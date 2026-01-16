@@ -60,7 +60,14 @@
     const STORAGE_PANEL_HIDDEN = "activityPlanState.panel.hidden";
     const PANEL_TOGGLE_KEY = "F2";
 
-    // ============
+    //==========================
+    // RUN SAMPLE PATHS FEATURE
+    //==========================
+    // This section contains all functions and constants related to the Run Sample Paths feature.
+    // This feature automates the process of locking sample paths by navigating through
+    // the sample paths list, detail pages, and update pages to set the locked status.
+    //==========================
+
     var STORAGE_RUN_LOCK_SAMPLE_PATHS = "activityPlanState.runLockSamplePaths";
 
     async function processLockSamplePathsPage() {
@@ -435,8 +442,17 @@
         }
     }
 
+    //==========================
+    // RUN FORM FEATURES (OOR A, OOR B, IR)
+    //==========================
+    // This section contains all functions related to form automation features:
+    // - Run Form (OOR) A: Out of Range values below minimum
+    // - Run Form (OOR) B: Out of Range values above maximum  
+    // - Run Form (IR): In Range values within valid range
+    // These functions handle form field filling, item group processing, range parsing,
+    // and value selection based on the specified mode (oorA, oorB, or ir).
+    //==========================
 
-    // =========
     async function handleRepeatingItemGroupAddNew(groupDiv) {
         var addBtn = groupDiv.querySelector("a.btn.btn-default.blue.pull-right");
         if (!addBtn) {
@@ -469,6 +485,13 @@
         return true;
     }
 
+    //==========================
+    // SHARED GUI AND PANEL FUNCTIONS
+    //==========================
+    // This section contains functions used by multiple features for panel management,
+    // visibility control, hotkey handling, and UI interactions. These functions are
+    // shared across all automation features and provide the common user interface.
+    //==========================
 
     function setPanelHidden(flag) {
         try {
@@ -604,6 +627,159 @@
         }
     }
 
+    function setStoredPanelSize(w, h) {
+        try {
+            if (typeof w === "string") {
+                localStorage.setItem(STORAGE_PANEL_WIDTH, w);
+            }
+            if (typeof h === "string") {
+                localStorage.setItem(STORAGE_PANEL_HEIGHT, h);
+            }
+        } catch (e) {}
+    }
+
+    function getStoredPanelSize() {
+        var w = null;
+        var h = null;
+        try {
+            w = localStorage.getItem(STORAGE_PANEL_WIDTH);
+            h = localStorage.getItem(STORAGE_PANEL_HEIGHT);
+        } catch (e) {}
+        if (!w) {
+            w = PANEL_DEFAULT_WIDTH;
+        }
+        if (!h) {
+            h = PANEL_DEFAULT_HEIGHT;
+        }
+        return { width: w, height: h };
+    }
+
+    function updatePanelCollapsedState(panel, bodyContainer, resizeHandle, collapseBtn, headerBar) {
+        var collapsed = getPanelCollapsed();
+        if (collapsed) {
+            // Collapse: shrink height but DO NOT overwrite stored expanded size
+            panel.style.width = PANEL_DEFAULT_WIDTH;
+            panel.style.height = String(PANEL_HEADER_HEIGHT_PX + 12) + "px"; // Add padding
+            panel.style.overflow = "hidden";
+
+            if (bodyContainer) {
+                bodyContainer.style.display = "none";
+            }
+            if (resizeHandle) {
+                resizeHandle.style.display = "none";
+            }
+            if (collapseBtn) {
+                collapseBtn.textContent = "Expand";
+            }
+        } else {
+            // Expand: restore last stored size
+            var size = getStoredPanelSize();
+            panel.style.width = size.width;
+            panel.style.height = size.height;
+            panel.style.overflow = "visible";
+
+            if (bodyContainer) {
+                bodyContainer.style.display = "block";
+            }
+            if (resizeHandle) {
+                resizeHandle.style.display = "block";
+            }
+            if (collapseBtn) {
+                collapseBtn.textContent = "Collapse";
+            }
+        }
+    }
+
+    function setupResizeHandle(panel, bodyContainer) {
+        var handle = document.createElement("div");
+        handle.style.position = "absolute";
+        handle.style.width = "12px";
+        handle.style.height = "12px";
+        handle.style.right = "6px";
+        handle.style.bottom = "6px";
+        handle.style.cursor = "se-resize";
+        handle.style.background = "#333";
+        handle.style.borderRadius = "2px";
+        handle.style.display = "block";
+
+        var isResizing = false;
+        var startX = 0;
+        var startY = 0;
+        var startW = 0;
+        var startH = 0;
+
+        function toInt(s) {
+            var n = parseInt(String(s).replace("px", ""), 10);
+            if (isNaN(n)) {
+                return 0;
+            }
+            return n;
+        }
+
+        handle.addEventListener("mousedown", function (e) {
+            if (getPanelCollapsed()) {
+                return;
+            }
+            isResizing = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            startW = toInt(panel.style.width);
+            startH = panel.offsetHeight;
+            e.preventDefault();
+        });
+
+        document.addEventListener("mousemove", function (e) {
+            if (!isResizing) {
+                return;
+            }
+            var dx = e.clientX - startX;
+            var dy = e.clientY - startY;
+            var newW = startW + dx;
+            var newH = startH + dy;
+
+            var minW = toInt(PANEL_DEFAULT_WIDTH);
+            if (newW < minW) {
+                newW = minW;
+            }
+            if (newW > PANEL_MAX_WIDTH_PX) {
+                newW = PANEL_MAX_WIDTH_PX; // Enforce max width
+            }
+
+            var minH = PANEL_HEADER_HEIGHT_PX + 80;
+            if (newH < minH) {
+                newH = minH;
+            }
+
+            panel.style.width = String(newW) + "px";
+            panel.style.height = String(newH) + "px";
+
+            if (bodyContainer) {
+                bodyContainer.style.display = "block";
+                bodyContainer.style.height = "calc(100% - " + String(PANEL_HEADER_HEIGHT_PX) + "px)";
+                bodyContainer.style.maxHeight = "calc(100% - " + String(PANEL_HEADER_HEIGHT_PX) + "px)";
+                bodyContainer.style.overflowY = "auto";
+            }
+        });
+
+        document.addEventListener("mouseup", function () {
+            if (!isResizing) {
+                return;
+            }
+            isResizing = false;
+            setStoredPanelSize(panel.style.width, panel.style.height);
+        });
+
+        return handle;
+    }
+
+    //==========================
+    // RUN IMPORT COHORT SUBJECT FEATURE
+    //==========================
+    // This section contains all functions related to importing cohort subjects from
+    // non-screening epochs. This feature automates the process of editing cohort settings,
+    // importing subjects from other cohorts, and activating volunteers. Functions handle
+    // epoch selection, cohort editing, import modal interactions, and volunteer activation.
+    //==========================
 
     function markImportDoneIfSuccessOnLoad(cohortId) {
         log("markImportDoneIfSuccessOnLoad: start cohortId=" + String(cohortId));
@@ -616,6 +792,15 @@
         }
         return false;
     }
+
+    //==========================
+    // RUN ADD COHORT SUBJECTS FEATURE
+    //==========================
+    // This section contains all functions related to adding cohort subjects.
+    // This feature automates the process of editing cohort settings, adding volunteers
+    // to cohorts, and activating them. Functions handle epoch selection, cohort editing,
+    // volunteer selection via random letter search, and activation workflows.
+    //==========================
 
     async function processStudyShowPageForAddCohort() {
         var autoAddCohort = getQueryParam("autoaddcohort");
@@ -2658,6 +2843,14 @@
         log("Activation completed and run state cleared");
     }
 
+    //==========================
+    // RUN BARCODE FEATURE
+    //==========================
+    // This section contains all functions related to barcode lookup and data entry.
+    // This feature automates finding subject barcodes by searching through epochs,
+    // cohorts, and subjects. Functions handle subject identification, barcode retrieval,
+    // and populating barcode input modals.
+    //==========================
 
     async function openBarcodeDataEntryModalIfNeeded(timeoutMs) {
         var inputBox = document.querySelector("input.bootbox-input.bootbox-input-text.form-control");
@@ -2679,177 +2872,16 @@
         return inputEl;
     }
 
-
-    function clearPendingIds() {
-        try {
-            localStorage.removeItem(STORAGE_PENDING);
-            log("Pending IDs cleared");
-        } catch (e) {}
-    }
-
-    function clearAllRunState() {
-        clearRunMode();
-        clearContinueEpoch();
-        clearCohortGuard();
-        clearPendingIds();
-        clearAfterRefresh();
-        clearConsentScanIndex();
-        clearLastVolunteerId();
-        clearSelectedVolunteerIds();
-        try {
-            localStorage.removeItem(STORAGE_EDIT_STUDY);
-            localStorage.removeItem(STORAGE_CHECK_ELIG_LOCK);
-            localStorage.removeItem("activityPlanState.cohortAdd.editDoneMap");
-            log("Cleared cohortAdd.editDoneMap");
-        } catch (e) {}
-    }
-
-    function setStoredPanelSize(w, h) {
-        try {
-            if (typeof w === "string") {
-                localStorage.setItem(STORAGE_PANEL_WIDTH, w);
-            }
-            if (typeof h === "string") {
-                localStorage.setItem(STORAGE_PANEL_HEIGHT, h);
-            }
-        } catch (e) {}
-    }
-
-    function getStoredPanelSize() {
-        var w = null;
-        var h = null;
-        try {
-            w = localStorage.getItem(STORAGE_PANEL_WIDTH);
-            h = localStorage.getItem(STORAGE_PANEL_HEIGHT);
-        } catch (e) {}
-        if (!w) {
-            w = PANEL_DEFAULT_WIDTH;
-        }
-        if (!h) {
-            h = PANEL_DEFAULT_HEIGHT;
-        }
-        return { width: w, height: h };
-    }
-
-
-
-    function updatePanelCollapsedState(panel, bodyContainer, resizeHandle, collapseBtn, headerBar) {
-        var collapsed = getPanelCollapsed();
-        if (collapsed) {
-            // Collapse: shrink height but DO NOT overwrite stored expanded size
-            panel.style.width = PANEL_DEFAULT_WIDTH;
-            panel.style.height = String(PANEL_HEADER_HEIGHT_PX + 12) + "px"; // Add padding
-            panel.style.overflow = "hidden";
-
-            if (bodyContainer) {
-                bodyContainer.style.display = "none";
-            }
-            if (resizeHandle) {
-                resizeHandle.style.display = "none";
-            }
-            if (collapseBtn) {
-                collapseBtn.textContent = "Expand";
-            }
-        } else {
-            // Expand: restore last stored size
-            var size = getStoredPanelSize();
-            panel.style.width = size.width;
-            panel.style.height = size.height;
-            panel.style.overflow = "visible";
-
-            if (bodyContainer) {
-                bodyContainer.style.display = "block";
-            }
-            if (resizeHandle) {
-                resizeHandle.style.display = "block";
-            }
-            if (collapseBtn) {
-                collapseBtn.textContent = "Collapse";
-            }
-        }
-    }
-
-    function setupResizeHandle(panel, bodyContainer) {
-        var handle = document.createElement("div");
-        handle.style.position = "absolute";
-        handle.style.width = "12px";
-        handle.style.height = "12px";
-        handle.style.right = "6px";
-        handle.style.bottom = "6px";
-        handle.style.cursor = "se-resize";
-        handle.style.background = "#333";
-        handle.style.borderRadius = "2px";
-        handle.style.display = "block";
-
-        var isResizing = false;
-        var startX = 0;
-        var startY = 0;
-        var startW = 0;
-        var startH = 0;
-
-        function toInt(s) {
-            var n = parseInt(String(s).replace("px", ""), 10);
-            if (isNaN(n)) {
-                return 0;
-            }
-            return n;
-        }
-
-        handle.addEventListener("mousedown", function (e) {
-            if (getPanelCollapsed()) {
-                return;
-            }
-            isResizing = true;
-            startX = e.clientX;
-            startY = e.clientY;
-            startW = toInt(panel.style.width);
-            startH = panel.offsetHeight;
-            e.preventDefault();
-        });
-
-        document.addEventListener("mousemove", function (e) {
-            if (!isResizing) {
-                return;
-            }
-            var dx = e.clientX - startX;
-            var dy = e.clientY - startY;
-            var newW = startW + dx;
-            var newH = startH + dy;
-
-            var minW = toInt(PANEL_DEFAULT_WIDTH);
-            if (newW < minW) {
-                newW = minW;
-            }
-            if (newW > PANEL_MAX_WIDTH_PX) {
-                newW = PANEL_MAX_WIDTH_PX; // Enforce max width
-            }
-
-            var minH = PANEL_HEADER_HEIGHT_PX + 80;
-            if (newH < minH) {
-                newH = minH;
-            }
-
-            panel.style.width = String(newW) + "px";
-            panel.style.height = String(newH) + "px";
-
-            if (bodyContainer) {
-                bodyContainer.style.display = "block";
-                bodyContainer.style.height = "calc(100% - " + String(PANEL_HEADER_HEIGHT_PX) + "px)";
-                bodyContainer.style.maxHeight = "calc(100% - " + String(PANEL_HEADER_HEIGHT_PX) + "px)";
-                bodyContainer.style.overflowY = "auto";
-            }
-        });
-
-        document.addEventListener("mouseup", function () {
-            if (!isResizing) {
-                return;
-            }
-            isResizing = false;
-            setStoredPanelSize(panel.style.width, panel.style.height);
-        });
-
-        return handle;
-    }
+    //==========================
+    // RUN FORM FEATURES (OOR A, OOR B, IR)
+    //==========================
+    // This section contains all functions related to form automation features:
+    // - Run Form (OOR) A: Out of Range values below minimum
+    // - Run Form (OOR) B: Out of Range values above maximum  
+    // - Run Form (IR): In Range values within valid range
+    // These functions handle form field filling, item group processing, range parsing,
+    // and value selection based on the specified mode (oorA, oorB, or ir).
+    //==========================
 
     function setFormValueMode(s) {
         try {
@@ -4067,6 +4099,15 @@
         return -1;
     }
 
+    //==========================
+    // RUN ICF BARCODE (INFORMED CONSENT) FEATURE
+    //==========================
+    // This section contains all functions related to informed consent barcode collection.
+    // This feature automates the process of collecting informed consent barcodes for subjects.
+    // Functions handle barcode retrieval from study show pages, subject list scanning,
+    // consent tab navigation, and barcode entry into consent forms.
+    //==========================
+
     // Scan epochs/cohorts/subjects to find and return a barcode result.
     async function processBarcodeSubjectsPage() {
         var wantedText = getBarcodeSubjectText();
@@ -4341,6 +4382,41 @@
         }
         log("Routing to Eligibility form for locking");
         location.href = url;
+    }
+
+    //==========================
+    // SHARED UTILITY FUNCTIONS
+    //==========================
+    // This section contains utility functions used by multiple features across the automation.
+    // These include pause/resume control, logging, async helpers (sleep, waitForSelector),
+    // storage management, page detection, query parameter parsing, and other common utilities.
+    // Functions in this section are shared dependencies used by multiple feature sections.
+    //==========================
+
+    // Clear pending IDs from storage.
+    function clearPendingIds() {
+        try {
+            localStorage.removeItem(STORAGE_PENDING);
+            log("Pending IDs cleared");
+        } catch (e) {}
+    }
+
+    // Clear all run state from storage.
+    function clearAllRunState() {
+        clearRunMode();
+        clearContinueEpoch();
+        clearCohortGuard();
+        clearPendingIds();
+        clearAfterRefresh();
+        clearConsentScanIndex();
+        clearLastVolunteerId();
+        clearSelectedVolunteerIds();
+        try {
+            localStorage.removeItem(STORAGE_EDIT_STUDY);
+            localStorage.removeItem(STORAGE_CHECK_ELIG_LOCK);
+            localStorage.removeItem("activityPlanState.cohortAdd.editDoneMap");
+            log("Cleared cohortAdd.editDoneMap");
+        } catch (e) {}
     }
 
     // Return true if automation is paused via localStorage.
@@ -4943,6 +5019,15 @@
             localStorage.setItem("activityPlanState.panel.right", panelEl.style.right);
         } catch (e2) {}
     }
+
+    //==========================
+    // PANEL CREATION AND INITIALIZATION
+    //==========================
+    // This section contains the panel creation function (makePanel) and initialization
+    // function (init). These functions must remain at the bottom of the file as they
+    // depend on all other functions being defined first. The makePanel function creates
+    // the draggable control panel UI, and init sets up the automation routing.
+    //==========================
 
     // Add an extensible button to the floating panel.
     function addButtonToPanel(label, handler) {
@@ -6440,6 +6525,16 @@ closeBtn.addEventListener("click", function() {
         return true;
     }
 
+    //==========================
+    // RUN ACTIVITY PLANS FEATURE
+    //==========================
+    // This section contains all functions related to running activity plans automation.
+    // This feature automates the process of activating activity plans by navigating
+    // through plan lists, opening plan show pages, and updating plan states.
+    // Functions handle list page processing, plan link extraction, pending ID management,
+    // and automatic state updates.
+    //==========================
+
     // Orchestrate opening plan show pages and queuing pending ids when run flag present.
     async function processListPage() {
         log("processListPage start");
@@ -6652,6 +6747,15 @@ closeBtn.addEventListener("click", function() {
             try { window.close(); } catch (e3) {}
         }, 2000);
     }
+
+    //==========================
+    // RUN STUDY UPDATES FEATURE
+    //==========================
+    // This section contains all functions related to study update automation.
+    // This feature automates updating study status to ACTIVE and locking eligibility forms.
+    // Functions handle study show page routing, edit basics page processing, study metadata
+    // navigation, and eligibility form locking workflows.
+    //==========================
 
     // Orchestrate study show page actions for consent, update, or epoch routing.
     async function processStudyShowPage() {
@@ -7523,6 +7627,15 @@ closeBtn.addEventListener("click", function() {
         log("Activation completed and run state cleared");
     }
 
+
+    //==========================
+    // RUN ICF BARCODE (INFORMED CONSENT) FEATURE
+    //==========================
+    // This section contains all functions related to informed consent barcode collection.
+    // This feature automates the process of collecting informed consent barcodes for subjects.
+    // Functions handle barcode retrieval from study show pages, subject list scanning,
+    // consent tab navigation, and barcode entry into consent forms.
+    //==========================
 
     // Scan subjects list to find a subject needing consent and route to it.
 
