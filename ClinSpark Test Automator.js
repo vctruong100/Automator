@@ -5,6 +5,8 @@
 // @version 2.4.7
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
+// @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
+// @downloadURL  https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
 // @run-at document-idle
 // @grant GM.openInTab
 // @grant GM_openInTab
