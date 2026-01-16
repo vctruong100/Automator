@@ -5,6 +5,8 @@
 // @version 1.0.0
 // @description
 // @match https://cenexeltest.clinspark.com/*
+// @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/heads/main/ClinSpark%20Start%20Automator.js
+// @downloadURL  https://raw.githubusercontent.com/vctruong100/Automator/heads/main/ClinSpark%20Start%20Automator.js
 // @run-at document-idle
 // @grant GM.openInTab
 // @grant GM_openInTab

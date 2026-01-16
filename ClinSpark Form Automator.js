@@ -5,6 +5,8 @@
 // @version 1.0.0
 // @description
 // @match https://cenexeltest.clinspark.com/*
+// @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/heads/main/ClinSpark%20Form%20Automator.js
+// @downloadURL  https://raw.githubusercontent.com/vctruong100/Automator/heads/main/ClinSpark%20Form%20Automator.js
 // @run-at document-idle
 // @grant GM.openInTab
 // @grant GM_openInTab
@@ -58,6 +60,7 @@
     // and value selection based on the specified mode (oorA, oorB, or ir).
     //==========================
 
+    function FormAutomationFunctions() {}
 
     async function handleRepeatingItemGroupAddNew(groupDiv) {
         var addBtn = groupDiv.querySelector("a.btn.btn-default.blue.pull-right");
