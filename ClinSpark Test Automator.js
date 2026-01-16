@@ -1352,15 +1352,12 @@
             log("Step 3/12: Clicking Edit link");
             editLink.click();
             var modal = await waitForSelector("#ajaxModal, .modal", 6000);
-            log("Step 3/12: Edit modal present=" + String(!!modal));
             if (!modal) {
                 log("processCohortShowPageImportNonScrn: Edit modal did not open");
                 return;
             }
-            log("Step 4/12: Checking form-group structure");
             var groups = modal.querySelectorAll("#modalbody .form-group, .modal-body .form-group, form .form-group");
             var groupCount = groups ? groups.length : 0;
-            log("Step 4/12: form-group count=" + String(groupCount));
             if (!groups
                 || groups.length === 0) {
                 var waited = 0;
@@ -1379,7 +1376,6 @@
                     await sleep(step);
                     waited = waited + step;
                 }
-                log("Step 4/12: post-wait form-group count=" + String(groupCount));
             }
             if (!groups
                 || groups.length === 0) {
@@ -1432,91 +1428,49 @@
                     await sleep(300);
                     checkWait = checkWait + 300;
                 }
-                log("Step 4/12: checkbox presence=" + String(foundAny));
                 if (!foundAny) {
                     log("processCohortShowPageImportNonScrn: Edit modal inputs not present");
                     return;
                 }
             }
-            log("Step 5/12: Applying Subject/Volunteer Source (group 6) checkboxes");
             var ok6 = true;
-            log("Setting checkbox subjectInitiation -> false");
             ok6 = ok6 && setCheckboxStateById("subjectInitiation", false);
-            log("Setting checkbox sourceVolunteerDatabase -> true");
             ok6 = ok6 && setCheckboxStateById("sourceVolunteerDatabase", true);
-            log("Setting checkbox sourceAppointments -> true");
             ok6 = ok6 && setCheckboxStateById("sourceAppointments", true);
-            log("Setting checkbox sourceAppointmentsCohort -> true");
             ok6 = ok6 && setCheckboxStateById("sourceAppointmentsCohort", true);
-            log("Setting checkbox sourceScreeningCohorts -> true");
             ok6 = ok6 && setCheckboxStateById("sourceScreeningCohorts", true);
-            log("Setting checkbox sourceLeadInCohorts -> true");
             ok6 = ok6 && setCheckboxStateById("sourceLeadInCohorts", true);
-            log("Setting checkbox sourceRandomizationCohorts -> true");
             ok6 = ok6 && setCheckboxStateById("sourceRandomizationCohorts", true);
-            log("Step 5/12: group6 ok=" + String(ok6));
-            log("Step 6/12: Applying Participation Allowance (group 7) checkboxes");
             var ok7 = true;
-            log("Setting checkbox allowSubjectsActiveInCohorts -> true");
             ok7 = ok7 && setCheckboxStateById("allowSubjectsActiveInCohorts", true);
-            log("Setting checkbox allowSubjectsActiveInStudies -> true");
             ok7 = ok7 && setCheckboxStateById("allowSubjectsActiveInStudies", true);
-            log("Step 6/12: group7 ok=" + String(ok7));
-            log("Step 7/12: Applying Volunteer Recruitment Allowance (group 8) checkboxes");
             var ok8 = true;
-            log("Setting checkbox requireVolunteerRecruitment -> false");
             ok8 = ok8 && setCheckboxStateById("requireVolunteerRecruitment", false);
-            log("Setting checkbox allowRecruitmentEligible -> false");
             ok8 = ok8 && setCheckboxStateById("allowRecruitmentEligible", false);
-            log("Setting checkbox allowRecruitmentIdentified -> false");
             ok8 = ok8 && setCheckboxStateById("allowRecruitmentIdentified", false);
-            log("Setting checkbox allowRecruitmentIneligible -> false");
             ok8 = ok8 && setCheckboxStateById("allowRecruitmentIneligible", false);
-            log("Setting checkbox allowRecruitmentRemoved -> false");
             ok8 = ok8 && setCheckboxStateById("allowRecruitmentRemoved", false);
-            log("Step 7/12: group8 ok=" + String(ok8));
-            log("Step 8/12: Applying Subject Eligibility Allowance (group 9) checkboxes");
             var ok9 = true;
-            log("Setting checkbox allowEligibilityEligible -> true");
             ok9 = ok9 && setCheckboxStateById("allowEligibilityEligible", true);
-            log("Setting checkbox allowEligibilityPending -> true");
             ok9 = ok9 && setCheckboxStateById("allowEligibilityPending", true);
-            log("Setting checkbox allowEligibilityIneligible -> true");
             ok9 = ok9 && setCheckboxStateById("allowEligibilityIneligible", true);
-            log("Setting checkbox allowEligibilityUnspecified -> true");
             ok9 = ok9 && setCheckboxStateById("allowEligibilityUnspecified", true);
-            log("Step 8/12: group9 ok=" + String(ok9));
-            log("Step 9/12: Applying Subject Status Allowance (group 10) checkboxes");
             var ok10 = true;
-            log("Setting checkbox allowStatusActive -> true");
             ok10 = ok10 && setCheckboxStateById("allowStatusActive", true);
-            log("Setting checkbox allowStatusComplete -> false");
             ok10 = ok10 && setCheckboxStateById("allowStatusComplete", false);
-            log("Setting checkbox allowStatusTerminated -> false");
             ok10 = ok10 && setCheckboxStateById("allowStatusTerminated", false);
-            log("Setting checkbox allowStatusWithdrawn -> false");
             ok10 = ok10 && setCheckboxStateById("allowStatusWithdrawn", false);
-            log("Step 9/12: group10 ok=" + String(ok10));
-            log("Step 10/12: Applying Subject Data Requirements (group 11) checkboxes");
             var ok11 = true;
-            log("Setting checkbox requireInformedConsent -> false");
             ok11 = ok11 && setCheckboxStateById("requireInformedConsent", false);
-            log("Setting checkbox requireOverVolunteeringCheck -> false");
             ok11 = ok11 && setCheckboxStateById("requireOverVolunteeringCheck", false);
-            log("Step 10/12: group11 ok=" + String(ok11));
-            log("Step 11/12: Setting Reason for Change");
             var reason = modal.querySelector('textarea#reasonForChange');
             var reasonExists = !!reason;
-            log("Step 11/12: reason textarea exists=" + String(reasonExists));
             if (reason) {
                 reason.value = "Test";
                 var evtR = new Event("input", { bubbles: true });
                 reason.dispatchEvent(evtR);
-                log("Step 11/12: reason set to 'Test'");
             }
-            log("Step 12/12: Saving Edit modal");
             var saveBtn = await waitForSelector("#actionButton", 5000);
-            log("Step 12/12: Save button found=" + String(!!saveBtn));
             if (!saveBtn) {
                 log("processCohortShowPageImportNonScrn: Edit modal Save button not found");
                 return;
