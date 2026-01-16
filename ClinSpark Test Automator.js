@@ -6337,6 +6337,10 @@ closeBtn.addEventListener("click", function() {
         var start = Date.now();
         var attempts = 0;
         while (Date.now() - start < timeoutMs) {
+            if (isPaused()) {
+                log("Activation: paused; stopping search for volunteerId=" + String(volId));
+                return null;
+            }
             var row = findCohortRowByVolunteerId(volId);
             if (row) {
                 var actionBtn = getRowActionButton(row);
@@ -6358,9 +6362,13 @@ closeBtn.addEventListener("click", function() {
                 }
             }
             attempts = attempts + 1;
+            var waited = Date.now() - start;
+            if (waited >= 1000 && waited % 1000 < 600) {
+                log("Activation: still searching for volunteerId=" + String(volId) + " waited=" + String(waited) + "ms");
+            }
             await sleep(600);
         }
-        log("Activate Volunteer link did not enable within timeout for id=" + String(volId));
+        log("Activation: row not found for volunteerId=" + String(volId) + " after " + String(timeoutMs) + "ms; skipping");
         return null;
     }
 
@@ -7028,12 +7036,22 @@ closeBtn.addEventListener("click", function() {
             var waitedRowX = 0;
             var maxWaitRowX = 30000;
             while (waitedRowX < maxWaitRowX) {
+                if (isPaused()) {
+                    log("Activation: paused; stopping row search for volunteerId=" + String(targetVolX));
+                    clearRunMode();
+                    clearContinueEpoch();
+                    clearCohortGuard();
+                    return;
+                }
                 targetRowX = findCohortRowByVolunteerId(targetVolX);
                 if (targetRowX) {
                     break;
                 }
                 await sleep(300);
                 waitedRowX = waitedRowX + 300;
+                if (waitedRowX >= 1000 && waitedRowX % 1000 < 300) {
+                    log("Activation: still searching for volunteerId=" + String(targetVolX) + " waited=" + String(waitedRowX) + "ms");
+                }
             }
             if (!targetRowX) {
                 log("Target row not found for id=" + String(targetVolX));
@@ -7570,12 +7588,22 @@ closeBtn.addEventListener("click", function() {
         var waitedRow = 0;
         var maxWaitRow = 30000;
         while (waitedRow < maxWaitRow) {
+            if (isPaused()) {
+                log("Activation: paused; stopping row search for volunteerId=" + String(targetVolId));
+                clearRunMode();
+                clearContinueEpoch();
+                clearCohortGuard();
+                return;
+            }
             targetRow = findCohortRowByVolunteerId(targetVolId);
             if (targetRow) {
                 break;
             }
             await sleep(300);
             waitedRow = waitedRow + 300;
+            if (waitedRow >= 1000 && waitedRow % 1000 < 300) {
+                log("Activation: still searching for volunteerId=" + String(targetVolId) + " waited=" + String(waitedRow) + "ms");
+            }
         }
         if (!targetRow) {
             log("Activation row not found for id=" + String(targetVolId));
@@ -7600,6 +7628,12 @@ closeBtn.addEventListener("click", function() {
         }
         var found = await waitForActivateVolunteerById(targetVolId, 45000);
         if (!found) {
+            if (isPaused()) {
+                log("Activation: paused during waitForActivateVolunteerById; clearing state");
+            }
+            clearRunMode();
+            clearContinueEpoch();
+            clearCohortGuard();
             return;
         }
         found.link.click();
