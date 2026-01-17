@@ -407,26 +407,6 @@
         return out3;
     }
 
-    function findItemGroupAnchorByName(name) {
-        var tbody = document.querySelector("tbody#sortableTable");
-        if (!tbody) {
-            return null;
-        }
-        var aList = tbody.querySelectorAll("a[href^='/secure/crfdesign/studylibrary/show/itemgroup/']");
-        var j = 0;
-        var targetNorm = String(name || "").replace(/\u00A0/g, " ").trim().toLowerCase();
-        while (j < aList.length) {
-            var a = aList[j];
-            var t = getText(a).replace(/\u00A0/g, " ").trim().toLowerCase();
-            if (t === targetNorm) {
-                return a;
-            }
-            j = j + 1;
-        }
-        return null;
-    }
-
-
     function getText(el) {
         if (!el) {
             return "";
