@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Basic Automator
 // @namespace vinh.activity.plan.state
-// @version 1.0.0
+// @version 1.1.0
 // @description
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/heads/main/ClinSpark%20Basic%20Automator.js
@@ -1312,30 +1312,7 @@
         runBarcodeBtn.style.borderRadius = "6px";
         runBarcodeBtn.style.padding = "8px";
         runBarcodeBtn.style.cursor = "pointer";
-        var runFormOORBtn = document.createElement("button");
-        runFormOORBtn.textContent = "9. Run Form (OOR) B";
-        runFormOORBtn.style.background = "#f99";
-        runFormOORBtn.style.color = "#000";
-        runFormOORBtn.style.border = "none";
-        runFormOORBtn.style.borderRadius = "6px";
-        runFormOORBtn.style.padding = "8px";
-        runFormOORBtn.style.cursor = "pointer";
-        var runFormOORABtn = document.createElement("button");
-        runFormOORABtn.textContent = "10. Run Form (OOR) A";
-        runFormOORABtn.style.background = "#f99";
-        runFormOORABtn.style.color = "#000";
-        runFormOORABtn.style.border = "none";
-        runFormOORABtn.style.borderRadius = "6px";
-        runFormOORABtn.style.padding = "8px";
-        runFormOORABtn.style.cursor = "pointer";
-        var runFormIRBtn = document.createElement("button");
-        runFormIRBtn.textContent = "11. Run Form (IR)";
-        runFormIRBtn.style.background = "#9f9";
-        runFormIRBtn.style.color = "#000";
-        runFormIRBtn.style.border = "none";
-        runFormIRBtn.style.borderRadius = "6px";
-        runFormIRBtn.style.padding = "8px";
-        runFormIRBtn.style.cursor = "pointer";
+
         var pauseBtn = document.createElement("button");
         pauseBtn.textContent = isPaused() ? "Resume" : "Pause";
         pauseBtn.style.background = "#ccc";
@@ -1365,9 +1342,6 @@
         toggleLogsBtn.style.cursor = "pointer";
 
         btnRow.appendChild(runBarcodeBtn);
-        btnRow.appendChild(runFormOORBtn);
-        btnRow.appendChild(runFormOORABtn);
-        btnRow.appendChild(runFormIRBtn);
         btnRow.appendChild(pauseBtn);
         btnRow.appendChild(clearLogsBtn);
         btnRow.appendChild(toggleLogsBtn);
