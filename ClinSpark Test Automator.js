@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 2.5.0
+// @version 2.5.1
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -7304,16 +7304,8 @@
         runStudyBtn.style.borderRadius = "6px";
         runStudyBtn.style.padding = "8px";
         runStudyBtn.style.cursor = "pointer";
-        var runEpochBtn = document.createElement("button");
-        runEpochBtn.textContent = "3. Run Add Cohort Subject";
-        runEpochBtn.style.background = "#fd4";
-        runEpochBtn.style.color = "#000";
-        runEpochBtn.style.border = "none";
-        runEpochBtn.style.borderRadius = "6px";
-        runEpochBtn.style.padding = "8px";
-        runEpochBtn.style.cursor = "pointer";
         var runAddCohortBtn = document.createElement("button");
-        runAddCohortBtn.textContent = "4. Run Add Cohort Subjects";
+        runAddCohortBtn.textContent = "4. Run Add Subjects";
         runAddCohortBtn.style.background = "#fd4";
         runAddCohortBtn.style.color = "#000";
         runAddCohortBtn.style.border = "none";
@@ -7337,7 +7329,7 @@
         runAllBtn.style.padding = "8px";
         runAllBtn.style.cursor = "pointer";
         var runNonScrnBtn = document.createElement("button");
-        runNonScrnBtn.textContent = "7. Run Import Cohort Subject";
+        runNonScrnBtn.textContent = "7. Run Import Subject";
         runNonScrnBtn.style.background = "#ff7";
         runNonScrnBtn.style.color = "#000";
         runNonScrnBtn.style.border = "none";
@@ -7417,7 +7409,6 @@
         btnRow.appendChild(runLockSamplePathsBtn);
         btnRow.appendChild(runStudyBtn);
         btnRow.appendChild(runAddCohortBtn);
-        btnRow.appendChild(runEpochBtn);
         btnRow.appendChild(runConsentBtn);
         btnRow.appendChild(runAllBtn);
         btnRow.appendChild(runNonScrnBtn);
@@ -7526,18 +7517,6 @@
             status.textContent = "Navigating to Study Show…";
             log("Run Study Update clicked");
             location.href = STUDY_SHOW_URL + "?autoupdate=1";
-        });
-        runEpochBtn.addEventListener("click", function () {
-            try {
-                localStorage.setItem(STORAGE_RUN_MODE, "epoch");
-            } catch (e) {}
-            try {
-                localStorage.setItem(STORAGE_CONTINUE_EPOCH, "1");
-            } catch (e2) {}
-            status.textContent = "Navigating to Study Show for Cohort Add…";
-            log("Run Cohort Add clicked");
-            location.href = STUDY_SHOW_URL;
-            clearCohortGuard();
         });
         runConsentBtn.addEventListener("click", function () {
             try {
