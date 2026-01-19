@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 2.5.1
+// @version 2.5.2
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -7289,7 +7289,7 @@
         btnRow.style.gap = "8px";
         btnRowRef = btnRow;
         var runPlansBtn = document.createElement("button");
-        runPlansBtn.textContent = "1. Run Activity Plans";
+        runPlansBtn.textContent = "1. Lock Activity Plans";
         runPlansBtn.style.background = "#2d7";
         runPlansBtn.style.color = "#000";
         runPlansBtn.style.border = "none";
@@ -7297,7 +7297,7 @@
         runPlansBtn.style.padding = "8px";
         runPlansBtn.style.cursor = "pointer";
         var runStudyBtn = document.createElement("button");
-        runStudyBtn.textContent = "3. Run Study Update";
+        runStudyBtn.textContent = "3. Update Study Status";
         runStudyBtn.style.background = "#4af";
         runStudyBtn.style.color = "#000";
         runStudyBtn.style.border = "none";
@@ -7305,7 +7305,7 @@
         runStudyBtn.style.padding = "8px";
         runStudyBtn.style.cursor = "pointer";
         var runAddCohortBtn = document.createElement("button");
-        runAddCohortBtn.textContent = "4. Run Add Subjects";
+        runAddCohortBtn.textContent = "4. Add Cohort Subjects";
         runAddCohortBtn.style.background = "#fd4";
         runAddCohortBtn.style.color = "#000";
         runAddCohortBtn.style.border = "none";
@@ -7329,7 +7329,7 @@
         runAllBtn.style.padding = "8px";
         runAllBtn.style.cursor = "pointer";
         var runNonScrnBtn = document.createElement("button");
-        runNonScrnBtn.textContent = "7. Run Import Subject";
+        runNonScrnBtn.textContent = "7. Import Cohort Subject";
         runNonScrnBtn.style.background = "#ff7";
         runNonScrnBtn.style.color = "#000";
         runNonScrnBtn.style.border = "none";
@@ -7345,7 +7345,7 @@
         runBarcodeBtn.style.padding = "8px";
         runBarcodeBtn.style.cursor = "pointer";
         var runFormOORBtn = document.createElement("button");
-        runFormOORBtn.textContent = "9. Run Form (OOR) B";
+        runFormOORBtn.textContent = "9. Run Form (OOR) Below Range";
         runFormOORBtn.style.background = "#f99";
         runFormOORBtn.style.color = "#000";
         runFormOORBtn.style.border = "none";
@@ -7353,7 +7353,7 @@
         runFormOORBtn.style.padding = "8px";
         runFormOORBtn.style.cursor = "pointer";
         var runFormOORABtn = document.createElement("button");
-        runFormOORABtn.textContent = "10. Run Form (OOR) A";
+        runFormOORABtn.textContent = "10. Run Form (OOR) Above Range";
         runFormOORABtn.style.background = "#f99";
         runFormOORABtn.style.color = "#000";
         runFormOORABtn.style.border = "none";
@@ -7361,7 +7361,7 @@
         runFormOORABtn.style.padding = "8px";
         runFormOORABtn.style.cursor = "pointer";
         var runFormIRBtn = document.createElement("button");
-        runFormIRBtn.textContent = "11. Run Form (IR)";
+        runFormIRBtn.textContent = "11. Run Form (In Range)";
         runFormIRBtn.style.background = "#9f9";
         runFormIRBtn.style.color = "#000";
         runFormIRBtn.style.border = "none";
@@ -7397,7 +7397,7 @@
         toggleLogsBtn.style.cursor = "pointer";
 
         var runLockSamplePathsBtn = document.createElement("button");
-        runLockSamplePathsBtn.textContent = "2. Run Sample Paths";
+        runLockSamplePathsBtn.textContent = "2. Lock Sample Paths";
         runLockSamplePathsBtn.style.background = "#f77";
         runLockSamplePathsBtn.style.color = "#000";
         runLockSamplePathsBtn.style.border = "none";
