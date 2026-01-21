@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.3.2
+// @version     1.3.3
 // @description Retain only Barcode feature; production environment only
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -56,7 +56,7 @@
     var BARCODE_START_TS = 0;
 
     var AE_LIST_BASE_URL = "https://cenexel.clinspark.com/secure/study/data/list?search=true";
-    var AE_LIST_TEST_BASE_URL = "https://cenexeltest.clinspark.com/secure/study/data/list?search=true";
+    var AE_LIST_TEST_BASE_URL = "https://cenexel.clinspark.com/secure/study/data/list?search=true";
     var AE_EVENT_KEYWORDS = ["AE/CM","Adverse Event","AE","ADVERSE EVENT","Adverse"];
 
     var AE_POPUP_TITLE = "Find Adverse Event";
@@ -85,7 +85,7 @@
     const STORAGE_PANEL_HIDDEN = "activityPlanState.panel.hidden";
     const PANEL_TOGGLE_KEY = "F2";
 
-    const ELIGIBILITY_LIST_URL = "https://cenexeltest.clinspark.com/secure/crfdesign/studylibrary/eligibility/list";
+    const ELIGIBILITY_LIST_URL = "https://cenexel.clinspark.com/secure/crfdesign/studylibrary/eligibility/list";
     const STORAGE_ELIG_IMPORTED = "activityPlanState.eligibility.importedItems";
     const RUNMODE_ELIG_IMPORT = "eligibilityImport";
     const STORAGE_ELIG_CHECKITEM_CACHE = "activityPlanState.eligibility.checkItemCache";
@@ -4983,7 +4983,7 @@ function showAeSubjectInputPopup(onDone) {
         if (runModeRaw === RUNMODE_CLEAR_MAPPING) {
             if (!isEligibilityListPage()) {
                 log("ClearMapping: run mode set but not on list page; redirecting");
-                location.href = "https://cenexeltest.clinspark.com/secure/crfdesign/studylibrary/eligibility/list";
+                location.href = "https://cenexel.clinspark.com/secure/crfdesign/studylibrary/eligibility/list";
                 return;
             }
             log("ClearMapping: run mode set on list page; resuming in 4s");
