@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.3.4
+// @version     1.3.5
 // @description Retain only Barcode feature; production environment only
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -699,7 +699,7 @@
         container.appendChild(runningBox);
 
         var popup = createPopup({
-            title: "Import Eligibility Mapping",
+            title: "Import I/E",
             content: container,
             width: "450px",
             height: "auto",
@@ -4648,7 +4648,7 @@ function showAeSubjectInputPopup(onDone) {
         toggleLogsBtn.style.padding = "8px";
         toggleLogsBtn.style.cursor = "pointer";
         var importEligBtn = document.createElement("button");
-        importEligBtn.textContent = "Import Eligibility Mapping";
+        importEligBtn.textContent = "Import I/E";
         importEligBtn.style.background = "#9df";
         importEligBtn.style.color = "#000";
         importEligBtn.style.border = "none";

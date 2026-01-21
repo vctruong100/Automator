@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 2.5.6
+// @version 2.5.7
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -744,7 +744,7 @@
         container.appendChild(runningBox);
 
         var popup = createPopup({
-            title: "Import Eligibility Mapping",
+            title: "Import I/E",
             content: container,
             width: "450px",
             height: "auto",
@@ -9540,7 +9540,7 @@
         runLockSamplePathsBtn.style.cursor = "pointer";
 
         var importEligBtn = document.createElement("button");
-        importEligBtn.textContent = "12. Import Eligibility Mapping";
+        importEligBtn.textContent = "12. Import I/E";
         importEligBtn.style.background = "#9df";
         importEligBtn.style.color = "#000";
         importEligBtn.style.border = "none";

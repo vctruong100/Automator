@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Eligibility Mapping Automator
 // @namespace vinh.activity.plan.state
-// @version 1.3.2
+// @version 1.3.3
 // @description
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/heads/main/ClinSpark%20Basic%20Automator.js
@@ -726,7 +726,7 @@
         container.appendChild(runningBox);
 
         var popup = createPopup({
-            title: "Import Eligibility Mapping",
+            title: "Import I/E",
             content: container,
             width: "450px",
             height: "auto",
@@ -3578,7 +3578,7 @@
         toggleLogsBtn.style.cursor = "pointer";
 
         var importEligBtn = document.createElement("button");
-        importEligBtn.textContent = "Import Eligibility Mapping";
+        importEligBtn.textContent = "Import I/E";
         importEligBtn.style.background = "#9df";
         importEligBtn.style.color = "#000";
         importEligBtn.style.border = "none";
