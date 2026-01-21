@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 2.5.5
+// @version 2.5.6
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -753,11 +753,23 @@
                 log("ImportElig: popup X pressed → stopping automation");
                 clearAllRunState();
                 clearEligibilityWorkingState();
+                // Clear pending popup flag
+                try {
+                    localStorage.removeItem(STORAGE_ELIG_IMPORT_PENDING_POPUP);
+                } catch (e) {}
             }
         });
 
         confirmBtn.addEventListener("click", function () {
             log("ImportElig: Confirm clicked");
+
+            // Set run mode only when Confirm is actually pressed
+            try {
+                localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_ELIG_IMPORT);
+                // Clear pending popup flag since we're now starting automation
+                localStorage.removeItem(STORAGE_ELIG_IMPORT_PENDING_POPUP);
+            } catch (e) {
+            }
 
             var planPriText = (planPriInput.value + "").trim();
             var ignoreText = (ignoreInput.value + "").trim();
@@ -1949,13 +1961,12 @@
     }
 
 
+
     function startImportEligibilityMapping() {
         log("ImportElig: startImportEligibilityMapping invoked");
 
-        try {
-            localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_ELIG_IMPORT);
-        } catch (e) {
-        }
+        // Don't set run mode here - only set it when Confirm is pressed
+        // This prevents auto-redirect if user navigates away before confirming
 
         var path = location.pathname;
 
@@ -1976,6 +1987,11 @@
         } catch (e) {
         }
 
+        try {
+            localStorage.setItem(STORAGE_ELIG_IMPORT_PENDING_POPUP, "1");
+        } catch (e) {
+        }
+
         buildImportEligPopup(function (doneCallback) {
             setTimeout(async function () {
                 await executeEligibilityMappingAutomation();
@@ -1984,6 +2000,7 @@
             }, 400);
         });
     }
+
 
 
     async function executeEligibilityMappingAutomation() {
@@ -10072,6 +10089,15 @@
             processBarcodeSubjectsPage();
             return;
         }
+
+        // Check for manual navigation away from Import Eligibility process
+        var pendingPopup = null;
+        try {
+            pendingPopup = localStorage.getItem(STORAGE_ELIG_IMPORT_PENDING_POPUP);
+        } catch (e) {
+            pendingPopup = null;
+        }
+
         var runModeRaw = null;
         try {
             runModeRaw = localStorage.getItem(STORAGE_RUN_MODE);
@@ -10079,15 +10105,28 @@
             runModeRaw = null;
         }
 
-        if (runModeRaw === RUNMODE_ELIG_IMPORT) {
-
-            var pendingPopup = null;
-
+        // If pending popup is set but run mode is not set and we're not on the eligibility list page,
+        // it means user navigated away before confirming - clear the pending popup
+        if (pendingPopup === "1" && runModeRaw !== RUNMODE_ELIG_IMPORT && !isEligibilityListPage()) {
+            log("ImportElig: pending popup detected but user navigated away before confirming; clearing state");
             try {
-                pendingPopup = localStorage.getItem(STORAGE_ELIG_IMPORT_PENDING_POPUP);
-            } catch (e) {
-                pendingPopup = null;
-            }
+                localStorage.removeItem(STORAGE_ELIG_IMPORT_PENDING_POPUP);
+            } catch (e) {}
+            // Don't return - continue with normal init
+        }
+
+        // If run mode is set but pending popup is not set and we're not on the eligibility list page,
+        // it means user navigated away after confirming - clear the run mode
+        if (runModeRaw === RUNMODE_ELIG_IMPORT && pendingPopup !== "1" && !isEligibilityListPage()) {
+            log("ImportElig: run mode set but user navigated away manually; clearing run mode");
+            try {
+                localStorage.removeItem(STORAGE_RUN_MODE);
+            } catch (e) {}
+            // Don't return - continue with normal init (no redirect)
+            return;
+        }
+
+        if (runModeRaw === RUNMODE_ELIG_IMPORT) {
 
             if (pendingPopup === "1") {
                 if (!isEligibilityListPage()) {
