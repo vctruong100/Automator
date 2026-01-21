@@ -232,7 +232,16 @@
     var DEFAULT_FORM_PRIORITY = "mh, bm, review, process, dm, rep, subs, med, elg_pi, vitals, ecg";
 
     function SubjectEligibilityFunctions() {}
-
+    // Check if run mode is still set for the given mode.
+    function isRunModeSet(expectedMode) {
+        var raw = null;
+        try {
+            raw = localStorage.getItem(STORAGE_RUN_MODE);
+        } catch (e) {
+            return false;
+        }
+        return raw === expectedMode;
+    }
     function setLastMatchSelection(planVal, saVal, itemVal) {
         try {
             localStorage.setItem(STORAGE_ELIG_LAST_PLAN, String(planVal));
@@ -1613,6 +1622,10 @@
                     log("ImportElig: scan paused at plan loop");
                     return false;
                 }
+                if (!isRunModeSet(RUNMODE_ELIG_IMPORT)) {
+                    log("ImportElig: run mode cleared (X pressed) at plan loop");
+                    return false;
+                }
                 var pVal = (plans[p].value + "").trim();
                 var pTxt = (plans[p].textContent + "").trim();
                 if (pVal.length > 0) {
@@ -1655,6 +1668,10 @@
                 while (s < sOps.length) {
                     if (isPaused()) {
                         log("ImportElig: scan paused at SA loop");
+                        return false;
+                    }
+                    if (!isRunModeSet(RUNMODE_ELIG_IMPORT)) {
+                        log("ImportElig: run mode cleared (X pressed) at SA loop");
                         return false;
                     }
                     var sVal = (sOps[s].value + "").trim();
@@ -1910,8 +1927,6 @@
         }
     }
 
-
-
     async function setComparatorEQ() {
         log("ImportElig: setComparatorEQ started");
         var sel = await waitForComparatorReady(1000);
@@ -2035,7 +2050,6 @@
 
 
 
-
     async function executeEligibilityMappingAutomation() {
         if (isPaused()) {
             log("ImportElig: paused at start; aborting");
@@ -2094,9 +2108,17 @@
                 log("ImportElig: paused; stopping loop");
                 break;
             }
+            if (!isRunModeSet(RUNMODE_ELIG_IMPORT)) {
+                log("ImportElig: run mode cleared (X pressed); stopping loop");
+                break;
+            }
             var opened = await openAddEligibilityModal();
             if (!opened) {
                 log("ImportElig: cannot open modal; stopping");
+                break;
+            }
+            if (!isRunModeSet(RUNMODE_ELIG_IMPORT)) {
+                log("ImportElig: run mode cleared (X pressed); stopping loop");
                 break;
             }
             var eligList = await readEligibilityItemCodesFromSelect();
@@ -2162,6 +2184,10 @@
             }
             log("ImportElig: stabilizing selections before comparator");
             await stabilizeSelectionBeforeComparator(3000);
+            if (!isRunModeSet(RUNMODE_ELIG_IMPORT)) {
+                log("ImportElig: run mode cleared (X pressed); stopping loop");
+                break;
+            }
             log("ImportElig: waiting for comparator to appear after Check Item selection");
             var compReady = await waitForComparatorReady(1000);
             if (!compReady) {
@@ -2199,6 +2225,10 @@
             var saved = await clickSaveAndWait();
             if (!saved) {
                 log("ImportElig: save failed; stopping");
+                break;
+            }
+            if (!isRunModeSet(RUNMODE_ELIG_IMPORT)) {
+                log("ImportElig: run mode cleared (X pressed); stopping loop");
                 break;
             }
             existingSet.add(pick);

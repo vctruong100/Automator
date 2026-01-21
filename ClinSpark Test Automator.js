@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 2.5.4
+// @version 2.5.5
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -250,6 +250,15 @@
     var DEFAULT_FORM_PRIORITY = "mh, bm, review, process, dm, rep, subs, med, elg_pi, vitals, ecg";
 
     function SubjectEligibilityFunctions() {}
+    function isRunModeSet(expectedMode) {
+        var raw = null;
+        try {
+            raw = localStorage.getItem(STORAGE_RUN_MODE);
+        } catch (e) {
+            return false;
+        }
+        return raw === expectedMode;
+    }
 
     function setLastMatchSelection(planVal, saVal, itemVal) {
         try {
@@ -1628,6 +1637,10 @@
                     log("ImportElig: scan paused at plan loop");
                     return false;
                 }
+                if (!isRunModeSet(RUNMODE_ELIG_IMPORT)) {
+                    log("ImportElig: run mode cleared (X pressed) at plan loop");
+                    return false;
+                }
                 var pVal = (plans[p].value + "").trim();
                 var pTxt = (plans[p].textContent + "").trim();
                 if (pVal.length > 0) {
@@ -1670,6 +1683,10 @@
                 while (s < sOps.length) {
                     if (isPaused()) {
                         log("ImportElig: scan paused at SA loop");
+                        return false;
+                    }
+                    if (!isRunModeSet(RUNMODE_ELIG_IMPORT)) {
+                        log("ImportElig: run mode cleared (X pressed) at SA loop");
                         return false;
                     }
                     var sVal = (sOps[s].value + "").trim();
@@ -1764,83 +1781,6 @@
             return false;
         }
 
-
-        async function attemptCheckItemMatchForSA(code, expectedPlanVal, expectedSAVal) {
-            log("ImportElig: attemptCheckItemMatchForSA start");
-            var saEl = document.querySelector("select#scheduledActivity");
-            if (!saEl) {
-                log("ImportElig: attemptCheckItemMatchForSA no SA select");
-                return false;
-            }
-            var curSA = (saEl.value + "");
-            if (String(curSA) !== String(expectedSAVal)) {
-                log("ImportElig: attemptCheckItemMatchForSA SA mismatch before scan");
-                return false;
-            }
-            var elapsed = 0;
-            var step = 160;
-            var max = 3200;
-            while (elapsed <= max) {
-                saEl = document.querySelector("select#scheduledActivity");
-                if (!saEl) {
-                    await sleep(step);
-                    elapsed = elapsed + step;
-                    continue;
-                }
-                curSA = (saEl.value + "");
-                if (String(curSA) !== String(expectedSAVal)) {
-                    log("ImportElig: attemptCheckItemMatchForSA SA changed mid-scan");
-                    return false;
-                }
-                var itemRefSel = document.querySelector("select#itemRef");
-                if (itemRefSel) {
-                    var opts = itemRefSel.querySelectorAll("option");
-                    var len = opts.length;
-                    if (len === 0) {
-                        await sleep(step);
-                        elapsed = elapsed + step;
-                        continue;
-                    }
-                    var i = 0;
-                    while (i < len) {
-                        var op = opts[i];
-                        var txt = (op.textContent + "").trim();
-                        var val = (op.value + "").trim();
-                        if (val.length > 0) {
-                            var parts = txt.split("-");
-                            if (parts.length >= 2) {
-                                var tail = (parts[parts.length - 1] + "").trim();
-                                if (tail === code) {
-                                    saEl = document.querySelector("select#scheduledActivity");
-                                    if (!saEl) {
-                                        log("ImportElig: attemptCheckItemMatchForSA SA missing before set");
-                                        return false;
-                                    }
-                                    curSA = (saEl.value + "");
-                                    if (String(curSA) !== String(expectedSAVal)) {
-                                        log("ImportElig: attemptCheckItemMatchForSA SA changed before set");
-                                        return false;
-                                    }
-                                    itemRefSel.value = val;
-                                    var evt = new Event("change", { bubbles: true });
-                                    itemRefSel.dispatchEvent(evt);
-                                    log("ImportElig: Check Item matched '" + String(txt) + "'");
-                                    setLastMatchSelection(expectedPlanVal, expectedSAVal, val);
-                                    return true;
-                                }
-                            }
-                        }
-                        i = i + 1;
-                    }
-                    return false;
-                }
-                await sleep(step);
-                elapsed = elapsed + step;
-            }
-            return false;
-        }
-
-
         async function attemptCheckItemMatch(code, expectedPlanVal, expectedSAVal) {
             var elapsed = 0;
             var step = 160;
@@ -1924,7 +1864,6 @@
             return false;
         }
     }
-
 
 
     async function setComparatorEQ() {
@@ -2047,7 +1986,6 @@
     }
 
 
-
     async function executeEligibilityMappingAutomation() {
         if (isPaused()) {
             log("ImportElig: paused at start; aborting");
@@ -2106,9 +2044,17 @@
                 log("ImportElig: paused; stopping loop");
                 break;
             }
+            if (!isRunModeSet(RUNMODE_ELIG_IMPORT)) {
+                log("ImportElig: run mode cleared (X pressed); stopping loop");
+                break;
+            }
             var opened = await openAddEligibilityModal();
             if (!opened) {
                 log("ImportElig: cannot open modal; stopping");
+                break;
+            }
+            if (!isRunModeSet(RUNMODE_ELIG_IMPORT)) {
+                log("ImportElig: run mode cleared (X pressed); stopping loop");
                 break;
             }
             var eligList = await readEligibilityItemCodesFromSelect();
@@ -2174,6 +2120,10 @@
             }
             log("ImportElig: stabilizing selections before comparator");
             await stabilizeSelectionBeforeComparator(3000);
+            if (!isRunModeSet(RUNMODE_ELIG_IMPORT)) {
+                log("ImportElig: run mode cleared (X pressed); stopping loop");
+                break;
+            }
             log("ImportElig: waiting for comparator to appear after Check Item selection");
             var compReady = await waitForComparatorReady(1000);
             if (!compReady) {
@@ -2211,6 +2161,10 @@
             var saved = await clickSaveAndWait();
             if (!saved) {
                 log("ImportElig: save failed; stopping");
+                break;
+            }
+            if (!isRunModeSet(RUNMODE_ELIG_IMPORT)) {
+                log("ImportElig: run mode cleared (X pressed); stopping loop");
                 break;
             }
             existingSet.add(pick);
