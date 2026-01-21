@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 2.5.7
+// @version 2.5.6
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -68,6 +68,666 @@
     const RUNMODE_ELIG_IMPORT = "eligibilityImport";
     const STORAGE_ELIG_CHECKITEM_CACHE = "activityPlanState.eligibility.checkItemCache";
     const STORAGE_ELIG_IMPORT_PENDING_POPUP = "activityPlanState.eligibility.importPendingPopup";
+
+        //==========================
+    // COLLECT ALL FEATURES
+    //==========================
+    //==========================
+
+    const DATA_COLLECTION_SUBJECT_URL = "https://cenexeltest.clinspark.com/secure/datacollection/subject";
+    var COLLECT_ALL_CANCELLED = false;
+    var COLLECT_ALL_POPUP_REF = null;
+
+    // Clear all Collect All related data
+    function clearCollectAllData() {
+        COLLECT_ALL_CANCELLED = false;
+        COLLECT_ALL_POPUP_REF = null;
+        log("CollectAll: data cleared");
+    }
+
+    // Return true if we are on the Data Collection > Subject page.
+    function isDataCollectionSubjectPage() {
+        var p = location.pathname + "";
+        var ok = false;
+        if (p === "/secure/datacollection/subject") {
+            ok = true;
+        } else {
+            ok = false;
+        }
+        if (ok) {
+            log("CollectAll: detected Data Collection Subject page");
+        } else {
+            log("CollectAll: NOT on Data Collection Subject page; current path=" + p);
+        }
+        return ok;
+    }
+
+    // Find and return all collectable form rows in the table body.
+    function getFormDataRows() {
+        var body = document.querySelector("tbody#formDataTableBody");
+        if (!body) {
+            log("CollectAll: tbody#formDataTableBody not found");
+            return [];
+        }
+        var rows = body.querySelectorAll("tr[id^='formDataRow_']");
+        var out = [];
+        var i = 0;
+        while (i < rows.length) {
+            out.push(rows[i]);
+            i = i + 1;
+        }
+        log("CollectAll: found " + String(out.length) + " formDataRow_* rows");
+        return out;
+    }
+
+    // Parse numeric form id from a <tr id="formDataRow_#####">
+    function getFormDataRowId(tr) {
+        if (!tr) {
+            return "";
+        }
+        var idAttr = tr.id + "";
+        var m = idAttr.match(/formDataRow_(\d+)/);
+        if (m && m[1]) {
+            return m[1];
+        }
+        return "";
+    }
+
+    // Extract form name from the first <td> of a form row
+    function getFormNameFromRow(tr) {
+        if (!tr) {
+            return "";
+        }
+        var firstTd = tr.querySelector("td:first-child");
+        if (!firstTd) {
+            return "";
+        }
+        var formSpan = firstTd.querySelector("span.tooltips[data-original-title='Form']");
+        if (formSpan) {
+            return (formSpan.textContent + "").trim();
+        }
+        return "";
+    }
+
+    // Extract collection status from the <tr> element's class
+    function getFormStatusFromRow(tr) {
+        if (!tr) {
+            return "";
+        }
+        var className = tr.className + "";
+        // Look for dataCollectionStatus_* pattern
+        var statusMatch = className.match(/dataCollectionStatus_([^\s]+)/);
+        if (statusMatch && statusMatch[1]) {
+            return statusMatch[1];
+        }
+        // Fallback: look for other status indicators
+        if (className.indexOf("formDataUnscheduled") !== -1) {
+            return "Unscheduled";
+        }
+        if (className.indexOf("formDataIncomplete") !== -1) {
+            return "Incomplete";
+        }
+        if (className.indexOf("formDataUnsaved") !== -1) {
+            return "Completed";
+        }
+        return "Unknown";
+    }
+
+    // Locate the "Collect" button inside a form row.
+    function findCollectButtonInRow(tr) {
+        if (!tr) {
+            return null;
+        }
+        var btns = tr.querySelectorAll("button.btn.green.btn-sm");
+        var i = 0;
+        while (i < btns.length) {
+            var b = btns[i];
+            var t = (b.textContent + "").trim();
+            var hasText = t.toLowerCase().indexOf("collect") !== -1;
+            if (hasText) {
+                return b;
+            }
+            i = i + 1;
+        }
+        var alt = tr.querySelector("button[onclick^='showModal(']");
+        if (alt) {
+            return alt;
+        }
+        return null;
+    }
+
+    // Return true if the barcode verify modal is present AND visible.
+    function isBarcodeVerifyModalVisible() {
+        var div = document.getElementById("requireSubjectBarcodeVerifyDiv");
+        if (!div) {
+            log("CollectAll: requireSubjectBarcodeVerifyDiv not present");
+            return false;
+        }
+        var styleAttr = div.getAttribute("style") || "";
+        var hidden = styleAttr.indexOf("display: none") !== -1;
+        if (hidden) {
+            log("CollectAll: barcode verify modal found but style=display: none (treated as not visible)");
+            return false;
+        }
+        log("CollectAll: barcode verify modal is visible (style not 'display: none')");
+        return true;
+    }
+
+    // Return true if the form order modal is present AND visible.
+    function isFormOrderModalVisible() {
+        var div = document.getElementById("requireFormOrderDiv");
+        if (!div) {
+            log("CollectAll: requireFormOrderDiv not present");
+            return false;
+        }
+        var styleAttr = div.getAttribute("style") || "";
+        var hidden = styleAttr.indexOf("display: none") !== -1;
+        if (hidden) {
+            log("CollectAll: form order modal found but style=display: none (treated as not visible)");
+            return false;
+        }
+        log("CollectAll: form order modal is visible (style not 'display: none')");
+        return true;
+    }
+
+    // Handle the form order modal: fill textarea and click Save.
+    async function handleFormOrderModal() {
+        log("CollectAll: handling form order modal");
+
+        var textarea = await waitForSelector("textarea#ordercomment", 6000);
+        if (!textarea) {
+            log("CollectAll: ordercomment textarea not found in form order modal");
+            return false;
+        }
+
+        log("CollectAll: found ordercomment textarea; setting value to 'Test'");
+        textarea.value = "Test";
+        var evt = new Event("input", { bubbles: true });
+        textarea.dispatchEvent(evt);
+
+        var saveBtn = await waitForSelector("button#saveOutOfOrderButton", 3000);
+        if (!saveBtn) {
+            log("CollectAll: saveOutOfOrderButton not found");
+            return false;
+        }
+
+        log("CollectAll: clicking Save button in form order modal");
+        saveBtn.click();
+
+        // Wait for modal to close
+        var closed = await waitForAnyModalToClose(6000);
+        if (closed) {
+            log("CollectAll: form order modal closed successfully");
+        } else {
+            log("CollectAll: form order modal close wait timed out");
+        }
+
+        return true;
+    }
+
+    // Await modal close: waits until no visible Bootstrap modal remains or timeout.
+    async function waitForAnyModalToClose(timeoutMs) {
+        var max = typeof timeoutMs === "number" ? timeoutMs : 12000;
+        var start = Date.now();
+        while (Date.now() - start < max) {
+            var openModal = document.querySelector(".modal.in, .modal.show");
+            if (!openModal) {
+                log("CollectAll: no .modal.in/.modal.show detected; assuming closed");
+                return true;
+            }
+            await sleep(200);
+        }
+        log("CollectAll: waitForAnyModalToClose reached timeout");
+        return false;
+    }
+
+    // Wait for the form table to refresh (simple delay + presence check).
+    async function waitForFormTableRefresh(timeoutMs) {
+        var max = typeof timeoutMs === "number" ? timeoutMs : 8000;
+        var start = Date.now();
+        while (Date.now() - start < max) {
+            var rows = getFormDataRows();
+            if (rows.length >= 0) {
+                return true;
+            }
+            await sleep(300);
+        }
+        log("CollectAll: waitForFormTableRefresh timeout");
+        return false;
+    }
+
+
+    // Run Barcode feature once from the current page context.
+    // Mirrors the behavior of clicking the "8. Run Barcode" button.
+    async function APS_RunBarcode() {
+        BARCODE_START_TS = Date.now();
+        clearBarcodeResult();
+
+        var info = getSubjectFromBreadcrumbOrTooltip();
+        var hasText = !!(info.subjectText && info.subjectText.length > 0);
+        var hasId = !!(info.subjectId && info.subjectId.length > 0);
+
+        if (!hasText && !hasId) {
+            log("Run Barcode: subject breadcrumb or tooltip not found (APS_RunBarcode)");
+            return;
+        }
+
+        if (hasText) {
+            setBarcodeSubjectText(info.subjectText);
+        } else {
+            clearBarcodeSubjectText();
+        }
+
+        if (hasId) {
+            setBarcodeSubjectId(info.subjectId);
+        } else {
+            clearBarcodeSubjectId();
+        }
+
+        log("APS_RunBarcode: Opening Barcode Printing Subjects in background…");
+        openInTab(location.origin + "/secure/barcodeprinting/subjects", false);
+
+        var loadingText = document.createElement("div");
+        loadingText.style.textAlign = "center";
+        loadingText.style.fontSize = "16px";
+        loadingText.style.color = "#fff";
+        loadingText.style.padding = "20px";
+        loadingText.textContent = "Locating barcode.";
+
+        var popup = createPopup({
+            title: "Locating Barcode",
+            content: loadingText,
+            width: "300px",
+            height: "auto"
+        });
+
+        var dots = 1;
+        var loadingInterval = setInterval(function () {
+            dots = dots + 1;
+            if (dots > 3) {
+                dots = 1;
+            }
+            var text = "Locating barcode";
+            var i = 0;
+            while (i < dots) {
+                text = text + ".";
+                i = i + 1;
+            }
+            loadingText.textContent = text;
+        }, 500);
+
+        var waited = 0;
+        var maxWait = 10000;
+        var step = 500;
+
+        while (waited <= maxWait) {
+            var r = getBarcodeResult();
+            if (r && r.length > 0) {
+                try {
+                    clearInterval(loadingInterval);
+                } catch (e1) {}
+                try {
+                    if (popup && popup.close) {
+                        popup.close();
+                    }
+                } catch (e2) {}
+
+                log("APS_RunBarcode: got result '" + r + "'; attempting to populate input");
+
+                var inputBox = document.querySelector("input.bootbox-input.bootbox-input-text.form-control");
+                if (!inputBox) {
+                    inputBox = await openBarcodeDataEntryModalIfNeeded(6000);
+                }
+
+                if (inputBox) {
+                    inputBox.value = r;
+                    var evt = new Event("input", { bubbles: true });
+                    inputBox.dispatchEvent(evt);
+                    log("APS_RunBarcode: populated barcode value in modal");
+
+                    var okBtn = document.querySelector("button[data-bb-handler=\"confirm\"].btn.btn-primary");
+                    if (!okBtn) {
+                        okBtn = document.querySelector("button.btn.btn-primary[data-bb-handler=\"confirm\"]");
+                    }
+                    if (okBtn) {
+                        okBtn.click();
+                        log("APS_RunBarcode: confirmed barcode modal");
+                    } else {
+                        log("APS_RunBarcode: OK button not found after populating input");
+                    }
+                } else {
+                    log("APS_RunBarcode: unable to find or open barcode input modal");
+                }
+
+                try {
+                    var secs1 = (Date.now() - BARCODE_START_TS) / 1000;
+                    var s1 = secs1.toFixed(2);
+                    log("APS_RunBarcode: elapsed " + String(s1) + " s");
+                } catch (e3) {}
+                BARCODE_START_TS = 0;
+                clearBarcodeResult();
+                return;
+            }
+
+            await sleep(step);
+            waited = waited + step;
+        }
+
+        try {
+            clearInterval(loadingInterval);
+        } catch (e4) {}
+        try {
+            if (popup && popup.close) {
+                popup.close();
+            }
+        } catch (e5) {}
+
+        log("APS_RunBarcode: timeout with no result");
+
+        try {
+            var secs2 = (Date.now() - BARCODE_START_TS) / 1000;
+            var s2 = secs2.toFixed(2);
+            log("APS_RunBarcode: elapsed " + String(s2) + " s");
+        } catch (e6) {}
+        BARCODE_START_TS = 0;
+        clearBarcodeResult();
+    }
+
+
+    // Main "Collect All" feature that combines Run Barcode (if needed) + Run Form (IR) for each first row repeatedly.
+    async function runCollectAll() {
+        log("CollectAll: start requested");
+
+        // Clear any previous data and reset cancellation flag
+        clearCollectAllData();
+        COLLECT_ALL_CANCELLED = false;
+
+        var onPage = isDataCollectionSubjectPage();
+        if (!onPage) {
+            log("CollectAll: redirecting to Data Collection Subject page and aborting current run");
+            location.href = DATA_COLLECTION_SUBJECT_URL;
+            return;
+        }
+
+        // Create popup container with status and list
+        var popupContainer = document.createElement("div");
+        popupContainer.style.display = "flex";
+        popupContainer.style.flexDirection = "column";
+        popupContainer.style.gap = "12px";
+
+        var statusDiv = document.createElement("div");
+        statusDiv.style.textAlign = "center";
+        statusDiv.style.fontSize = "16px";
+        statusDiv.style.color = "#fff";
+        statusDiv.style.padding = "8px";
+        statusDiv.textContent = "Running.";
+
+        var listContainer = document.createElement("div");
+        listContainer.style.maxHeight = "400px";
+        listContainer.style.overflowY = "auto";
+        listContainer.style.border = "1px solid #444";
+        listContainer.style.borderRadius = "4px";
+        listContainer.style.padding = "8px";
+        listContainer.style.background = "#1a1a1a";
+        listContainer.style.fontSize = "13px";
+
+        var listTitle = document.createElement("div");
+        listTitle.textContent = "Collected Forms:";
+        listTitle.style.fontWeight = "600";
+        listTitle.style.marginBottom = "8px";
+        listTitle.style.color = "#fff";
+        listContainer.appendChild(listTitle);
+
+        var formsList = document.createElement("div");
+        formsList.id = "collectAllFormsList";
+        formsList.style.display = "flex";
+        formsList.style.flexDirection = "column";
+        formsList.style.gap = "4px";
+        listContainer.appendChild(formsList);
+
+        popupContainer.appendChild(statusDiv);
+        popupContainer.appendChild(listContainer);
+
+        var pop = createPopup({
+            title: "Collect All",
+            content: popupContainer,
+            width: "450px",
+            height: "500px",
+            onClose: function() {
+                COLLECT_ALL_CANCELLED = true;
+                clearCollectAllData();
+                log("CollectAll: cancelled by user (close button)");
+            }
+        });
+
+        COLLECT_ALL_POPUP_REF = pop;
+
+        // Function to update the status text with animation
+        var animDots = 1;
+        var animTimer = setInterval(function () {
+            if (COLLECT_ALL_CANCELLED) {
+                try {
+                    clearInterval(animTimer);
+                } catch (e) {}
+                return;
+            }
+            animDots = animDots + 1;
+            if (animDots > 3) {
+                animDots = 1;
+            }
+            var t = "Running";
+            var i = 0;
+            while (i < animDots) {
+                t = t + ".";
+                i = i + 1;
+            }
+            statusDiv.textContent = t;
+        }, 500);
+
+        // Function to add a form to the list
+        function addFormToList(formName, formStatus, formId) {
+            var listItem = document.createElement("div");
+            listItem.style.display = "flex";
+            listItem.style.justifyContent = "space-between";
+            listItem.style.alignItems = "center";
+            listItem.style.padding = "6px 8px";
+            listItem.style.background = "#222";
+            listItem.style.borderRadius = "4px";
+            listItem.style.border = "1px solid #333";
+
+            var nameSpan = document.createElement("span");
+            nameSpan.textContent = formName || "Unknown Form";
+            nameSpan.style.color = "#fff";
+            nameSpan.style.flex = "1";
+
+            var statusSpan = document.createElement("span");
+            statusSpan.textContent = formStatus || "Unknown";
+            statusSpan.style.color = "#9df";
+            statusSpan.style.marginLeft = "12px";
+            statusSpan.style.fontSize = "12px";
+            statusSpan.style.padding = "2px 8px";
+            statusSpan.style.background = "#333";
+            statusSpan.style.borderRadius = "3px";
+
+            listItem.appendChild(nameSpan);
+            listItem.appendChild(statusSpan);
+            formsList.appendChild(listItem);
+
+            // Auto-scroll to bottom
+            listContainer.scrollTop = listContainer.scrollHeight;
+        }
+
+        var processed = {};
+        var safety = 0;
+        var safetyMax = 1000;
+
+        while (safety < safetyMax) {
+            if (COLLECT_ALL_CANCELLED) {
+                log("CollectAll: cancelled; stopping run");
+                try {
+                    clearInterval(animTimer);
+                } catch (e1) {}
+                statusDiv.textContent = "Cancelled";
+                statusDiv.style.color = "#f99";
+                return;
+            }
+
+            if (isPaused()) {
+                log("CollectAll: paused detected; stopping run");
+                try {
+                    clearInterval(animTimer);
+                } catch (e1) {}
+                statusDiv.textContent = "Paused";
+                statusDiv.style.color = "#ff9";
+                clearCollectAllData();
+                return;
+            }
+
+            var rows = getFormDataRows();
+            if (!rows || rows.length === 0) {
+                log("CollectAll: no form rows found; finishing");
+                break;
+            }
+
+            var pickedRow = null;
+            var pickedFormId = "";
+            var i = 0;
+            while (i < rows.length) {
+                var tr = rows[i];
+                var fid = getFormDataRowId(tr);
+                if (fid && fid.length > 0) {
+                    var already = processed[fid] === true;
+                    if (!already) {
+                        pickedRow = tr;
+                        pickedFormId = fid;
+                        break;
+                    }
+                }
+                i = i + 1;
+            }
+
+            if (!pickedRow) {
+                log("CollectAll: no new rows (all remaining are repeats); finishing");
+                break;
+            }
+
+            // Extract form name and status before processing
+            var formName = getFormNameFromRow(pickedRow);
+            var formStatus = getFormStatusFromRow(pickedRow);
+
+            log("CollectAll: picked first unprocessed formId=" + String(pickedFormId) + " name=" + String(formName) + " status=" + String(formStatus));
+            processed[pickedFormId] = true;
+
+            var collectBtn = findCollectButtonInRow(pickedRow);
+            if (!collectBtn) {
+                log("CollectAll: Collect button not found in formId=" + String(pickedFormId) + "; moving to next");
+                await sleep(600);
+                safety = safety + 1;
+                continue;
+            }
+
+            log("CollectAll: clicking Collect for formId=" + String(pickedFormId));
+            collectBtn.click();
+
+            // Wait a moment for modals to appear
+            await sleep(300);
+
+            // Check for form order modal first (may appear before or after barcode modal)
+            var formOrderDiv = await waitForSelector("#requireFormOrderDiv", 6000);
+            var formOrderVisible = false;
+            if (formOrderDiv) {
+                formOrderVisible = isFormOrderModalVisible();
+            }
+
+            if (formOrderVisible) {
+                log("CollectAll: form order modal detected; handling it");
+                await handleFormOrderModal();
+                // After handling form order modal, wait and check if barcode modal appears
+                await sleep(500);
+            }
+
+            // Check for barcode modal (may appear before or after form order modal)
+            var barcodeDiv = await waitForSelector("#requireSubjectBarcodeVerifyDiv", 6000);
+            var barcodeVisible = false;
+            if (barcodeDiv) {
+                barcodeVisible = isBarcodeVerifyModalVisible();
+            } else {
+                log("CollectAll: barcode verify container not found after Collect click (may not be required)");
+            }
+
+            if (barcodeVisible) {
+                log("CollectAll: barcode required; executing Run Barcode feature");
+                await APS_RunBarcode();
+                var okClosed = await waitForAnyModalToClose(6000);
+                if (okClosed) {
+                    log("CollectAll: barcode modal flow appears closed");
+                } else {
+                    log("CollectAll: barcode modal close wait timed out; continuing cautiously");
+                }
+                // After barcode modal closes, check again for form order modal (in case it appears after)
+                await sleep(500);
+                formOrderDiv = document.getElementById("requireFormOrderDiv");
+                if (formOrderDiv) {
+                    formOrderVisible = isFormOrderModalVisible();
+                    if (formOrderVisible) {
+                        log("CollectAll: form order modal detected after barcode; handling it");
+                        await handleFormOrderModal();
+                    }
+                }
+            } else {
+                log("CollectAll: barcode not required");
+                // Even if barcode is not required, check again for form order modal (in case it appears later)
+                await sleep(500);
+                formOrderDiv = document.getElementById("requireFormOrderDiv");
+                if (formOrderDiv) {
+                    formOrderVisible = isFormOrderModalVisible();
+                    if (formOrderVisible) {
+                        log("CollectAll: form order modal detected (no barcode); handling it");
+                        await handleFormOrderModal();
+                    }
+                }
+            }
+
+            log("CollectAll: launching Run Form (IR) for formId=" + String(pickedFormId));
+            RUN_FORM_V2_START_TS = Date.now();
+            setFormValueMode("ir");
+            await runFormAutomationV2();
+
+            var closeSpan = await waitForSelector("span[data-dismiss='modal']", 8000);
+            if (closeSpan) {
+                log("CollectAll: clicking Close span after form processing");
+                closeSpan.click();
+            } else {
+                log("CollectAll: Close span not found; attempting to ensure modal is closed");
+            }
+
+            var closed = await waitForAnyModalToClose(3000);
+            if (!closed) {
+                log("CollectAll: modal did not close within timeout; proceeding to rescan");
+            } else {
+                log("CollectAll: modal closed; waiting for table refresh");
+            }
+
+            // Add form to list after collection
+            addFormToList(formName, formStatus, pickedFormId);
+
+            await waitForFormTableRefresh(1000);
+            await sleep(100);
+            safety = safety + 1;
+        }
+
+        try {
+            clearInterval(animTimer);
+        } catch (e1) {}
+
+        statusDiv.textContent = "Completed";
+        statusDiv.style.color = "#9f9";
+        log("CollectAll: completed");
+
+        try {
+            clearBarcodeResult();
+        } catch (e2) {}
+    }
 
     //==========================
     // CLEAR SUBJECT ELIGIBILITY FEATURE
@@ -744,7 +1404,7 @@
         container.appendChild(runningBox);
 
         var popup = createPopup({
-            title: "Import I/E",
+            title: "Import Eligibility Mapping",
             content: container,
             width: "450px",
             height: "auto",
@@ -8914,6 +9574,8 @@
 
 
     // Create a draggable, closeable popup styled like the panel
+
+    // Create a draggable, closeable popup styled like the panel
     function createPopup(options) {
         options = options || {};
         var title = options.title || "Popup";
@@ -8999,18 +9661,24 @@
             if (onClose) {
                 try { onClose(); } catch (e2) { log("Popup onClose error: " + e2); }
             }
+            document.removeEventListener("keydown", escapeHandler);
             popup.remove();
         });
 
         headerBar.appendChild(closeBtn);
         popup.appendChild(headerBar);
 
-        document.addEventListener("keydown", function(e) {
-            if (e.key === "Escape") {
+        var escapeHandler = function(e) {
+            if (e.key === "Escape" && document.body.contains(popup)) {
                 try { clearAllRunState(); } catch(e2){}
+                if (onClose) {
+                    try { onClose(); } catch (e3) { log("Popup onClose error (Escape): " + e3); }
+                }
                 if (popup && popup.remove) popup.remove();
+                document.removeEventListener("keydown", escapeHandler);
             }
-        });
+        };
+        document.addEventListener("keydown", escapeHandler);
 
         var bodyContainer = document.createElement("div");
         bodyContainer.style.flex = "1";
@@ -9127,6 +9795,7 @@
                 }
                 document.removeEventListener("mousemove", mouseMoveHandler);
                 document.removeEventListener("mouseup", mouseUpHandler);
+                document.removeEventListener("keydown", escapeHandler);
                 popup.remove();
             },
             setContent: function(newContent) {
@@ -9540,7 +10209,7 @@
         runLockSamplePathsBtn.style.cursor = "pointer";
 
         var importEligBtn = document.createElement("button");
-        importEligBtn.textContent = "12. Import I/E";
+        importEligBtn.textContent = "12. Import Eligibility Mapping";
         importEligBtn.style.background = "#9df";
         importEligBtn.style.color = "#000";
         importEligBtn.style.border = "none";
@@ -9558,6 +10227,15 @@
         clearMappingBtn.style.padding = "8px";
         clearMappingBtn.style.cursor = "pointer";
 
+        var collectAllBtn = document.createElement("button");
+        collectAllBtn.textContent = "Collect All";
+        collectAllBtn.style.background = "#6cf";
+        collectAllBtn.style.color = "#000";
+        collectAllBtn.style.border = "none";
+        collectAllBtn.style.borderRadius = "6px";
+        collectAllBtn.style.padding = "8px";
+        collectAllBtn.style.cursor = "pointer";
+
         btnRow.appendChild(runPlansBtn);
         btnRow.appendChild(runLockSamplePathsBtn);
         btnRow.appendChild(runStudyBtn);
@@ -9571,6 +10249,7 @@
         btnRow.appendChild(runFormIRBtn);
         btnRow.appendChild(importEligBtn);
         btnRow.appendChild(clearMappingBtn);
+        btnRow.appendChild(collectAllBtn);
         btnRow.appendChild(pauseBtn);
         btnRow.appendChild(clearLogsBtn);
         btnRow.appendChild(toggleLogsBtn);
@@ -9706,6 +10385,8 @@
                 status.textContent = "Paused";
                 log("Paused");
                 clearAllRunState();
+                COLLECT_ALL_CANCELLED = true;
+                clearCollectAllData();
                 clearEligibilityWorkingState();
             }
         });
@@ -9857,6 +10538,10 @@
             log("Run Form (IR) clicked");
             setFormValueMode("ir");
             runFormAutomationV2();
+        });
+        collectAllBtn.addEventListener("click", function () {
+            log("CollectAll: button clicked");
+            runCollectAll();
         });
         collapseBtn.addEventListener("click", function () {
             var collapsed = getPanelCollapsed();
