@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.3.3
+// @version     1.3.4
 // @description Retain only Barcode feature; production environment only
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -91,7 +91,6 @@
     const STORAGE_ELIG_CHECKITEM_CACHE = "activityPlanState.eligibility.checkItemCache";
     const STORAGE_ELIG_IMPORT_PENDING_POPUP = "activityPlanState.eligibility.importPendingPopup";
 
-    
     //==========================
     // RUN SUBJECT ELIGIBILITY FEATURE
     //==========================
@@ -239,6 +238,95 @@
         log("ImportElig: stabilization timeout");
     }
 
+        // Clear persisted selected volunteer ids.
+    function clearSelectedVolunteerIds() {
+        try {
+            localStorage.removeItem(STORAGE_SELECTED_IDS);
+            log("SelectedIds cleared");
+        } catch (e) {}
+    }
+
+    // Clear pending IDs from storage.
+    function clearPendingIds() {
+        try {
+            localStorage.removeItem(STORAGE_PENDING);
+            log("Pending IDs cleared");
+        } catch (e) {}
+    }
+
+    // Clear run mode.
+    function clearRunMode() {
+        try {
+            localStorage.removeItem(STORAGE_RUN_MODE);
+            log("RunMode cleared");
+        } catch (e) {}
+    }
+
+    // Clear continue-epoch flag.
+    function clearContinueEpoch() {
+        try {
+            localStorage.removeItem(STORAGE_CONTINUE_EPOCH);
+            log("ContinueEpoch cleared");
+        } catch (e) {}
+    }
+    // Clear cohort-run guard state.
+    function clearCohortGuard() {
+        try {
+            localStorage.removeItem("activityPlanState.cohortAdd.guard");
+            localStorage.removeItem("activityPlanState.cohortAdd.editDoneMap");
+            log("CohortGuard and editDoneMap cleared");
+        } catch (e) {}
+    }
+
+    // Clear the after-refresh action string.
+    function clearAfterRefresh() {
+        var raw = null;
+        try {
+            raw = localStorage.getItem(STORAGE_AFTER_REFRESH);
+        } catch (e) {}
+        if (raw) {
+            try {
+                localStorage.removeItem(STORAGE_AFTER_REFRESH);
+                log("AfterRefresh cleared");
+            } catch (e2) {}
+        }
+    }
+
+    // Clear consent scan index.
+    function clearConsentScanIndex() {
+        try {
+            localStorage.removeItem(STORAGE_CONSENT_SCAN_INDEX);
+        } catch (e) {}
+    }
+    // Clear last volunteer id storage.
+    function clearLastVolunteerId() {
+        try {
+            localStorage.removeItem("activityPlanState.lastVolunteerId");
+            log("lastVolunteerId cleared");
+        } catch (e) {}
+    }
+    function clearBarcodeResult() {
+        try {
+            localStorage.removeItem(STORAGE_BARCODE_RESULT);
+        } catch (e) {}
+    }
+    function clearAllRunState() {
+        clearRunMode();
+        clearContinueEpoch();
+        clearCohortGuard();
+        clearPendingIds();
+        clearAfterRefresh();
+        clearConsentScanIndex();
+        clearLastVolunteerId();
+        clearSelectedVolunteerIds();
+        try {
+            localStorage.removeItem(STORAGE_EDIT_STUDY);
+            localStorage.removeItem(STORAGE_CHECK_ELIG_LOCK);
+            localStorage.removeItem("activityPlanState.cohortAdd.editDoneMap");
+            log("Cleared cohortAdd.editDoneMap");
+        } catch (e) {}
+    }
+
     async function waitForComparatorReady(timeoutMs) {
         log("ImportElig: waitForComparatorReady start");
         var max = typeof timeoutMs === "number" ? timeoutMs : 8000;
@@ -320,6 +408,7 @@
         log("ImportElig: itemRef did not reload before timeout");
         return false;
     }
+
 
 
     function buildImportEligPopup(onConfirm) {
@@ -619,11 +708,23 @@
                 log("ImportElig: popup X pressed → stopping automation");
                 clearAllRunState();
                 clearEligibilityWorkingState();
+                // Clear pending popup flag
+                try {
+                    localStorage.removeItem(STORAGE_ELIG_IMPORT_PENDING_POPUP);
+                } catch (e) {}
             }
         });
 
         confirmBtn.addEventListener("click", function () {
             log("ImportElig: Confirm clicked");
+
+            // Set run mode only when Confirm is actually pressed
+            try {
+                localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_ELIG_IMPORT);
+                // Clear pending popup flag since we're now starting automation
+                localStorage.removeItem(STORAGE_ELIG_IMPORT_PENDING_POPUP);
+            } catch (e) {
+            }
 
             var planPriText = (planPriInput.value + "").trim();
             var ignoreText = (ignoreInput.value + "").trim();
@@ -688,9 +789,6 @@
             });
         });
     }
-    ``
-
-
 
     function parseStoredKeywords(rawText) {
         var arr = [];
@@ -1895,14 +1993,11 @@
 
 
 
-
     function startImportEligibilityMapping() {
         log("ImportElig: startImportEligibilityMapping invoked");
 
-        try {
-            localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_ELIG_IMPORT);
-        } catch (e) {
-        }
+        // Don't set run mode here - only set it when Confirm is pressed
+        // This prevents auto-redirect if user navigates away before confirming
 
         var path = location.pathname;
 
@@ -1920,6 +2015,12 @@
 
         try {
             localStorage.removeItem(STORAGE_ELIG_IMPORT_PENDING_POPUP);
+        } catch (e) {
+        }
+
+        // Set flag that popup is open (but not run mode yet - that's set when Confirm is pressed)
+        try {
+            localStorage.setItem(STORAGE_ELIG_IMPORT_PENDING_POPUP, "1");
         } catch (e) {
         }
 
@@ -4930,22 +5031,38 @@ function showAeSubjectInputPopup(onDone) {
         if (location.pathname === "/secure/study/data/list") {
             processFindFormOnList();
         }
-                var runModeRaw = null;
+
+        // Check for manual navigation away from Import Eligibility process
+        var pendingPopup = null;
+        try {
+            pendingPopup = localStorage.getItem(STORAGE_ELIG_IMPORT_PENDING_POPUP);
+        } catch (e) {
+            pendingPopup = null;
+        }
+
+        var runModeRaw = null;
         try {
             runModeRaw = localStorage.getItem(STORAGE_RUN_MODE);
         } catch (e) {
             runModeRaw = null;
         }
 
-        if (runModeRaw === RUNMODE_ELIG_IMPORT) {
-
-            var pendingPopup = null;
-
+        if (pendingPopup === "1" && runModeRaw !== RUNMODE_ELIG_IMPORT && !isEligibilityListPage()) {
+            log("ImportElig: pending popup detected but user navigated away before confirming; clearing state");
             try {
-                pendingPopup = localStorage.getItem(STORAGE_ELIG_IMPORT_PENDING_POPUP);
-            } catch (e) {
-                pendingPopup = null;
-            }
+                localStorage.removeItem(STORAGE_ELIG_IMPORT_PENDING_POPUP);
+            } catch (e) {}
+        }
+
+        if (runModeRaw === RUNMODE_ELIG_IMPORT && pendingPopup !== "1" && !isEligibilityListPage()) {
+            log("ImportElig: run mode set but user navigated away manually; clearing run mode");
+            try {
+                localStorage.removeItem(STORAGE_RUN_MODE);
+            } catch (e) {}
+            return;
+        }
+
+        if (runModeRaw === RUNMODE_ELIG_IMPORT) {
 
             if (pendingPopup === "1") {
                 if (!isEligibilityListPage()) {
@@ -4979,19 +5096,6 @@ function showAeSubjectInputPopup(onDone) {
             return;
         }
 
-
-        if (runModeRaw === RUNMODE_CLEAR_MAPPING) {
-            if (!isEligibilityListPage()) {
-                log("ClearMapping: run mode set but not on list page; redirecting");
-                location.href = "https://cenexel.clinspark.com/secure/crfdesign/studylibrary/eligibility/list";
-                return;
-            }
-            log("ClearMapping: run mode set on list page; resuming in 4s");
-            setTimeout(function () {
-                executeClearMappingAutomation();
-            }, 4000);
-            return;
-        }
     }
 
 
