@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 2.5.3
+// @version 2.5.4
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -67,6 +67,7 @@
     const STORAGE_ELIG_IMPORTED = "activityPlanState.eligibility.importedItems";
     const RUNMODE_ELIG_IMPORT = "eligibilityImport";
     const STORAGE_ELIG_CHECKITEM_CACHE = "activityPlanState.eligibility.checkItemCache";
+    const STORAGE_ELIG_IMPORT_PENDING_POPUP = "activityPlanState.eligibility.importPendingPopup";
 
     //==========================
     // CLEAR SUBJECT ELIGIBILITY FEATURE
@@ -235,8 +236,6 @@
     // adding new eligibility item that cannot be found in the table,
     // saving those new items and storing it so there is no duplicate.
     //==========================
-
-
     var STORAGE_ELIG_FORM_EXCLUSION = "activityPlanState.elig.formExclusion";
     var STORAGE_ELIG_FORM_PRIORITY = "activityPlanState.elig.formPriority";
     var STORAGE_ELIG_FORM_PRIORITY_ONLY = "activityPlanState.elig.formPriorityOnly";
@@ -489,7 +488,7 @@
         planPriLabel.style.flex = "1";
 
         var planPriDefaultBtn = document.createElement("button");
-        planPriDefaultBtn.textContent = "Use Default";
+        planPriDefaultBtn.textContent = "Clear All";
         planPriDefaultBtn.style.background = "#444";
         planPriDefaultBtn.style.color = "#fff";
         planPriDefaultBtn.style.border = "none";
@@ -536,7 +535,7 @@
         ignoreLabel.style.flex = "1";
 
         var ignoreDefaultBtn = document.createElement("button");
-        ignoreDefaultBtn.textContent = "Use Default";
+        ignoreDefaultBtn.textContent = "Clear All";
         ignoreDefaultBtn.style.background = "#444";
         ignoreDefaultBtn.style.color = "#fff";
         ignoreDefaultBtn.style.border = "none";
@@ -2011,30 +2010,37 @@
     }
 
 
-
-    async function startImportEligibilityMapping() {
-
-        if (isPaused()) {
-            return;
-        }
+    function startImportEligibilityMapping() {
+        log("ImportElig: startImportEligibilityMapping invoked");
 
         try {
             localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_ELIG_IMPORT);
         } catch (e) {
         }
 
-        if (!isEligibilityListPage()) {
+        var path = location.pathname;
+
+        if (path !== "/secure/crfdesign/studylibrary/eligibility/list") {
+            log("ImportElig: not on eligibility list page; redirecting");
+
+            try {
+                localStorage.setItem(STORAGE_ELIG_IMPORT_PENDING_POPUP, "1");
+            } catch (e) {
+            }
+
             location.href = ELIGIBILITY_LIST_URL;
             return;
         }
 
-        buildImportEligPopup(function (doneCallback) {
+        try {
+            localStorage.removeItem(STORAGE_ELIG_IMPORT_PENDING_POPUP);
+        } catch (e) {
+        }
 
+        buildImportEligPopup(function (doneCallback) {
             setTimeout(async function () {
                 await executeEligibilityMappingAutomation();
-
                 doneCallback("No more Eligibility Item to Check");
-
                 location.href = ELIGIBILITY_LIST_URL + "#";
             }, 400);
         });
@@ -2232,7 +2238,7 @@
     // and value selection based on the specified mode (oorA, oorB, or ir).
     //==========================
     function FormAutomationFunctions() {}
-    
+
     async function handleRepeatingItemGroupAddNew(groupDiv) {
         var addBtn = groupDiv.querySelector("a.btn.btn-default.blue.pull-right");
         if (!addBtn) {
@@ -3795,7 +3801,7 @@
         }
         return [];
     }
-    
+
     async function processEpochShowPageForImport() {
         if (isPaused()) {
             log("Paused; exiting processEpochShowPageForImport");
@@ -3960,7 +3966,7 @@
         var el = await waitForSelector('table#listTable', timeoutMs);
         return el;
     }
-    
+
     // Find cohort table row referencing a given volunteer id.
     function findCohortRowByVolunteerId(volId) {
         var table = document.querySelector('table#listTable');
@@ -4010,7 +4016,7 @@
         return btn;
     }
 
-    
+
     // Find 'Activate Plan' link in a row's dropdown menu.
     function getMenuLinkActivatePlan(row) {
         if (!row) {
@@ -4040,7 +4046,7 @@
         return null;
     }
 
-    
+
     // Find 'Activate Volunteer' link in a row's dropdown menu.
     function getMenuLinkActivateVolunteer(row) {
         if (!row) {
@@ -4132,7 +4138,7 @@
         log("parseCohortIdFromUpdateHref: parsed id=" + String(id));
         return id;
     }
-    
+
     function setCheckboxStateById(id, state) {
         log("setCheckboxStateById: id=" + String(id) + " targetState=" + String(!!state));
         var el = document.getElementById(id);
@@ -6211,7 +6217,7 @@
         }
         return String(raw);
     }
-    
+
     // Return the subjects-list tbody element or fallback table tbody.
     function getSubjectsListTbody() {
         var tbody = document.querySelector('tbody#subjectTableBody');
@@ -6347,7 +6353,7 @@
         return "";
     }
 
-    
+
     //==========================
     // RUN ADD COHORT SUBJECTS FEATURE
     //==========================
@@ -7645,7 +7651,7 @@
         }
         return null;
     }
-    
+
     // Store pending autostate ids list.
     function setPendingIds(ids) {
         var payload = JSON.stringify(ids);
@@ -8065,7 +8071,7 @@
 
     function SharedUtilityFunctions() {}
 
-    
+
     // Find and navigate to eligibility locking form when required.
     async function processStudyMetadataPageForEligibilityLock() {
         if (isPaused()) {
@@ -8140,7 +8146,7 @@
         log("Routing to Eligibility form for locking");
         location.href = url;
     }
-    
+
     // Normalize (lowercase, remove punctuation/spaces) a text string used for label matching.
     function normalizeText(t) {
         if (typeof t !== "string") {
@@ -8183,7 +8189,7 @@
         }
         return false;
     }
-    
+
     // Wait for and click a Bootbox confirmation OK button.
     async function clickBootboxOk(timeoutMs) {
         var okBtn = await waitForSelector('button[data-bb-handler="confirm"].btn.btn-primary', timeoutMs);
@@ -8279,7 +8285,7 @@
         log("Actions dropdown not found");
         return false;
     }
-    
+
     // Locate and click the edit-state link for activity plans, opening its modal.
     async function findAndOpenEditStateModal() {
         var link = document.querySelector('a[href^="/secure/crfdesign/activityplans/updatestate/"]');
@@ -8731,7 +8737,7 @@
         } catch (e) {}
     }
 
-    
+
     // Detect activity plans list page.
     function isListPage() {
         var path = location.pathname;
@@ -9563,7 +9569,7 @@
         runLockSamplePathsBtn.style.cursor = "pointer";
 
         var importEligBtn = document.createElement("button");
-        importEligBtn.textContent = "Import Eligibility Mapping";
+        importEligBtn.textContent = "12. Import Eligibility Mapping";
         importEligBtn.style.background = "#9df";
         importEligBtn.style.color = "#000";
         importEligBtn.style.border = "none";
@@ -9573,7 +9579,7 @@
 
 
         var clearMappingBtn = document.createElement("button");
-        clearMappingBtn.textContent = "Clear Mapping";
+        clearMappingBtn.textContent = "13. Clear Mapping";
         clearMappingBtn.style.background = "#f99";
         clearMappingBtn.style.color = "#000";
         clearMappingBtn.style.border = "none";
@@ -10112,26 +10118,54 @@
             processBarcodeSubjectsPage();
             return;
         }
-                var runModeRaw = null;
+        var runModeRaw = null;
         try {
             runModeRaw = localStorage.getItem(STORAGE_RUN_MODE);
         } catch (e) {
             runModeRaw = null;
         }
+
         if (runModeRaw === RUNMODE_ELIG_IMPORT) {
+
+            var pendingPopup = null;
+
+            try {
+                pendingPopup = localStorage.getItem(STORAGE_ELIG_IMPORT_PENDING_POPUP);
+            } catch (e) {
+                pendingPopup = null;
+            }
+
+            if (pendingPopup === "1") {
+                if (!isEligibilityListPage()) {
+                    log("ImportElig: pending popup but not on list page; redirecting");
+                    location.href = ELIGIBILITY_LIST_URL;
+                    return;
+                }
+
+                log("ImportElig: pending popup detected; showing popup");
+
+                try {
+                    localStorage.removeItem(STORAGE_ELIG_IMPORT_PENDING_POPUP);
+                } catch (e) {
+                }
+
+                startImportEligibilityMapping();
+                return;
+            }
+
             if (!isEligibilityListPage()) {
-                log("ImportElig: run mode set but not on list page; redirecting to " + ELIGIBILITY_LIST_URL);
+                log("ImportElig: run mode set but not on list page; redirecting");
                 location.href = ELIGIBILITY_LIST_URL;
                 return;
             }
+
             log("ImportElig: run mode set on list page; waiting 3s before resuming");
             setTimeout(function () {
                 executeEligibilityMappingAutomation();
             }, 3000);
+
             return;
         }
-        log("Init: ready");
-
 
         if (runModeRaw === RUNMODE_CLEAR_MAPPING) {
             if (!isEligibilityListPage()) {

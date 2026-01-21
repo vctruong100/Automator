@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Eligibility Mapping Automator
 // @namespace vinh.activity.plan.state
-// @version 1.3.0
+// @version 1.3.1
 // @description
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/heads/main/ClinSpark%20Basic%20Automator.js
@@ -48,7 +48,7 @@
     const STORAGE_ELIG_IMPORTED = "activityPlanState.eligibility.importedItems";
     const RUNMODE_ELIG_IMPORT = "eligibilityImport";
     const STORAGE_ELIG_CHECKITEM_CACHE = "activityPlanState.eligibility.checkItemCache";
-
+    const STORAGE_ELIG_IMPORT_PENDING_POPUP = "activityPlanState.eligibility.importPendingPopup";
     //==========================
     // CLEAR SUBJECT ELIGIBILITY FEATURE
     //==========================
@@ -470,7 +470,7 @@
         planPriLabel.style.flex = "1";
 
         var planPriDefaultBtn = document.createElement("button");
-        planPriDefaultBtn.textContent = "Use Default";
+        planPriDefaultBtn.textContent = "Clear All";
         planPriDefaultBtn.style.background = "#444";
         planPriDefaultBtn.style.color = "#fff";
         planPriDefaultBtn.style.border = "none";
@@ -517,7 +517,7 @@
         ignoreLabel.style.flex = "1";
 
         var ignoreDefaultBtn = document.createElement("button");
-        ignoreDefaultBtn.textContent = "Use Default";
+        ignoreDefaultBtn.textContent = "Clear All";
         ignoreDefaultBtn.style.background = "#444";
         ignoreDefaultBtn.style.color = "#fff";
         ignoreDefaultBtn.style.border = "none";
@@ -1996,33 +1996,43 @@
 
 
 
-    async function startImportEligibilityMapping() {
 
-        if (isPaused()) {
-            return;
-        }
+    function startImportEligibilityMapping() {
+        log("ImportElig: startImportEligibilityMapping invoked");
 
         try {
             localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_ELIG_IMPORT);
         } catch (e) {
         }
 
-        if (!isEligibilityListPage()) {
+        var path = location.pathname;
+
+        if (path !== "/secure/crfdesign/studylibrary/eligibility/list") {
+            log("ImportElig: not on eligibility list page; redirecting");
+
+            try {
+                localStorage.setItem(STORAGE_ELIG_IMPORT_PENDING_POPUP, "1");
+            } catch (e) {
+            }
+
             location.href = ELIGIBILITY_LIST_URL;
             return;
         }
 
-        buildImportEligPopup(function (doneCallback) {
+        try {
+            localStorage.removeItem(STORAGE_ELIG_IMPORT_PENDING_POPUP);
+        } catch (e) {
+        }
 
+        buildImportEligPopup(function (doneCallback) {
             setTimeout(async function () {
                 await executeEligibilityMappingAutomation();
-
                 doneCallback("No more Eligibility Item to Check");
-
                 location.href = ELIGIBILITY_LIST_URL + "#";
             }, 400);
         });
     }
+
 
 
 
@@ -3910,19 +3920,48 @@
         } catch (e) {
             runModeRaw = null;
         }
+
         if (runModeRaw === RUNMODE_ELIG_IMPORT) {
+
+            var pendingPopup = null;
+
+            try {
+                pendingPopup = localStorage.getItem(STORAGE_ELIG_IMPORT_PENDING_POPUP);
+            } catch (e) {
+                pendingPopup = null;
+            }
+
+            if (pendingPopup === "1") {
+                if (!isEligibilityListPage()) {
+                    log("ImportElig: pending popup but not on list page; redirecting");
+                    location.href = ELIGIBILITY_LIST_URL;
+                    return;
+                }
+
+                log("ImportElig: pending popup detected; showing popup");
+
+                try {
+                    localStorage.removeItem(STORAGE_ELIG_IMPORT_PENDING_POPUP);
+                } catch (e) {
+                }
+
+                startImportEligibilityMapping();
+                return;
+            }
+
             if (!isEligibilityListPage()) {
-                log("ImportElig: run mode set but not on list page; redirecting to " + ELIGIBILITY_LIST_URL);
+                log("ImportElig: run mode set but not on list page; redirecting");
                 location.href = ELIGIBILITY_LIST_URL;
                 return;
             }
+
             log("ImportElig: run mode set on list page; waiting 3s before resuming");
             setTimeout(function () {
                 executeEligibilityMappingAutomation();
             }, 3000);
+
             return;
         }
-        log("Init: ready");
 
 
         if (runModeRaw === RUNMODE_CLEAR_MAPPING) {
