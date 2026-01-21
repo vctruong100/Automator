@@ -1,8 +1,8 @@
 
 // ==UserScript==
-// @name ClinSpark Basic Automator
+// @name ClinSpark Eligibility Mapping Automator
 // @namespace vinh.activity.plan.state
-// @version 1.2.8
+// @version 1.3.0
 // @description
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/heads/main/ClinSpark%20Basic%20Automator.js
@@ -217,15 +217,19 @@
     // saving those new items and storing it so there is no duplicate.
     //==========================
 
+
     var STORAGE_ELIG_FORM_EXCLUSION = "activityPlanState.elig.formExclusion";
     var STORAGE_ELIG_FORM_PRIORITY = "activityPlanState.elig.formPriority";
+    var STORAGE_ELIG_FORM_PRIORITY_ONLY = "activityPlanState.elig.formPriorityOnly";
+    var STORAGE_ELIG_PLAN_PRIORITY = "activityPlanState.elig.planPriority";
+    var STORAGE_ELIG_IGNORE = "activityPlanState.elig.ignore";
 
     const STORAGE_ELIG_LAST_PLAN = "activityPlanState.elig.lastPlan";
     const STORAGE_ELIG_LAST_SA = "activityPlanState.elig.lastSA";
     const STORAGE_ELIG_LAST_ITEMREF = "activityPlanState.elig.lastItemRef";
 
     var DEFAULT_FORM_EXCLUSION = "check";
-    var DEFAULT_FORM_PRIORITY = "mh, bm, review, process, dm, rep, subs, med, elg_pi";
+    var DEFAULT_FORM_PRIORITY = "mh, bm, review, process, dm, rep, subs, med, elg_pi, vitals, ecg";
 
     function SubjectEligibilityFunctions() {}
 
@@ -428,6 +432,10 @@
     function buildImportEligPopup(onConfirm) {
         log("ImportElig: building popup");
 
+        var storedPlanPriStr = localStorage.getItem(STORAGE_ELIG_PLAN_PRIORITY);
+        if (!storedPlanPriStr || storedPlanPriStr.trim() === "" || storedPlanPriStr.trim() === "[]") {
+            storedPlanPriStr = "";
+        }
         var storedExcStr = localStorage.getItem(STORAGE_ELIG_FORM_EXCLUSION);
         if (!storedExcStr || storedExcStr.trim() === "" || storedExcStr.trim() === "[]") {
             storedExcStr = "";
@@ -436,10 +444,108 @@
         if (!storedPriStr || storedPriStr.trim() === "" || storedPriStr.trim() === "[]") {
             storedPriStr = "";
         }
+        var storedIgnoreStr = localStorage.getItem(STORAGE_ELIG_IGNORE);
+        if (!storedIgnoreStr || storedIgnoreStr.trim() === "" || storedIgnoreStr.trim() === "[]") {
+            storedIgnoreStr = "";
+        }
         var container = document.createElement("div");
         container.style.display = "flex";
         container.style.flexDirection = "column";
         container.style.gap = "20px";
+
+        var planPriBox = document.createElement("div");
+        planPriBox.style.display = "flex";
+        planPriBox.style.flexDirection = "column";
+        planPriBox.style.gap = "8px";
+
+        var planPriHeaderRow = document.createElement("div");
+        planPriHeaderRow.style.display = "flex";
+        planPriHeaderRow.style.alignItems = "center";
+        planPriHeaderRow.style.justifyContent = "space-between";
+        planPriHeaderRow.style.gap = "8px";
+
+        var planPriLabel = document.createElement("div");
+        planPriLabel.textContent = "Activity Plan Priority (comma-separated)";
+        planPriLabel.style.fontWeight = "600";
+        planPriLabel.style.flex = "1";
+
+        var planPriDefaultBtn = document.createElement("button");
+        planPriDefaultBtn.textContent = "Use Default";
+        planPriDefaultBtn.style.background = "#444";
+        planPriDefaultBtn.style.color = "#fff";
+        planPriDefaultBtn.style.border = "none";
+        planPriDefaultBtn.style.padding = "4px 12px";
+        planPriDefaultBtn.style.borderRadius = "4px";
+        planPriDefaultBtn.style.cursor = "pointer";
+        planPriDefaultBtn.style.fontSize = "12px";
+        planPriDefaultBtn.style.whiteSpace = "nowrap";
+
+        planPriHeaderRow.appendChild(planPriLabel);
+        planPriHeaderRow.appendChild(planPriDefaultBtn);
+
+        var planPriInput = document.createElement("textarea");
+        planPriInput.style.width = "100%";
+        planPriInput.style.height = "70px";
+        planPriInput.style.background = "#222";
+        planPriInput.style.color = "#fff";
+        planPriInput.style.border = "1px solid #555";
+        planPriInput.style.borderRadius = "4px";
+        planPriInput.value = storedPlanPriStr;
+
+        planPriDefaultBtn.addEventListener("click", function () {
+            planPriInput.value = "";
+            log("ImportElig: Activity Plan Priority cleared (no default)");
+        });
+
+        planPriBox.appendChild(planPriHeaderRow);
+        planPriBox.appendChild(planPriInput);
+
+        var ignoreBox = document.createElement("div");
+        ignoreBox.style.display = "flex";
+        ignoreBox.style.flexDirection = "column";
+        ignoreBox.style.gap = "8px";
+
+        var ignoreHeaderRow = document.createElement("div");
+        ignoreHeaderRow.style.display = "flex";
+        ignoreHeaderRow.style.alignItems = "center";
+        ignoreHeaderRow.style.justifyContent = "space-between";
+        ignoreHeaderRow.style.gap = "8px";
+
+        var ignoreLabel = document.createElement("div");
+        ignoreLabel.textContent = "Ignore I/E (comma-separated)";
+        ignoreLabel.style.fontWeight = "600";
+        ignoreLabel.style.flex = "1";
+
+        var ignoreDefaultBtn = document.createElement("button");
+        ignoreDefaultBtn.textContent = "Use Default";
+        ignoreDefaultBtn.style.background = "#444";
+        ignoreDefaultBtn.style.color = "#fff";
+        ignoreDefaultBtn.style.border = "none";
+        ignoreDefaultBtn.style.padding = "4px 12px";
+        ignoreDefaultBtn.style.borderRadius = "4px";
+        ignoreDefaultBtn.style.cursor = "pointer";
+        ignoreDefaultBtn.style.fontSize = "12px";
+        ignoreDefaultBtn.style.whiteSpace = "nowrap";
+
+        ignoreHeaderRow.appendChild(ignoreLabel);
+        ignoreHeaderRow.appendChild(ignoreDefaultBtn);
+
+        var ignoreInput = document.createElement("textarea");
+        ignoreInput.style.width = "100%";
+        ignoreInput.style.height = "70px";
+        ignoreInput.style.background = "#222";
+        ignoreInput.style.color = "#fff";
+        ignoreInput.style.border = "1px solid #555";
+        ignoreInput.style.borderRadius = "4px";
+        ignoreInput.value = storedIgnoreStr;
+
+        ignoreDefaultBtn.addEventListener("click", function () {
+            ignoreInput.value = "";
+            log("ImportElig: Ignore I/E cleared (no default)");
+        });
+
+        ignoreBox.appendChild(ignoreHeaderRow);
+        ignoreBox.appendChild(ignoreInput);
 
         var excBox = document.createElement("div");
         excBox.style.display = "flex";
@@ -504,6 +610,21 @@
         priLabel.style.fontWeight = "600";
         priLabel.style.flex = "1";
 
+        var priOnlyCheckbox = document.createElement("input");
+        priOnlyCheckbox.type = "checkbox";
+        priOnlyCheckbox.id = "formPriorityOnlyCheckbox";
+        var storedPriOnly = localStorage.getItem(STORAGE_ELIG_FORM_PRIORITY_ONLY);
+        priOnlyCheckbox.checked = storedPriOnly === "1";
+        priOnlyCheckbox.style.cursor = "pointer";
+        priOnlyCheckbox.style.marginRight = "8px";
+
+        var priOnlyLabel = document.createElement("label");
+        priOnlyLabel.textContent = "Only";
+        priOnlyLabel.style.fontSize = "12px";
+        priOnlyLabel.style.cursor = "pointer";
+        priOnlyLabel.style.marginRight = "8px";
+        priOnlyLabel.setAttribute("for", "formPriorityOnlyCheckbox");
+
         var priDefaultBtn = document.createElement("button");
         priDefaultBtn.textContent = "Use Default";
         priDefaultBtn.style.background = "#444";
@@ -515,8 +636,16 @@
         priDefaultBtn.style.fontSize = "12px";
         priDefaultBtn.style.whiteSpace = "nowrap";
 
+        var priRightControls = document.createElement("div");
+        priRightControls.style.display = "flex";
+        priRightControls.style.alignItems = "center";
+        priRightControls.style.gap = "4px";
+        priRightControls.appendChild(priOnlyCheckbox);
+        priRightControls.appendChild(priOnlyLabel);
+        priRightControls.appendChild(priDefaultBtn);
+
         priHeaderRow.appendChild(priLabel);
-        priHeaderRow.appendChild(priDefaultBtn);
+        priHeaderRow.appendChild(priRightControls);
 
         var priInput = document.createElement("textarea");
         priInput.style.width = "100%";
@@ -535,6 +664,8 @@
         priBox.appendChild(priHeaderRow);
         priBox.appendChild(priInput);
 
+        container.appendChild(planPriBox);
+        container.appendChild(ignoreBox);
         container.appendChild(excBox);
         container.appendChild(priBox);
 
@@ -564,9 +695,12 @@
         clearAllBtn.style.flex = "1";
 
         clearAllBtn.addEventListener("click", function () {
+            planPriInput.value = "";
+            ignoreInput.value = "";
             excInput.value = "";
             priInput.value = "";
-            log("ImportElig: Both input boxes cleared");
+            priOnlyCheckbox.checked = false;
+            log("ImportElig: All input boxes cleared");
         });
 
         buttonRow.appendChild(confirmBtn);
@@ -588,8 +722,8 @@
             width: "450px",
             height: "auto",
             onClose: function () {
+                // X pressed → STOP everything (but don't pause)
                 log("ImportElig: popup X pressed → stopping automation");
-                setPaused(true);
                 clearAllRunState();
                 clearEligibilityWorkingState();
             }
@@ -598,19 +732,33 @@
         confirmBtn.addEventListener("click", function () {
             log("ImportElig: Confirm clicked");
 
+            var planPriText = (planPriInput.value + "").trim();
+            var ignoreText = (ignoreInput.value + "").trim();
             var excText = (excInput.value + "").trim();
             var priText = (priInput.value + "").trim();
+            var priOnlyChecked = priOnlyCheckbox.checked;
 
+            // Save empty strings if inputs are empty (don't save default values)
+            setPlanPriority(planPriText);
+            setIgnoreKeywords(ignoreText);
             setFormExclusion(excText);
             setFormPriority(priText);
+            setFormPriorityOnly(priOnlyChecked);
 
+            planPriInput.disabled = true;
+            ignoreInput.disabled = true;
             excInput.disabled = true;
             priInput.disabled = true;
+            priOnlyCheckbox.disabled = true;
 
+            planPriDefaultBtn.disabled = true;
+            ignoreDefaultBtn.disabled = true;
             excDefaultBtn.disabled = true;
             priDefaultBtn.disabled = true;
             clearAllBtn.disabled = true;
 
+            planPriBox.style.display = "none";
+            ignoreBox.style.display = "none";
             excBox.style.display = "none";
             priBox.style.display = "none";
 
@@ -634,12 +782,22 @@
                 runningBox.textContent = t;
             }, 350);
 
-            onConfirm(function () {
+            onConfirm(function (message) {
                 clearInterval(interval);
-                popup.close();
+                if (message) {
+                    runningBox.textContent = message;
+                    setTimeout(function() {
+                        popup.close();
+                    }, 2000);
+                } else {
+                    popup.close();
+                }
             });
         });
     }
+    ``
+
+
 
     function parseStoredKeywords(rawText) {
         var arr = [];
@@ -666,6 +824,8 @@
             raw = null;
         }
 
+        // If raw is empty/null, return empty array (don't use default)
+        // This allows scanning all SAs when exclusion is not set
         if (!raw || raw.trim() === "" || raw.trim() === "[]") {
             var arr = [];
             log("ImportElig: loaded Form Exclusion = [] (empty, will scan all SAs)");
@@ -696,6 +856,8 @@
             raw = null;
         }
 
+        // If raw is empty/null, return empty array (don't use default)
+        // This allows scanning all SAs without priority when priority is not set
         if (!raw || raw.trim() === "" || raw.trim() === "[]") {
             var arr = [];
             log("ImportElig: loaded Form Priority = [] (empty, will scan all SAs)");
@@ -715,6 +877,172 @@
         } catch (e) {
             log("ImportElig: error saving Form Priority");
         }
+    }
+
+    function getFormPriorityOnly() {
+        var raw = null;
+        try {
+            raw = localStorage.getItem(STORAGE_ELIG_FORM_PRIORITY_ONLY);
+        } catch (e) {
+            raw = null;
+        }
+        if (raw === "1") {
+            return true;
+        }
+        return false;
+    }
+
+    function setFormPriorityOnly(flag) {
+        try {
+            localStorage.setItem(STORAGE_ELIG_FORM_PRIORITY_ONLY, flag ? "1" : "0");
+            log("ImportElig: saved Form Priority Only = " + String(flag));
+        } catch (e) {
+            log("ImportElig: error saving Form Priority Only");
+        }
+    }
+
+    function getPlanPriority() {
+        var raw = null;
+
+        try {
+            raw = localStorage.getItem(STORAGE_ELIG_PLAN_PRIORITY);
+        } catch (e) {
+            raw = null;
+        }
+
+        // If raw is empty/null, return empty array (don't use default)
+        // This allows scanning all plans without priority when priority is not set
+        if (!raw || raw.trim() === "" || raw.trim() === "[]") {
+            var arr = [];
+            log("ImportElig: loaded Plan Priority = [] (empty, will scan all plans)");
+            return arr;
+        }
+
+        var aarr = parseStoredKeywords(raw);
+
+        log("ImportElig: loaded Plan Priority = " + JSON.stringify(aarr));
+        return aarr;
+    }
+
+    function setPlanPriority(str) {
+        try {
+            localStorage.setItem(STORAGE_ELIG_PLAN_PRIORITY, str);
+            log("ImportElig: saved Plan Priority = " + str);
+        } catch (e) {
+            log("ImportElig: error saving Plan Priority");
+        }
+    }
+
+    function getIgnoreKeywords() {
+        var raw = null;
+
+        try {
+            raw = localStorage.getItem(STORAGE_ELIG_IGNORE);
+        } catch (e) {
+            raw = null;
+        }
+
+        // If raw is empty/null, return empty array (don't use default)
+        // This allows processing all items when ignore is not set
+        if (!raw || raw.trim() === "" || raw.trim() === "[]") {
+            var arr = [];
+            log("ImportElig: loaded Ignore I/E = [] (empty, will process all items)");
+            return arr;
+        }
+
+        var aarr = parseStoredKeywords(raw);
+
+        log("ImportElig: loaded Ignore I/E = " + JSON.stringify(aarr));
+        return aarr;
+    }
+
+    function setIgnoreKeywords(str) {
+        try {
+            localStorage.setItem(STORAGE_ELIG_IGNORE, str);
+            log("ImportElig: saved Ignore I/E = " + str);
+        } catch (e) {
+            log("ImportElig: error saving Ignore I/E");
+        }
+    }
+
+    function addToIgnoreKeywords(code) {
+        if (!code || code.length === 0) {
+            return;
+        }
+        var currentKeywords = getIgnoreKeywords();
+        var codeStr = (code + "").trim();
+        var codeLower = codeStr.toLowerCase();
+
+        // Check if code is already in the ignore list
+        var alreadyIgnored = false;
+        var i = 0;
+        while (i < currentKeywords.length) {
+            var kw = (currentKeywords[i] + "").trim().toLowerCase();
+            if (kw === codeLower) {
+                alreadyIgnored = true;
+                break;
+            }
+            i = i + 1;
+        }
+
+        if (alreadyIgnored) {
+            log("ImportElig: code '" + String(codeStr) + "' already in ignore list");
+            return;
+        }
+
+        // Add the code to the list
+        currentKeywords.push(codeStr);
+
+        // Convert back to comma-separated string
+        var newStr = currentKeywords.join(", ");
+        setIgnoreKeywords(newStr);
+        log("ImportElig: added code '" + String(codeStr) + "' to Ignore I/E list");
+    }
+
+
+    function getCheckItemCache() {
+        var obj = {};
+        var raw = null;
+        try {
+            raw = localStorage.getItem(STORAGE_ELIG_CHECKITEM_CACHE);
+        } catch (e) {
+            raw = null;
+        }
+        if (raw) {
+            try {
+                var parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === "object") {
+                    obj = parsed;
+                }
+            } catch (e2) {}
+        }
+        return obj;
+    }
+
+    function persistCheckItemCache(cache) {
+        try {
+            localStorage.setItem(STORAGE_ELIG_CHECKITEM_CACHE, JSON.stringify(cache));
+        } catch (e) {}
+    }
+
+    function getCachedCheckItem(code) {
+        var cache = getCheckItemCache();
+        if (cache.hasOwnProperty(code)) {
+            var rec = cache[code];
+            if (rec && typeof rec === "object") {
+                log("ImportElig: cache hit for code=" + String(code) + " plan=" + String(rec.plan) + " sched=" + String(rec.sched) + " item=" + String(rec.item));
+                return rec;
+            }
+        }
+        log("ImportElig: cache miss for code=" + String(code));
+        return null;
+    }
+
+    function cacheCheckItem(code, planVal, schedVal, itemVal) {
+        var cache = getCheckItemCache();
+        cache[String(code)] = { plan: String(planVal), sched: String(schedVal), item: String(itemVal) };
+        persistCheckItemCache(cache);
+        log("ImportElig: cached mapping for code=" + String(code) + " plan=" + String(planVal) + " sched=" + String(schedVal) + " item=" + String(itemVal));
     }
 
     async function setSexOptionFromEligibilitySelection(code, valueMap) {
@@ -961,6 +1289,22 @@
         }
     }
 
+    function parseItemCodeFromEligibilityLabel(t) {
+        var s = (t + "").trim();
+        var code = "";
+        var parts = s.split("-");
+        if (parts.length >= 3) {
+            var third = parts[2];
+            var semiParts = third.split(";");
+            if (semiParts.length >= 1) {
+                code = (semiParts[0] + "").trim();
+            } else {
+                code = (third + "").trim();
+            }
+        }
+        return code;
+    }
+
     async function collectEligibilityTableMap() {
         var map = {};
         var codeSet = new Set();
@@ -1047,6 +1391,31 @@
         return true;
     }
 
+    async function readEligibilityItemCodesFromDropdown() {
+        var ok = await openSelect2("#s2id_eligibilityItemRef");
+        if (!ok) {
+            log("ImportElig: unable to open Eligibility Item dropdown");
+            return [];
+        }
+        var list = document.querySelectorAll("div.select2-drop-active ul.select2-results li.select2-result");
+        var codes = [];
+        var i = 0;
+        while (i < list.length) {
+            var li = list[i];
+            var label = li.querySelector("div.select2-result-label");
+            if (label) {
+                var text = (label.textContent + "").trim();
+                var code = parseItemCodeFromEligibilityLabel(text);
+                if (code && code.length > 0) {
+                    codes.push(code);
+                }
+            }
+            i = i + 1;
+        }
+        return codes;
+    }
+
+
     async function selectEligibilityItemByCode(code, valueMap) {
         log("ImportElig: selecting Eligibility Item via select for code=" + String(code));
         var sel = await waitForSelector("select#eligibilityItemRef", 12000);
@@ -1110,6 +1479,8 @@
     async function trySelectCheckItemForCodeThroughAllPlansAndActivities(code) {
         var formExclusion = getFormExclusion();
         var formPriority = getFormPriority();
+        var formPriorityOnly = getFormPriorityOnly();
+        var planPriority = getPlanPriority();
         var priorityCheckedSet = new Set();
 
         function isExcluded(saText) {
@@ -1142,15 +1513,69 @@
             return false;
         }
 
-        log("ImportElig: TrySelect start with priority and exclusion");
-
-        var pri = await scanActivitiesForMatch(true);
-        if (pri) {
-            log("ImportElig: TrySelect found match during priority scan");
-            return true;
+        function isPlanPriority(planText) {
+            var k = 0;
+            while (k < planPriority.length) {
+                var pr = (planPriority[k] + "").toLowerCase();
+                var s = (planText + "").toLowerCase();
+                if (pr.length > 0) {
+                    if (s.indexOf(pr) >= 0) {
+                        return true;
+                    }
+                }
+                k = k + 1;
+            }
+            return false;
         }
 
-        var norm = await scanActivitiesForMatch(false);
+        log("ImportElig: TrySelect start with priority and exclusion");
+
+        // If Form Priority Only mode is enabled and Form Priority has keywords
+        if (formPriorityOnly && formPriority.length > 0) {
+            // Scan priority plans first (if they exist), then non-priority plans, but only priority SAs
+            if (planPriority.length > 0) {
+                var formPriOnlyPlan = await scanActivitiesForMatch(true, true);
+                if (formPriOnlyPlan) {
+                    log("ImportElig: TrySelect found match during Form Priority Only scan (priority plans)");
+                    return true;
+                }
+            }
+            // Scan non-priority plans (or all plans if no plan priority) with priority SAs only
+            var formPriOnly = await scanActivitiesForMatch(true, false);
+            if (formPriOnly) {
+                log("ImportElig: TrySelect found match during Form Priority Only scan");
+                return true;
+            }
+            // No match found in Form Priority Only mode - return false (will be added to ignore list)
+            log("ImportElig: TrySelect no match in Form Priority Only mode");
+            return false;
+        }
+
+        // If plan priorities are set, scan priority plans first
+        if (planPriority.length > 0) {
+            var pri = await scanActivitiesForMatch(true, true);
+            if (pri) {
+                log("ImportElig: TrySelect found match during priority plan scan");
+                return true;
+            }
+
+            var pri2 = await scanActivitiesForMatch(false, true);
+            if (pri2) {
+                log("ImportElig: TrySelect found match during non-priority SA scan (priority plans)");
+                return true;
+            }
+        }
+
+        // Normal scan: priority SAs first (if Form Priority is set), then all SAs
+        if (formPriority.length > 0) {
+            var priSA = await scanActivitiesForMatch(true, false);
+            if (priSA) {
+                log("ImportElig: TrySelect found match during priority SA scan");
+                return true;
+            }
+        }
+
+        var norm = await scanActivitiesForMatch(false, false);
         if (norm) {
             log("ImportElig: TrySelect found match during normal scan");
             return true;
@@ -1160,7 +1585,7 @@
         return false;
 
 
-        async function scanActivitiesForMatch(priorityOnly) {
+        async function scanActivitiesForMatch(priorityOnly, planPriorityOnly) {
             var planSel = await waitForSelector("select#activityPlan", 10000);
             var schedSel = await waitForSelector("select#scheduledActivity", 10000);
             var itemRefSel = await waitForSelector("select#itemRef", 10000);
@@ -1190,6 +1615,23 @@
                 }
                 var pVal = (plans[p].value + "").trim();
                 var pTxt = (plans[p].textContent + "").trim();
+                if (pVal.length > 0) {
+                    if (planPriorityOnly) {
+                        var isPlanPri = isPlanPriority(pTxt);
+                        if (!isPlanPri) {
+                            log("ImportElig: skipping non-priority plan '" + String(pTxt) + "'");
+                            p = p + 1;
+                            continue;
+                        }
+                    } else {
+                        var isPlanPri2 = isPlanPriority(pTxt);
+                        if (isPlanPri2) {
+                            log("ImportElig: skipping priority plan '" + String(pTxt) + "' (already scanned)");
+                            p = p + 1;
+                            continue;
+                        }
+                    }
+                }
                 if (pVal.length > 0) {
                     planSel.value = pVal;
                     var evtP = new Event("change", { bubbles: true });
@@ -1249,13 +1691,16 @@
                         s = s + 1;
                         continue;
                     }
+                    // Verify we're still on the correct SA after itemRef reloaded
                     var verifySAEl = document.querySelector("select#scheduledActivity");
                     if (!verifySAEl || String(verifySAEl.value) !== String(sVal)) {
                         log("ImportElig: SA changed after itemRef reload, expected '" + String(sVal) + "' but got '" + String(verifySAEl ? verifySAEl.value : "null") + "'; skipping");
                         s = s + 1;
                         continue;
                     }
+                    // Wait a bit more to ensure Check Item list is fully populated
                     await sleep(300);
+                    // Verify again after additional wait
                     verifySAEl = document.querySelector("select#scheduledActivity");
                     if (!verifySAEl || String(verifySAEl.value) !== String(sVal)) {
                         log("ImportElig: SA changed during wait period, expected '" + String(sVal) + "' but got '" + String(verifySAEl ? verifySAEl.value : "null") + "'; skipping");
@@ -1304,11 +1749,89 @@
             return false;
         }
 
+
+        async function attemptCheckItemMatchForSA(code, expectedPlanVal, expectedSAVal) {
+            log("ImportElig: attemptCheckItemMatchForSA start");
+            var saEl = document.querySelector("select#scheduledActivity");
+            if (!saEl) {
+                log("ImportElig: attemptCheckItemMatchForSA no SA select");
+                return false;
+            }
+            var curSA = (saEl.value + "");
+            if (String(curSA) !== String(expectedSAVal)) {
+                log("ImportElig: attemptCheckItemMatchForSA SA mismatch before scan");
+                return false;
+            }
+            var elapsed = 0;
+            var step = 160;
+            var max = 3200;
+            while (elapsed <= max) {
+                saEl = document.querySelector("select#scheduledActivity");
+                if (!saEl) {
+                    await sleep(step);
+                    elapsed = elapsed + step;
+                    continue;
+                }
+                curSA = (saEl.value + "");
+                if (String(curSA) !== String(expectedSAVal)) {
+                    log("ImportElig: attemptCheckItemMatchForSA SA changed mid-scan");
+                    return false;
+                }
+                var itemRefSel = document.querySelector("select#itemRef");
+                if (itemRefSel) {
+                    var opts = itemRefSel.querySelectorAll("option");
+                    var len = opts.length;
+                    if (len === 0) {
+                        await sleep(step);
+                        elapsed = elapsed + step;
+                        continue;
+                    }
+                    var i = 0;
+                    while (i < len) {
+                        var op = opts[i];
+                        var txt = (op.textContent + "").trim();
+                        var val = (op.value + "").trim();
+                        if (val.length > 0) {
+                            var parts = txt.split("-");
+                            if (parts.length >= 2) {
+                                var tail = (parts[parts.length - 1] + "").trim();
+                                if (tail === code) {
+                                    saEl = document.querySelector("select#scheduledActivity");
+                                    if (!saEl) {
+                                        log("ImportElig: attemptCheckItemMatchForSA SA missing before set");
+                                        return false;
+                                    }
+                                    curSA = (saEl.value + "");
+                                    if (String(curSA) !== String(expectedSAVal)) {
+                                        log("ImportElig: attemptCheckItemMatchForSA SA changed before set");
+                                        return false;
+                                    }
+                                    itemRefSel.value = val;
+                                    var evt = new Event("change", { bubbles: true });
+                                    itemRefSel.dispatchEvent(evt);
+                                    log("ImportElig: Check Item matched '" + String(txt) + "'");
+                                    setLastMatchSelection(expectedPlanVal, expectedSAVal, val);
+                                    return true;
+                                }
+                            }
+                        }
+                        i = i + 1;
+                    }
+                    return false;
+                }
+                await sleep(step);
+                elapsed = elapsed + step;
+            }
+            return false;
+        }
+
+
         async function attemptCheckItemMatch(code, expectedPlanVal, expectedSAVal) {
             var elapsed = 0;
             var step = 160;
             var max = 3200;
             while (elapsed <= max) {
+                // Verify we're still on the correct Scheduled Activity
                 var saEl = document.querySelector("select#scheduledActivity");
                 if (!saEl) {
                     await sleep(step);
@@ -1334,6 +1857,7 @@
                         elapsed = elapsed + step;
                         continue;
                     }
+                    // Verify SA hasn't changed after options are loaded
                     saEl = document.querySelector("select#scheduledActivity");
                     if (!saEl || (expectedSAVal && String(saEl.value) !== String(expectedSAVal))) {
                         log("ImportElig: attemptCheckItemMatch SA changed after options loaded; aborting");
@@ -1349,6 +1873,7 @@
                             if (parts.length >= 2) {
                                 var tail = (parts[parts.length - 1] + "").trim();
                                 if (tail === code) {
+                                    // Final verification before setting value
                                     saEl = document.querySelector("select#scheduledActivity");
                                     if (!saEl || (expectedSAVal && String(saEl.value) !== String(expectedSAVal))) {
                                         log("ImportElig: attemptCheckItemMatch SA changed before setting match; aborting");
@@ -1422,6 +1947,8 @@
         return false;
     }
 
+
+
     async function selectCodeListValueContainingSF() {
         var sel = await waitForSelector("select#codeListItem", 8000);
         if (!sel) {
@@ -1467,6 +1994,8 @@
         return true;
     }
 
+
+
     async function startImportEligibilityMapping() {
 
         if (isPaused()) {
@@ -1488,12 +2017,14 @@
             setTimeout(async function () {
                 await executeEligibilityMappingAutomation();
 
-                doneCallback();
+                doneCallback("No more Eligibility Item to Check");
 
                 location.href = ELIGIBILITY_LIST_URL + "#";
             }, 400);
         });
     }
+
+
 
     async function executeEligibilityMappingAutomation() {
         if (isPaused()) {
@@ -1524,6 +2055,27 @@
         var collected = await collectEligibilityTableMap();
         var existingSet = collected.codeSet;
         var importedSet = getImportedItemsSet();
+        var ignoreKeywords = getIgnoreKeywords();
+
+        function shouldIgnoreCode(code) {
+            if (!code || code.length === 0) {
+                return false;
+            }
+            var codeLower = (code + "").toLowerCase();
+            var k = 0;
+            while (k < ignoreKeywords.length) {
+                var keyword = (ignoreKeywords[k] + "").toLowerCase().trim();
+                if (keyword.length > 0) {
+                    if (codeLower.indexOf(keyword) >= 0) {
+                        log("ImportElig: ignoring code '" + String(code) + "' (matches ignore keyword '" + String(ignoreKeywords[k]) + "')");
+                        return true;
+                    }
+                }
+                k = k + 1;
+            }
+            return false;
+        }
+
         var guardIterations = 0;
         var maxIterations = 200;
         while (guardIterations < maxIterations) {
@@ -1544,6 +2096,10 @@
             var j = 0;
             while (j < allCodes.length) {
                 var c = allCodes[j];
+                if (shouldIgnoreCode(c)) {
+                    j = j + 1;
+                    continue;
+                }
                 var inExisting = existingSet.has(c);
                 var inImported = importedSet.has(c);
                 if (!inExisting && !inImported) {
@@ -1559,6 +2115,7 @@
                 } catch (e) {
                 }
                 clearImportedItemsSet();
+                // Note: The completion message will be shown by the callback in startImportEligibilityMapping
                 return;
             }
             var selOk = await selectEligibilityItemByCode(pick, codeToVal);
@@ -1578,6 +2135,10 @@
             }
             var foundCheckItem = await trySelectCheckItemForCodeThroughAllPlansAndActivities(pick);
             if (!foundCheckItem) {
+                log("ImportElig: no CheckItem match found for code '" + String(pick) + "' after scanning all plans and activities");
+                addToIgnoreKeywords(pick);
+                // Reload ignore keywords so the updated list is used in subsequent iterations
+                ignoreKeywords = getIgnoreKeywords();
                 var closeBtn2 = document.querySelector("#ajaxModal .modal-content button.close");
                 if (closeBtn2) {
                     closeBtn2.click();
@@ -1643,6 +2204,7 @@
         } catch (e) {
         }
     }
+
 
     //==========================
     // RUN BARCODE FEATURE
@@ -2903,7 +3465,7 @@
         var leftSpacer = document.createElement("div");
         leftSpacer.style.width = "32px";
         var title = document.createElement("div");
-        title.textContent = "ClinSpark Test Automator";
+        title.textContent = "ClinSpark Eligibility Mapping Automator";
         title.style.fontWeight = "600";
         title.style.textAlign = "center";
         title.style.justifySelf = "center";
