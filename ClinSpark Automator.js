@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.3.5
+// @version     1.3.6
 // @description Retain only Barcode feature; production environment only
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -4608,54 +4608,65 @@ function showAeSubjectInputPopup(onDone) {
         btnRowRef = btnRow;
         var pauseBtn = document.createElement("button");
         pauseBtn.textContent = isPaused() ? "Resume" : "Pause";
-        pauseBtn.style.background = "#ccc";
-        pauseBtn.style.color = "#000";
+        pauseBtn.style.background = "#6c757d";
+        pauseBtn.style.color = "#fff";
         pauseBtn.style.border = "none";
         pauseBtn.style.borderRadius = "6px";
         pauseBtn.style.padding = "8px";
         pauseBtn.style.cursor = "pointer";
+        pauseBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
+        pauseBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
         var runBarcodeBtn = document.createElement("button");
         runBarcodeBtn.textContent = "Run Barcode";
-        runBarcodeBtn.style.background = "#9df";
-        runBarcodeBtn.style.color = "#000";
+        runBarcodeBtn.style.background = "#4a90e2";
+        runBarcodeBtn.style.color = "#fff";
         runBarcodeBtn.style.border = "none";
         runBarcodeBtn.style.borderRadius = "6px";
         runBarcodeBtn.style.padding = "8px";
         runBarcodeBtn.style.cursor = "pointer";
+        runBarcodeBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
+        runBarcodeBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
         var findAeBtn = document.createElement("button");
         findAeBtn.textContent = "Find Adverse Event";
-        findAeBtn.style.background = "#e66";
+        findAeBtn.style.background = "#4a90e2";
         findAeBtn.style.color = "#fff";
         findAeBtn.style.border = "none";
         findAeBtn.style.borderRadius = "6px";
         findAeBtn.style.padding = "8px";
         findAeBtn.style.cursor = "pointer";
+        findAeBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
+        findAeBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
         var findFormBtn = document.createElement("button");
         findFormBtn.textContent = "Find Form";
-        findFormBtn.style.background = "#6c8";
-        findFormBtn.style.color = "#000";
+        findFormBtn.style.background = "#4a90e2";
+        findFormBtn.style.color = "#fff";
         findFormBtn.style.border = "none";
         findFormBtn.style.borderRadius = "6px";
         findFormBtn.style.padding = "8px";
         findFormBtn.style.cursor = "pointer";
+        findFormBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
+        findFormBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
         var toggleLogsBtn = document.createElement("button");
         var logVisible = getLogVisible();
         toggleLogsBtn.textContent = logVisible ? "Hide Logs" : "Show Logs";
-        toggleLogsBtn.style.background = "#555";
+        toggleLogsBtn.style.background = "#6c757d";
         toggleLogsBtn.style.color = "#fff";
         toggleLogsBtn.style.border = "none";
         toggleLogsBtn.style.borderRadius = "6px";
         toggleLogsBtn.style.padding = "8px";
         toggleLogsBtn.style.cursor = "pointer";
+        toggleLogsBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
+        toggleLogsBtn.onmouseleave = function() { this.style.background = "#6c757d"; }; 
         var importEligBtn = document.createElement("button");
         importEligBtn.textContent = "Import I/E";
-        importEligBtn.style.background = "#9df";
-        importEligBtn.style.color = "#000";
+        importEligBtn.style.background = "#4a90e2";
+        importEligBtn.style.color = "#fff";
         importEligBtn.style.border = "none";
         importEligBtn.style.borderRadius = "6px";
         importEligBtn.style.padding = "8px";
         importEligBtn.style.cursor = "pointer";
-
+        importEligBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
+        importEligBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
         btnRow.appendChild(runBarcodeBtn);
         btnRow.appendChild(findAeBtn);
         btnRow.appendChild(findFormBtn);

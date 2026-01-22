@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 2.5.7
+// @version 2.6.0
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -98,7 +98,7 @@
         try {
             localStorage.setItem(STORAGE_RUN_ALL_STATUS, statusText);
         } catch (e) {}
-        
+
         if (!RUN_ALL_POPUP_REF) {
             return;
         }
@@ -171,7 +171,7 @@
     function recreatePopupsIfNeeded() {
         try {
             var runMode = getRunMode();
-            
+
             // Recreate Run All popup
             if (runMode === "all") {
                 var runAllPopupActive = localStorage.getItem(STORAGE_RUN_ALL_POPUP);
@@ -181,7 +181,7 @@
                     popupContainer.style.flexDirection = "column";
                     popupContainer.style.gap = "16px";
                     popupContainer.style.padding = "8px";
-                    
+
                     // Restore status from localStorage
                     var savedStatus = "Running Lock Activity Plans";
                     try {
@@ -190,7 +190,7 @@
                             savedStatus = storedStatus;
                         }
                     } catch (e) {}
-                    
+
                     var statusDiv = document.createElement("div");
                     statusDiv.id = "runAllStatus";
                     statusDiv.style.textAlign = "center";
@@ -198,17 +198,17 @@
                     statusDiv.style.color = "#fff";
                     statusDiv.style.fontWeight = "500";
                     statusDiv.textContent = savedStatus;
-                    
+
                     var loadingAnimation = document.createElement("div");
                     loadingAnimation.id = "runAllLoading";
                     loadingAnimation.style.textAlign = "center";
                     loadingAnimation.style.fontSize = "14px";
                     loadingAnimation.style.color = "#9df";
                     loadingAnimation.textContent = "Running.";
-                    
+
                     popupContainer.appendChild(statusDiv);
                     popupContainer.appendChild(loadingAnimation);
-                    
+
                     RUN_ALL_POPUP_REF = createPopup({
                         title: "Run Button (1-5) Progress",
                         content: popupContainer,
@@ -228,7 +228,7 @@
                             RUN_ALL_POPUP_REF = null;
                         }
                     });
-                    
+
                     var dots = 1;
                     var loadingInterval = setInterval(function() {
                         if (!RUN_ALL_POPUP_REF || !document.body.contains(RUN_ALL_POPUP_REF.element)) {
@@ -251,7 +251,7 @@
                     }, 500);
                 }
             }
-            
+
             // Recreate Clear Mapping popup
             if (runMode === RUNMODE_CLEAR_MAPPING) {
                 var clearMappingPopupActive = localStorage.getItem(STORAGE_CLEAR_MAPPING_POPUP);
@@ -261,24 +261,24 @@
                     popupContainer.style.flexDirection = "column";
                     popupContainer.style.gap = "16px";
                     popupContainer.style.padding = "8px";
-                    
+
                     var statusDiv = document.createElement("div");
                     statusDiv.style.textAlign = "center";
                     statusDiv.style.fontSize = "18px";
                     statusDiv.style.color = "#fff";
                     statusDiv.style.fontWeight = "500";
                     statusDiv.textContent = "Running Clear Mapping";
-                    
+
                     var loadingAnimation = document.createElement("div");
                     loadingAnimation.id = "clearMappingLoading";
                     loadingAnimation.style.textAlign = "center";
                     loadingAnimation.style.fontSize = "14px";
                     loadingAnimation.style.color = "#9df";
                     loadingAnimation.textContent = "Running.";
-                    
+
                     popupContainer.appendChild(statusDiv);
                     popupContainer.appendChild(loadingAnimation);
-                    
+
                     CLEAR_MAPPING_POPUP_REF = createPopup({
                         title: "Clear Mapping",
                         content: popupContainer,
@@ -293,7 +293,7 @@
                             CLEAR_MAPPING_POPUP_REF = null;
                         }
                     });
-                    
+
                     var dots = 1;
                     var loadingInterval = setInterval(function() {
                         if (!CLEAR_MAPPING_POPUP_REF || !document.body.contains(CLEAR_MAPPING_POPUP_REF.element)) {
@@ -1741,7 +1741,7 @@
                 IMPORT_ELIG_POPUP_REF = null;
             }
         });
-        
+
         IMPORT_ELIG_POPUP_REF = popup;
         try {
             localStorage.setItem(STORAGE_IMPORT_ELIG_POPUP, "1");
@@ -1792,7 +1792,7 @@
             clearAllBtn.style.display = "none";
 
             runningContainer.style.display = "flex";
-            
+
             // Set popup flag so it persists across page changes
             try {
                 localStorage.setItem(STORAGE_IMPORT_ELIG_POPUP, "1");
@@ -10604,7 +10604,7 @@
         runAllBtn.onmouseleave = function() { this.style.background = "#5cb85c"; };
         var runNonScrnBtn = document.createElement("button");
         runNonScrnBtn.textContent = "Import Cohort Subject";
-        runNonScrnBtn.style.background = "#4994aa";
+        runNonScrnBtn.style.background = "#5b43c7";
         runNonScrnBtn.style.color = "#fff";
         runNonScrnBtn.style.border = "none";
         runNonScrnBtn.style.borderRadius = "6px";
@@ -10612,11 +10612,11 @@
         runNonScrnBtn.style.cursor = "pointer";
         runNonScrnBtn.style.fontWeight = "500";
         runNonScrnBtn.style.transition = "background 0.2s";
-        runNonScrnBtn.onmouseenter = function() { this.style.background = "#357abd"; };
-        runNonScrnBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+        runNonScrnBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
+        runNonScrnBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
         var runBarcodeBtn = document.createElement("button");
         runBarcodeBtn.textContent = "Run Barcode";
-        runBarcodeBtn.style.background = "#4994aa";
+        runBarcodeBtn.style.background = "#5b43c7";
         runBarcodeBtn.style.color = "#fff";
         runBarcodeBtn.style.border = "none";
         runBarcodeBtn.style.borderRadius = "6px";
@@ -10624,8 +10624,8 @@
         runBarcodeBtn.style.cursor = "pointer";
         runBarcodeBtn.style.fontWeight = "500";
         runBarcodeBtn.style.transition = "background 0.2s";
-        runBarcodeBtn.onmouseenter = function() { this.style.background = "#357abd"; };
-        runBarcodeBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+        runBarcodeBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
+        runBarcodeBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
         var runFormOORBtn = document.createElement("button");
         runFormOORBtn.textContent = "Run Form (OOR) Below Range";
         runFormOORBtn.style.background = "#f0ad4e";
@@ -10660,8 +10660,8 @@
         runFormIRBtn.style.cursor = "pointer";
         runFormIRBtn.style.fontWeight = "500";
         runFormIRBtn.style.transition = "background 0.2s";
-        runFormIRBtn.onmouseenter = function() { this.style.background = "#449d44"; };
-        runFormIRBtn.onmouseleave = function() { this.style.background = "#5cb85c"; };
+        runFormIRBtn.onmouseenter = function() { this.style.background = "#ec971f"; };
+        runFormIRBtn.onmouseleave = function() { this.style.background = "#f0ad4e"; };
         var pauseBtn = document.createElement("button");
         pauseBtn.textContent = isPaused() ? "Resume" : "Pause";
         pauseBtn.style.background = "#6c757d";
@@ -10725,9 +10725,8 @@
         importEligBtn.style.cursor = "pointer";
         importEligBtn.style.fontWeight = "500";
         importEligBtn.style.transition = "background 0.2s";
-        importEligBtn.onmouseenter = function() { this.style.background = "#357abd"; };
-        importEligBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
-
+        importEligBtn.onmouseenter = function() { this.style.background = "#2bb9c4"; };
+        importEligBtn.onmouseleave = function() { this.style.background = "#38dae6"; };
 
         var clearMappingBtn = document.createElement("button");
         clearMappingBtn.textContent = "Clear Mapping";
@@ -10739,8 +10738,8 @@
         clearMappingBtn.style.cursor = "pointer";
         clearMappingBtn.style.fontWeight = "500";
         clearMappingBtn.style.transition = "background 0.2s";
-        clearMappingBtn.onmouseenter = function() { this.style.background = "#c9302c"; };
-        clearMappingBtn.onmouseleave = function() { this.style.background = "#d9534f"; };
+        clearMappingBtn.onmouseenter = function() { this.style.background = "#2bb9c4"; };
+        clearMappingBtn.onmouseleave = function() { this.style.background = "#38dae6"; };
 
         var collectAllBtn = document.createElement("button");
         collectAllBtn.textContent = "Collect All";
@@ -10752,8 +10751,8 @@
         collectAllBtn.style.cursor = "pointer";
         collectAllBtn.style.fontWeight = "500";
         collectAllBtn.style.transition = "background 0.2s";
-        collectAllBtn.onmouseenter = function() { this.style.background = "#357abd"; };
-        collectAllBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+        collectAllBtn.onmouseenter = function() { this.style.background = "#ec971f"; };
+        collectAllBtn.onmouseleave = function() { this.style.background = "#f0ad4e"; };
 
         btnRow.appendChild(runPlansBtn);
         btnRow.appendChild(runLockSamplePathsBtn);
@@ -10888,14 +10887,14 @@
             } catch (e) {}
             status.textContent = "Starting ALL: Activity Plans…";
             log("Run ALL clicked");
-            
+
             // Create progress popup
             var popupContainer = document.createElement("div");
             popupContainer.style.display = "flex";
             popupContainer.style.flexDirection = "column";
             popupContainer.style.gap = "16px";
             popupContainer.style.padding = "8px";
-            
+
             var statusDiv = document.createElement("div");
             statusDiv.id = "runAllStatus";
             statusDiv.style.textAlign = "center";
@@ -10903,17 +10902,17 @@
             statusDiv.style.color = "#fff";
             statusDiv.style.fontWeight = "500";
             statusDiv.textContent = "Running Lock Activity Plans";
-            
+
             var loadingAnimation = document.createElement("div");
             loadingAnimation.id = "runAllLoading";
             loadingAnimation.style.textAlign = "center";
             loadingAnimation.style.fontSize = "14px";
             loadingAnimation.style.color = "#9df";
             loadingAnimation.textContent = "Running.";
-            
+
             popupContainer.appendChild(statusDiv);
             popupContainer.appendChild(loadingAnimation);
-            
+
             RUN_ALL_POPUP_REF = createPopup({
                 title: "Run Button (1-5) Progress",
                 content: popupContainer,
@@ -10932,11 +10931,11 @@
                     RUN_ALL_POPUP_REF = null;
                 }
             });
-            
+
             try {
                 localStorage.setItem(STORAGE_RUN_ALL_POPUP, "1");
             } catch (e) {}
-            
+
             // Animate loading dots
             var dots = 1;
             var loadingInterval = setInterval(function() {
@@ -10958,7 +10957,7 @@
                     loadingAnimation.textContent = text;
                 }
             }, 500);
-            
+
             location.href = LIST_URL;
             clearCohortGuard();
         });
@@ -11148,31 +11147,31 @@
         });
         clearMappingBtn.addEventListener("click", function () {
             log("ClearMapping: button clicked");
-            
+
             // Create running animation popup
             var popupContainer = document.createElement("div");
             popupContainer.style.display = "flex";
             popupContainer.style.flexDirection = "column";
             popupContainer.style.gap = "16px";
             popupContainer.style.padding = "8px";
-            
+
             var statusDiv = document.createElement("div");
             statusDiv.style.textAlign = "center";
             statusDiv.style.fontSize = "18px";
             statusDiv.style.color = "#fff";
             statusDiv.style.fontWeight = "500";
             statusDiv.textContent = "Running Clear Mapping";
-            
+
             var loadingAnimation = document.createElement("div");
             loadingAnimation.id = "clearMappingLoading";
             loadingAnimation.style.textAlign = "center";
             loadingAnimation.style.fontSize = "14px";
             loadingAnimation.style.color = "#9df";
             loadingAnimation.textContent = "Running.";
-            
+
             popupContainer.appendChild(statusDiv);
             popupContainer.appendChild(loadingAnimation);
-            
+
             var clearMappingPopup = createPopup({
                 title: "Clear Mapping",
                 content: popupContainer,
@@ -11187,12 +11186,12 @@
                     CLEAR_MAPPING_POPUP_REF = null;
                 }
             });
-            
+
             CLEAR_MAPPING_POPUP_REF = clearMappingPopup;
             try {
                 localStorage.setItem(STORAGE_CLEAR_MAPPING_POPUP, "1");
             } catch (e) {}
-            
+
             // Animate loading dots
             var dots = 1;
             var loadingInterval = setInterval(function() {
@@ -11214,7 +11213,7 @@
                     loadingAnimation.textContent = text;
                 }
             }, 500);
-            
+
             // Close popup when done (check periodically)
             var checkInterval = setInterval(function() {
                 try {
@@ -11232,7 +11231,7 @@
                     }
                 } catch (e) {}
             }, 1000);
-            
+
             startClearMapping();
         });
         closeBtn.addEventListener("click", function () {
@@ -11355,10 +11354,10 @@
             addButtonToPanel(label, handler);
         };
         bindPanelHotkeyOnce();
-        
+
         // Recreate popups if needed
         recreatePopupsIfNeeded();
-        
+
         if (isPaused()) {
             log("Paused; automation halted");
             return;
@@ -11534,7 +11533,7 @@
                 runningBox.style.fontWeight = "500";
                 runningBox.textContent = "Running";
                 runningContainer.appendChild(runningBox);
-                
+
                 // Animate loading dots
                 var dots = 1;
                 var loadingInterval = setInterval(function() {
@@ -11648,7 +11647,7 @@
                         IMPORT_ELIG_POPUP_REF = null;
                     }
                 });
-                
+
                 // Continue execution after recreating popup
                 if (isEligibilityListPage()) {
                     log("ImportElig: popup recreated, continuing execution");
