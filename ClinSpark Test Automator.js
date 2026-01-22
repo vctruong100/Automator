@@ -10013,9 +10013,6 @@
         btnRowRef.appendChild(btn);
     }
 
-
-    // Create a draggable, closeable popup styled like the panel
-
     // Create a draggable, closeable popup styled like the panel
     function createPopup(options) {
         options = options || {};
