@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 2.5.6
+// @version 2.5.7
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -77,12 +77,248 @@
     const DATA_COLLECTION_SUBJECT_URL = "https://cenexeltest.clinspark.com/secure/datacollection/subject";
     var COLLECT_ALL_CANCELLED = false;
     var COLLECT_ALL_POPUP_REF = null;
+    var RUN_ALL_POPUP_REF = null;
+    var CLEAR_MAPPING_POPUP_REF = null;
+    var IMPORT_ELIG_POPUP_REF = null;
+    const STORAGE_RUN_ALL_POPUP = "activityPlanState.runAllPopup";
+    const STORAGE_RUN_ALL_STATUS = "activityPlanState.runAllStatus";
+    const STORAGE_CLEAR_MAPPING_POPUP = "activityPlanState.clearMappingPopup";
+    const STORAGE_IMPORT_ELIG_POPUP = "activityPlanState.importEligPopup";
 
     // Clear all Collect All related data
     function clearCollectAllData() {
         COLLECT_ALL_CANCELLED = false;
         COLLECT_ALL_POPUP_REF = null;
         log("CollectAll: data cleared");
+    }
+
+    // Update Run All popup status
+    function updateRunAllPopupStatus(statusText) {
+        // Store status in localStorage for persistence
+        try {
+            localStorage.setItem(STORAGE_RUN_ALL_STATUS, statusText);
+        } catch (e) {}
+        
+        if (!RUN_ALL_POPUP_REF) {
+            return;
+        }
+        try {
+            var statusDiv = RUN_ALL_POPUP_REF.element.querySelector("#runAllStatus");
+            if (statusDiv) {
+                statusDiv.textContent = statusText;
+            }
+        } catch (e) {
+            log("Error updating Run All popup status: " + e);
+        }
+    }
+
+    // Update Import Eligibility popup lists
+    function addToImportEligCompletedList(itemCode) {
+        try {
+            var list = document.getElementById("importEligCompletedList");
+            if (!list && IMPORT_ELIG_POPUP_REF && IMPORT_ELIG_POPUP_REF.element) {
+                list = IMPORT_ELIG_POPUP_REF.element.querySelector("#importEligCompletedList");
+            }
+            if (list) {
+                var item = document.createElement("div");
+                item.textContent = itemCode;
+                item.style.padding = "2px 4px";
+                list.appendChild(item);
+                list.scrollTop = list.scrollHeight;
+            }
+        } catch (e) {
+            log("Error adding to completed list: " + e);
+        }
+    }
+
+    function addToImportEligFailedList(itemCode) {
+        try {
+            var list = document.getElementById("importEligFailedList");
+            if (!list && IMPORT_ELIG_POPUP_REF && IMPORT_ELIG_POPUP_REF.element) {
+                list = IMPORT_ELIG_POPUP_REF.element.querySelector("#importEligFailedList");
+            }
+            if (list) {
+                var item = document.createElement("div");
+                item.textContent = itemCode;
+                item.style.padding = "2px 4px";
+                list.appendChild(item);
+                list.scrollTop = list.scrollHeight;
+            }
+        } catch (e) {
+            log("Error adding to failed list: " + e);
+        }
+    }
+
+    function addToImportEligExcludedList(itemCode) {
+        try {
+            var list = document.getElementById("importEligExcludedList");
+            if (!list && IMPORT_ELIG_POPUP_REF && IMPORT_ELIG_POPUP_REF.element) {
+                list = IMPORT_ELIG_POPUP_REF.element.querySelector("#importEligExcludedList");
+            }
+            if (list) {
+                var item = document.createElement("div");
+                item.textContent = itemCode;
+                item.style.padding = "2px 4px";
+                list.appendChild(item);
+                list.scrollTop = list.scrollHeight;
+            }
+        } catch (e) {
+            log("Error adding to excluded list: " + e);
+        }
+    }
+
+    // Recreate popups on page load if they should be active
+    function recreatePopupsIfNeeded() {
+        try {
+            var runMode = getRunMode();
+            
+            // Recreate Run All popup
+            if (runMode === "all") {
+                var runAllPopupActive = localStorage.getItem(STORAGE_RUN_ALL_POPUP);
+                if (runAllPopupActive === "1" && (!RUN_ALL_POPUP_REF || !document.body.contains(RUN_ALL_POPUP_REF.element))) {
+                    var popupContainer = document.createElement("div");
+                    popupContainer.style.display = "flex";
+                    popupContainer.style.flexDirection = "column";
+                    popupContainer.style.gap = "16px";
+                    popupContainer.style.padding = "8px";
+                    
+                    // Restore status from localStorage
+                    var savedStatus = "Running Lock Activity Plans";
+                    try {
+                        var storedStatus = localStorage.getItem(STORAGE_RUN_ALL_STATUS);
+                        if (storedStatus && storedStatus.length > 0) {
+                            savedStatus = storedStatus;
+                        }
+                    } catch (e) {}
+                    
+                    var statusDiv = document.createElement("div");
+                    statusDiv.id = "runAllStatus";
+                    statusDiv.style.textAlign = "center";
+                    statusDiv.style.fontSize = "18px";
+                    statusDiv.style.color = "#fff";
+                    statusDiv.style.fontWeight = "500";
+                    statusDiv.textContent = savedStatus;
+                    
+                    var loadingAnimation = document.createElement("div");
+                    loadingAnimation.id = "runAllLoading";
+                    loadingAnimation.style.textAlign = "center";
+                    loadingAnimation.style.fontSize = "14px";
+                    loadingAnimation.style.color = "#9df";
+                    loadingAnimation.textContent = "Running.";
+                    
+                    popupContainer.appendChild(statusDiv);
+                    popupContainer.appendChild(loadingAnimation);
+                    
+                    RUN_ALL_POPUP_REF = createPopup({
+                        title: "Run Button (1-5) Progress",
+                        content: popupContainer,
+                        width: "400px",
+                        height: "auto",
+                        onClose: function() {
+                            log("Run All: cancelled by user (close button)");
+                            clearAllRunState();
+                            clearCohortGuard();
+                            try {
+                                localStorage.removeItem(STORAGE_RUN_MODE);
+                                localStorage.removeItem(STORAGE_KEY);
+                                localStorage.removeItem(STORAGE_CONTINUE_EPOCH);
+                                localStorage.removeItem(STORAGE_RUN_ALL_POPUP);
+                                localStorage.removeItem(STORAGE_RUN_ALL_STATUS);
+                            } catch (e) {}
+                            RUN_ALL_POPUP_REF = null;
+                        }
+                    });
+                    
+                    var dots = 1;
+                    var loadingInterval = setInterval(function() {
+                        if (!RUN_ALL_POPUP_REF || !document.body.contains(RUN_ALL_POPUP_REF.element)) {
+                            clearInterval(loadingInterval);
+                            return;
+                        }
+                        dots = dots + 1;
+                        if (dots > 3) {
+                            dots = 1;
+                        }
+                        var text = "Running";
+                        var i = 0;
+                        while (i < dots) {
+                            text = text + ".";
+                            i = i + 1;
+                        }
+                        if (loadingAnimation) {
+                            loadingAnimation.textContent = text;
+                        }
+                    }, 500);
+                }
+            }
+            
+            // Recreate Clear Mapping popup
+            if (runMode === RUNMODE_CLEAR_MAPPING) {
+                var clearMappingPopupActive = localStorage.getItem(STORAGE_CLEAR_MAPPING_POPUP);
+                if (clearMappingPopupActive === "1" && (!CLEAR_MAPPING_POPUP_REF || !document.body.contains(CLEAR_MAPPING_POPUP_REF.element))) {
+                    var popupContainer = document.createElement("div");
+                    popupContainer.style.display = "flex";
+                    popupContainer.style.flexDirection = "column";
+                    popupContainer.style.gap = "16px";
+                    popupContainer.style.padding = "8px";
+                    
+                    var statusDiv = document.createElement("div");
+                    statusDiv.style.textAlign = "center";
+                    statusDiv.style.fontSize = "18px";
+                    statusDiv.style.color = "#fff";
+                    statusDiv.style.fontWeight = "500";
+                    statusDiv.textContent = "Running Clear Mapping";
+                    
+                    var loadingAnimation = document.createElement("div");
+                    loadingAnimation.id = "clearMappingLoading";
+                    loadingAnimation.style.textAlign = "center";
+                    loadingAnimation.style.fontSize = "14px";
+                    loadingAnimation.style.color = "#9df";
+                    loadingAnimation.textContent = "Running.";
+                    
+                    popupContainer.appendChild(statusDiv);
+                    popupContainer.appendChild(loadingAnimation);
+                    
+                    CLEAR_MAPPING_POPUP_REF = createPopup({
+                        title: "Clear Mapping",
+                        content: popupContainer,
+                        width: "350px",
+                        height: "auto",
+                        onClose: function() {
+                            log("ClearMapping: cancelled by user (close button)");
+                            try {
+                                localStorage.removeItem(STORAGE_RUN_MODE);
+                                localStorage.removeItem(STORAGE_CLEAR_MAPPING_POPUP);
+                            } catch (e) {}
+                            CLEAR_MAPPING_POPUP_REF = null;
+                        }
+                    });
+                    
+                    var dots = 1;
+                    var loadingInterval = setInterval(function() {
+                        if (!CLEAR_MAPPING_POPUP_REF || !document.body.contains(CLEAR_MAPPING_POPUP_REF.element)) {
+                            clearInterval(loadingInterval);
+                            return;
+                        }
+                        dots = dots + 1;
+                        if (dots > 3) {
+                            dots = 1;
+                        }
+                        var text = "Running";
+                        var i = 0;
+                        while (i < dots) {
+                            text = text + ".";
+                            i = i + 1;
+                        }
+                        if (loadingAnimation) {
+                            loadingAnimation.textContent = text;
+                        }
+                    }, 500);
+                }
+            }
+        } catch (e) {
+            log("Error recreating popups: " + e);
+        }
     }
 
     // Return true if we are on the Data Collection > Subject page.
@@ -1394,20 +1630,104 @@
         buttonRow.appendChild(clearAllBtn);
         container.appendChild(buttonRow);
 
+        var runningContainer = document.createElement("div");
+        runningContainer.id = "importEligRunningContainer";
+        runningContainer.style.display = "none";
+        runningContainer.style.marginTop = "10px";
+        runningContainer.style.flexDirection = "column";
+        runningContainer.style.gap = "12px";
+
         var runningBox = document.createElement("div");
-        runningBox.style.display = "none";
-        runningBox.style.marginTop = "10px";
+        runningBox.id = "importEligRunningText";
         runningBox.style.textAlign = "center";
         runningBox.style.fontSize = "16px";
         runningBox.style.color = "#fff";
+        runningBox.style.fontWeight = "500";
         runningBox.textContent = "Running";
-        container.appendChild(runningBox);
+        runningContainer.appendChild(runningBox);
+
+        var listsContainer = document.createElement("div");
+        listsContainer.style.display = "flex";
+        listsContainer.style.flexDirection = "column";
+        listsContainer.style.gap = "12px";
+        listsContainer.style.maxHeight = "300px";
+        listsContainer.style.overflowY = "auto";
+
+        var completedListContainer = document.createElement("div");
+        completedListContainer.style.display = "flex";
+        completedListContainer.style.flexDirection = "column";
+        completedListContainer.style.gap = "4px";
+        var completedTitle = document.createElement("div");
+        completedTitle.textContent = "Completed:";
+        completedTitle.style.fontWeight = "600";
+        completedTitle.style.color = "#5cb85c";
+        completedTitle.style.fontSize = "13px";
+        completedListContainer.appendChild(completedTitle);
+        var completedList = document.createElement("div");
+        completedList.id = "importEligCompletedList";
+        completedList.style.fontSize = "12px";
+        completedList.style.color = "#9f9";
+        completedList.style.maxHeight = "100px";
+        completedList.style.overflowY = "auto";
+        completedList.style.padding = "4px";
+        completedList.style.background = "#1a1a1a";
+        completedList.style.borderRadius = "4px";
+        completedListContainer.appendChild(completedList);
+        listsContainer.appendChild(completedListContainer);
+
+        var failedListContainer = document.createElement("div");
+        failedListContainer.style.display = "flex";
+        failedListContainer.style.flexDirection = "column";
+        failedListContainer.style.gap = "4px";
+        var failedTitle = document.createElement("div");
+        failedTitle.textContent = "Failed to Collect:";
+        failedTitle.style.fontWeight = "600";
+        failedTitle.style.color = "#d9534f";
+        failedTitle.style.fontSize = "13px";
+        failedListContainer.appendChild(failedTitle);
+        var failedList = document.createElement("div");
+        failedList.id = "importEligFailedList";
+        failedList.style.fontSize = "12px";
+        failedList.style.color = "#f99";
+        failedList.style.maxHeight = "100px";
+        failedList.style.overflowY = "auto";
+        failedList.style.padding = "4px";
+        failedList.style.background = "#1a1a1a";
+        failedList.style.borderRadius = "4px";
+        failedListContainer.appendChild(failedList);
+        listsContainer.appendChild(failedListContainer);
+
+        var excludedListContainer = document.createElement("div");
+        excludedListContainer.style.display = "flex";
+        excludedListContainer.style.flexDirection = "column";
+        excludedListContainer.style.gap = "4px";
+        var excludedTitle = document.createElement("div");
+        excludedTitle.textContent = "Form Exclusion:";
+        excludedTitle.style.fontWeight = "600";
+        excludedTitle.style.color = "#f0ad4e";
+        excludedTitle.style.fontSize = "13px";
+        excludedListContainer.appendChild(excludedTitle);
+        var excludedList = document.createElement("div");
+        excludedList.id = "importEligExcludedList";
+        excludedList.style.fontSize = "12px";
+        excludedList.style.color = "#ff9";
+        excludedList.style.maxHeight = "100px";
+        excludedList.style.overflowY = "auto";
+        excludedList.style.padding = "4px";
+        excludedList.style.background = "#1a1a1a";
+        excludedList.style.borderRadius = "4px";
+        excludedListContainer.appendChild(excludedList);
+        listsContainer.appendChild(excludedListContainer);
+
+        runningContainer.appendChild(listsContainer);
+        container.appendChild(runningContainer);
 
         var popup = createPopup({
             title: "Import Eligibility Mapping",
             content: container,
-            width: "450px",
+            width: "500px",
             height: "auto",
+            maxHeight: "80vh",
             onClose: function () {
                 // X pressed → STOP everything (but don't pause)
                 log("ImportElig: popup X pressed → stopping automation");
@@ -1416,9 +1736,16 @@
                 // Clear pending popup flag
                 try {
                     localStorage.removeItem(STORAGE_ELIG_IMPORT_PENDING_POPUP);
+                    localStorage.removeItem(STORAGE_IMPORT_ELIG_POPUP);
                 } catch (e) {}
+                IMPORT_ELIG_POPUP_REF = null;
             }
         });
+        
+        IMPORT_ELIG_POPUP_REF = popup;
+        try {
+            localStorage.setItem(STORAGE_IMPORT_ELIG_POPUP, "1");
+        } catch (e) {}
 
         confirmBtn.addEventListener("click", function () {
             log("ImportElig: Confirm clicked");
@@ -1464,10 +1791,19 @@
             confirmBtn.style.display = "none";
             clearAllBtn.style.display = "none";
 
-            runningBox.style.display = "block";
+            runningContainer.style.display = "flex";
+            
+            // Set popup flag so it persists across page changes
+            try {
+                localStorage.setItem(STORAGE_IMPORT_ELIG_POPUP, "1");
+            } catch (e) {}
 
             var dots = 1;
             var interval = setInterval(function () {
+                if (!popup || !document.body.contains(popup.element)) {
+                    clearInterval(interval);
+                    return;
+                }
                 dots = dots + 1;
                 if (dots > 3) {
                     dots = 1;
@@ -1478,18 +1814,23 @@
                     t = t + ".";
                     i = i + 1;
                 }
-                runningBox.textContent = t;
+                if (runningBox) {
+                    runningBox.textContent = t;
+                }
             }, 350);
 
             onConfirm(function (message) {
                 clearInterval(interval);
                 if (message) {
-                    runningBox.textContent = message;
-                    setTimeout(function() {
-                        popup.close();
-                    }, 2000);
+                    if (runningBox) {
+                        runningBox.textContent = "No more I/E items to add";
+                    }
+                    // Don't auto-close - user must click X
                 } else {
-                    popup.close();
+                    if (runningBox) {
+                        runningBox.textContent = "No more I/E items to add";
+                    }
+                    // Don't auto-close - user must click X
                 }
             });
         });
@@ -2638,6 +2979,21 @@
             } catch (e) {
             }
 
+            // Show redirect popup
+            var redirectMessage = document.createElement("div");
+            redirectMessage.style.textAlign = "center";
+            redirectMessage.style.fontSize = "16px";
+            redirectMessage.style.color = "#fff";
+            redirectMessage.style.padding = "20px";
+            redirectMessage.textContent = "Click Import Eligibility Mapping again to run.";
+
+            var redirectPopup = createPopup({
+                title: "Import Eligibility Mapping",
+                content: redirectMessage,
+                width: "400px",
+                height: "auto"
+            });
+
             location.href = ELIGIBILITY_LIST_URL;
             return;
         }
@@ -2723,6 +3079,9 @@
             }
             if (!isRunModeSet(RUNMODE_ELIG_IMPORT)) {
                 log("ImportElig: run mode cleared (X pressed); stopping loop");
+                try {
+                    localStorage.removeItem(STORAGE_IMPORT_ELIG_POPUP);
+                } catch (e) {}
                 break;
             }
             var opened = await openAddEligibilityModal();
@@ -2732,40 +3091,67 @@
             }
             if (!isRunModeSet(RUNMODE_ELIG_IMPORT)) {
                 log("ImportElig: run mode cleared (X pressed); stopping loop");
+                try {
+                    localStorage.removeItem(STORAGE_IMPORT_ELIG_POPUP);
+                } catch (e) {}
                 break;
             }
+            // Wait a bit for modal to fully load
+            await sleep(500);
             var eligList = await readEligibilityItemCodesFromSelect();
             var allCodes = eligList.codes;
             var codeToVal = eligList.valueMap;
+            log("ImportElig: read " + String(allCodes.length) + " codes from select");
             var pick = "";
             var j = 0;
+            var ignoredCount = 0;
+            var existingCount = 0;
+            var importedCount = 0;
             while (j < allCodes.length) {
                 var c = allCodes[j];
                 if (shouldIgnoreCode(c)) {
+                    ignoredCount = ignoredCount + 1;
                     j = j + 1;
                     continue;
                 }
                 var inExisting = existingSet.has(c);
                 var inImported = importedSet.has(c);
+                if (inExisting) {
+                    existingCount = existingCount + 1;
+                }
+                if (inImported) {
+                    importedCount = importedCount + 1;
+                }
                 if (!inExisting && !inImported) {
                     pick = c;
+                    log("ImportElig: found new code to process: " + String(c));
                     break;
                 }
                 j = j + 1;
             }
+            log("ImportElig: code filtering - ignored=" + String(ignoredCount) + ", existing=" + String(existingCount) + ", imported=" + String(importedCount) + ", selected=" + String(pick || "none"));
             if (!pick || pick.length === 0) {
                 log("ImportElig: no new items; finishing");
+                // Close modal before finishing
+                var closeBtn = document.querySelector("#ajaxModal .modal-content button.close");
+                if (closeBtn) {
+                    closeBtn.click();
+                    await sleep(500);
+                }
                 try {
                     localStorage.removeItem(STORAGE_RUN_MODE);
+                    localStorage.removeItem(STORAGE_IMPORT_ELIG_POPUP);
                 } catch (e) {
                 }
                 clearImportedItemsSet();
                 // Note: The completion message will be shown by the callback in startImportEligibilityMapping
                 return;
             }
+            log("ImportElig: attempting to select code: " + String(pick));
             var selOk = await selectEligibilityItemByCode(pick, codeToVal);
             if (!selOk) {
                 log("ImportElig: select failed; closing modal");
+                addToImportEligFailedList(pick);
                 var closeBtn = document.querySelector("#ajaxModal .modal-content button.close");
                 if (closeBtn) {
                     closeBtn.click();
@@ -2782,6 +3168,7 @@
             if (!foundCheckItem) {
                 log("ImportElig: no CheckItem match found for code '" + String(pick) + "' after scanning all plans and activities");
                 addToIgnoreKeywords(pick);
+                addToImportEligFailedList(pick);
                 // Reload ignore keywords so the updated list is used in subsequent iterations
                 ignoreKeywords = getIgnoreKeywords();
                 var closeBtn2 = document.querySelector("#ajaxModal .modal-content button.close");
@@ -2799,12 +3186,16 @@
             await stabilizeSelectionBeforeComparator(3000);
             if (!isRunModeSet(RUNMODE_ELIG_IMPORT)) {
                 log("ImportElig: run mode cleared (X pressed); stopping loop");
+                try {
+                    localStorage.removeItem(STORAGE_IMPORT_ELIG_POPUP);
+                } catch (e) {}
                 break;
             }
             log("ImportElig: waiting for comparator to appear after Check Item selection");
             var compReady = await waitForComparatorReady(1000);
             if (!compReady) {
                 log("ImportElig: comparator never appeared; skipping");
+                addToImportEligFailedList(pick);
                 var closeBtn2b = document.querySelector("#ajaxModal .modal-content button.close");
                 if (closeBtn2b) {
                     closeBtn2b.click();
@@ -2816,6 +3207,7 @@
             var cmpOk = await setComparatorEQ();
             if (!cmpOk) {
                 log("ImportElig: comparator fail; skipping");
+                addToImportEligFailedList(pick);
                 var closeBtn3 = document.querySelector("#ajaxModal .modal-content button.close");
                 if (closeBtn3) {
                     closeBtn3.click();
@@ -2827,6 +3219,7 @@
             var sfOk = await selectCodeListValueContainingSF();
             if (!sfOk) {
                 log("ImportElig: SF fail; skipping");
+                addToImportEligFailedList(pick);
                 var closeBtn4 = document.querySelector("#ajaxModal .modal-content button.close");
                 if (closeBtn4) {
                     closeBtn4.click();
@@ -2838,15 +3231,20 @@
             var saved = await clickSaveAndWait();
             if (!saved) {
                 log("ImportElig: save failed; stopping");
+                addToImportEligFailedList(pick);
                 break;
             }
             if (!isRunModeSet(RUNMODE_ELIG_IMPORT)) {
                 log("ImportElig: run mode cleared (X pressed); stopping loop");
+                try {
+                    localStorage.removeItem(STORAGE_IMPORT_ELIG_POPUP);
+                } catch (e) {}
                 break;
             }
             existingSet.add(pick);
             importedSet.add(pick);
             persistImportedItemsSet(importedSet);
+            addToImportEligCompletedList(pick);
             log("ImportElig: added " + String(pick));
             clearLastMatchSelection();
             await sleep(1000);
@@ -4046,6 +4444,7 @@
         if (mode === "all") {
             await sleep(1000);
             log("processLockSamplePathsPage: continuing to Study Show for ALL mode");
+            updateRunAllPopupStatus("Running Update Study Status");
             location.href = STUDY_SHOW_URL + "?autoupdate=1";
         }
     }
@@ -5440,13 +5839,14 @@
         if (!ok2) {
             await sleep(500);
         }
-        if (getRunMode() === "all") {
-            setRunMode("consent");
-            await sleep(3000);
-            location.href = STUDY_SHOW_URL + "?autoconsent=1";
-            log("Continuing ALL to consent after pause");
-            return;
-        }
+            if (getRunMode() === "all") {
+                setRunMode("consent");
+                updateRunAllPopupStatus("Running Run ICF Barcode");
+                await sleep(3000);
+                location.href = STUDY_SHOW_URL + "?autoconsent=1";
+                log("Continuing ALL to consent after pause");
+                return;
+            }
         clearContinueEpoch();
         clearRunMode();
         setCohortGuard("done");
@@ -6370,8 +6770,8 @@
             btn.style.width = "100%";
             btn.style.padding = "10px";
             btn.style.cursor = "pointer";
-            btn.style.background = "#2d7";
-            btn.style.color = "#000";
+            btn.style.background = "#4a90e2";
+            btn.style.color = "#fff";
             btn.style.border = "none";
             btn.style.borderRadius = "6px";
             btn.style.fontSize = "14px";
@@ -6379,10 +6779,10 @@
             btn.style.transition = "background 0.2s";
 
             btn.addEventListener("mouseenter", function() {
-                btn.style.background = "#3e8";
+                btn.style.background = "#357abd";
             });
             btn.addEventListener("mouseleave", function() {
-                btn.style.background = "#2d7";
+                btn.style.background = "#4a90e2";
             });
 
             btn.addEventListener("click", async function () {
@@ -6734,7 +7134,18 @@
             return;
         }
         clearConsentScanIndex();
+        var wasAllMode = getRunMode() === "consent" && localStorage.getItem(STORAGE_RUN_ALL_POPUP) === "1";
         clearRunMode();
+        // If this was the final step of Run All, close the popup
+        if (wasAllMode) {
+            try {
+                localStorage.removeItem(STORAGE_RUN_ALL_POPUP);
+                if (RUN_ALL_POPUP_REF && RUN_ALL_POPUP_REF.close) {
+                    RUN_ALL_POPUP_REF.close();
+                }
+                RUN_ALL_POPUP_REF = null;
+            } catch (e) {}
+        }
         log("Consent collected and run state cleared");
     }
     // Detect whether consent is present on a subject show page.
@@ -7824,8 +8235,8 @@
             btn.style.width = "100%";
             btn.style.padding = "10px";
             btn.style.cursor = "pointer";
-            btn.style.background = "#2d7";
-            btn.style.color = "#000";
+            btn.style.background = "#4a90e2";
+            btn.style.color = "#fff";
             btn.style.border = "none";
             btn.style.borderRadius = "6px";
             btn.style.fontSize = "14px";
@@ -7833,10 +8244,10 @@
             btn.style.transition = "background 0.2s";
 
             btn.addEventListener("mouseenter", function() {
-                btn.style.background = "#3e8";
+                btn.style.background = "#357abd";
             });
             btn.addEventListener("mouseleave", function() {
-                btn.style.background = "#2d7";
+                btn.style.background = "#4a90e2";
             });
 
             btn.addEventListener("click", async function () {
@@ -7859,6 +8270,7 @@
 
                 log("Selected epoch; starting Add Cohort Subjects automation");
                 setRunMode("epochAddCohort");
+                updateRunAllPopupStatus("Running Add Cohort Subjects");
                 location.href = location.origin + href + "?autoepochaddcohort=1";
             });
 
@@ -8332,6 +8744,7 @@
                     localStorage.setItem(STORAGE_RUN_LOCK_SAMPLE_PATHS, "1");
                 } catch (e) {}
                 log("Go Lock Sample Paths after Activity Plans");
+                updateRunAllPopupStatus("Running Lock Sample Paths");
                 location.href = "https://cenexeltest.clinspark.com/secure/samples/configure/paths";
                 return;
             }
@@ -9277,8 +9690,36 @@
     // Clear run mode.
     function clearRunMode() {
         try {
+            var runMode = getRunMode();
             localStorage.removeItem(STORAGE_RUN_MODE);
             log("RunMode cleared");
+            // Clear popup flags
+            if (runMode === "all") {
+                localStorage.removeItem(STORAGE_RUN_ALL_POPUP);
+                localStorage.removeItem(STORAGE_RUN_ALL_STATUS);
+                if (RUN_ALL_POPUP_REF && RUN_ALL_POPUP_REF.close) {
+                    try {
+                        RUN_ALL_POPUP_REF.close();
+                    } catch (e2) {}
+                }
+                RUN_ALL_POPUP_REF = null;
+            } else if (runMode === RUNMODE_CLEAR_MAPPING) {
+                localStorage.removeItem(STORAGE_CLEAR_MAPPING_POPUP);
+                if (CLEAR_MAPPING_POPUP_REF && CLEAR_MAPPING_POPUP_REF.close) {
+                    try {
+                        CLEAR_MAPPING_POPUP_REF.close();
+                    } catch (e3) {}
+                }
+                CLEAR_MAPPING_POPUP_REF = null;
+            } else if (runMode === RUNMODE_ELIG_IMPORT) {
+                localStorage.removeItem(STORAGE_IMPORT_ELIG_POPUP);
+                if (IMPORT_ELIG_POPUP_REF && IMPORT_ELIG_POPUP_REF.close) {
+                    try {
+                        IMPORT_ELIG_POPUP_REF.close();
+                    } catch (e4) {}
+                }
+                IMPORT_ELIG_POPUP_REF = null;
+            }
         } catch (e) {}
     }
 
@@ -9332,6 +9773,7 @@
     }
     // Clear all run state from storage.
     function clearAllRunState() {
+        var runMode = getRunMode();
         clearRunMode();
         clearContinueEpoch();
         clearCohortGuard();
@@ -9345,6 +9787,15 @@
             localStorage.removeItem(STORAGE_CHECK_ELIG_LOCK);
             localStorage.removeItem("activityPlanState.cohortAdd.editDoneMap");
             log("Cleared cohortAdd.editDoneMap");
+            // Also clear popup flags
+            if (runMode === "all") {
+                localStorage.removeItem(STORAGE_RUN_ALL_POPUP);
+                localStorage.removeItem(STORAGE_RUN_ALL_STATUS);
+            } else if (runMode === RUNMODE_CLEAR_MAPPING) {
+                localStorage.removeItem(STORAGE_CLEAR_MAPPING_POPUP);
+            } else if (runMode === RUNMODE_ELIG_IMPORT) {
+                localStorage.removeItem(STORAGE_IMPORT_ELIG_POPUP);
+            }
         } catch (e) {}
     }
 
@@ -10092,149 +10543,217 @@
         btnRow.style.gap = "8px";
         btnRowRef = btnRow;
         var runPlansBtn = document.createElement("button");
-        runPlansBtn.textContent = "1. Lock Activity Plans";
-        runPlansBtn.style.background = "#2d7";
-        runPlansBtn.style.color = "#000";
+        runPlansBtn.textContent = "Lock Activity Plans";
+        runPlansBtn.style.background = "#4a90e2";
+        runPlansBtn.style.color = "#fff";
         runPlansBtn.style.border = "none";
         runPlansBtn.style.borderRadius = "6px";
         runPlansBtn.style.padding = "8px";
         runPlansBtn.style.cursor = "pointer";
+        runPlansBtn.style.fontWeight = "500";
+        runPlansBtn.style.transition = "background 0.2s";
+        runPlansBtn.onmouseenter = function() { this.style.background = "#357abd"; };
+        runPlansBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
         var runStudyBtn = document.createElement("button");
-        runStudyBtn.textContent = "3. Update Study Status";
-        runStudyBtn.style.background = "#4af";
-        runStudyBtn.style.color = "#000";
+        runStudyBtn.textContent = "Update Study Status";
+        runStudyBtn.style.background = "#4a90e2";
+        runStudyBtn.style.color = "#fff";
         runStudyBtn.style.border = "none";
         runStudyBtn.style.borderRadius = "6px";
         runStudyBtn.style.padding = "8px";
         runStudyBtn.style.cursor = "pointer";
+        runStudyBtn.style.fontWeight = "500";
+        runStudyBtn.style.transition = "background 0.2s";
+        runStudyBtn.onmouseenter = function() { this.style.background = "#357abd"; };
+        runStudyBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
         var runAddCohortBtn = document.createElement("button");
-        runAddCohortBtn.textContent = "4. Add Cohort Subjects";
-        runAddCohortBtn.style.background = "#fd4";
-        runAddCohortBtn.style.color = "#000";
+        runAddCohortBtn.textContent = "Add Cohort Subjects";
+        runAddCohortBtn.style.background = "#4a90e2";
+        runAddCohortBtn.style.color = "#fff";
         runAddCohortBtn.style.border = "none";
         runAddCohortBtn.style.borderRadius = "6px";
         runAddCohortBtn.style.padding = "8px";
         runAddCohortBtn.style.cursor = "pointer";
+        runAddCohortBtn.style.fontWeight = "500";
+        runAddCohortBtn.style.transition = "background 0.2s";
+        runAddCohortBtn.onmouseenter = function() { this.style.background = "#357abd"; };
+        runAddCohortBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
         var runConsentBtn = document.createElement("button");
-        runConsentBtn.textContent = "5. Run ICF Barcode";
-        runConsentBtn.style.background = "#a8f";
-        runConsentBtn.style.color = "#000";
+        runConsentBtn.textContent = "Run ICF Barcode";
+        runConsentBtn.style.background = "#4a90e2";
+        runConsentBtn.style.color = "#fff";
         runConsentBtn.style.border = "none";
         runConsentBtn.style.borderRadius = "6px";
         runConsentBtn.style.padding = "8px";
         runConsentBtn.style.cursor = "pointer";
+        runConsentBtn.style.fontWeight = "500";
+        runConsentBtn.style.transition = "background 0.2s";
+        runConsentBtn.onmouseenter = function() { this.style.background = "#357abd"; };
+        runConsentBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
         var runAllBtn = document.createElement("button");
-        runAllBtn.textContent = "6. Run Button (1-5)";
-        runAllBtn.style.background = "#fb6";
-        runAllBtn.style.color = "#000";
+        runAllBtn.textContent = "Run Button (1-5)";
+        runAllBtn.style.background = "#5cb85c";
+        runAllBtn.style.color = "#fff";
         runAllBtn.style.border = "none";
         runAllBtn.style.borderRadius = "6px";
         runAllBtn.style.padding = "8px";
         runAllBtn.style.cursor = "pointer";
+        runAllBtn.style.fontWeight = "600";
+        runAllBtn.style.transition = "background 0.2s";
+        runAllBtn.onmouseenter = function() { this.style.background = "#449d44"; };
+        runAllBtn.onmouseleave = function() { this.style.background = "#5cb85c"; };
         var runNonScrnBtn = document.createElement("button");
-        runNonScrnBtn.textContent = "7. Import Cohort Subject";
-        runNonScrnBtn.style.background = "#ff7";
-        runNonScrnBtn.style.color = "#000";
+        runNonScrnBtn.textContent = "Import Cohort Subject";
+        runNonScrnBtn.style.background = "#4994aa";
+        runNonScrnBtn.style.color = "#fff";
         runNonScrnBtn.style.border = "none";
         runNonScrnBtn.style.borderRadius = "6px";
         runNonScrnBtn.style.padding = "8px";
         runNonScrnBtn.style.cursor = "pointer";
+        runNonScrnBtn.style.fontWeight = "500";
+        runNonScrnBtn.style.transition = "background 0.2s";
+        runNonScrnBtn.onmouseenter = function() { this.style.background = "#357abd"; };
+        runNonScrnBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
         var runBarcodeBtn = document.createElement("button");
-        runBarcodeBtn.textContent = "8. Run Barcode";
-        runBarcodeBtn.style.background = "#9df";
-        runBarcodeBtn.style.color = "#000";
+        runBarcodeBtn.textContent = "Run Barcode";
+        runBarcodeBtn.style.background = "#4994aa";
+        runBarcodeBtn.style.color = "#fff";
         runBarcodeBtn.style.border = "none";
         runBarcodeBtn.style.borderRadius = "6px";
         runBarcodeBtn.style.padding = "8px";
         runBarcodeBtn.style.cursor = "pointer";
+        runBarcodeBtn.style.fontWeight = "500";
+        runBarcodeBtn.style.transition = "background 0.2s";
+        runBarcodeBtn.onmouseenter = function() { this.style.background = "#357abd"; };
+        runBarcodeBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
         var runFormOORBtn = document.createElement("button");
-        runFormOORBtn.textContent = "9. Run Form (OOR) Below Range";
-        runFormOORBtn.style.background = "#f99";
-        runFormOORBtn.style.color = "#000";
+        runFormOORBtn.textContent = "Run Form (OOR) Below Range";
+        runFormOORBtn.style.background = "#f0ad4e";
+        runFormOORBtn.style.color = "#fff";
         runFormOORBtn.style.border = "none";
         runFormOORBtn.style.borderRadius = "6px";
         runFormOORBtn.style.padding = "8px";
         runFormOORBtn.style.cursor = "pointer";
+        runFormOORBtn.style.fontWeight = "500";
+        runFormOORBtn.style.transition = "background 0.2s";
+        runFormOORBtn.onmouseenter = function() { this.style.background = "#ec971f"; };
+        runFormOORBtn.onmouseleave = function() { this.style.background = "#f0ad4e"; };
         var runFormOORABtn = document.createElement("button");
-        runFormOORABtn.textContent = "10. Run Form (OOR) Above Range";
-        runFormOORABtn.style.background = "#f99";
-        runFormOORABtn.style.color = "#000";
+        runFormOORABtn.textContent = "Run Form (OOR) Above Range";
+        runFormOORABtn.style.background = "#f0ad4e";
+        runFormOORABtn.style.color = "#fff";
         runFormOORABtn.style.border = "none";
         runFormOORABtn.style.borderRadius = "6px";
         runFormOORABtn.style.padding = "8px";
         runFormOORABtn.style.cursor = "pointer";
+        runFormOORABtn.style.fontWeight = "500";
+        runFormOORABtn.style.transition = "background 0.2s";
+        runFormOORABtn.onmouseenter = function() { this.style.background = "#ec971f"; };
+        runFormOORABtn.onmouseleave = function() { this.style.background = "#f0ad4e"; };
         var runFormIRBtn = document.createElement("button");
-        runFormIRBtn.textContent = "11. Run Form (In Range)";
-        runFormIRBtn.style.background = "#9f9";
-        runFormIRBtn.style.color = "#000";
+        runFormIRBtn.textContent = "Run Form (In Range)";
+        runFormIRBtn.style.background = "#f0ad4e";
+        runFormIRBtn.style.color = "#fff";
         runFormIRBtn.style.border = "none";
         runFormIRBtn.style.borderRadius = "6px";
         runFormIRBtn.style.padding = "8px";
         runFormIRBtn.style.cursor = "pointer";
+        runFormIRBtn.style.fontWeight = "500";
+        runFormIRBtn.style.transition = "background 0.2s";
+        runFormIRBtn.onmouseenter = function() { this.style.background = "#449d44"; };
+        runFormIRBtn.onmouseleave = function() { this.style.background = "#5cb85c"; };
         var pauseBtn = document.createElement("button");
         pauseBtn.textContent = isPaused() ? "Resume" : "Pause";
-        pauseBtn.style.background = "#ccc";
-        pauseBtn.style.color = "#000";
+        pauseBtn.style.background = "#6c757d";
+        pauseBtn.style.color = "#fff";
         pauseBtn.style.border = "none";
         pauseBtn.style.borderRadius = "6px";
         pauseBtn.style.padding = "8px";
         pauseBtn.style.cursor = "pointer";
+        pauseBtn.style.fontWeight = "500";
+        pauseBtn.style.transition = "background 0.2s";
+        pauseBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
+        pauseBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
 
         var clearLogsBtn = document.createElement("button");
         clearLogsBtn.textContent = "Clear Logs";
-        clearLogsBtn.style.background = "#555";
+        clearLogsBtn.style.background = "#6c757d";
         clearLogsBtn.style.color = "#fff";
         clearLogsBtn.style.border = "none";
         clearLogsBtn.style.borderRadius = "6px";
         clearLogsBtn.style.padding = "8px";
         clearLogsBtn.style.cursor = "pointer";
+        clearLogsBtn.style.fontWeight = "500";
+        clearLogsBtn.style.transition = "background 0.2s";
+        clearLogsBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
+        clearLogsBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
 
         var toggleLogsBtn = document.createElement("button");
         var logVisible = getLogVisible();
         toggleLogsBtn.textContent = logVisible ? "Hide Logs" : "Show Logs";
-        toggleLogsBtn.style.background = "#555";
+        toggleLogsBtn.style.background = "#6c757d";
         toggleLogsBtn.style.color = "#fff";
         toggleLogsBtn.style.border = "none";
         toggleLogsBtn.style.borderRadius = "6px";
         toggleLogsBtn.style.padding = "8px";
         toggleLogsBtn.style.cursor = "pointer";
+        toggleLogsBtn.style.fontWeight = "500";
+        toggleLogsBtn.style.transition = "background 0.2s";
+        toggleLogsBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
+        toggleLogsBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
 
         var runLockSamplePathsBtn = document.createElement("button");
-        runLockSamplePathsBtn.textContent = "2. Lock Sample Paths";
-        runLockSamplePathsBtn.style.background = "#f77";
-        runLockSamplePathsBtn.style.color = "#000";
+        runLockSamplePathsBtn.textContent = "Lock Sample Paths";
+        runLockSamplePathsBtn.style.background = "#4a90e2";
+        runLockSamplePathsBtn.style.color = "#fff";
         runLockSamplePathsBtn.style.border = "none";
         runLockSamplePathsBtn.style.borderRadius = "6px";
         runLockSamplePathsBtn.style.padding = "8px";
         runLockSamplePathsBtn.style.cursor = "pointer";
+        runLockSamplePathsBtn.style.fontWeight = "500";
+        runLockSamplePathsBtn.style.transition = "background 0.2s";
+        runLockSamplePathsBtn.onmouseenter = function() { this.style.background = "#357abd"; };
+        runLockSamplePathsBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
         var importEligBtn = document.createElement("button");
-        importEligBtn.textContent = "12. Import Eligibility Mapping";
-        importEligBtn.style.background = "#9df";
-        importEligBtn.style.color = "#000";
+        importEligBtn.textContent = "Import I/E";
+        importEligBtn.style.background = "#38dae6";
+        importEligBtn.style.color = "#fff";
         importEligBtn.style.border = "none";
         importEligBtn.style.borderRadius = "6px";
         importEligBtn.style.padding = "8px";
         importEligBtn.style.cursor = "pointer";
+        importEligBtn.style.fontWeight = "500";
+        importEligBtn.style.transition = "background 0.2s";
+        importEligBtn.onmouseenter = function() { this.style.background = "#357abd"; };
+        importEligBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
 
         var clearMappingBtn = document.createElement("button");
-        clearMappingBtn.textContent = "13. Clear Mapping";
-        clearMappingBtn.style.background = "#f99";
-        clearMappingBtn.style.color = "#000";
+        clearMappingBtn.textContent = "Clear Mapping";
+        clearMappingBtn.style.background = "#38dae6";
+        clearMappingBtn.style.color = "#fff";
         clearMappingBtn.style.border = "none";
         clearMappingBtn.style.borderRadius = "6px";
         clearMappingBtn.style.padding = "8px";
         clearMappingBtn.style.cursor = "pointer";
+        clearMappingBtn.style.fontWeight = "500";
+        clearMappingBtn.style.transition = "background 0.2s";
+        clearMappingBtn.onmouseenter = function() { this.style.background = "#c9302c"; };
+        clearMappingBtn.onmouseleave = function() { this.style.background = "#d9534f"; };
 
         var collectAllBtn = document.createElement("button");
         collectAllBtn.textContent = "Collect All";
-        collectAllBtn.style.background = "#6cf";
-        collectAllBtn.style.color = "#000";
+        collectAllBtn.style.background = "#f0ad4e";
+        collectAllBtn.style.color = "#fff";
         collectAllBtn.style.border = "none";
         collectAllBtn.style.borderRadius = "6px";
         collectAllBtn.style.padding = "8px";
         collectAllBtn.style.cursor = "pointer";
+        collectAllBtn.style.fontWeight = "500";
+        collectAllBtn.style.transition = "background 0.2s";
+        collectAllBtn.onmouseenter = function() { this.style.background = "#357abd"; };
+        collectAllBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
         btnRow.appendChild(runPlansBtn);
         btnRow.appendChild(runLockSamplePathsBtn);
@@ -10247,9 +10766,9 @@
         btnRow.appendChild(runFormOORBtn);
         btnRow.appendChild(runFormOORABtn);
         btnRow.appendChild(runFormIRBtn);
+        btnRow.appendChild(collectAllBtn);
         btnRow.appendChild(importEligBtn);
         btnRow.appendChild(clearMappingBtn);
-        btnRow.appendChild(collectAllBtn);
         btnRow.appendChild(pauseBtn);
         btnRow.appendChild(clearLogsBtn);
         btnRow.appendChild(toggleLogsBtn);
@@ -10369,6 +10888,77 @@
             } catch (e) {}
             status.textContent = "Starting ALL: Activity Plans…";
             log("Run ALL clicked");
+            
+            // Create progress popup
+            var popupContainer = document.createElement("div");
+            popupContainer.style.display = "flex";
+            popupContainer.style.flexDirection = "column";
+            popupContainer.style.gap = "16px";
+            popupContainer.style.padding = "8px";
+            
+            var statusDiv = document.createElement("div");
+            statusDiv.id = "runAllStatus";
+            statusDiv.style.textAlign = "center";
+            statusDiv.style.fontSize = "18px";
+            statusDiv.style.color = "#fff";
+            statusDiv.style.fontWeight = "500";
+            statusDiv.textContent = "Running Lock Activity Plans";
+            
+            var loadingAnimation = document.createElement("div");
+            loadingAnimation.id = "runAllLoading";
+            loadingAnimation.style.textAlign = "center";
+            loadingAnimation.style.fontSize = "14px";
+            loadingAnimation.style.color = "#9df";
+            loadingAnimation.textContent = "Running.";
+            
+            popupContainer.appendChild(statusDiv);
+            popupContainer.appendChild(loadingAnimation);
+            
+            RUN_ALL_POPUP_REF = createPopup({
+                title: "Run Button (1-5) Progress",
+                content: popupContainer,
+                width: "400px",
+                height: "auto",
+                onClose: function() {
+                    log("Run All: cancelled by user (close button)");
+                    clearAllRunState();
+                    clearCohortGuard();
+                    try {
+                        localStorage.removeItem(STORAGE_RUN_MODE);
+                        localStorage.removeItem(STORAGE_KEY);
+                        localStorage.removeItem(STORAGE_CONTINUE_EPOCH);
+                        localStorage.removeItem(STORAGE_RUN_ALL_POPUP);
+                    } catch (e) {}
+                    RUN_ALL_POPUP_REF = null;
+                }
+            });
+            
+            try {
+                localStorage.setItem(STORAGE_RUN_ALL_POPUP, "1");
+            } catch (e) {}
+            
+            // Animate loading dots
+            var dots = 1;
+            var loadingInterval = setInterval(function() {
+                if (!RUN_ALL_POPUP_REF || !document.body.contains(RUN_ALL_POPUP_REF.element)) {
+                    clearInterval(loadingInterval);
+                    return;
+                }
+                dots = dots + 1;
+                if (dots > 3) {
+                    dots = 1;
+                }
+                var text = "Running";
+                var i = 0;
+                while (i < dots) {
+                    text = text + ".";
+                    i = i + 1;
+                }
+                if (loadingAnimation) {
+                    loadingAnimation.textContent = text;
+                }
+            }, 500);
+            
             location.href = LIST_URL;
             clearCohortGuard();
         });
@@ -10558,6 +11148,91 @@
         });
         clearMappingBtn.addEventListener("click", function () {
             log("ClearMapping: button clicked");
+            
+            // Create running animation popup
+            var popupContainer = document.createElement("div");
+            popupContainer.style.display = "flex";
+            popupContainer.style.flexDirection = "column";
+            popupContainer.style.gap = "16px";
+            popupContainer.style.padding = "8px";
+            
+            var statusDiv = document.createElement("div");
+            statusDiv.style.textAlign = "center";
+            statusDiv.style.fontSize = "18px";
+            statusDiv.style.color = "#fff";
+            statusDiv.style.fontWeight = "500";
+            statusDiv.textContent = "Running Clear Mapping";
+            
+            var loadingAnimation = document.createElement("div");
+            loadingAnimation.id = "clearMappingLoading";
+            loadingAnimation.style.textAlign = "center";
+            loadingAnimation.style.fontSize = "14px";
+            loadingAnimation.style.color = "#9df";
+            loadingAnimation.textContent = "Running.";
+            
+            popupContainer.appendChild(statusDiv);
+            popupContainer.appendChild(loadingAnimation);
+            
+            var clearMappingPopup = createPopup({
+                title: "Clear Mapping",
+                content: popupContainer,
+                width: "350px",
+                height: "auto",
+                onClose: function() {
+                    log("ClearMapping: cancelled by user (close button)");
+                    try {
+                        localStorage.removeItem(STORAGE_RUN_MODE);
+                        localStorage.removeItem(STORAGE_CLEAR_MAPPING_POPUP);
+                    } catch (e) {}
+                    CLEAR_MAPPING_POPUP_REF = null;
+                }
+            });
+            
+            CLEAR_MAPPING_POPUP_REF = clearMappingPopup;
+            try {
+                localStorage.setItem(STORAGE_CLEAR_MAPPING_POPUP, "1");
+            } catch (e) {}
+            
+            // Animate loading dots
+            var dots = 1;
+            var loadingInterval = setInterval(function() {
+                if (!clearMappingPopup || !document.body.contains(clearMappingPopup.element)) {
+                    clearInterval(loadingInterval);
+                    return;
+                }
+                dots = dots + 1;
+                if (dots > 3) {
+                    dots = 1;
+                }
+                var text = "Running";
+                var i = 0;
+                while (i < dots) {
+                    text = text + ".";
+                    i = i + 1;
+                }
+                if (loadingAnimation) {
+                    loadingAnimation.textContent = text;
+                }
+            }, 500);
+            
+            // Close popup when done (check periodically)
+            var checkInterval = setInterval(function() {
+                try {
+                    var runMode = localStorage.getItem(STORAGE_RUN_MODE);
+                    if (runMode !== RUNMODE_CLEAR_MAPPING) {
+                        clearInterval(loadingInterval);
+                        clearInterval(checkInterval);
+                        if (clearMappingPopup && clearMappingPopup.close) {
+                            try {
+                                localStorage.removeItem(STORAGE_CLEAR_MAPPING_POPUP);
+                            } catch (e) {}
+                            clearMappingPopup.close();
+                        }
+                        CLEAR_MAPPING_POPUP_REF = null;
+                    }
+                } catch (e) {}
+            }, 1000);
+            
             startClearMapping();
         });
         closeBtn.addEventListener("click", function () {
@@ -10680,6 +11355,10 @@
             addButtonToPanel(label, handler);
         };
         bindPanelHotkeyOnce();
+        
+        // Recreate popups if needed
+        recreatePopupsIfNeeded();
+        
         if (isPaused()) {
             log("Paused; automation halted");
             return;
@@ -10811,7 +11490,7 @@
             return;
         }
 
-        if (runModeRaw === RUNMODE_ELIG_IMPORT) {
+            if (runModeRaw === RUNMODE_ELIG_IMPORT) {
 
             if (pendingPopup === "1") {
                 if (!isEligibilityListPage()) {
@@ -10829,6 +11508,155 @@
 
                 startImportEligibilityMapping();
                 return;
+            }
+
+            // Recreate popup if it should be active and continue execution
+            var importEligPopupActive = localStorage.getItem(STORAGE_IMPORT_ELIG_POPUP);
+            if (importEligPopupActive === "1" && (!IMPORT_ELIG_POPUP_REF || !document.body.contains(IMPORT_ELIG_POPUP_REF.element))) {
+                // Recreate the running popup
+                var container = document.createElement("div");
+                container.style.display = "flex";
+                container.style.flexDirection = "column";
+                container.style.gap = "12px";
+                container.style.padding = "8px";
+
+                var runningContainer = document.createElement("div");
+                runningContainer.id = "importEligRunningContainer";
+                runningContainer.style.display = "flex";
+                runningContainer.style.flexDirection = "column";
+                runningContainer.style.gap = "12px";
+
+                var runningBox = document.createElement("div");
+                runningBox.id = "importEligRunningText";
+                runningBox.style.textAlign = "center";
+                runningBox.style.fontSize = "16px";
+                runningBox.style.color = "#fff";
+                runningBox.style.fontWeight = "500";
+                runningBox.textContent = "Running";
+                runningContainer.appendChild(runningBox);
+                
+                // Animate loading dots
+                var dots = 1;
+                var loadingInterval = setInterval(function() {
+                    dots = dots + 1;
+                    if (dots > 3) {
+                        dots = 1;
+                    }
+                    var t = "Running";
+                    var i = 0;
+                    while (i < dots) {
+                        t = t + ".";
+                        i = i + 1;
+                    }
+                    if (runningBox && document.body.contains(runningBox)) {
+                        runningBox.textContent = t;
+                    } else {
+                        clearInterval(loadingInterval);
+                    }
+                }, 350);
+
+                var listsContainer = document.createElement("div");
+                listsContainer.style.display = "flex";
+                listsContainer.style.flexDirection = "column";
+                listsContainer.style.gap = "12px";
+                listsContainer.style.maxHeight = "300px";
+                listsContainer.style.overflowY = "auto";
+
+                var completedListContainer = document.createElement("div");
+                completedListContainer.style.display = "flex";
+                completedListContainer.style.flexDirection = "column";
+                completedListContainer.style.gap = "4px";
+                var completedTitle = document.createElement("div");
+                completedTitle.textContent = "Completed:";
+                completedTitle.style.fontWeight = "600";
+                completedTitle.style.color = "#5cb85c";
+                completedTitle.style.fontSize = "13px";
+                completedListContainer.appendChild(completedTitle);
+                var completedList = document.createElement("div");
+                completedList.id = "importEligCompletedList";
+                completedList.style.fontSize = "12px";
+                completedList.style.color = "#9f9";
+                completedList.style.maxHeight = "100px";
+                completedList.style.overflowY = "auto";
+                completedList.style.padding = "4px";
+                completedList.style.background = "#1a1a1a";
+                completedList.style.borderRadius = "4px";
+                completedListContainer.appendChild(completedList);
+                listsContainer.appendChild(completedListContainer);
+
+                var failedListContainer = document.createElement("div");
+                failedListContainer.style.display = "flex";
+                failedListContainer.style.flexDirection = "column";
+                failedListContainer.style.gap = "4px";
+                var failedTitle = document.createElement("div");
+                failedTitle.textContent = "Failed to Collect:";
+                failedTitle.style.fontWeight = "600";
+                failedTitle.style.color = "#d9534f";
+                failedTitle.style.fontSize = "13px";
+                failedListContainer.appendChild(failedTitle);
+                var failedList = document.createElement("div");
+                failedList.id = "importEligFailedList";
+                failedList.style.fontSize = "12px";
+                failedList.style.color = "#f99";
+                failedList.style.maxHeight = "100px";
+                failedList.style.overflowY = "auto";
+                failedList.style.padding = "4px";
+                failedList.style.background = "#1a1a1a";
+                failedList.style.borderRadius = "4px";
+                failedListContainer.appendChild(failedList);
+                listsContainer.appendChild(failedListContainer);
+
+                var excludedListContainer = document.createElement("div");
+                excludedListContainer.style.display = "flex";
+                excludedListContainer.style.flexDirection = "column";
+                excludedListContainer.style.gap = "4px";
+                var excludedTitle = document.createElement("div");
+                excludedTitle.textContent = "Form Exclusion:";
+                excludedTitle.style.fontWeight = "600";
+                excludedTitle.style.color = "#f0ad4e";
+                excludedTitle.style.fontSize = "13px";
+                excludedListContainer.appendChild(excludedTitle);
+                var excludedList = document.createElement("div");
+                excludedList.id = "importEligExcludedList";
+                excludedList.style.fontSize = "12px";
+                excludedList.style.color = "#ff9";
+                excludedList.style.maxHeight = "100px";
+                excludedList.style.overflowY = "auto";
+                excludedList.style.padding = "4px";
+                excludedList.style.background = "#1a1a1a";
+                excludedList.style.borderRadius = "4px";
+                excludedListContainer.appendChild(excludedList);
+                listsContainer.appendChild(excludedListContainer);
+
+                runningContainer.appendChild(listsContainer);
+                container.appendChild(runningContainer);
+
+                IMPORT_ELIG_POPUP_REF = createPopup({
+                    title: "Import I/E",
+                    content: container,
+                    width: "500px",
+                    height: "auto",
+                    maxHeight: "80vh",
+                    onClose: function () {
+                        log("ImportElig: popup X pressed → stopping automation");
+                        clearAllRunState();
+                        clearEligibilityWorkingState();
+                        try {
+                            localStorage.removeItem(STORAGE_ELIG_IMPORT_PENDING_POPUP);
+                            localStorage.removeItem(STORAGE_IMPORT_ELIG_POPUP);
+                        } catch (e) {}
+                        IMPORT_ELIG_POPUP_REF = null;
+                    }
+                });
+                
+                // Continue execution after recreating popup
+                if (isEligibilityListPage()) {
+                    log("ImportElig: popup recreated, continuing execution");
+                    setTimeout(function () {
+                        executeEligibilityMappingAutomation();
+                    }, 1000);
+                    return;
+                }
             }
 
             if (!isEligibilityListPage()) {
