@@ -56,12 +56,173 @@
     const DATA_COLLECTION_SUBJECT_URL = "https://cenexeltest.clinspark.com/secure/datacollection/subject";
     var COLLECT_ALL_CANCELLED = false;
     var COLLECT_ALL_POPUP_REF = null;
+    var RUN_ALL_POPUP_REF = null;
+    var CLEAR_MAPPING_POPUP_REF = null;
+    var IMPORT_ELIG_POPUP_REF = null;
+    const STORAGE_RUN_ALL_POPUP = "activityPlanState.runAllPopup";
+    const STORAGE_RUN_ALL_STATUS = "activityPlanState.runAllStatus";
+    const STORAGE_CLEAR_MAPPING_POPUP = "activityPlanState.clearMappingPopup";
+    const STORAGE_IMPORT_ELIG_POPUP = "activityPlanState.importEligPopup";
 
     // Clear all Collect All related data
     function clearCollectAllData() {
         COLLECT_ALL_CANCELLED = false;
         COLLECT_ALL_POPUP_REF = null;
         log("CollectAll: data cleared");
+    }
+
+    // Recreate popups on page load if they should be active
+    function recreatePopupsIfNeeded() {
+        try {
+            var runMode = getRunMode();
+
+            // Recreate Run All popup
+            if (runMode === "all") {
+                var runAllPopupActive = localStorage.getItem(STORAGE_RUN_ALL_POPUP);
+                if (runAllPopupActive === "1" && (!RUN_ALL_POPUP_REF || !document.body.contains(RUN_ALL_POPUP_REF.element))) {
+                    var popupContainer = document.createElement("div");
+                    popupContainer.style.display = "flex";
+                    popupContainer.style.flexDirection = "column";
+                    popupContainer.style.gap = "16px";
+                    popupContainer.style.padding = "8px";
+
+                    // Restore status from localStorage
+                    var savedStatus = "Running Lock Activity Plans";
+                    try {
+                        var storedStatus = localStorage.getItem(STORAGE_RUN_ALL_STATUS);
+                        if (storedStatus && storedStatus.length > 0) {
+                            savedStatus = storedStatus;
+                        }
+                    } catch (e) {}
+
+                    var statusDiv = document.createElement("div");
+                    statusDiv.id = "runAllStatus";
+                    statusDiv.style.textAlign = "center";
+                    statusDiv.style.fontSize = "18px";
+                    statusDiv.style.color = "#fff";
+                    statusDiv.style.fontWeight = "500";
+                    statusDiv.textContent = savedStatus;
+
+                    var loadingAnimation = document.createElement("div");
+                    loadingAnimation.id = "runAllLoading";
+                    loadingAnimation.style.textAlign = "center";
+                    loadingAnimation.style.fontSize = "14px";
+                    loadingAnimation.style.color = "#9df";
+                    loadingAnimation.textContent = "Running.";
+
+                    popupContainer.appendChild(statusDiv);
+                    popupContainer.appendChild(loadingAnimation);
+
+                    RUN_ALL_POPUP_REF = createPopup({
+                        title: "Run Button (1-5) Progress",
+                        content: popupContainer,
+                        width: "400px",
+                        height: "auto",
+                        onClose: function() {
+                            log("Run All: cancelled by user (close button)");
+                            clearAllRunState();
+                            clearCohortGuard();
+                            try {
+                                localStorage.removeItem(STORAGE_RUN_MODE);
+                                localStorage.removeItem(STORAGE_KEY);
+                                localStorage.removeItem(STORAGE_CONTINUE_EPOCH);
+                                localStorage.removeItem(STORAGE_RUN_ALL_POPUP);
+                                localStorage.removeItem(STORAGE_RUN_ALL_STATUS);
+                            } catch (e) {}
+                            RUN_ALL_POPUP_REF = null;
+                        }
+                    });
+
+                    var dots = 1;
+                    var loadingInterval = setInterval(function() {
+                        if (!RUN_ALL_POPUP_REF || !document.body.contains(RUN_ALL_POPUP_REF.element)) {
+                            clearInterval(loadingInterval);
+                            return;
+                        }
+                        dots = dots + 1;
+                        if (dots > 3) {
+                            dots = 1;
+                        }
+                        var text = "Running";
+                        var i = 0;
+                        while (i < dots) {
+                            text = text + ".";
+                            i = i + 1;
+                        }
+                        if (loadingAnimation) {
+                            loadingAnimation.textContent = text;
+                        }
+                    }, 500);
+                }
+            }
+
+            // Recreate Clear Mapping popup
+            if (runMode === RUNMODE_CLEAR_MAPPING) {
+                var clearMappingPopupActive = localStorage.getItem(STORAGE_CLEAR_MAPPING_POPUP);
+                if (clearMappingPopupActive === "1" && (!CLEAR_MAPPING_POPUP_REF || !document.body.contains(CLEAR_MAPPING_POPUP_REF.element))) {
+                    var popupContainer = document.createElement("div");
+                    popupContainer.style.display = "flex";
+                    popupContainer.style.flexDirection = "column";
+                    popupContainer.style.gap = "16px";
+                    popupContainer.style.padding = "8px";
+
+                    var statusDiv = document.createElement("div");
+                    statusDiv.style.textAlign = "center";
+                    statusDiv.style.fontSize = "18px";
+                    statusDiv.style.color = "#fff";
+                    statusDiv.style.fontWeight = "500";
+                    statusDiv.textContent = "Running Clear Mapping";
+
+                    var loadingAnimation = document.createElement("div");
+                    loadingAnimation.id = "clearMappingLoading";
+                    loadingAnimation.style.textAlign = "center";
+                    loadingAnimation.style.fontSize = "14px";
+                    loadingAnimation.style.color = "#9df";
+                    loadingAnimation.textContent = "Running.";
+
+                    popupContainer.appendChild(statusDiv);
+                    popupContainer.appendChild(loadingAnimation);
+
+                    CLEAR_MAPPING_POPUP_REF = createPopup({
+                        title: "Clear Mapping",
+                        content: popupContainer,
+                        width: "350px",
+                        height: "auto",
+                        onClose: function() {
+                            log("ClearMapping: cancelled by user (close button)");
+                            try {
+                                localStorage.removeItem(STORAGE_RUN_MODE);
+                                localStorage.removeItem(STORAGE_CLEAR_MAPPING_POPUP);
+                            } catch (e) {}
+                            CLEAR_MAPPING_POPUP_REF = null;
+                        }
+                    });
+
+                    var dots = 1;
+                    var loadingInterval = setInterval(function() {
+                        if (!CLEAR_MAPPING_POPUP_REF || !document.body.contains(CLEAR_MAPPING_POPUP_REF.element)) {
+                            clearInterval(loadingInterval);
+                            return;
+                        }
+                        dots = dots + 1;
+                        if (dots > 3) {
+                            dots = 1;
+                        }
+                        var text = "Running";
+                        var i = 0;
+                        while (i < dots) {
+                            text = text + ".";
+                            i = i + 1;
+                        }
+                        if (loadingAnimation) {
+                            loadingAnimation.textContent = text;
+                        }
+                    }, 500);
+                }
+            }
+        } catch (e) {
+            log("Error recreating popups: " + e);
+        }
     }
 
     // Return true if we are on the Data Collection > Subject page.
@@ -212,7 +373,7 @@
     // Handle the form order modal: fill textarea and click Save.
     async function handleFormOrderModal() {
         log("CollectAll: handling form order modal");
-        
+
         var textarea = await waitForSelector("textarea#ordercomment", 6000);
         if (!textarea) {
             log("CollectAll: ordercomment textarea not found in form order modal");
@@ -706,10 +867,8 @@
         try {
             clearBarcodeResult();
         } catch (e2) {}
-
-        // Don't auto-close - let user close manually
     }
-
+    
     //==========================
     // RUN FORM FEATURES (OOR A, OOR B, IR)
     //==========================

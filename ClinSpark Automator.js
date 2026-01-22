@@ -11,6 +11,7 @@
 // @grant       GM.openInTab
 // @grant       GM_openInTab
 // @grant       GM.xmlHttpRequest
+// @ts-check
 // ==/UserScript==
 
 (function () {
@@ -238,7 +239,7 @@
         log("ImportElig: stabilization timeout");
     }
 
-        // Clear persisted selected volunteer ids.
+    // Clear persisted selected volunteer ids.
     function clearSelectedVolunteerIds() {
         try {
             localStorage.removeItem(STORAGE_SELECTED_IDS);
@@ -2230,7 +2231,7 @@
         }
     }
 
-// ======================
+    // ======================
     function setPanelHidden(flag) {
         try {
             localStorage.setItem(STORAGE_PANEL_HIDDEN, flag ? "1" : "0");
@@ -2600,297 +2601,297 @@
     }
 
 
-function showFindFormPopup(prefillSubject, onDone) {
-  log("Find Form: showing popup");
-  var container = document.createElement("div");
-  container.style.display = "grid";
-  container.style.gridTemplateRows = "auto auto auto auto auto";
-  container.style.gap = "10px";
+    function showFindFormPopup(prefillSubject, onDone) {
+        log("Find Form: showing popup");
+        var container = document.createElement("div");
+        container.style.display = "grid";
+        container.style.gridTemplateRows = "auto auto auto auto auto";
+        container.style.gap = "10px";
 
-  var row1 = document.createElement("div");
-  row1.style.display = "grid";
-  row1.style.gridTemplateColumns = "140px 1fr";
-  row1.style.alignItems = "center";
-  row1.style.gap = "8px";
-  var label1 = document.createElement("div");
-  label1.textContent = FORM_POPUP_KEYWORD_LABEL;
-  label1.style.fontWeight = "600";
-  var inputKeyword = document.createElement("input");
-  inputKeyword.type = "text";
-  inputKeyword.placeholder = "Required: any word";
-  inputKeyword.style.width = "100%";
-  inputKeyword.style.boxSizing = "border-box";
-  inputKeyword.style.padding = "8px";
-  inputKeyword.style.borderRadius = "6px";
-  inputKeyword.style.border = "1px solid #444";
-  inputKeyword.style.background = "#1a1a1a";
-  inputKeyword.style.color = "#fff";
-  row1.appendChild(label1);
-  row1.appendChild(inputKeyword);
-  container.appendChild(row1);
+        var row1 = document.createElement("div");
+        row1.style.display = "grid";
+        row1.style.gridTemplateColumns = "140px 1fr";
+        row1.style.alignItems = "center";
+        row1.style.gap = "8px";
+        var label1 = document.createElement("div");
+        label1.textContent = FORM_POPUP_KEYWORD_LABEL;
+        label1.style.fontWeight = "600";
+        var inputKeyword = document.createElement("input");
+        inputKeyword.type = "text";
+        inputKeyword.placeholder = "Required: any word";
+        inputKeyword.style.width = "100%";
+        inputKeyword.style.boxSizing = "border-box";
+        inputKeyword.style.padding = "8px";
+        inputKeyword.style.borderRadius = "6px";
+        inputKeyword.style.border = "1px solid #444";
+        inputKeyword.style.background = "#1a1a1a";
+        inputKeyword.style.color = "#fff";
+        row1.appendChild(label1);
+        row1.appendChild(inputKeyword);
+        container.appendChild(row1);
 
-  var row2 = document.createElement("div");
-  row2.style.display = "grid";
-  row2.style.gridTemplateColumns = "140px 1fr";
-  row2.style.alignItems = "center";
-  row2.style.gap = "8px";
-  var label2 = document.createElement("div");
-  label2.textContent = FORM_POPUP_SUBJECT_LABEL;
-  label2.style.fontWeight = "600";
-  var inputSubject = document.createElement("input");
-  inputSubject.type = "text";
-  inputSubject.placeholder = "Optional: subject id or label";
-  inputSubject.style.width = "100%";
-  inputSubject.style.boxSizing = "border-box";
-  inputSubject.style.padding = "8px";
-  inputSubject.style.borderRadius = "6px";
-  inputSubject.style.border = "1px solid #444";
-  inputSubject.style.background = "#1a1a1a";
-  inputSubject.style.color = "#fff";
-  row2.appendChild(label2);
-  row2.appendChild(inputSubject);
-  container.appendChild(row2);
+        var row2 = document.createElement("div");
+        row2.style.display = "grid";
+        row2.style.gridTemplateColumns = "140px 1fr";
+        row2.style.alignItems = "center";
+        row2.style.gap = "8px";
+        var label2 = document.createElement("div");
+        label2.textContent = FORM_POPUP_SUBJECT_LABEL;
+        label2.style.fontWeight = "600";
+        var inputSubject = document.createElement("input");
+        inputSubject.type = "text";
+        inputSubject.placeholder = "Optional: subject id or label";
+        inputSubject.style.width = "100%";
+        inputSubject.style.boxSizing = "border-box";
+        inputSubject.style.padding = "8px";
+        inputSubject.style.borderRadius = "6px";
+        inputSubject.style.border = "1px solid #444";
+        inputSubject.style.background = "#1a1a1a";
+        inputSubject.style.color = "#fff";
+        row2.appendChild(label2);
+        row2.appendChild(inputSubject);
+        container.appendChild(row2);
 
-  var row3 = document.createElement("div");
-  row3.style.display = "grid";
-  row3.style.gridTemplateColumns = "140px 1fr";
-  row3.style.alignItems = "center";
-  row3.style.gap = "8px";
-  var labelIG = document.createElement("div");
-  labelIG.textContent = "Item Group Data";
-  labelIG.style.fontWeight = "600";
-  var igWrap = document.createElement("div");
-  igWrap.style.display = "inline-flex";
-  igWrap.style.gap = "12px";
-  var igC = document.createElement("label");
-  var igCBox = document.createElement("input");
-  igCBox.type = "checkbox";
-  igCBox.value = "Complete";
-  igC.appendChild(igCBox);
-  igC.appendChild(document.createTextNode(" Complete"));
-  var igI = document.createElement("label");
-  var igIBox = document.createElement("input");
-  igIBox.type = "checkbox";
-  igIBox.value = "Incomplete";
-  igI.appendChild(igIBox);
-  igI.appendChild(document.createTextNode(" Incomplete"));
-  var igN = document.createElement("label");
-  var igNBox = document.createElement("input");
-  igNBox.type = "checkbox";
-  igNBox.value = "Nonconformant";
-  igN.appendChild(igNBox);
-  igN.appendChild(document.createTextNode(" Nonconformant"));
-  igWrap.appendChild(igC);
-  igWrap.appendChild(igI);
-  igWrap.appendChild(igN);
-  row3.appendChild(labelIG);
-  row3.appendChild(igWrap);
-  container.appendChild(row3);
+        var row3 = document.createElement("div");
+        row3.style.display = "grid";
+        row3.style.gridTemplateColumns = "140px 1fr";
+        row3.style.alignItems = "center";
+        row3.style.gap = "8px";
+        var labelIG = document.createElement("div");
+        labelIG.textContent = "Item Group Data";
+        labelIG.style.fontWeight = "600";
+        var igWrap = document.createElement("div");
+        igWrap.style.display = "inline-flex";
+        igWrap.style.gap = "12px";
+        var igC = document.createElement("label");
+        var igCBox = document.createElement("input");
+        igCBox.type = "checkbox";
+        igCBox.value = "Complete";
+        igC.appendChild(igCBox);
+        igC.appendChild(document.createTextNode(" Complete"));
+        var igI = document.createElement("label");
+        var igIBox = document.createElement("input");
+        igIBox.type = "checkbox";
+        igIBox.value = "Incomplete";
+        igI.appendChild(igIBox);
+        igI.appendChild(document.createTextNode(" Incomplete"));
+        var igN = document.createElement("label");
+        var igNBox = document.createElement("input");
+        igNBox.type = "checkbox";
+        igNBox.value = "Nonconformant";
+        igN.appendChild(igNBox);
+        igN.appendChild(document.createTextNode(" Nonconformant"));
+        igWrap.appendChild(igC);
+        igWrap.appendChild(igI);
+        igWrap.appendChild(igN);
+        row3.appendChild(labelIG);
+        row3.appendChild(igWrap);
+        container.appendChild(row3);
 
-  var row4 = document.createElement("div");
-  row4.style.display = "grid";
-  row4.style.gridTemplateColumns = "140px 1fr";
-  row4.style.alignItems = "center";
-  row4.style.gap = "8px";
-  var labelFD = document.createElement("div");
-  labelFD.textContent = "Form Data";
-  labelFD.style.fontWeight = "600";
-  var fdWrap = document.createElement("div");
-  fdWrap.style.display = "inline-flex";
-  fdWrap.style.gap = "12px";
-  var fdNC = document.createElement("label");
-  var fdNCBox = document.createElement("input");
-  fdNCBox.type = "checkbox";
-  fdNCBox.value = "formDataNotCanceled";
-  fdNC.appendChild(fdNCBox);
-  fdNC.appendChild(document.createTextNode(" Not Canceled"));
-  var fdTM = document.createElement("label");
-  var fdTMBox = document.createElement("input");
-  fdTMBox.type = "checkbox";
-  fdTMBox.value = "timedAndMissed";
-  fdTM.appendChild(fdTMBox);
-  fdTM.appendChild(document.createTextNode(" Time and Missed"));
-  fdWrap.appendChild(fdNC);
-  fdWrap.appendChild(fdTM);
-  row4.appendChild(labelFD);
-  row4.appendChild(fdWrap);
-  container.appendChild(row4);
+        var row4 = document.createElement("div");
+        row4.style.display = "grid";
+        row4.style.gridTemplateColumns = "140px 1fr";
+        row4.style.alignItems = "center";
+        row4.style.gap = "8px";
+        var labelFD = document.createElement("div");
+        labelFD.textContent = "Form Data";
+        labelFD.style.fontWeight = "600";
+        var fdWrap = document.createElement("div");
+        fdWrap.style.display = "inline-flex";
+        fdWrap.style.gap = "12px";
+        var fdNC = document.createElement("label");
+        var fdNCBox = document.createElement("input");
+        fdNCBox.type = "checkbox";
+        fdNCBox.value = "formDataNotCanceled";
+        fdNC.appendChild(fdNCBox);
+        fdNC.appendChild(document.createTextNode(" Not Canceled"));
+        var fdTM = document.createElement("label");
+        var fdTMBox = document.createElement("input");
+        fdTMBox.type = "checkbox";
+        fdTMBox.value = "timedAndMissed";
+        fdTM.appendChild(fdTMBox);
+        fdTM.appendChild(document.createTextNode(" Time and Missed"));
+        fdWrap.appendChild(fdNC);
+        fdWrap.appendChild(fdTM);
+        row4.appendChild(labelFD);
+        row4.appendChild(fdWrap);
+        container.appendChild(row4);
 
-  try {
-    var prevRaw = localStorage.getItem(STORAGE_FIND_FORM_STATUS_VALUES);
-    if (prevRaw) {
-      var prevArr = JSON.parse(prevRaw);
-      if (Array.isArray(prevArr) && prevArr.length > 0) {
-        var hasComplete = prevArr.indexOf("Complete") >= 0;
-        var hasIncomplete = prevArr.indexOf("Incomplete") >= 0;
-        var hasNonconf = prevArr.indexOf("Nonconformant") >= 0;
-        var hasFormNotCanceled = prevArr.indexOf("formDataNotCanceled") >= 0;
-        var hasTimedMissed = prevArr.indexOf("timedAndMissed") >= 0;
-        igCBox.checked = !!hasComplete;
-        igIBox.checked = !!hasIncomplete;
-        igNBox.checked = !!hasNonconf;
-        fdNCBox.checked = !!hasFormNotCanceled;
-        fdTMBox.checked = !!hasTimedMissed;
-        log("Find Form: restored checkbox prefs count=" + String(prevArr.length));
-      } else {
-        log("Find Form: no prior checkbox prefs to restore");
-      }
-    } else {
-      log("Find Form: checkbox prefs not present in storage");
+        try {
+            var prevRaw = localStorage.getItem(STORAGE_FIND_FORM_STATUS_VALUES);
+            if (prevRaw) {
+                var prevArr = JSON.parse(prevRaw);
+                if (Array.isArray(prevArr) && prevArr.length > 0) {
+                    var hasComplete = prevArr.indexOf("Complete") >= 0;
+                    var hasIncomplete = prevArr.indexOf("Incomplete") >= 0;
+                    var hasNonconf = prevArr.indexOf("Nonconformant") >= 0;
+                    var hasFormNotCanceled = prevArr.indexOf("formDataNotCanceled") >= 0;
+                    var hasTimedMissed = prevArr.indexOf("timedAndMissed") >= 0;
+                    igCBox.checked = !!hasComplete;
+                    igIBox.checked = !!hasIncomplete;
+                    igNBox.checked = !!hasNonconf;
+                    fdNCBox.checked = !!hasFormNotCanceled;
+                    fdTMBox.checked = !!hasTimedMissed;
+                    log("Find Form: restored checkbox prefs count=" + String(prevArr.length));
+                } else {
+                    log("Find Form: no prior checkbox prefs to restore");
+                }
+            } else {
+                log("Find Form: checkbox prefs not present in storage");
+            }
+        } catch (e) {
+            log("Find Form: error restoring checkbox prefs");
+        }
+
+        if (prefillSubject && prefillSubject.length > 0) {
+            inputSubject.value = prefillSubject;
+            var ev0 = new Event("input", { bubbles: true });
+            inputSubject.dispatchEvent(ev0);
+            log("Find Form: subject prefilled='" + String(prefillSubject) + "'");
+        }
+
+        var btnRow = document.createElement("div");
+        btnRow.style.display = "inline-flex";
+        btnRow.style.justifyContent = "flex-end";
+        btnRow.style.gap = "8px";
+        var clearIdBtn = document.createElement("button");
+        clearIdBtn.textContent = "Clear ID";
+        clearIdBtn.style.background = "#777";
+        clearIdBtn.style.color = "#fff";
+        clearIdBtn.style.border = "none";
+        clearIdBtn.style.borderRadius = "6px";
+        clearIdBtn.style.padding = "8px 12px";
+        clearIdBtn.style.cursor = "pointer";
+        var cancelBtn = document.createElement("button");
+        cancelBtn.textContent = FORM_POPUP_CANCEL_TEXT;
+        cancelBtn.style.background = "#333";
+        cancelBtn.style.color = "#fff";
+        cancelBtn.style.border = "none";
+        cancelBtn.style.borderRadius = "6px";
+        cancelBtn.style.padding = "8px 12px";
+        cancelBtn.style.cursor = "pointer";
+        var okBtn = document.createElement("button");
+        okBtn.textContent = FORM_POPUP_OK_TEXT;
+        okBtn.style.background = "#0b82ff";
+        okBtn.style.color = "#fff";
+        okBtn.style.border = "none";
+        okBtn.style.borderRadius = "6px";
+        okBtn.style.padding = "8px 12px";
+        okBtn.style.cursor = "pointer";
+        btnRow.appendChild(clearIdBtn);
+        btnRow.appendChild(cancelBtn);
+        btnRow.appendChild(okBtn);
+        container.appendChild(btnRow);
+
+        var popup = createPopup({ title: FORM_POPUP_TITLE, content: container, width: "520px", height: "auto" });
+
+        window.setTimeout(function () {
+            try {
+                inputKeyword.focus();
+                inputKeyword.select();
+                log("Find Form: keyword input focused");
+            } catch (e) {
+                log("Find Form: failed to focus keyword input");
+            }
+        }, 50);
+
+        function gatherStatusSelections() {
+            var out = [];
+            if (igCBox && igCBox.checked) {
+                out.push("Complete");
+            }
+            if (igIBox && igIBox.checked) {
+                out.push("Incomplete");
+            }
+            if (igNBox && igNBox.checked) {
+                out.push("Nonconformant");
+            }
+            if (fdNCBox && fdNCBox.checked) {
+                out.push("formDataNotCanceled");
+            }
+            if (fdTMBox && fdTMBox.checked) {
+                out.push("timedAndMissed");
+            }
+            return out;
+        }
+
+        function doContinue() {
+            var kw = inputKeyword.value + "";
+            var sbj = inputSubject.value + "";
+            var kwt = kw.trim();
+            var sbjt = sbj.trim();
+            if (!kwt || kwt.length === 0) {
+                log("Find Form: keyword required");
+                return;
+            }
+            var statuses = gatherStatusSelections();
+            try {
+                if (statuses && statuses.length > 0) {
+                    localStorage.setItem(STORAGE_FIND_FORM_STATUS_VALUES, JSON.stringify(statuses));
+                    log("Find Form: statuses saved count=" + String(statuses.length));
+                } else {
+                    localStorage.removeItem(STORAGE_FIND_FORM_STATUS_VALUES);
+                    log("Find Form: no statuses selected; cleared storage");
+                }
+            } catch (e) {}
+            log("Find Form: popup inputs keyword='" + String(kwt) + "' subject='" + String(sbjt) + "'");
+            if (popup && popup.close) {
+                popup.close();
+            }
+            if (typeof onDone === "function") {
+                onDone({ keyword: kwt, subject: sbjt });
+            }
+        }
+
+        function keyHandler(e) {
+            var code = e.key || e.code || "";
+            if (code === "Enter") {
+                log("Find Form: Enter pressed; continuing");
+                doContinue();
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+            if (code === "Escape" || code === "Esc") {
+                log("Find Form: Esc pressed; closing");
+                if (popup && popup.close) {
+                    popup.close();
+                }
+                document.removeEventListener("keydown", keyHandler, true);
+                if (typeof onDone === "function") {
+                    onDone(null);
+                }
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+        }
+
+        document.addEventListener("keydown", keyHandler, true);
+
+        clearIdBtn.addEventListener("click", function () {
+            inputSubject.value = "";
+            var ev = new Event("input", { bubbles: true });
+            inputSubject.dispatchEvent(ev);
+            log("Find Form: subject cleared by user");
+        });
+
+        cancelBtn.addEventListener("click", function () {
+            log("Find Form: popup canceled");
+            if (popup && popup.close) {
+                popup.close();
+            }
+            document.removeEventListener("keydown", keyHandler, true);
+            if (typeof onDone === "function") {
+                onDone(null);
+            }
+        });
+
+        okBtn.addEventListener("click", function () {
+            document.removeEventListener("keydown", keyHandler, true);
+            doContinue();
+        });
     }
-  } catch (e) {
-    log("Find Form: error restoring checkbox prefs");
-  }
-
-  if (prefillSubject && prefillSubject.length > 0) {
-    inputSubject.value = prefillSubject;
-    var ev0 = new Event("input", { bubbles: true });
-    inputSubject.dispatchEvent(ev0);
-    log("Find Form: subject prefilled='" + String(prefillSubject) + "'");
-  }
-
-  var btnRow = document.createElement("div");
-  btnRow.style.display = "inline-flex";
-  btnRow.style.justifyContent = "flex-end";
-  btnRow.style.gap = "8px";
-  var clearIdBtn = document.createElement("button");
-  clearIdBtn.textContent = "Clear ID";
-  clearIdBtn.style.background = "#777";
-  clearIdBtn.style.color = "#fff";
-  clearIdBtn.style.border = "none";
-  clearIdBtn.style.borderRadius = "6px";
-  clearIdBtn.style.padding = "8px 12px";
-  clearIdBtn.style.cursor = "pointer";
-  var cancelBtn = document.createElement("button");
-  cancelBtn.textContent = FORM_POPUP_CANCEL_TEXT;
-  cancelBtn.style.background = "#333";
-  cancelBtn.style.color = "#fff";
-  cancelBtn.style.border = "none";
-  cancelBtn.style.borderRadius = "6px";
-  cancelBtn.style.padding = "8px 12px";
-  cancelBtn.style.cursor = "pointer";
-  var okBtn = document.createElement("button");
-  okBtn.textContent = FORM_POPUP_OK_TEXT;
-  okBtn.style.background = "#0b82ff";
-  okBtn.style.color = "#fff";
-  okBtn.style.border = "none";
-  okBtn.style.borderRadius = "6px";
-  okBtn.style.padding = "8px 12px";
-  okBtn.style.cursor = "pointer";
-  btnRow.appendChild(clearIdBtn);
-  btnRow.appendChild(cancelBtn);
-  btnRow.appendChild(okBtn);
-  container.appendChild(btnRow);
-
-  var popup = createPopup({ title: FORM_POPUP_TITLE, content: container, width: "520px", height: "auto" });
-
-  window.setTimeout(function () {
-    try {
-      inputKeyword.focus();
-      inputKeyword.select();
-      log("Find Form: keyword input focused");
-    } catch (e) {
-      log("Find Form: failed to focus keyword input");
-    }
-  }, 50);
-
-  function gatherStatusSelections() {
-    var out = [];
-    if (igCBox && igCBox.checked) {
-      out.push("Complete");
-    }
-    if (igIBox && igIBox.checked) {
-      out.push("Incomplete");
-    }
-    if (igNBox && igNBox.checked) {
-      out.push("Nonconformant");
-    }
-    if (fdNCBox && fdNCBox.checked) {
-      out.push("formDataNotCanceled");
-    }
-    if (fdTMBox && fdTMBox.checked) {
-      out.push("timedAndMissed");
-    }
-    return out;
-  }
-
-  function doContinue() {
-    var kw = inputKeyword.value + "";
-    var sbj = inputSubject.value + "";
-    var kwt = kw.trim();
-    var sbjt = sbj.trim();
-    if (!kwt || kwt.length === 0) {
-      log("Find Form: keyword required");
-      return;
-    }
-    var statuses = gatherStatusSelections();
-    try {
-      if (statuses && statuses.length > 0) {
-        localStorage.setItem(STORAGE_FIND_FORM_STATUS_VALUES, JSON.stringify(statuses));
-        log("Find Form: statuses saved count=" + String(statuses.length));
-      } else {
-        localStorage.removeItem(STORAGE_FIND_FORM_STATUS_VALUES);
-        log("Find Form: no statuses selected; cleared storage");
-      }
-    } catch (e) {}
-    log("Find Form: popup inputs keyword='" + String(kwt) + "' subject='" + String(sbjt) + "'");
-    if (popup && popup.close) {
-      popup.close();
-    }
-    if (typeof onDone === "function") {
-      onDone({ keyword: kwt, subject: sbjt });
-    }
-  }
-
-  function keyHandler(e) {
-    var code = e.key || e.code || "";
-    if (code === "Enter") {
-      log("Find Form: Enter pressed; continuing");
-      doContinue();
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
-    if (code === "Escape" || code === "Esc") {
-      log("Find Form: Esc pressed; closing");
-      if (popup && popup.close) {
-        popup.close();
-      }
-      document.removeEventListener("keydown", keyHandler, true);
-      if (typeof onDone === "function") {
-        onDone(null);
-      }
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
-  }
-
-  document.addEventListener("keydown", keyHandler, true);
-
-  clearIdBtn.addEventListener("click", function () {
-    inputSubject.value = "";
-    var ev = new Event("input", { bubbles: true });
-    inputSubject.dispatchEvent(ev);
-    log("Find Form: subject cleared by user");
-  });
-
-  cancelBtn.addEventListener("click", function () {
-    log("Find Form: popup canceled");
-    if (popup && popup.close) {
-      popup.close();
-    }
-    document.removeEventListener("keydown", keyHandler, true);
-    if (typeof onDone === "function") {
-      onDone(null);
-    }
-  });
-
-  okBtn.addEventListener("click", function () {
-    document.removeEventListener("keydown", keyHandler, true);
-    doContinue();
-  });
-}
 
     function openFindForm() {
         log("Find Form: starting");
@@ -3201,125 +3202,125 @@ function showFindFormPopup(prefillSubject, onDone) {
         }, 200);
     }
 
-function showAeSubjectInputPopup(onDone) {
-  log("Find AE: showing subject input popup");
-  var container = document.createElement("div");
-  container.style.display = "grid";
-  container.style.gridTemplateRows = "auto auto";
-  container.style.gap = "10px";
+    function showAeSubjectInputPopup(onDone) {
+        log("Find AE: showing subject input popup");
+        var container = document.createElement("div");
+        container.style.display = "grid";
+        container.style.gridTemplateRows = "auto auto";
+        container.style.gap = "10px";
 
-  var fieldRow = document.createElement("div");
-  fieldRow.style.display = "grid";
-  fieldRow.style.gridTemplateColumns = "120px 1fr";
-  fieldRow.style.alignItems = "center";
-  fieldRow.style.gap = "8px";
-  var label = document.createElement("div");
-  label.textContent = AE_POPUP_LABEL;
-  label.style.fontWeight = "600";
-  var input = document.createElement("input");
-  input.type = "text";
-  input.placeholder = "e.g., 1001, S123, or subject label text";
-  input.style.width = "100%";
-  input.style.boxSizing = "border-box";
-  input.style.padding = "8px";
-  input.style.borderRadius = "6px";
-  input.style.border = "1px solid #444";
-  input.style.background = "#1a1a1a";
-  input.style.color = "#fff";
-  fieldRow.appendChild(label);
-  fieldRow.appendChild(input);
-  container.appendChild(fieldRow);
+        var fieldRow = document.createElement("div");
+        fieldRow.style.display = "grid";
+        fieldRow.style.gridTemplateColumns = "120px 1fr";
+        fieldRow.style.alignItems = "center";
+        fieldRow.style.gap = "8px";
+        var label = document.createElement("div");
+        label.textContent = AE_POPUP_LABEL;
+        label.style.fontWeight = "600";
+        var input = document.createElement("input");
+        input.type = "text";
+        input.placeholder = "e.g., 1001, S123, or subject label text";
+        input.style.width = "100%";
+        input.style.boxSizing = "border-box";
+        input.style.padding = "8px";
+        input.style.borderRadius = "6px";
+        input.style.border = "1px solid #444";
+        input.style.background = "#1a1a1a";
+        input.style.color = "#fff";
+        fieldRow.appendChild(label);
+        fieldRow.appendChild(input);
+        container.appendChild(fieldRow);
 
-  var btnRow = document.createElement("div");
-  btnRow.style.display = "inline-flex";
-  btnRow.style.justifyContent = "flex-end";
-  btnRow.style.gap = "8px";
-  var cancelBtn = document.createElement("button");
-  cancelBtn.textContent = AE_POPUP_CANCEL_TEXT;
-  cancelBtn.style.background = "#333";
-  cancelBtn.style.color = "#fff";
-  cancelBtn.style.border = "none";
-  cancelBtn.style.borderRadius = "6px";
-  cancelBtn.style.padding = "8px 12px";
-  cancelBtn.style.cursor = "pointer";
-  var okBtn = document.createElement("button");
-  okBtn.textContent = AE_POPUP_OK_TEXT;
-  okBtn.style.background = "#0b82ff";
-  okBtn.style.color = "#fff";
-  okBtn.style.border = "none";
-  okBtn.style.borderRadius = "6px";
-  okBtn.style.padding = "8px 12px";
-  okBtn.style.cursor = "pointer";
-  btnRow.appendChild(cancelBtn);
-  btnRow.appendChild(okBtn);
-  container.appendChild(btnRow);
+        var btnRow = document.createElement("div");
+        btnRow.style.display = "inline-flex";
+        btnRow.style.justifyContent = "flex-end";
+        btnRow.style.gap = "8px";
+        var cancelBtn = document.createElement("button");
+        cancelBtn.textContent = AE_POPUP_CANCEL_TEXT;
+        cancelBtn.style.background = "#333";
+        cancelBtn.style.color = "#fff";
+        cancelBtn.style.border = "none";
+        cancelBtn.style.borderRadius = "6px";
+        cancelBtn.style.padding = "8px 12px";
+        cancelBtn.style.cursor = "pointer";
+        var okBtn = document.createElement("button");
+        okBtn.textContent = AE_POPUP_OK_TEXT;
+        okBtn.style.background = "#0b82ff";
+        okBtn.style.color = "#fff";
+        okBtn.style.border = "none";
+        okBtn.style.borderRadius = "6px";
+        okBtn.style.padding = "8px 12px";
+        okBtn.style.cursor = "pointer";
+        btnRow.appendChild(cancelBtn);
+        btnRow.appendChild(okBtn);
+        container.appendChild(btnRow);
 
-  var popup = createPopup({ title: AE_POPUP_TITLE, content: container, width: "380px", height: "auto" });
+        var popup = createPopup({ title: AE_POPUP_TITLE, content: container, width: "380px", height: "auto" });
 
-  window.setTimeout(function () {
-    try {
-      input.focus();
-      input.select();
-      log("Find AE: subject input focused");
-    } catch (e) {
-      log("Find AE: failed to focus subject input");
+        window.setTimeout(function () {
+            try {
+                input.focus();
+                input.select();
+                log("Find AE: subject input focused");
+            } catch (e) {
+                log("Find AE: failed to focus subject input");
+            }
+        }, 50);
+
+        function doContinue() {
+            var v = input.value + "";
+            var t = v.trim();
+            log("Find AE: popup input='" + String(t) + "'");
+            if (popup && popup.close) {
+                popup.close();
+            }
+            document.removeEventListener("keydown", keyHandler, true);
+            if (typeof onDone === "function") {
+                onDone(t);
+            }
+        }
+
+        function keyHandler(e) {
+            var code = e.key || e.code || "";
+            if (code === "Enter") {
+                log("Find AE: Enter pressed; continuing");
+                doContinue();
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+            if (code === "Escape" || code === "Esc") {
+                log("Find AE: Esc pressed; closing");
+                if (popup && popup.close) {
+                    popup.close();
+                }
+                document.removeEventListener("keydown", keyHandler, true);
+                if (typeof onDone === "function") {
+                    onDone(null);
+                }
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+        }
+
+        document.addEventListener("keydown", keyHandler, true);
+
+        cancelBtn.addEventListener("click", function () {
+            log("Find AE: popup canceled by user");
+            if (popup && popup.close) {
+                popup.close();
+            }
+            document.removeEventListener("keydown", keyHandler, true);
+            if (typeof onDone === "function") {
+                onDone(null);
+            }
+        });
+
+        okBtn.addEventListener("click", function () {
+            doContinue();
+        });
     }
-  }, 50);
-
-  function doContinue() {
-    var v = input.value + "";
-    var t = v.trim();
-    log("Find AE: popup input='" + String(t) + "'");
-    if (popup && popup.close) {
-      popup.close();
-    }
-    document.removeEventListener("keydown", keyHandler, true);
-    if (typeof onDone === "function") {
-      onDone(t);
-    }
-  }
-
-  function keyHandler(e) {
-    var code = e.key || e.code || "";
-    if (code === "Enter") {
-      log("Find AE: Enter pressed; continuing");
-      doContinue();
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
-    if (code === "Escape" || code === "Esc") {
-      log("Find AE: Esc pressed; closing");
-      if (popup && popup.close) {
-        popup.close();
-      }
-      document.removeEventListener("keydown", keyHandler, true);
-      if (typeof onDone === "function") {
-        onDone(null);
-      }
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
-  }
-
-  document.addEventListener("keydown", keyHandler, true);
-
-  cancelBtn.addEventListener("click", function () {
-    log("Find AE: popup canceled by user");
-    if (popup && popup.close) {
-      popup.close();
-    }
-    document.removeEventListener("keydown", keyHandler, true);
-    if (typeof onDone === "function") {
-      onDone(null);
-    }
-  });
-
-  okBtn.addEventListener("click", function () {
-    doContinue();
-  });
-}
 
 
     function aeNormalize(x) {

@@ -110,8 +110,6 @@
         await deleteFirstEligibilityRow();
     }
 
-
-
     async function deleteFirstEligibilityRow() {
         log("ClearMapping: deleteFirstEligibilityRow started");
 
@@ -218,6 +216,14 @@
     //==========================
 
 
+    //==========================
+    // RUN SUBJECT ELIGIBILITY FEATURE
+    //==========================
+    // This section contains all functions related to subject eligibility.
+    // This feature automates storing all existing eligibility mapping in the table,
+    // adding new eligibility item that cannot be found in the table,
+    // saving those new items and storing it so there is no duplicate.
+    //==========================
     var STORAGE_ELIG_FORM_EXCLUSION = "activityPlanState.elig.formExclusion";
     var STORAGE_ELIG_FORM_PRIORITY = "activityPlanState.elig.formPriority";
     var STORAGE_ELIG_FORM_PRIORITY_ONLY = "activityPlanState.elig.formPriorityOnly";
@@ -232,7 +238,6 @@
     var DEFAULT_FORM_PRIORITY = "mh, bm, review, process, dm, rep, subs, med, elg_pi, vitals, ecg";
 
     function SubjectEligibilityFunctions() {}
-    // Check if run mode is still set for the given mode.
     function isRunModeSet(expectedMode) {
         var raw = null;
         try {
@@ -242,6 +247,7 @@
         }
         return raw === expectedMode;
     }
+
     function setLastMatchSelection(planVal, saVal, itemVal) {
         try {
             localStorage.setItem(STORAGE_ELIG_LAST_PLAN, String(planVal));
@@ -716,30 +722,133 @@
         buttonRow.appendChild(clearAllBtn);
         container.appendChild(buttonRow);
 
+        var runningContainer = document.createElement("div");
+        runningContainer.id = "importEligRunningContainer";
+        runningContainer.style.display = "none";
+        runningContainer.style.marginTop = "10px";
+        runningContainer.style.flexDirection = "column";
+        runningContainer.style.gap = "12px";
+
         var runningBox = document.createElement("div");
-        runningBox.style.display = "none";
-        runningBox.style.marginTop = "10px";
+        runningBox.id = "importEligRunningText";
         runningBox.style.textAlign = "center";
         runningBox.style.fontSize = "16px";
         runningBox.style.color = "#fff";
+        runningBox.style.fontWeight = "500";
         runningBox.textContent = "Running";
-        container.appendChild(runningBox);
+        runningContainer.appendChild(runningBox);
+
+        var listsContainer = document.createElement("div");
+        listsContainer.style.display = "flex";
+        listsContainer.style.flexDirection = "column";
+        listsContainer.style.gap = "12px";
+        listsContainer.style.maxHeight = "300px";
+        listsContainer.style.overflowY = "auto";
+
+        var completedListContainer = document.createElement("div");
+        completedListContainer.style.display = "flex";
+        completedListContainer.style.flexDirection = "column";
+        completedListContainer.style.gap = "4px";
+        var completedTitle = document.createElement("div");
+        completedTitle.textContent = "Completed:";
+        completedTitle.style.fontWeight = "600";
+        completedTitle.style.color = "#5cb85c";
+        completedTitle.style.fontSize = "13px";
+        completedListContainer.appendChild(completedTitle);
+        var completedList = document.createElement("div");
+        completedList.id = "importEligCompletedList";
+        completedList.style.fontSize = "12px";
+        completedList.style.color = "#9f9";
+        completedList.style.maxHeight = "100px";
+        completedList.style.overflowY = "auto";
+        completedList.style.padding = "4px";
+        completedList.style.background = "#1a1a1a";
+        completedList.style.borderRadius = "4px";
+        completedListContainer.appendChild(completedList);
+        listsContainer.appendChild(completedListContainer);
+
+        var failedListContainer = document.createElement("div");
+        failedListContainer.style.display = "flex";
+        failedListContainer.style.flexDirection = "column";
+        failedListContainer.style.gap = "4px";
+        var failedTitle = document.createElement("div");
+        failedTitle.textContent = "Failed to Collect:";
+        failedTitle.style.fontWeight = "600";
+        failedTitle.style.color = "#d9534f";
+        failedTitle.style.fontSize = "13px";
+        failedListContainer.appendChild(failedTitle);
+        var failedList = document.createElement("div");
+        failedList.id = "importEligFailedList";
+        failedList.style.fontSize = "12px";
+        failedList.style.color = "#f99";
+        failedList.style.maxHeight = "100px";
+        failedList.style.overflowY = "auto";
+        failedList.style.padding = "4px";
+        failedList.style.background = "#1a1a1a";
+        failedList.style.borderRadius = "4px";
+        failedListContainer.appendChild(failedList);
+        listsContainer.appendChild(failedListContainer);
+
+        var excludedListContainer = document.createElement("div");
+        excludedListContainer.style.display = "flex";
+        excludedListContainer.style.flexDirection = "column";
+        excludedListContainer.style.gap = "4px";
+        var excludedTitle = document.createElement("div");
+        excludedTitle.textContent = "Form Exclusion:";
+        excludedTitle.style.fontWeight = "600";
+        excludedTitle.style.color = "#f0ad4e";
+        excludedTitle.style.fontSize = "13px";
+        excludedListContainer.appendChild(excludedTitle);
+        var excludedList = document.createElement("div");
+        excludedList.id = "importEligExcludedList";
+        excludedList.style.fontSize = "12px";
+        excludedList.style.color = "#ff9";
+        excludedList.style.maxHeight = "100px";
+        excludedList.style.overflowY = "auto";
+        excludedList.style.padding = "4px";
+        excludedList.style.background = "#1a1a1a";
+        excludedList.style.borderRadius = "4px";
+        excludedListContainer.appendChild(excludedList);
+        listsContainer.appendChild(excludedListContainer);
+
+        runningContainer.appendChild(listsContainer);
+        container.appendChild(runningContainer);
 
         var popup = createPopup({
-            title: "Import I/E",
+            title: "Import Eligibility Mapping",
             content: container,
-            width: "450px",
+            width: "500px",
             height: "auto",
+            maxHeight: "80vh",
             onClose: function () {
                 // X pressed → STOP everything (but don't pause)
                 log("ImportElig: popup X pressed → stopping automation");
                 clearAllRunState();
                 clearEligibilityWorkingState();
+                // Clear pending popup flag
+                try {
+                    localStorage.removeItem(STORAGE_ELIG_IMPORT_PENDING_POPUP);
+                    localStorage.removeItem(STORAGE_IMPORT_ELIG_POPUP);
+                } catch (e) {}
+                IMPORT_ELIG_POPUP_REF = null;
             }
         });
 
+        IMPORT_ELIG_POPUP_REF = popup;
+        try {
+            localStorage.setItem(STORAGE_IMPORT_ELIG_POPUP, "1");
+        } catch (e) {}
+
         confirmBtn.addEventListener("click", function () {
             log("ImportElig: Confirm clicked");
+
+            // Set run mode only when Confirm is actually pressed
+            try {
+                localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_ELIG_IMPORT);
+                // Clear pending popup flag since we're now starting automation
+                localStorage.removeItem(STORAGE_ELIG_IMPORT_PENDING_POPUP);
+            } catch (e) {
+            }
 
             var planPriText = (planPriInput.value + "").trim();
             var ignoreText = (ignoreInput.value + "").trim();
@@ -774,10 +883,19 @@
             confirmBtn.style.display = "none";
             clearAllBtn.style.display = "none";
 
-            runningBox.style.display = "block";
+            runningContainer.style.display = "flex";
+
+            // Set popup flag so it persists across page changes
+            try {
+                localStorage.setItem(STORAGE_IMPORT_ELIG_POPUP, "1");
+            } catch (e) {}
 
             var dots = 1;
             var interval = setInterval(function () {
+                if (!popup || !document.body.contains(popup.element)) {
+                    clearInterval(interval);
+                    return;
+                }
                 dots = dots + 1;
                 if (dots > 3) {
                     dots = 1;
@@ -788,25 +906,27 @@
                     t = t + ".";
                     i = i + 1;
                 }
-                runningBox.textContent = t;
+                if (runningBox) {
+                    runningBox.textContent = t;
+                }
             }, 350);
 
             onConfirm(function (message) {
                 clearInterval(interval);
                 if (message) {
-                    runningBox.textContent = message;
-                    setTimeout(function() {
-                        popup.close();
-                    }, 2000);
+                    if (runningBox) {
+                        runningBox.textContent = "No more I/E items to add";
+                    }
+                    // Don't auto-close - user must click X
                 } else {
-                    popup.close();
+                    if (runningBox) {
+                        runningBox.textContent = "No more I/E items to add";
+                    }
+                    // Don't auto-close - user must click X
                 }
             });
         });
     }
-    ``
-
-
 
     function parseStoredKeywords(rawText) {
         var arr = [];
@@ -1766,83 +1886,6 @@
             return false;
         }
 
-
-        async function attemptCheckItemMatchForSA(code, expectedPlanVal, expectedSAVal) {
-            log("ImportElig: attemptCheckItemMatchForSA start");
-            var saEl = document.querySelector("select#scheduledActivity");
-            if (!saEl) {
-                log("ImportElig: attemptCheckItemMatchForSA no SA select");
-                return false;
-            }
-            var curSA = (saEl.value + "");
-            if (String(curSA) !== String(expectedSAVal)) {
-                log("ImportElig: attemptCheckItemMatchForSA SA mismatch before scan");
-                return false;
-            }
-            var elapsed = 0;
-            var step = 160;
-            var max = 3200;
-            while (elapsed <= max) {
-                saEl = document.querySelector("select#scheduledActivity");
-                if (!saEl) {
-                    await sleep(step);
-                    elapsed = elapsed + step;
-                    continue;
-                }
-                curSA = (saEl.value + "");
-                if (String(curSA) !== String(expectedSAVal)) {
-                    log("ImportElig: attemptCheckItemMatchForSA SA changed mid-scan");
-                    return false;
-                }
-                var itemRefSel = document.querySelector("select#itemRef");
-                if (itemRefSel) {
-                    var opts = itemRefSel.querySelectorAll("option");
-                    var len = opts.length;
-                    if (len === 0) {
-                        await sleep(step);
-                        elapsed = elapsed + step;
-                        continue;
-                    }
-                    var i = 0;
-                    while (i < len) {
-                        var op = opts[i];
-                        var txt = (op.textContent + "").trim();
-                        var val = (op.value + "").trim();
-                        if (val.length > 0) {
-                            var parts = txt.split("-");
-                            if (parts.length >= 2) {
-                                var tail = (parts[parts.length - 1] + "").trim();
-                                if (tail === code) {
-                                    saEl = document.querySelector("select#scheduledActivity");
-                                    if (!saEl) {
-                                        log("ImportElig: attemptCheckItemMatchForSA SA missing before set");
-                                        return false;
-                                    }
-                                    curSA = (saEl.value + "");
-                                    if (String(curSA) !== String(expectedSAVal)) {
-                                        log("ImportElig: attemptCheckItemMatchForSA SA changed before set");
-                                        return false;
-                                    }
-                                    itemRefSel.value = val;
-                                    var evt = new Event("change", { bubbles: true });
-                                    itemRefSel.dispatchEvent(evt);
-                                    log("ImportElig: Check Item matched '" + String(txt) + "'");
-                                    setLastMatchSelection(expectedPlanVal, expectedSAVal, val);
-                                    return true;
-                                }
-                            }
-                        }
-                        i = i + 1;
-                    }
-                    return false;
-                }
-                await sleep(step);
-                elapsed = elapsed + step;
-            }
-            return false;
-        }
-
-
         async function attemptCheckItemMatch(code, expectedPlanVal, expectedSAVal) {
             var elapsed = 0;
             var step = 160;
@@ -1926,6 +1969,7 @@
             return false;
         }
     }
+
 
     async function setComparatorEQ() {
         log("ImportElig: setComparatorEQ started");
@@ -2011,14 +2055,11 @@
 
 
 
-
     function startImportEligibilityMapping() {
         log("ImportElig: startImportEligibilityMapping invoked");
 
-        try {
-            localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_ELIG_IMPORT);
-        } catch (e) {
-        }
+        // Don't set run mode here - only set it when Confirm is pressed
+        // This prevents auto-redirect if user navigates away before confirming
 
         var path = location.pathname;
 
@@ -2030,12 +2071,32 @@
             } catch (e) {
             }
 
+            // Show redirect popup
+            var redirectMessage = document.createElement("div");
+            redirectMessage.style.textAlign = "center";
+            redirectMessage.style.fontSize = "16px";
+            redirectMessage.style.color = "#fff";
+            redirectMessage.style.padding = "20px";
+            redirectMessage.textContent = "Click Import Eligibility Mapping again to run.";
+
+            var redirectPopup = createPopup({
+                title: "Import Eligibility Mapping",
+                content: redirectMessage,
+                width: "400px",
+                height: "auto"
+            });
+
             location.href = ELIGIBILITY_LIST_URL;
             return;
         }
 
         try {
             localStorage.removeItem(STORAGE_ELIG_IMPORT_PENDING_POPUP);
+        } catch (e) {
+        }
+
+        try {
+            localStorage.setItem(STORAGE_ELIG_IMPORT_PENDING_POPUP, "1");
         } catch (e) {
         }
 
@@ -2048,7 +2109,80 @@
         });
     }
 
+    // Update Run All popup status
+    function updateRunAllPopupStatus(statusText) {
+        // Store status in localStorage for persistence
+        try {
+            localStorage.setItem(STORAGE_RUN_ALL_STATUS, statusText);
+        } catch (e) {}
 
+        if (!RUN_ALL_POPUP_REF) {
+            return;
+        }
+        try {
+            var statusDiv = RUN_ALL_POPUP_REF.element.querySelector("#runAllStatus");
+            if (statusDiv) {
+                statusDiv.textContent = statusText;
+            }
+        } catch (e) {
+            log("Error updating Run All popup status: " + e);
+        }
+    }
+
+    // Update Import Eligibility popup lists
+    function addToImportEligCompletedList(itemCode) {
+        try {
+            var list = document.getElementById("importEligCompletedList");
+            if (!list && IMPORT_ELIG_POPUP_REF && IMPORT_ELIG_POPUP_REF.element) {
+                list = IMPORT_ELIG_POPUP_REF.element.querySelector("#importEligCompletedList");
+            }
+            if (list) {
+                var item = document.createElement("div");
+                item.textContent = itemCode;
+                item.style.padding = "2px 4px";
+                list.appendChild(item);
+                list.scrollTop = list.scrollHeight;
+            }
+        } catch (e) {
+            log("Error adding to completed list: " + e);
+        }
+    }
+
+    function addToImportEligFailedList(itemCode) {
+        try {
+            var list = document.getElementById("importEligFailedList");
+            if (!list && IMPORT_ELIG_POPUP_REF && IMPORT_ELIG_POPUP_REF.element) {
+                list = IMPORT_ELIG_POPUP_REF.element.querySelector("#importEligFailedList");
+            }
+            if (list) {
+                var item = document.createElement("div");
+                item.textContent = itemCode;
+                item.style.padding = "2px 4px";
+                list.appendChild(item);
+                list.scrollTop = list.scrollHeight;
+            }
+        } catch (e) {
+            log("Error adding to failed list: " + e);
+        }
+    }
+
+    function addToImportEligExcludedList(itemCode) {
+        try {
+            var list = document.getElementById("importEligExcludedList");
+            if (!list && IMPORT_ELIG_POPUP_REF && IMPORT_ELIG_POPUP_REF.element) {
+                list = IMPORT_ELIG_POPUP_REF.element.querySelector("#importEligExcludedList");
+            }
+            if (list) {
+                var item = document.createElement("div");
+                item.textContent = itemCode;
+                item.style.padding = "2px 4px";
+                list.appendChild(item);
+                list.scrollTop = list.scrollHeight;
+            }
+        } catch (e) {
+            log("Error adding to excluded list: " + e);
+        }
+    }
 
     async function executeEligibilityMappingAutomation() {
         if (isPaused()) {
@@ -2110,6 +2244,9 @@
             }
             if (!isRunModeSet(RUNMODE_ELIG_IMPORT)) {
                 log("ImportElig: run mode cleared (X pressed); stopping loop");
+                try {
+                    localStorage.removeItem(STORAGE_IMPORT_ELIG_POPUP);
+                } catch (e) {}
                 break;
             }
             var opened = await openAddEligibilityModal();
@@ -2119,40 +2256,67 @@
             }
             if (!isRunModeSet(RUNMODE_ELIG_IMPORT)) {
                 log("ImportElig: run mode cleared (X pressed); stopping loop");
+                try {
+                    localStorage.removeItem(STORAGE_IMPORT_ELIG_POPUP);
+                } catch (e) {}
                 break;
             }
+            // Wait a bit for modal to fully load
+            await sleep(500);
             var eligList = await readEligibilityItemCodesFromSelect();
             var allCodes = eligList.codes;
             var codeToVal = eligList.valueMap;
+            log("ImportElig: read " + String(allCodes.length) + " codes from select");
             var pick = "";
             var j = 0;
+            var ignoredCount = 0;
+            var existingCount = 0;
+            var importedCount = 0;
             while (j < allCodes.length) {
                 var c = allCodes[j];
                 if (shouldIgnoreCode(c)) {
+                    ignoredCount = ignoredCount + 1;
                     j = j + 1;
                     continue;
                 }
                 var inExisting = existingSet.has(c);
                 var inImported = importedSet.has(c);
+                if (inExisting) {
+                    existingCount = existingCount + 1;
+                }
+                if (inImported) {
+                    importedCount = importedCount + 1;
+                }
                 if (!inExisting && !inImported) {
                     pick = c;
+                    log("ImportElig: found new code to process: " + String(c));
                     break;
                 }
                 j = j + 1;
             }
+            log("ImportElig: code filtering - ignored=" + String(ignoredCount) + ", existing=" + String(existingCount) + ", imported=" + String(importedCount) + ", selected=" + String(pick || "none"));
             if (!pick || pick.length === 0) {
                 log("ImportElig: no new items; finishing");
+                // Close modal before finishing
+                var closeBtn = document.querySelector("#ajaxModal .modal-content button.close");
+                if (closeBtn) {
+                    closeBtn.click();
+                    await sleep(500);
+                }
                 try {
                     localStorage.removeItem(STORAGE_RUN_MODE);
+                    localStorage.removeItem(STORAGE_IMPORT_ELIG_POPUP);
                 } catch (e) {
                 }
                 clearImportedItemsSet();
                 // Note: The completion message will be shown by the callback in startImportEligibilityMapping
                 return;
             }
+            log("ImportElig: attempting to select code: " + String(pick));
             var selOk = await selectEligibilityItemByCode(pick, codeToVal);
             if (!selOk) {
                 log("ImportElig: select failed; closing modal");
+                addToImportEligFailedList(pick);
                 var closeBtn = document.querySelector("#ajaxModal .modal-content button.close");
                 if (closeBtn) {
                     closeBtn.click();
@@ -2169,6 +2333,7 @@
             if (!foundCheckItem) {
                 log("ImportElig: no CheckItem match found for code '" + String(pick) + "' after scanning all plans and activities");
                 addToIgnoreKeywords(pick);
+                addToImportEligFailedList(pick);
                 // Reload ignore keywords so the updated list is used in subsequent iterations
                 ignoreKeywords = getIgnoreKeywords();
                 var closeBtn2 = document.querySelector("#ajaxModal .modal-content button.close");
@@ -2186,12 +2351,16 @@
             await stabilizeSelectionBeforeComparator(3000);
             if (!isRunModeSet(RUNMODE_ELIG_IMPORT)) {
                 log("ImportElig: run mode cleared (X pressed); stopping loop");
+                try {
+                    localStorage.removeItem(STORAGE_IMPORT_ELIG_POPUP);
+                } catch (e) {}
                 break;
             }
             log("ImportElig: waiting for comparator to appear after Check Item selection");
             var compReady = await waitForComparatorReady(1000);
             if (!compReady) {
                 log("ImportElig: comparator never appeared; skipping");
+                addToImportEligFailedList(pick);
                 var closeBtn2b = document.querySelector("#ajaxModal .modal-content button.close");
                 if (closeBtn2b) {
                     closeBtn2b.click();
@@ -2203,6 +2372,7 @@
             var cmpOk = await setComparatorEQ();
             if (!cmpOk) {
                 log("ImportElig: comparator fail; skipping");
+                addToImportEligFailedList(pick);
                 var closeBtn3 = document.querySelector("#ajaxModal .modal-content button.close");
                 if (closeBtn3) {
                     closeBtn3.click();
@@ -2214,6 +2384,7 @@
             var sfOk = await selectCodeListValueContainingSF();
             if (!sfOk) {
                 log("ImportElig: SF fail; skipping");
+                addToImportEligFailedList(pick);
                 var closeBtn4 = document.querySelector("#ajaxModal .modal-content button.close");
                 if (closeBtn4) {
                     closeBtn4.click();
@@ -2225,15 +2396,20 @@
             var saved = await clickSaveAndWait();
             if (!saved) {
                 log("ImportElig: save failed; stopping");
+                addToImportEligFailedList(pick);
                 break;
             }
             if (!isRunModeSet(RUNMODE_ELIG_IMPORT)) {
                 log("ImportElig: run mode cleared (X pressed); stopping loop");
+                try {
+                    localStorage.removeItem(STORAGE_IMPORT_ELIG_POPUP);
+                } catch (e) {}
                 break;
             }
             existingSet.add(pick);
             importedSet.add(pick);
             persistImportedItemsSet(importedSet);
+            addToImportEligCompletedList(pick);
             log("ImportElig: added " + String(pick));
             clearLastMatchSelection();
             await sleep(1000);
@@ -2244,7 +2420,6 @@
         } catch (e) {
         }
     }
-
 
     //==========================
     // RUN BARCODE FEATURE
@@ -3579,12 +3754,17 @@
 
         var importEligBtn = document.createElement("button");
         importEligBtn.textContent = "Import I/E";
-        importEligBtn.style.background = "#9df";
-        importEligBtn.style.color = "#000";
+        importEligBtn.style.background = "#38dae6";
+        importEligBtn.style.color = "#fff";
         importEligBtn.style.border = "none";
         importEligBtn.style.borderRadius = "6px";
         importEligBtn.style.padding = "8px";
         importEligBtn.style.cursor = "pointer";
+        importEligBtn.style.fontWeight = "500";
+        importEligBtn.style.transition = "background 0.2s";
+        importEligBtn.onmouseenter = function() { this.style.background = "#2bb9c4"; };
+        importEligBtn.onmouseleave = function() { this.style.background = "#38dae6"; };
+
 
 
         var clearMappingBtn = document.createElement("button");

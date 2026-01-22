@@ -69,7 +69,7 @@
     const STORAGE_ELIG_CHECKITEM_CACHE = "activityPlanState.eligibility.checkItemCache";
     const STORAGE_ELIG_IMPORT_PENDING_POPUP = "activityPlanState.eligibility.importPendingPopup";
 
-        //==========================
+    //==========================
     // COLLECT ALL FEATURES
     //==========================
     //==========================
@@ -90,81 +90,6 @@
         COLLECT_ALL_CANCELLED = false;
         COLLECT_ALL_POPUP_REF = null;
         log("CollectAll: data cleared");
-    }
-
-    // Update Run All popup status
-    function updateRunAllPopupStatus(statusText) {
-        // Store status in localStorage for persistence
-        try {
-            localStorage.setItem(STORAGE_RUN_ALL_STATUS, statusText);
-        } catch (e) {}
-
-        if (!RUN_ALL_POPUP_REF) {
-            return;
-        }
-        try {
-            var statusDiv = RUN_ALL_POPUP_REF.element.querySelector("#runAllStatus");
-            if (statusDiv) {
-                statusDiv.textContent = statusText;
-            }
-        } catch (e) {
-            log("Error updating Run All popup status: " + e);
-        }
-    }
-
-    // Update Import Eligibility popup lists
-    function addToImportEligCompletedList(itemCode) {
-        try {
-            var list = document.getElementById("importEligCompletedList");
-            if (!list && IMPORT_ELIG_POPUP_REF && IMPORT_ELIG_POPUP_REF.element) {
-                list = IMPORT_ELIG_POPUP_REF.element.querySelector("#importEligCompletedList");
-            }
-            if (list) {
-                var item = document.createElement("div");
-                item.textContent = itemCode;
-                item.style.padding = "2px 4px";
-                list.appendChild(item);
-                list.scrollTop = list.scrollHeight;
-            }
-        } catch (e) {
-            log("Error adding to completed list: " + e);
-        }
-    }
-
-    function addToImportEligFailedList(itemCode) {
-        try {
-            var list = document.getElementById("importEligFailedList");
-            if (!list && IMPORT_ELIG_POPUP_REF && IMPORT_ELIG_POPUP_REF.element) {
-                list = IMPORT_ELIG_POPUP_REF.element.querySelector("#importEligFailedList");
-            }
-            if (list) {
-                var item = document.createElement("div");
-                item.textContent = itemCode;
-                item.style.padding = "2px 4px";
-                list.appendChild(item);
-                list.scrollTop = list.scrollHeight;
-            }
-        } catch (e) {
-            log("Error adding to failed list: " + e);
-        }
-    }
-
-    function addToImportEligExcludedList(itemCode) {
-        try {
-            var list = document.getElementById("importEligExcludedList");
-            if (!list && IMPORT_ELIG_POPUP_REF && IMPORT_ELIG_POPUP_REF.element) {
-                list = IMPORT_ELIG_POPUP_REF.element.querySelector("#importEligExcludedList");
-            }
-            if (list) {
-                var item = document.createElement("div");
-                item.textContent = itemCode;
-                item.style.padding = "2px 4px";
-                list.appendChild(item);
-                list.scrollTop = list.scrollHeight;
-            }
-        } catch (e) {
-            log("Error adding to excluded list: " + e);
-        }
     }
 
     // Recreate popups on page load if they should be active
@@ -1146,6 +1071,62 @@
     var DEFAULT_FORM_PRIORITY = "mh, bm, review, process, dm, rep, subs, med, elg_pi, vitals, ecg";
 
     function SubjectEligibilityFunctions() {}
+
+    // Update Import Eligibility popup lists
+    function addToImportEligCompletedList(itemCode) {
+        try {
+            var list = document.getElementById("importEligCompletedList");
+            if (!list && IMPORT_ELIG_POPUP_REF && IMPORT_ELIG_POPUP_REF.element) {
+                list = IMPORT_ELIG_POPUP_REF.element.querySelector("#importEligCompletedList");
+            }
+            if (list) {
+                var item = document.createElement("div");
+                item.textContent = itemCode;
+                item.style.padding = "2px 4px";
+                list.appendChild(item);
+                list.scrollTop = list.scrollHeight;
+            }
+        } catch (e) {
+            log("Error adding to completed list: " + e);
+        }
+    }
+
+    function addToImportEligFailedList(itemCode) {
+        try {
+            var list = document.getElementById("importEligFailedList");
+            if (!list && IMPORT_ELIG_POPUP_REF && IMPORT_ELIG_POPUP_REF.element) {
+                list = IMPORT_ELIG_POPUP_REF.element.querySelector("#importEligFailedList");
+            }
+            if (list) {
+                var item = document.createElement("div");
+                item.textContent = itemCode;
+                item.style.padding = "2px 4px";
+                list.appendChild(item);
+                list.scrollTop = list.scrollHeight;
+            }
+        } catch (e) {
+            log("Error adding to failed list: " + e);
+        }
+    }
+
+    function addToImportEligExcludedList(itemCode) {
+        try {
+            var list = document.getElementById("importEligExcludedList");
+            if (!list && IMPORT_ELIG_POPUP_REF && IMPORT_ELIG_POPUP_REF.element) {
+                list = IMPORT_ELIG_POPUP_REF.element.querySelector("#importEligExcludedList");
+            }
+            if (list) {
+                var item = document.createElement("div");
+                item.textContent = itemCode;
+                item.style.padding = "2px 4px";
+                list.appendChild(item);
+                list.scrollTop = list.scrollHeight;
+            }
+        } catch (e) {
+            log("Error adding to excluded list: " + e);
+        }
+    }
+
     function isRunModeSet(expectedMode) {
         var raw = null;
         try {
@@ -9115,6 +9096,25 @@
 
     function SharedUtilityFunctions() {}
 
+    // Update Run All popup status
+    function updateRunAllPopupStatus(statusText) {
+        // Store status in localStorage for persistence
+        try {
+            localStorage.setItem(STORAGE_RUN_ALL_STATUS, statusText);
+        } catch (e) {}
+
+        if (!RUN_ALL_POPUP_REF) {
+            return;
+        }
+        try {
+            var statusDiv = RUN_ALL_POPUP_REF.element.querySelector("#runAllStatus");
+            if (statusDiv) {
+                statusDiv.textContent = statusText;
+            }
+        } catch (e) {
+            log("Error updating Run All popup status: " + e);
+        }
+    }
 
     // Find and navigate to eligibility locking form when required.
     async function processStudyMetadataPageForEligibilityLock() {
@@ -9909,16 +9909,6 @@
         var path = location.pathname;
         var expected = "/secure/crfdesign/studylibrary/show/studymetadata";
         if (path === expected) {
-            return true;
-        }
-        return false;
-    }
-
-    // Detect if current path is a Study Library form-show page.
-    function isStudyLibraryFormShowPage() {
-        var path = location.pathname;
-        var ok = path.indexOf("/secure/crfdesign/studylibrary/show/form/") !== -1;
-        if (ok) {
             return true;
         }
         return false;
@@ -10783,7 +10773,6 @@
             log("Run Lock Sample Paths clicked");
             location.href = "https://cenexeltest.clinspark.com/secure/samples/configure/paths";
         });
-
 
         bodyContainer.appendChild(btnRow);
         var status = document.createElement("div");
