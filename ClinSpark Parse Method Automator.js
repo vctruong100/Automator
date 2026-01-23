@@ -1046,6 +1046,17 @@
     var DEFAULT_FORM_EXCLUSION = "check";
     var DEFAULT_FORM_PRIORITY = "mh, bm, review, process, dm, rep, subs, med, elg_pi, vitals, ecg";
 
+    // Parse Method Feature Constants
+    var STORAGE_PARSE_METHOD_RUNNING = "activityPlanState.parseMethod.running";
+    var STORAGE_PARSE_METHOD_ITEM_NAME = "activityPlanState.parseMethod.itemName";
+    var STORAGE_PARSE_METHOD_RESULTS = "activityPlanState.parseMethod.results";
+    var STORAGE_PARSE_METHOD_COMPLETED = "activityPlanState.parseMethod.completed";
+    var RUNMODE_PARSE_METHOD = "parseMethod";
+    var METHOD_LIBRARY_URL = "https://cenexeltest.clinspark.com/secure/crfdesign/studylibrary/list/method";
+    var PARSE_METHOD_CANCELED = false;
+    var PARSE_METHOD_COLLECTED_METHODS = [];
+    var PARSE_METHOD_COLLECTED_FORMS = [];
+
     function SubjectEligibilityFunctions() {}
     // Check if run mode is still set for the given mode.
     function isRunModeSet(expectedMode) {
@@ -4255,9 +4266,20 @@
         importEligBtn.style.cursor = "pointer";
         importEligBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         importEligBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+        var parseMethodBtn = document.createElement("button");
+        parseMethodBtn.textContent = "Parse Method";
+        parseMethodBtn.style.background = "#4a90e2";
+        parseMethodBtn.style.color = "#fff";
+        parseMethodBtn.style.border = "none";
+        parseMethodBtn.style.borderRadius = "6px";
+        parseMethodBtn.style.padding = "8px";
+        parseMethodBtn.style.cursor = "pointer";
+        parseMethodBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
+        parseMethodBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
         btnRow.appendChild(runBarcodeBtn);
         btnRow.appendChild(findFormBtn);
         btnRow.appendChild(importEligBtn);
+        btnRow.appendChild(parseMethodBtn);
         btnRow.appendChild(pauseBtn);
         btnRow.appendChild(toggleLogsBtn);
         bodyContainer.appendChild(btnRow);
@@ -4473,6 +4495,9 @@
         findFormBtn.addEventListener("click", function () {
             openFindForm();
         });
+        parseMethodBtn.addEventListener("click", function () {
+            openParseMethod();
+        });
         toggleLogsBtn.addEventListener("click", function () {
             var currentlyVisible = getLogVisible();
             var newVisible = !currentlyVisible;
@@ -4625,6 +4650,7 @@
         }
         if (location.pathname === "/secure/study/data/list") {
             processFindFormOnList();
+            checkAndRestoreParseMethodPopup();
         }
 
         // Check for manual navigation away from Import Eligibility process
@@ -4693,6 +4719,253 @@
 
     }
 
+
+    // Parse Method Functions
+    function clearParseMethodState() {
+        PARSE_METHOD_CANCELED = false;
+        PARSE_METHOD_COLLECTED_METHODS = [];
+        PARSE_METHOD_COLLECTED_FORMS = [];
+        try { localStorage.removeItem(STORAGE_PARSE_METHOD_RUNNING); localStorage.removeItem(STORAGE_PARSE_METHOD_ITEM_NAME); } catch (e) {}
+    }
+
+    function stopParseMethodAutomation() {
+        PARSE_METHOD_CANCELED = true;
+        clearParseMethodState();
+        try { localStorage.removeItem(STORAGE_RUN_MODE); } catch (e) {}
+    }
+
+    function clearParseMethodStoredResults() {
+        try { localStorage.removeItem(STORAGE_PARSE_METHOD_RESULTS); localStorage.removeItem(STORAGE_PARSE_METHOD_COMPLETED); localStorage.removeItem(STORAGE_PARSE_METHOD_ITEM_NAME); } catch (e) {}
+    }
+
+    function openParseMethod() {
+        log("ParseMethod: button clicked");
+        if (isPaused()) return;
+        clearParseMethodState();
+        showParseMethodPopup();
+    }
+
+    function showParseMethodPopup() {
+        var container = document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;gap:16px";
+        var inputRow = document.createElement("div");
+        inputRow.style.cssText = "display:grid;grid-template-columns:100px 1fr;align-items:center;gap:12px";
+        var label = document.createElement("div");
+        label.textContent = "Item name";
+        label.style.fontWeight = "600";
+        var inputEl = document.createElement("input");
+        inputEl.type = "text";
+        inputEl.placeholder = "Required (case sensitive)";
+        inputEl.style.cssText = "width:100%;box-sizing:border-box;padding:10px;border-radius:6px;border:1px solid #444;background:#1a1a1a;color:#fff";
+        inputRow.appendChild(label);
+        inputRow.appendChild(inputEl);
+        container.appendChild(inputRow);
+        var btnRow = document.createElement("div");
+        btnRow.style.cssText = "display:flex;justify-content:flex-end";
+        var confirmBtn = document.createElement("button");
+        confirmBtn.textContent = "Confirmed";
+        confirmBtn.style.cssText = "background:#28a745;color:#fff;border:none;border-radius:6px;padding:10px 20px;cursor:pointer;font-weight:600";
+        btnRow.appendChild(confirmBtn);
+        container.appendChild(btnRow);
+        var statusBox = document.createElement("div");
+        statusBox.style.cssText = "display:none;margin-top:8px;padding:12px;background:#1a1a1a;border-radius:6px;border:1px solid #333;text-align:center";
+        statusBox.textContent = "Running.";
+        container.appendChild(statusBox);
+        var resultsBox = document.createElement("div");
+        resultsBox.style.cssText = "display:none;margin-top:8px;max-height:300px;overflow-y:auto;background:#1a1a1a;border-radius:6px;border:1px solid #333;padding:12px";
+        container.appendChild(resultsBox);
+        var okRow = document.createElement("div");
+        okRow.style.cssText = "display:none;justify-content:center;margin-top:8px";
+        var okBtn = document.createElement("button");
+        okBtn.textContent = "Ok";
+        okBtn.style.cssText = "background:#0b82ff;color:#fff;border:none;border-radius:6px;padding:10px 30px;cursor:pointer;font-weight:600";
+        okRow.appendChild(okBtn);
+        container.appendChild(okRow);
+        var popup = createPopup({ title: "Parse Method", content: container, width: "480px", height: "auto", onClose: function() { stopParseMethodAutomation(); } });
+        setTimeout(function() { try { inputEl.focus(); } catch (e) {} }, 50);
+        confirmBtn.addEventListener("click", function() {
+            var itemName = (inputEl.value + "").trim();
+            if (!itemName) { inputEl.style.border = "2px solid #dc3545"; return; }
+            inputEl.style.border = "1px solid #444";
+            log("ParseMethod: Confirmed itemName=" + itemName);
+            try { localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_PARSE_METHOD); localStorage.setItem(STORAGE_PARSE_METHOD_RUNNING, "1"); localStorage.setItem(STORAGE_PARSE_METHOD_ITEM_NAME, itemName); } catch (e) {}
+            inputRow.style.display = "none";
+            btnRow.style.display = "none";
+            statusBox.style.display = "block";
+            resultsBox.style.display = "block";
+            var dots = 1;
+            var interval = setInterval(function() { if (PARSE_METHOD_CANCELED) { clearInterval(interval); return; } dots = (dots % 3) + 1; var t = "Running"; for (var d = 0; d < dots; d++) t += "."; statusBox.textContent = t; }, 400);
+            runParseMethodAutomation(itemName, function(methods, forms) {
+                clearInterval(interval);
+                if (PARSE_METHOD_CANCELED) return;
+                statusBox.textContent = "Completed. Proceed to Study -> Data ?";
+                showParseMethodResults(resultsBox, methods);
+                okRow.style.display = "flex";
+                okBtn.addEventListener("click", function() { okRow.style.display = "none"; statusBox.textContent = "Running Find Form..."; doFindFormWithForms(forms); });
+            }, function(name, fms) { addParseMethodResult(resultsBox, name, fms); });
+        });
+    }
+
+    function showParseMethodResults(box, methods) {
+        box.innerHTML = "";
+        if (!methods || methods.length === 0) { box.innerHTML = "<div style='color:#999;text-align:center;padding:20px'>No methods found.</div>"; return; }
+        for (var i = 0; i < methods.length; i++) {
+            var m = methods[i];
+            var block = document.createElement("div");
+            block.style.cssText = "margin-bottom:12px;padding:10px;background:#222;border-radius:6px;border:1px solid #444";
+            var title = document.createElement("div");
+            title.style.cssText = "font-weight:600;color:#4a90e2;margin-bottom:6px";
+            title.textContent = m.name;
+            block.appendChild(title);
+            if (m.forms && m.forms.length > 0) {
+                var list = document.createElement("div");
+                list.style.paddingLeft = "16px";
+                for (var j = 0; j < m.forms.length; j++) { var it = document.createElement("div"); it.style.cssText = "color:#ccc;font-size:12px"; it.textContent = "- " + m.forms[j]; list.appendChild(it); }
+                block.appendChild(list);
+            }
+            box.appendChild(block);
+        }
+    }
+
+    function addParseMethodResult(box, name, forms) {
+        var block = document.createElement("div");
+        block.style.cssText = "margin-bottom:12px;padding:10px;background:#222;border-radius:6px;border:1px solid #444";
+        var title = document.createElement("div");
+        title.style.cssText = "font-weight:600;color:#4a90e2;margin-bottom:6px";
+        title.textContent = name;
+        block.appendChild(title);
+        if (forms && forms.length > 0) {
+            var list = document.createElement("div");
+            list.style.paddingLeft = "16px";
+            for (var j = 0; j < forms.length; j++) { var it = document.createElement("div"); it.style.cssText = "color:#ccc;font-size:12px"; it.textContent = "- " + forms[j]; list.appendChild(it); }
+            block.appendChild(list);
+        }
+        box.appendChild(block);
+        box.scrollTop = box.scrollHeight;
+    }
+
+    async function runParseMethodAutomation(itemName, onComplete, onFound) {
+        PARSE_METHOD_CANCELED = false;
+        PARSE_METHOD_COLLECTED_METHODS = [];
+        PARSE_METHOD_COLLECTED_FORMS = [];
+        try {
+            var methodsData = await getMethodLibraryData();
+            if (PARSE_METHOD_CANCELED) return;
+            if (!methodsData || methodsData.length === 0) { onComplete([], []); return; }
+            for (var idx = 0; idx < methodsData.length; idx++) {
+                if (PARSE_METHOD_CANCELED) return;
+                if (isPaused()) { stopParseMethodAutomation(); return; }
+                var method = methodsData[idx];
+                var formalExpr = await getMethodFormalExpr(method.url);
+                if (PARSE_METHOD_CANCELED) return;
+                if (!formalExpr || formalExpr.indexOf(itemName) < 0) continue;
+                log("ParseMethod: " + method.name + " matches");
+                var itemRefs = await getMethodItemRefs(method.url);
+                if (PARSE_METHOD_CANCELED) return;
+                if (!itemRefs || itemRefs.length === 0) continue;
+                var mForms = [];
+                for (var ri = 0; ri < itemRefs.length; ri++) {
+                    if (PARSE_METHOD_CANCELED) return;
+                    var fs = await getItemRefForms(itemRefs[ri].url);
+                    if (PARSE_METHOD_CANCELED) return;
+                    if (fs) { for (var fi = 0; fi < fs.length; fi++) { if (mForms.indexOf(fs[fi]) < 0) mForms.push(fs[fi]); if (PARSE_METHOD_COLLECTED_FORMS.indexOf(fs[fi]) < 0) PARSE_METHOD_COLLECTED_FORMS.push(fs[fi]); } }
+                }
+                if (mForms.length > 0) { PARSE_METHOD_COLLECTED_METHODS.push({ name: method.name, forms: mForms }); if (typeof onFound === "function") onFound(method.name, mForms); }
+            }
+            onComplete(PARSE_METHOD_COLLECTED_METHODS, PARSE_METHOD_COLLECTED_FORMS);
+        } catch (err) { log("ParseMethod: error - " + err); onComplete([], []); }
+    }
+
+    async function getMethodLibraryData() {
+        return new Promise(function(resolve) {
+            GM.xmlHttpRequest({ method: "GET", url: METHOD_LIBRARY_URL, onload: function(resp) {
+                var html = resp && resp.responseText ? resp.responseText : "";
+                var methods = [];
+                var tmp = document.createElement("div"); tmp.innerHTML = html;
+                var table = tmp.querySelector("table#listTable") || tmp.querySelector("table");
+                if (table) { var tbody = table.querySelector("tbody"); if (tbody) { var rows = tbody.querySelectorAll("tr"); for (var i = 0; i < rows.length; i++) { var tds = rows[i].querySelectorAll("td"); if (tds.length >= 1) { var link = tds[0].querySelector("a"); if (link) { var name = (link.textContent || "").trim(); var href = link.getAttribute("href") || ""; if (name && href) { var url = href.indexOf("http") === 0 ? href : "https://cenexeltest.clinspark.com" + href; methods.push({ name: name, url: url }); } } } } } }
+                resolve(methods);
+            }, onerror: function() { resolve([]); } });
+        });
+    }
+
+    async function getMethodFormalExpr(methodUrl) {
+        return new Promise(function(resolve) {
+            GM.xmlHttpRequest({ method: "GET", url: methodUrl, onload: function(resp) {
+                var html = resp && resp.responseText ? resp.responseText : "";
+                var tmp = document.createElement("div"); tmp.innerHTML = html;
+                var tables = tmp.querySelectorAll("table.table.table-striped.table-bordered");
+                for (var i = 0; i < tables.length; i++) { var tbody = tables[i].querySelector("tbody"); if (tbody) { var rows = tbody.querySelectorAll("tr"); for (var j = 0; j < rows.length; j++) { var tds = rows[j].querySelectorAll("td"); if (tds.length >= 2 && (tds[0].textContent || "").trim() === "Formal Expression:") { resolve((tds[1].textContent || "").trim()); return; } } } }
+                resolve("");
+            }, onerror: function() { resolve(""); } });
+        });
+    }
+
+    async function getMethodItemRefs(methodUrl) {
+        return new Promise(function(resolve) {
+            GM.xmlHttpRequest({ method: "GET", url: methodUrl + "?references=references", onload: function(resp) {
+                var html = resp && resp.responseText ? resp.responseText : "";
+                var refs = [];
+                var tmp = document.createElement("div"); tmp.innerHTML = html;
+                var groups = tmp.querySelectorAll("ul.list-group");
+                for (var i = 0; i < groups.length; i++) { var items = groups[i].querySelectorAll("li.list-group-item a"); for (var j = 0; j < items.length; j++) { var href = items[j].getAttribute("href") || ""; if (href.indexOf("/show/itemgroup/") >= 0) { var fullUrl = href.indexOf("http") === 0 ? href : "https://cenexeltest.clinspark.com" + href; refs.push({ url: fullUrl }); } } }
+                resolve(refs);
+            }, onerror: function() { resolve([]); } });
+        });
+    }
+
+    async function getItemRefForms(itemRefUrl) {
+        return new Promise(function(resolve) {
+            GM.xmlHttpRequest({ method: "GET", url: itemRefUrl + "?references=references", onload: function(resp) {
+                var html = resp && resp.responseText ? resp.responseText : "";
+                var forms = [];
+                var tmp = document.createElement("div"); tmp.innerHTML = html;
+                var groups = tmp.querySelectorAll("ul.list-group");
+                for (var i = 0; i < groups.length; i++) { var items = groups[i].querySelectorAll("li.list-group-item a"); for (var j = 0; j < items.length; j++) { var href = items[j].getAttribute("href") || ""; var text = (items[j].textContent || "").trim(); if (href.indexOf("/show/form/") >= 0 && text) { forms.push(text); } } }
+                resolve(forms);
+            }, onerror: function() { resolve([]); } });
+        });
+    }
+
+    function doFindFormWithForms(formNames) {
+        if (!formNames || formNames.length === 0) { log("ParseMethod: no forms"); return; }
+        log("ParseMethod: Find Form with " + formNames.length + " forms");
+        try { localStorage.setItem(STORAGE_PARSE_METHOD_RESULTS, JSON.stringify(PARSE_METHOD_COLLECTED_METHODS)); localStorage.setItem(STORAGE_PARSE_METHOD_COMPLETED, "1"); } catch (e) {}
+        try { localStorage.removeItem(STORAGE_FIND_FORM_STATUS_VALUES); } catch (e) {}
+        localStorage.setItem(STORAGE_FIND_FORM_PENDING, "1");
+        localStorage.setItem(STORAGE_FIND_FORM_KEYWORD, formNames.join(" "));
+        localStorage.setItem(STORAGE_FIND_FORM_SUBJECT, "");
+        window.location.href = FORM_LIST_URL;
+    }
+
+    function showParseMethodCompletedPopup(methods) {
+        var container = document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;gap:16px";
+        var statusBox = document.createElement("div");
+        statusBox.style.cssText = "padding:12px;background:#1a1a1a;border-radius:6px;border:1px solid #333;text-align:center";
+        statusBox.textContent = "Find Form completed.";
+        container.appendChild(statusBox);
+        var resultsBox = document.createElement("div");
+        resultsBox.style.cssText = "max-height:300px;overflow-y:auto;background:#1a1a1a;border-radius:6px;border:1px solid #333;padding:12px";
+        showParseMethodResults(resultsBox, methods);
+        container.appendChild(resultsBox);
+        createPopup({ title: "Parse Method", content: container, width: "480px", height: "auto", onClose: function() { clearParseMethodStoredResults(); } });
+    }
+
+    function checkAndRestoreParseMethodPopup() {
+        var completed = null;
+        try { completed = localStorage.getItem(STORAGE_PARSE_METHOD_COMPLETED); } catch (e) {}
+        if (completed !== "1") return false;
+        var resultsRaw = null;
+        try { resultsRaw = localStorage.getItem(STORAGE_PARSE_METHOD_RESULTS); } catch (e) {}
+        if (!resultsRaw) { clearParseMethodStoredResults(); return false; }
+        try {
+            var methods = JSON.parse(resultsRaw);
+            if (Array.isArray(methods)) { log("ParseMethod: restoring completed popup"); showParseMethodCompletedPopup(methods); return true; }
+        } catch (e) { log("ParseMethod: failed to parse stored results"); }
+        clearParseMethodStoredResults();
+        return false;
+    }
 
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", init, { once: true });
