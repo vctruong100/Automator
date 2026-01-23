@@ -68,14 +68,7 @@
     const STORAGE_ELIG_CHECKITEM_CACHE = "activityPlanState.eligibility.checkItemCache";
     const STORAGE_ELIG_IMPORT_PENDING_POPUP = "activityPlanState.eligibility.importPendingPopup";
 
-    //==========================
-    // FIND FORM FEATURE
-    //==========================
-    // This section contains all functions related to finding forms.
-    // This feature automates pull any subject identifier found on page,
-    // request user for form keyword, and then search for form based on the keyword.
-    //==========================
-    
+    // Run Find Form
     var FORM_LIST_URL = "https://cenexeltest.clinspark.com/secure/study/data/list";
     var FORM_POPUP_TITLE = "Find Form";
     var FORM_POPUP_KEYWORD_LABEL = "Form Keyword";
@@ -87,12 +80,68 @@
     var FORM_NO_MATCH_MESSAGE = "No form is found.";
 
     var BARCODE_BG_TAB = null;
+    const RUNMODE_CLEAR_MAPPING = "clearMapping";
 
     var STORAGE_FIND_FORM_PENDING = "activityPlanState.findForm.pending";
     var STORAGE_FIND_FORM_KEYWORD = "activityPlanState.findForm.keyword";
     var STORAGE_FIND_FORM_SUBJECT = "activityPlanState.findForm.subject";
     var STORAGE_FIND_FORM_STATUS_VALUES = "activityPlanState.findForm.statusValues";
 
+    var FORM_LIST_URL = "https://cenexeltest.clinspark.com/secure/study/data/list";
+    var STORAGE_FIND_FORM_PENDING = "activityPlanState.findForm.pending";
+    var STORAGE_FIND_FORM_KEYWORD = "activityPlanState.findForm.keyword";
+    var STORAGE_FIND_FORM_SUBJECT = "activityPlanState.findForm.subject";
+    var STORAGE_FIND_FORM_STATUS_VALUES = "activityPlanState.findForm.statusValues";
+
+    // Run Parse Method
+    var STORAGE_PARSE_METHOD_RUNNING = "activityPlanState.parseMethod.running";
+    var STORAGE_PARSE_METHOD_ITEM_NAME = "activityPlanState.parseMethod.itemName";
+    var STORAGE_PARSE_METHOD_RESULTS = "activityPlanState.parseMethod.results";
+    var STORAGE_PARSE_METHOD_COMPLETED = "activityPlanState.parseMethod.completed";
+    var RUNMODE_PARSE_METHOD = "parseMethod";
+    var METHOD_LIBRARY_URL = "https://cenexeltest.clinspark.com/secure/crfdesign/studylibrary/list/method";
+    var PARSE_METHOD_CANCELED = false;
+    var PARSE_METHOD_COLLECTED_METHODS = [];
+    var PARSE_METHOD_COLLECTED_FORMS = [];
+
+    // Run Data Collection
+    const DATA_COLLECTION_SUBJECT_URL = "https://cenexeltest.clinspark.com/secure/datacollection/subject";
+    var COLLECT_ALL_CANCELLED = false;
+    var COLLECT_ALL_POPUP_REF = null;
+    var RUN_ALL_POPUP_REF = null;
+    var CLEAR_MAPPING_POPUP_REF = null;
+    var IMPORT_ELIG_POPUP_REF = null;
+    var IMPORT_COHORT_POPUP_REF = null;
+    var ADD_COHORT_POPUP_REF = null;
+    const STORAGE_RUN_ALL_POPUP = "activityPlanState.runAllPopup";
+    const STORAGE_RUN_ALL_STATUS = "activityPlanState.runAllStatus";
+    const STORAGE_CLEAR_MAPPING_POPUP = "activityPlanState.clearMappingPopup";
+    const STORAGE_IMPORT_ELIG_POPUP = "activityPlanState.importEligPopup";
+    const STORAGE_IMPORT_COHORT_POPUP = "activityPlanState.importCohortPopup";
+    const STORAGE_ADD_COHORT_POPUP = "activityPlanState.addCohortPopup";
+
+    // Run Subject Eligibility
+    var STORAGE_ELIG_FORM_EXCLUSION = "activityPlanState.elig.formExclusion";
+    var STORAGE_ELIG_FORM_PRIORITY = "activityPlanState.elig.formPriority";
+    var STORAGE_ELIG_FORM_PRIORITY_ONLY = "activityPlanState.elig.formPriorityOnly";
+    var STORAGE_ELIG_PLAN_PRIORITY = "activityPlanState.elig.planPriority";
+    var STORAGE_ELIG_IGNORE = "activityPlanState.elig.ignore";
+
+    const STORAGE_ELIG_LAST_PLAN = "activityPlanState.elig.lastPlan";
+    const STORAGE_ELIG_LAST_SA = "activityPlanState.elig.lastSA";
+    const STORAGE_ELIG_LAST_ITEMREF = "activityPlanState.elig.lastItemRef";
+
+    var DEFAULT_FORM_EXCLUSION = "check";
+    var DEFAULT_FORM_PRIORITY = "mh, bm, review, process, dm, rep, subs, med, elg_pi, vitals, ecg";
+
+    //==========================
+    // FIND FORM FEATURE
+    //==========================
+    // This section contains all functions related to finding forms.
+    // This feature automates pull any subject identifier found on page,
+    // request user for form keyword, and then search for form based on the keyword.
+    //==========================
+    
     function setPanelHidden(flag) {
         try {
             localStorage.setItem(STORAGE_PANEL_HIDDEN, flag ? "1" : "0");
@@ -1020,26 +1069,11 @@
         s = s.toUpperCase();
         return s;
     }
-
+    //==========================
     //==========================
     // Parse Method Functions
     //==========================
     //==========================
-    var FORM_LIST_URL = "https://cenexeltest.clinspark.com/secure/study/data/list";
-    var STORAGE_FIND_FORM_PENDING = "activityPlanState.findForm.pending";
-    var STORAGE_FIND_FORM_KEYWORD = "activityPlanState.findForm.keyword";
-    var STORAGE_FIND_FORM_SUBJECT = "activityPlanState.findForm.subject";
-    var STORAGE_FIND_FORM_STATUS_VALUES = "activityPlanState.findForm.statusValues";
-
-    var STORAGE_PARSE_METHOD_RUNNING = "activityPlanState.parseMethod.running";
-    var STORAGE_PARSE_METHOD_ITEM_NAME = "activityPlanState.parseMethod.itemName";
-    var STORAGE_PARSE_METHOD_RESULTS = "activityPlanState.parseMethod.results";
-    var STORAGE_PARSE_METHOD_COMPLETED = "activityPlanState.parseMethod.completed";
-    var RUNMODE_PARSE_METHOD = "parseMethod";
-    var METHOD_LIBRARY_URL = "https://cenexeltest.clinspark.com/secure/crfdesign/studylibrary/list/method";
-    var PARSE_METHOD_CANCELED = false;
-    var PARSE_METHOD_COLLECTED_METHODS = [];
-    var PARSE_METHOD_COLLECTED_FORMS = [];
 
     function ParseMethodFunctions() {}
 
@@ -1361,27 +1395,6 @@
     //==========================
     //==========================
 
-    const DATA_COLLECTION_SUBJECT_URL = "https://cenexeltest.clinspark.com/secure/datacollection/subject";
-    var COLLECT_ALL_CANCELLED = false;
-    var COLLECT_ALL_POPUP_REF = null;
-    var RUN_ALL_POPUP_REF = null;
-    var CLEAR_MAPPING_POPUP_REF = null;
-    var IMPORT_ELIG_POPUP_REF = null;
-    var IMPORT_COHORT_POPUP_REF = null;
-    var ADD_COHORT_POPUP_REF = null;
-    const STORAGE_RUN_ALL_POPUP = "activityPlanState.runAllPopup";
-    const STORAGE_RUN_ALL_STATUS = "activityPlanState.runAllStatus";
-    const STORAGE_CLEAR_MAPPING_POPUP = "activityPlanState.clearMappingPopup";
-    const STORAGE_IMPORT_ELIG_POPUP = "activityPlanState.importEligPopup";
-    const STORAGE_IMPORT_COHORT_POPUP = "activityPlanState.importCohortPopup";
-    const STORAGE_ADD_COHORT_POPUP = "activityPlanState.addCohortPopup";
-
-    // Clear all Collect All related data
-    function clearCollectAllData() {
-        COLLECT_ALL_CANCELLED = false;
-        COLLECT_ALL_POPUP_REF = null;
-        log("CollectAll: data cleared");
-    }
 
     // Recreate popups on page load if they should be active
     function recreatePopupsIfNeeded() {
@@ -2325,7 +2338,6 @@
     //==========================
 
     function ClearEligibilityFunctions() {}
-    const RUNMODE_CLEAR_MAPPING = "clearMapping";
 
     function startClearMapping() {
         log("ClearMapping: startClearMapping invoked");
@@ -2484,18 +2496,6 @@
     // adding new eligibility item that cannot be found in the table,
     // saving those new items and storing it so there is no duplicate.
     //==========================
-    var STORAGE_ELIG_FORM_EXCLUSION = "activityPlanState.elig.formExclusion";
-    var STORAGE_ELIG_FORM_PRIORITY = "activityPlanState.elig.formPriority";
-    var STORAGE_ELIG_FORM_PRIORITY_ONLY = "activityPlanState.elig.formPriorityOnly";
-    var STORAGE_ELIG_PLAN_PRIORITY = "activityPlanState.elig.planPriority";
-    var STORAGE_ELIG_IGNORE = "activityPlanState.elig.ignore";
-
-    const STORAGE_ELIG_LAST_PLAN = "activityPlanState.elig.lastPlan";
-    const STORAGE_ELIG_LAST_SA = "activityPlanState.elig.lastSA";
-    const STORAGE_ELIG_LAST_ITEMREF = "activityPlanState.elig.lastItemRef";
-
-    var DEFAULT_FORM_EXCLUSION = "check";
-    var DEFAULT_FORM_PRIORITY = "mh, bm, review, process, dm, rep, subs, med, elg_pi, vitals, ecg";
 
     function SubjectEligibilityFunctions() {}
 
@@ -10449,6 +10449,28 @@
     //==========================
 
     function SharedUtilityFunctions() {}
+
+    
+    function clearEligibilityWorkingState() {
+        try {
+            localStorage.removeItem(STORAGE_ELIG_IMPORTED);
+            log("ImportElig: cleared imported items");
+        } catch(e) {}
+
+        try {
+            localStorage.removeItem(STORAGE_ELIG_CHECKITEM_CACHE);
+            log("ImportElig: cleared checkItemCache");
+        } catch(e) {}
+
+        log("ImportElig: working state fully cleared");
+    }
+    
+    // Clear all Collect All related data
+    function clearCollectAllData() {
+        COLLECT_ALL_CANCELLED = false;
+        COLLECT_ALL_POPUP_REF = null;
+        log("CollectAll: data cleared");
+    }
 
     // Update Run All popup status
     function updateRunAllPopupStatus(statusText) {

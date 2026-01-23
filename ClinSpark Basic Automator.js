@@ -22,27 +22,118 @@
     var PANEL_HEADER_HEIGHT_PX = 48;
     var PANEL_HEADER_GAP_PX = 8;
     var PANEL_MAX_WIDTH_PX = 60
+    var STORAGE_KEY = "activityPlanState.run";
     var STORAGE_PENDING = "activityPlanState.pendingIds";
     var STORAGE_AFTER_REFRESH = "activityPlanState.afterRefresh";
     var STORAGE_EDIT_STUDY = "activityPlanState.editStudy";
     var STORAGE_RUN_MODE = "activityPlanState.runMode";
     var STORAGE_CONTINUE_EPOCH = "activityPlanState.continueEpoch";
+    var LIST_URL = "https://cenexeltest.clinspark.com/secure/crfdesign/activityplans/list";
+    var STUDY_SHOW_URL = "https://cenexeltest.clinspark.com/secure/administration/studies/show";
     var PANEL_ID = "activityPlanStatePanel";
     var LOG_ID = "activityPlanStateLog";
     var STORAGE_SELECTED_IDS = "activityPlanState.selectedVolunteerIds";
+    var STORAGE_IC_BARCODE = "activityPlanState.ic.barcode";
     var STORAGE_CONSENT_SCAN_INDEX = "activityPlanState.consent.scanIndex";
     var STORAGE_PAUSED = "activityPlanState.paused";
     var STORAGE_CHECK_ELIG_LOCK = "activityPlanState.checkEligLock";
     var btnRowRef = null;
     var PENDING_BUTTONS = [];
+    var STUDY_METADATA_URL = "https://cenexeltest.clinspark.com/secure/crfdesign/studylibrary/show/studymetadata";
     var STORAGE_BARCODE_SUBJECT_TEXT = "activityPlanState.barcode.subjectText";
     var STORAGE_BARCODE_SUBJECT_ID = "activityPlanState.barcode.subjectId";
     var STORAGE_BARCODE_RESULT = "activityPlanState.barcode.result";
     var STORAGE_PANEL_COLLAPSED = "activityPlanState.panel.collapsed";
+    var FORM_DELAY_MS = 800;
     var BARCODE_START_TS = 0;
+    var DELAY_V2_ITEM_MS = 100;
+    var DELAY_V2_GROUP_RESCAN_MS = 1000;
+    var RUN_FORM_V2_START_TS = 0;
+    var STORAGE_FORM_VALUE_MODE = "activityPlanState.formValueMode";
+    var STORAGE_IMPORT_DONE_MAP = "activityPlanState.import.doneMap";
+    var STORAGE_IMPORT_IN_PROGRESS = "activityPlanState.import.inprogress";
+    var STORAGE_NON_SCRN_EPOCH_INDEX = "activityPlanState.nonscrn.epochIndex";
+    var STORAGE_IMPORT_SUBJECT_IDS = "activityPlanState.import.subjectIds";
+
+    var STORAGE_NON_SCRN_SELECTED_EPOCH = "activityPlanState.nonscrn.selectedEpoch";
+    var STORAGE_IMPORT_COHORT_EDIT_DONE = "activityPlanState.import.cohortEditDone";
     var STORAGE_LOG_VISIBLE = "activityPlanState.log.visible";
+    var STORAGE_MANUAL_SELECT_INITIAL_REF_TIME = "activityPlanState.manualSelectInitialRefTime";
+    var STORAGE_RUN_LOCK_SAMPLE_PATHS = "activityPlanState.runLockSamplePaths";
+
     const STORAGE_PANEL_HIDDEN = "activityPlanState.panel.hidden";
     const PANEL_TOGGLE_KEY = "F2";
+    const ELIGIBILITY_LIST_URL = "https://cenexeltest.clinspark.com/secure/crfdesign/studylibrary/eligibility/list";
+    const STORAGE_ELIG_IMPORTED = "activityPlanState.eligibility.importedItems";
+    const RUNMODE_ELIG_IMPORT = "eligibilityImport";
+    const STORAGE_ELIG_CHECKITEM_CACHE = "activityPlanState.eligibility.checkItemCache";
+    const STORAGE_ELIG_IMPORT_PENDING_POPUP = "activityPlanState.eligibility.importPendingPopup";
+
+    // Run Find Form
+    var FORM_LIST_URL = "https://cenexeltest.clinspark.com/secure/study/data/list";
+    var FORM_POPUP_TITLE = "Find Form";
+    var FORM_POPUP_KEYWORD_LABEL = "Form Keyword";
+    var FORM_POPUP_SUBJECT_LABEL = "Subject Identifier";
+    var FORM_POPUP_OK_TEXT = "Continue";
+    var FORM_POPUP_CANCEL_TEXT = "Cancel";
+
+    var FORM_NO_MATCH_TITLE = "Find Form";
+    var FORM_NO_MATCH_MESSAGE = "No form is found.";
+
+    var BARCODE_BG_TAB = null;
+    const RUNMODE_CLEAR_MAPPING = "clearMapping";
+
+    var STORAGE_FIND_FORM_PENDING = "activityPlanState.findForm.pending";
+    var STORAGE_FIND_FORM_KEYWORD = "activityPlanState.findForm.keyword";
+    var STORAGE_FIND_FORM_SUBJECT = "activityPlanState.findForm.subject";
+    var STORAGE_FIND_FORM_STATUS_VALUES = "activityPlanState.findForm.statusValues";
+
+    var FORM_LIST_URL = "https://cenexeltest.clinspark.com/secure/study/data/list";
+    var STORAGE_FIND_FORM_PENDING = "activityPlanState.findForm.pending";
+    var STORAGE_FIND_FORM_KEYWORD = "activityPlanState.findForm.keyword";
+    var STORAGE_FIND_FORM_SUBJECT = "activityPlanState.findForm.subject";
+    var STORAGE_FIND_FORM_STATUS_VALUES = "activityPlanState.findForm.statusValues";
+
+    // Run Parse Method
+    var STORAGE_PARSE_METHOD_RUNNING = "activityPlanState.parseMethod.running";
+    var STORAGE_PARSE_METHOD_ITEM_NAME = "activityPlanState.parseMethod.itemName";
+    var STORAGE_PARSE_METHOD_RESULTS = "activityPlanState.parseMethod.results";
+    var STORAGE_PARSE_METHOD_COMPLETED = "activityPlanState.parseMethod.completed";
+    var RUNMODE_PARSE_METHOD = "parseMethod";
+    var METHOD_LIBRARY_URL = "https://cenexeltest.clinspark.com/secure/crfdesign/studylibrary/list/method";
+    var PARSE_METHOD_CANCELED = false;
+    var PARSE_METHOD_COLLECTED_METHODS = [];
+    var PARSE_METHOD_COLLECTED_FORMS = [];
+
+    // Run Data Collection
+    const DATA_COLLECTION_SUBJECT_URL = "https://cenexeltest.clinspark.com/secure/datacollection/subject";
+    var COLLECT_ALL_CANCELLED = false;
+    var COLLECT_ALL_POPUP_REF = null;
+    var RUN_ALL_POPUP_REF = null;
+    var CLEAR_MAPPING_POPUP_REF = null;
+    var IMPORT_ELIG_POPUP_REF = null;
+    var IMPORT_COHORT_POPUP_REF = null;
+    var ADD_COHORT_POPUP_REF = null;
+    const STORAGE_RUN_ALL_POPUP = "activityPlanState.runAllPopup";
+    const STORAGE_RUN_ALL_STATUS = "activityPlanState.runAllStatus";
+    const STORAGE_CLEAR_MAPPING_POPUP = "activityPlanState.clearMappingPopup";
+    const STORAGE_IMPORT_ELIG_POPUP = "activityPlanState.importEligPopup";
+    const STORAGE_IMPORT_COHORT_POPUP = "activityPlanState.importCohortPopup";
+    const STORAGE_ADD_COHORT_POPUP = "activityPlanState.addCohortPopup";
+
+    // Run Subject Eligibility
+    var STORAGE_ELIG_FORM_EXCLUSION = "activityPlanState.elig.formExclusion";
+    var STORAGE_ELIG_FORM_PRIORITY = "activityPlanState.elig.formPriority";
+    var STORAGE_ELIG_FORM_PRIORITY_ONLY = "activityPlanState.elig.formPriorityOnly";
+    var STORAGE_ELIG_PLAN_PRIORITY = "activityPlanState.elig.planPriority";
+    var STORAGE_ELIG_IGNORE = "activityPlanState.elig.ignore";
+
+    const STORAGE_ELIG_LAST_PLAN = "activityPlanState.elig.lastPlan";
+    const STORAGE_ELIG_LAST_SA = "activityPlanState.elig.lastSA";
+    const STORAGE_ELIG_LAST_ITEMREF = "activityPlanState.elig.lastItemRef";
+
+    var DEFAULT_FORM_EXCLUSION = "check";
+    var DEFAULT_FORM_PRIORITY = "mh, bm, review, process, dm, rep, subs, med, elg_pi, vitals, ecg";
 
     //==========================
     // RUN BARCODE FEATURE
@@ -382,6 +473,25 @@
     //==========================
 
     function SharedUtilityFunctions() {}
+
+    function clearCollectAllData() {
+        COLLECT_ALL_CANCELLED = false;
+        COLLECT_ALL_POPUP_REF = null;
+        log("CollectAll: data cleared");
+    }
+        function clearEligibilityWorkingState() {
+        try {
+            localStorage.removeItem(STORAGE_ELIG_IMPORTED);
+            log("ImportElig: cleared imported items");
+        } catch(e) {}
+
+        try {
+            localStorage.removeItem(STORAGE_ELIG_CHECKITEM_CACHE);
+            log("ImportElig: cleared checkItemCache");
+        } catch(e) {}
+
+        log("ImportElig: working state fully cleared");
+    }
 
     // Open a URL in a tab using GM API if available, otherwise window.open.
     function openInTab(url, active) {
@@ -1224,6 +1334,13 @@
     // These functions are used to create the panel UI and manage its state.
     //==========================
 
+
+    //==========================
+    // MAKE PANEL FUNCTIONS
+    //==========================
+    // This section contains functions used to create and manage the panel UI.
+    // These functions are used to create the panel UI and manage its state.
+    //==========================
     function makePanel() {
         var prior = document.getElementById(PANEL_ID);
         if (prior) {
@@ -1305,47 +1422,62 @@
         btnRow.style.gap = "8px";
         btnRowRef = btnRow;
         var runBarcodeBtn = document.createElement("button");
-        runBarcodeBtn.textContent = "8. Run Barcode";
-        runBarcodeBtn.style.background = "#9df";
-        runBarcodeBtn.style.color = "#000";
+        runBarcodeBtn.textContent = "Run Barcode";
+        runBarcodeBtn.style.background = "#5b43c7";
+        runBarcodeBtn.style.color = "#fff";
         runBarcodeBtn.style.border = "none";
         runBarcodeBtn.style.borderRadius = "6px";
         runBarcodeBtn.style.padding = "8px";
         runBarcodeBtn.style.cursor = "pointer";
-
+        runBarcodeBtn.style.fontWeight = "500";
+        runBarcodeBtn.style.transition = "background 0.2s";
+        runBarcodeBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
+        runBarcodeBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
         var pauseBtn = document.createElement("button");
         pauseBtn.textContent = isPaused() ? "Resume" : "Pause";
-        pauseBtn.style.background = "#ccc";
-        pauseBtn.style.color = "#000";
+        pauseBtn.style.background = "#6c757d";
+        pauseBtn.style.color = "#fff";
         pauseBtn.style.border = "none";
         pauseBtn.style.borderRadius = "6px";
         pauseBtn.style.padding = "8px";
         pauseBtn.style.cursor = "pointer";
+        pauseBtn.style.fontWeight = "500";
+        pauseBtn.style.transition = "background 0.2s";
+        pauseBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
+        pauseBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
 
         var clearLogsBtn = document.createElement("button");
         clearLogsBtn.textContent = "Clear Logs";
-        clearLogsBtn.style.background = "#555";
+        clearLogsBtn.style.background = "#6c757d";
         clearLogsBtn.style.color = "#fff";
         clearLogsBtn.style.border = "none";
         clearLogsBtn.style.borderRadius = "6px";
         clearLogsBtn.style.padding = "8px";
         clearLogsBtn.style.cursor = "pointer";
+        clearLogsBtn.style.fontWeight = "500";
+        clearLogsBtn.style.transition = "background 0.2s";
+        clearLogsBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
+        clearLogsBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
 
         var toggleLogsBtn = document.createElement("button");
         var logVisible = getLogVisible();
         toggleLogsBtn.textContent = logVisible ? "Hide Logs" : "Show Logs";
-        toggleLogsBtn.style.background = "#555";
+        toggleLogsBtn.style.background = "#6c757d";
         toggleLogsBtn.style.color = "#fff";
         toggleLogsBtn.style.border = "none";
         toggleLogsBtn.style.borderRadius = "6px";
         toggleLogsBtn.style.padding = "8px";
         toggleLogsBtn.style.cursor = "pointer";
+        toggleLogsBtn.style.fontWeight = "500";
+        toggleLogsBtn.style.transition = "background 0.2s";
+        toggleLogsBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
+        toggleLogsBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
 
         btnRow.appendChild(runBarcodeBtn);
         btnRow.appendChild(pauseBtn);
         btnRow.appendChild(clearLogsBtn);
         btnRow.appendChild(toggleLogsBtn);
-
+        
         bodyContainer.appendChild(btnRow);
         var status = document.createElement("div");
         status.style.marginTop = "10px";
@@ -1391,7 +1523,6 @@
                 }
             }
         } catch (e) {}
-
         panel.appendChild(bodyContainer);
         var resizeHandle = setupResizeHandle(panel, bodyContainer);
         panel.appendChild(resizeHandle);
@@ -1408,6 +1539,9 @@
                 status.textContent = "Paused";
                 log("Paused");
                 clearAllRunState();
+                COLLECT_ALL_CANCELLED = true;
+                clearCollectAllData();
+                clearEligibilityWorkingState();
             }
         });
 

@@ -14,6 +14,7 @@
 // @ts-check
 // ==/UserScript==
 
+
 (function () {
     var STORAGE_PANEL_WIDTH = "activityPlanState.panel.width";
     var STORAGE_PANEL_HEIGHT = "activityPlanState.panel.height";
@@ -44,17 +45,96 @@
     var STORAGE_BARCODE_SUBJECT_ID = "activityPlanState.barcode.subjectId";
     var STORAGE_BARCODE_RESULT = "activityPlanState.barcode.result";
     var STORAGE_PANEL_COLLAPSED = "activityPlanState.panel.collapsed";
+    var FORM_DELAY_MS = 800;
     var BARCODE_START_TS = 0;
+    var DELAY_V2_ITEM_MS = 100;
+    var DELAY_V2_GROUP_RESCAN_MS = 1000;
+    var RUN_FORM_V2_START_TS = 0;
+    var STORAGE_FORM_VALUE_MODE = "activityPlanState.formValueMode";
     var STORAGE_IMPORT_DONE_MAP = "activityPlanState.import.doneMap";
+    var STORAGE_IMPORT_IN_PROGRESS = "activityPlanState.import.inprogress";
     var STORAGE_NON_SCRN_EPOCH_INDEX = "activityPlanState.nonscrn.epochIndex";
     var STORAGE_IMPORT_SUBJECT_IDS = "activityPlanState.import.subjectIds";
+
     var STORAGE_NON_SCRN_SELECTED_EPOCH = "activityPlanState.nonscrn.selectedEpoch";
     var STORAGE_IMPORT_COHORT_EDIT_DONE = "activityPlanState.import.cohortEditDone";
     var STORAGE_LOG_VISIBLE = "activityPlanState.log.visible";
     var STORAGE_MANUAL_SELECT_INITIAL_REF_TIME = "activityPlanState.manualSelectInitialRefTime";
+    var STORAGE_RUN_LOCK_SAMPLE_PATHS = "activityPlanState.runLockSamplePaths";
+
     const STORAGE_PANEL_HIDDEN = "activityPlanState.panel.hidden";
     const PANEL_TOGGLE_KEY = "F2";
-    var STORAGE_RUN_LOCK_SAMPLE_PATHS = "activityPlanState.runLockSamplePaths";
+    const ELIGIBILITY_LIST_URL = "https://cenexeltest.clinspark.com/secure/crfdesign/studylibrary/eligibility/list";
+    const STORAGE_ELIG_IMPORTED = "activityPlanState.eligibility.importedItems";
+    const RUNMODE_ELIG_IMPORT = "eligibilityImport";
+    const STORAGE_ELIG_CHECKITEM_CACHE = "activityPlanState.eligibility.checkItemCache";
+    const STORAGE_ELIG_IMPORT_PENDING_POPUP = "activityPlanState.eligibility.importPendingPopup";
+
+    // Run Find Form
+    var FORM_LIST_URL = "https://cenexeltest.clinspark.com/secure/study/data/list";
+    var FORM_POPUP_TITLE = "Find Form";
+    var FORM_POPUP_KEYWORD_LABEL = "Form Keyword";
+    var FORM_POPUP_SUBJECT_LABEL = "Subject Identifier";
+    var FORM_POPUP_OK_TEXT = "Continue";
+    var FORM_POPUP_CANCEL_TEXT = "Cancel";
+
+    var FORM_NO_MATCH_TITLE = "Find Form";
+    var FORM_NO_MATCH_MESSAGE = "No form is found.";
+
+    var BARCODE_BG_TAB = null;
+    const RUNMODE_CLEAR_MAPPING = "clearMapping";
+
+    var STORAGE_FIND_FORM_PENDING = "activityPlanState.findForm.pending";
+    var STORAGE_FIND_FORM_KEYWORD = "activityPlanState.findForm.keyword";
+    var STORAGE_FIND_FORM_SUBJECT = "activityPlanState.findForm.subject";
+    var STORAGE_FIND_FORM_STATUS_VALUES = "activityPlanState.findForm.statusValues";
+
+    var FORM_LIST_URL = "https://cenexeltest.clinspark.com/secure/study/data/list";
+    var STORAGE_FIND_FORM_PENDING = "activityPlanState.findForm.pending";
+    var STORAGE_FIND_FORM_KEYWORD = "activityPlanState.findForm.keyword";
+    var STORAGE_FIND_FORM_SUBJECT = "activityPlanState.findForm.subject";
+    var STORAGE_FIND_FORM_STATUS_VALUES = "activityPlanState.findForm.statusValues";
+
+    // Run Parse Method
+    var STORAGE_PARSE_METHOD_RUNNING = "activityPlanState.parseMethod.running";
+    var STORAGE_PARSE_METHOD_ITEM_NAME = "activityPlanState.parseMethod.itemName";
+    var STORAGE_PARSE_METHOD_RESULTS = "activityPlanState.parseMethod.results";
+    var STORAGE_PARSE_METHOD_COMPLETED = "activityPlanState.parseMethod.completed";
+    var RUNMODE_PARSE_METHOD = "parseMethod";
+    var METHOD_LIBRARY_URL = "https://cenexeltest.clinspark.com/secure/crfdesign/studylibrary/list/method";
+    var PARSE_METHOD_CANCELED = false;
+    var PARSE_METHOD_COLLECTED_METHODS = [];
+    var PARSE_METHOD_COLLECTED_FORMS = [];
+
+    // Run Data Collection
+    const DATA_COLLECTION_SUBJECT_URL = "https://cenexeltest.clinspark.com/secure/datacollection/subject";
+    var COLLECT_ALL_CANCELLED = false;
+    var COLLECT_ALL_POPUP_REF = null;
+    var RUN_ALL_POPUP_REF = null;
+    var CLEAR_MAPPING_POPUP_REF = null;
+    var IMPORT_ELIG_POPUP_REF = null;
+    var IMPORT_COHORT_POPUP_REF = null;
+    var ADD_COHORT_POPUP_REF = null;
+    const STORAGE_RUN_ALL_POPUP = "activityPlanState.runAllPopup";
+    const STORAGE_RUN_ALL_STATUS = "activityPlanState.runAllStatus";
+    const STORAGE_CLEAR_MAPPING_POPUP = "activityPlanState.clearMappingPopup";
+    const STORAGE_IMPORT_ELIG_POPUP = "activityPlanState.importEligPopup";
+    const STORAGE_IMPORT_COHORT_POPUP = "activityPlanState.importCohortPopup";
+    const STORAGE_ADD_COHORT_POPUP = "activityPlanState.addCohortPopup";
+
+    // Run Subject Eligibility
+    var STORAGE_ELIG_FORM_EXCLUSION = "activityPlanState.elig.formExclusion";
+    var STORAGE_ELIG_FORM_PRIORITY = "activityPlanState.elig.formPriority";
+    var STORAGE_ELIG_FORM_PRIORITY_ONLY = "activityPlanState.elig.formPriorityOnly";
+    var STORAGE_ELIG_PLAN_PRIORITY = "activityPlanState.elig.planPriority";
+    var STORAGE_ELIG_IGNORE = "activityPlanState.elig.ignore";
+
+    const STORAGE_ELIG_LAST_PLAN = "activityPlanState.elig.lastPlan";
+    const STORAGE_ELIG_LAST_SA = "activityPlanState.elig.lastSA";
+    const STORAGE_ELIG_LAST_ITEMREF = "activityPlanState.elig.lastItemRef";
+
+    var DEFAULT_FORM_EXCLUSION = "check";
+    var DEFAULT_FORM_PRIORITY = "mh, bm, review, process, dm, rep, subs, med, elg_pi, vitals, ecg";
 
     //==========================
     // RUN SAMPLE PATHS FEATURE
@@ -130,6 +210,7 @@
         if (mode === "all") {
             await sleep(1000);
             log("processLockSamplePathsPage: continuing to Study Show for ALL mode");
+            updateRunAllPopupStatus("Running Update Study Status");
             location.href = STUDY_SHOW_URL + "?autoupdate=1";
         }
     }
@@ -143,17 +224,7 @@
             if (alertText.indexOf("The sample path has been updated") !== -1) {
                 log("processLockSamplePathDetailPage: success alert detected, closing tab");
                 await sleep(300);
-                try {
-                    window.close();
-                } catch (e) {
-                    log("Error closing window: " + String(e));
-                }
-                setTimeout(function() {
-                    try { window.close(); } catch (e2) {}
-                }, 500);
-                setTimeout(function() {
-                    try { window.close(); } catch (e3) {}
-                }, 2000);
+                closeTabWithFallback("Sample Path locked successfully.");
                 return;
             }
         }
@@ -171,15 +242,7 @@
                     if (text.indexOf("The sample path has been updated") !== -1) {
                         clearInterval(checkSuccess);
                         log("processLockSamplePathDetailPage: success alert detected, closing tab");
-                        setTimeout(function() {
-                            try { window.close(); } catch (e) {}
-                        }, 300);
-                        setTimeout(function() {
-                            try { window.close(); } catch (e) {}
-                        }, 800);
-                        setTimeout(function() {
-                            try { window.close(); } catch (e) {}
-                        }, 2300);
+                        closeTabWithFallback("Sample Path locked successfully.");
                     }
                 }
             }, 500);
@@ -198,15 +261,7 @@
                 if (text.indexOf("The sample path has been updated") !== -1) {
                     clearInterval(checkSuccessInterval);
                     log("processLockSamplePathDetailPage: success alert detected during processing, closing tab");
-                    setTimeout(function() {
-                        try { window.close(); } catch (e) {}
-                    }, 300);
-                    setTimeout(function() {
-                        try { window.close(); } catch (e) {}
-                    }, 800);
-                    setTimeout(function() {
-                        try { window.close(); } catch (e) {}
-                    }, 2300);
+                    closeTabWithFallback("Sample Path locked successfully.");
                 }
             }
         }, 500);
@@ -214,7 +269,7 @@
         var closeTimeout = setTimeout(function() {
             clearInterval(checkSuccessInterval);
             log("processLockSamplePathDetailPage: timeout, closing tab");
-            try { window.close(); } catch (e) {}
+            closeTabWithFallback("Sample Path processing completed.");
         }, 5000);
 
         var actionsOpened = await clickActionsDropdownIfNeeded();
@@ -225,11 +280,8 @@
             log("Actions dropdown not found");
             clearTimeout(closeTimeout);
             clearInterval(checkSuccessInterval);
-            await sleep(1000);
-            try { window.close(); } catch (e) {}
-            setTimeout(function() {
-                try { window.close(); } catch (e2) {}
-            }, 500);
+            await sleep(500);
+            closeTabWithFallback("Sample Path processing completed.");
             return;
         }
 
@@ -245,11 +297,8 @@
             log("Edit Path link missing");
             clearTimeout(closeTimeout);
             clearInterval(checkSuccessInterval);
-            await sleep(1000);
-            try { window.close(); } catch (e) {}
-            setTimeout(function() {
-                try { window.close(); } catch (e2) {}
-            }, 500);
+            await sleep(500);
+            closeTabWithFallback("Sample Path processing completed.");
             return;
         }
 
@@ -277,14 +326,14 @@
         if (!isAuto) {
             log("processLockSamplePathUpdatePage: not auto mode");
             setTimeout(function() {
-                try { window.close(); } catch (e) {}
+                closeTabWithFallback("Sample Path processing completed.");
             }, 5000);
             return;
         }
 
         var closeTimeout = setTimeout(function() {
             log("processLockSamplePathUpdatePage: timeout, closing tab");
-            try { window.close(); } catch (e) {}
+            closeTabWithFallback("Sample Path processing completed.");
         }, 5000);
 
         var lockBox = await waitForSelector('input#locked', 10000);
@@ -312,11 +361,8 @@
         } else {
             log("Lock checkbox not found");
             clearTimeout(closeTimeout);
-            await sleep(1000);
-            try { window.close(); } catch (e) {}
-            setTimeout(function() {
-                try { window.close(); } catch (e2) {}
-            }, 500);
+            await sleep(500);
+            closeTabWithFallback("Sample Path processing completed.");
             return;
         }
 
@@ -332,11 +378,8 @@
         } else {
             log("Reason textarea not found");
             clearTimeout(closeTimeout);
-            await sleep(1000);
-            try { window.close(); } catch (e) {}
-            setTimeout(function() {
-                try { window.close(); } catch (e2) {}
-            }, 500);
+            await sleep(500);
+            closeTabWithFallback("Sample Path processing completed.");
             return;
         }
 
@@ -364,17 +407,7 @@
                         log("processLockSamplePathUpdatePage: success alert detected, closing tab");
                         successDetected = true;
                         await sleep(300);
-                        try {
-                            window.close();
-                        } catch (e) {
-                            log("Error closing window: " + String(e));
-                        }
-                        setTimeout(function() {
-                            try { window.close(); } catch (e2) {}
-                        }, 500);
-                        setTimeout(function() {
-                            try { window.close(); } catch (e3) {}
-                        }, 2000);
+                        closeTabWithFallback("Sample Path locked successfully.");
                         return;
                     }
                 }
@@ -388,17 +421,7 @@
                             log("processLockSamplePathUpdatePage: success alert detected on show page, closing tab");
                             successDetected = true;
                             await sleep(300);
-                            try {
-                                window.close();
-                            } catch (e) {
-                                log("Error closing window: " + String(e));
-                            }
-                            setTimeout(function() {
-                                try { window.close(); } catch (e2) {}
-                            }, 500);
-                            setTimeout(function() {
-                                try { window.close(); } catch (e3) {}
-                            }, 2000);
+                            closeTabWithFallback("Sample Path locked successfully.");
                             return;
                         }
                     }
@@ -408,30 +431,13 @@
             if (!successDetected) {
                 log("processLockSamplePathUpdatePage: success alert not detected within timeout, closing tab anyway");
                 await sleep(300);
-                try {
-                    window.close();
-                } catch (e) {
-                    log("Error closing window: " + String(e));
-                }
-                setTimeout(function() {
-                    try { window.close(); } catch (e2) {}
-                }, 500);
-                setTimeout(function() {
-                    try { window.close(); } catch (e3) {}
-                }, 2000);
+                closeTabWithFallback("Sample Path processing completed.");
             }
         } else {
             log("Save button not found");
             clearTimeout(closeTimeout);
-            await sleep(1000);
-            try {
-                window.close();
-            } catch (e) {
-                log("Error closing window: " + String(e));
-            }
-            setTimeout(function() {
-                try { window.close(); } catch (e2) {}
-            }, 500);
+            await sleep(500);
+            closeTabWithFallback("Sample Path processing completed.");
             return;
         }
     }
@@ -516,7 +522,7 @@
         }
         return [];
     }
-    
+
     async function processEpochShowPageForImport() {
         if (isPaused()) {
             log("Paused; exiting processEpochShowPageForImport");
@@ -681,7 +687,7 @@
         var el = await waitForSelector('table#listTable', timeoutMs);
         return el;
     }
-    
+
     // Find cohort table row referencing a given volunteer id.
     function findCohortRowByVolunteerId(volId) {
         var table = document.querySelector('table#listTable');
@@ -731,7 +737,7 @@
         return btn;
     }
 
-    
+
     // Find 'Activate Plan' link in a row's dropdown menu.
     function getMenuLinkActivatePlan(row) {
         if (!row) {
@@ -761,7 +767,7 @@
         return null;
     }
 
-    
+
     // Find 'Activate Volunteer' link in a row's dropdown menu.
     function getMenuLinkActivateVolunteer(row) {
         if (!row) {
@@ -853,7 +859,7 @@
         log("parseCohortIdFromUpdateHref: parsed id=" + String(id));
         return id;
     }
-    
+
     function setCheckboxStateById(id, state) {
         log("setCheckboxStateById: id=" + String(id) + " targetState=" + String(!!state));
         var el = document.getElementById(id);
@@ -1524,13 +1530,14 @@
         if (!ok2) {
             await sleep(500);
         }
-        if (getRunMode() === "all") {
-            setRunMode("consent");
-            await sleep(3000);
-            location.href = STUDY_SHOW_URL + "?autoconsent=1";
-            log("Continuing ALL to consent after pause");
-            return;
-        }
+            if (getRunMode() === "all") {
+                setRunMode("consent");
+                updateRunAllPopupStatus("Running Run ICF Barcode");
+                await sleep(3000);
+                location.href = STUDY_SHOW_URL + "?autoconsent=1";
+                log("Continuing ALL to consent after pause");
+                return;
+            }
         clearContinueEpoch();
         clearRunMode();
         setCohortGuard("done");
@@ -2454,8 +2461,8 @@
             btn.style.width = "100%";
             btn.style.padding = "10px";
             btn.style.cursor = "pointer";
-            btn.style.background = "#2d7";
-            btn.style.color = "#000";
+            btn.style.background = "#4a90e2";
+            btn.style.color = "#fff";
             btn.style.border = "none";
             btn.style.borderRadius = "6px";
             btn.style.fontSize = "14px";
@@ -2463,10 +2470,10 @@
             btn.style.transition = "background 0.2s";
 
             btn.addEventListener("mouseenter", function() {
-                btn.style.background = "#3e8";
+                btn.style.background = "#357abd";
             });
             btn.addEventListener("mouseleave", function() {
-                btn.style.background = "#2d7";
+                btn.style.background = "#4a90e2";
             });
 
             btn.addEventListener("click", async function () {
@@ -2818,7 +2825,18 @@
             return;
         }
         clearConsentScanIndex();
+        var wasAllMode = getRunMode() === "consent" && localStorage.getItem(STORAGE_RUN_ALL_POPUP) === "1";
         clearRunMode();
+        // If this was the final step of Run All, close the popup
+        if (wasAllMode) {
+            try {
+                localStorage.removeItem(STORAGE_RUN_ALL_POPUP);
+                if (RUN_ALL_POPUP_REF && RUN_ALL_POPUP_REF.close) {
+                    RUN_ALL_POPUP_REF.close();
+                }
+                RUN_ALL_POPUP_REF = null;
+            } catch (e) {}
+        }
         log("Consent collected and run state cleared");
     }
     // Detect whether consent is present on a subject show page.
@@ -2932,7 +2950,7 @@
         }
         return String(raw);
     }
-    
+
     // Return the subjects-list tbody element or fallback table tbody.
     function getSubjectsListTbody() {
         var tbody = document.querySelector('tbody#subjectTableBody');
@@ -3068,7 +3086,7 @@
         return "";
     }
 
-    
+
     //==========================
     // RUN ADD COHORT SUBJECTS FEATURE
     //==========================
@@ -3908,8 +3926,8 @@
             btn.style.width = "100%";
             btn.style.padding = "10px";
             btn.style.cursor = "pointer";
-            btn.style.background = "#2d7";
-            btn.style.color = "#000";
+            btn.style.background = "#4a90e2";
+            btn.style.color = "#fff";
             btn.style.border = "none";
             btn.style.borderRadius = "6px";
             btn.style.fontSize = "14px";
@@ -3917,10 +3935,10 @@
             btn.style.transition = "background 0.2s";
 
             btn.addEventListener("mouseenter", function() {
-                btn.style.background = "#3e8";
+                btn.style.background = "#357abd";
             });
             btn.addEventListener("mouseleave", function() {
-                btn.style.background = "#2d7";
+                btn.style.background = "#4a90e2";
             });
 
             btn.addEventListener("click", async function () {
@@ -3943,6 +3961,7 @@
 
                 log("Selected epoch; starting Add Cohort Subjects automation");
                 setRunMode("epochAddCohort");
+                updateRunAllPopupStatus("Running Add Cohort Subjects");
                 location.href = location.origin + href + "?autoepochaddcohort=1";
             });
 
@@ -4170,6 +4189,10 @@
         if (href.length === 0) {
             return;
         }
+        var mode = getRunMode();
+        if (mode === "all") {
+            updateRunAllPopupStatus("Running Add Cohort Subjects");
+        }
         location.href = location.origin + href + "?autoepoch=1";
         log("Routing to epoch show");
     }
@@ -4366,7 +4389,27 @@
         }
         return null;
     }
-    
+
+    // Update Run All popup status
+    function updateRunAllPopupStatus(statusText) {
+        // Store status in localStorage for persistence
+        try {
+            localStorage.setItem(STORAGE_RUN_ALL_STATUS, statusText);
+        } catch (e) {}
+
+        if (!RUN_ALL_POPUP_REF) {
+            return;
+        }
+        try {
+            var statusDiv = RUN_ALL_POPUP_REF.element.querySelector("#runAllStatus");
+            if (statusDiv) {
+                statusDiv.textContent = statusText;
+            }
+        } catch (e) {
+            log("Error updating Run All popup status: " + e);
+        }
+    }
+
     // Store pending autostate ids list.
     function setPendingIds(ids) {
         var payload = JSON.stringify(ids);
@@ -4416,6 +4459,7 @@
                     localStorage.setItem(STORAGE_RUN_LOCK_SAMPLE_PATHS, "1");
                 } catch (e) {}
                 log("Go Lock Sample Paths after Activity Plans");
+                updateRunAllPopupStatus("Running Lock Sample Paths");
                 location.href = "https://cenexeltest.clinspark.com/secure/samples/configure/paths";
                 return;
             }
@@ -4446,6 +4490,7 @@
             monitorCompletionThenAdvance();
         }
     }
+
 
     //==========================
     // RUN BARCODE FEATURE
@@ -4774,7 +4819,6 @@
     }
 
 
-
     //==========================
     // SHARED UTILITY FUNCTIONS
     //==========================
@@ -4785,8 +4829,338 @@
     //==========================
 
     function SharedUtilityFunctions() {}
-
     
+    // Recreate popups on page load if they should be active
+    function recreatePopupsIfNeeded() {
+        try {
+            var runMode = getRunMode();
+
+            // Recreate Run All popup
+            if (runMode === "all") {
+                var runAllPopupActive = localStorage.getItem(STORAGE_RUN_ALL_POPUP);
+                if (runAllPopupActive === "1" && (!RUN_ALL_POPUP_REF || !document.body.contains(RUN_ALL_POPUP_REF.element))) {
+                    var popupContainer = document.createElement("div");
+                    popupContainer.style.display = "flex";
+                    popupContainer.style.flexDirection = "column";
+                    popupContainer.style.gap = "16px";
+                    popupContainer.style.padding = "8px";
+
+                    // Restore status from localStorage
+                    var savedStatus = "Running Lock Activity Plans";
+                    try {
+                        var storedStatus = localStorage.getItem(STORAGE_RUN_ALL_STATUS);
+                        if (storedStatus && storedStatus.length > 0) {
+                            savedStatus = storedStatus;
+                        }
+                    } catch (e) {}
+
+                    var statusDiv = document.createElement("div");
+                    statusDiv.id = "runAllStatus";
+                    statusDiv.style.textAlign = "center";
+                    statusDiv.style.fontSize = "18px";
+                    statusDiv.style.color = "#fff";
+                    statusDiv.style.fontWeight = "500";
+                    statusDiv.textContent = savedStatus;
+
+                    var loadingAnimation = document.createElement("div");
+                    loadingAnimation.id = "runAllLoading";
+                    loadingAnimation.style.textAlign = "center";
+                    loadingAnimation.style.fontSize = "14px";
+                    loadingAnimation.style.color = "#9df";
+                    loadingAnimation.textContent = "Running.";
+
+                    popupContainer.appendChild(statusDiv);
+                    popupContainer.appendChild(loadingAnimation);
+
+                    RUN_ALL_POPUP_REF = createPopup({
+                        title: "Run Button (1-5) Progress",
+                        content: popupContainer,
+                        width: "400px",
+                        height: "auto",
+                        onClose: function() {
+                            log("Run All: cancelled by user (close button)");
+                            clearAllRunState();
+                            clearCohortGuard();
+                            try {
+                                localStorage.removeItem(STORAGE_RUN_MODE);
+                                localStorage.removeItem(STORAGE_KEY);
+                                localStorage.removeItem(STORAGE_CONTINUE_EPOCH);
+                                localStorage.removeItem(STORAGE_RUN_ALL_POPUP);
+                                localStorage.removeItem(STORAGE_RUN_ALL_STATUS);
+                            } catch (e) {}
+                            RUN_ALL_POPUP_REF = null;
+                        }
+                    });
+
+                    var dots = 1;
+                    var loadingInterval = setInterval(function() {
+                        if (!RUN_ALL_POPUP_REF || !document.body.contains(RUN_ALL_POPUP_REF.element)) {
+                            clearInterval(loadingInterval);
+                            return;
+                        }
+                        dots = dots + 1;
+                        if (dots > 3) {
+                            dots = 1;
+                        }
+                        var text = "Running";
+                        var i = 0;
+                        while (i < dots) {
+                            text = text + ".";
+                            i = i + 1;
+                        }
+                        if (loadingAnimation) {
+                            loadingAnimation.textContent = text;
+                        }
+                    }, 500);
+                }
+            }
+
+            // Recreate Clear Mapping popup
+            if (runMode === RUNMODE_CLEAR_MAPPING) {
+                var clearMappingPopupActive = localStorage.getItem(STORAGE_CLEAR_MAPPING_POPUP);
+                if (clearMappingPopupActive === "1" && (!CLEAR_MAPPING_POPUP_REF || !document.body.contains(CLEAR_MAPPING_POPUP_REF.element))) {
+                    var popupContainer = document.createElement("div");
+                    popupContainer.style.display = "flex";
+                    popupContainer.style.flexDirection = "column";
+                    popupContainer.style.gap = "16px";
+                    popupContainer.style.padding = "8px";
+
+                    var statusDiv = document.createElement("div");
+                    statusDiv.style.textAlign = "center";
+                    statusDiv.style.fontSize = "18px";
+                    statusDiv.style.color = "#fff";
+                    statusDiv.style.fontWeight = "500";
+                    statusDiv.textContent = "Running Clear Mapping";
+
+                    var loadingAnimation = document.createElement("div");
+                    loadingAnimation.id = "clearMappingLoading";
+                    loadingAnimation.style.textAlign = "center";
+                    loadingAnimation.style.fontSize = "14px";
+                    loadingAnimation.style.color = "#9df";
+                    loadingAnimation.textContent = "Running.";
+
+                    popupContainer.appendChild(statusDiv);
+                    popupContainer.appendChild(loadingAnimation);
+
+                    CLEAR_MAPPING_POPUP_REF = createPopup({
+                        title: "Clear Mapping",
+                        content: popupContainer,
+                        width: "350px",
+                        height: "auto",
+                        onClose: function() {
+                            log("ClearMapping: cancelled by user (close button)");
+                            try {
+                                localStorage.removeItem(STORAGE_RUN_MODE);
+                                localStorage.removeItem(STORAGE_CLEAR_MAPPING_POPUP);
+                            } catch (e) {}
+                            CLEAR_MAPPING_POPUP_REF = null;
+                        }
+                    });
+
+                    var dots = 1;
+                    var loadingInterval = setInterval(function() {
+                        if (!CLEAR_MAPPING_POPUP_REF || !document.body.contains(CLEAR_MAPPING_POPUP_REF.element)) {
+                            clearInterval(loadingInterval);
+                            return;
+                        }
+                        dots = dots + 1;
+                        if (dots > 3) {
+                            dots = 1;
+                        }
+                        var text = "Running";
+                        var i = 0;
+                        while (i < dots) {
+                            text = text + ".";
+                            i = i + 1;
+                        }
+                        if (loadingAnimation) {
+                            loadingAnimation.textContent = text;
+                        }
+                    }, 500);
+                }
+            }
+
+            // Recreate Import Cohort Subject popup
+            if (runMode === "nonscrn" || runMode === "epochImport") {
+                var importCohortPopupActive = localStorage.getItem(STORAGE_IMPORT_COHORT_POPUP);
+                if (importCohortPopupActive === "1" && (!IMPORT_COHORT_POPUP_REF || !document.body.contains(IMPORT_COHORT_POPUP_REF.element))) {
+                    var popupContainer = document.createElement("div");
+                    popupContainer.style.display = "flex";
+                    popupContainer.style.flexDirection = "column";
+                    popupContainer.style.gap = "16px";
+                    popupContainer.style.padding = "8px";
+
+                    var statusDiv = document.createElement("div");
+                    statusDiv.id = "importCohortStatus";
+                    statusDiv.style.textAlign = "center";
+                    statusDiv.style.fontSize = "18px";
+                    statusDiv.style.color = "#fff";
+                    statusDiv.style.fontWeight = "500";
+                    statusDiv.textContent = "Running Import Cohort Subject";
+
+                    var loadingAnimation = document.createElement("div");
+                    loadingAnimation.id = "importCohortLoading";
+                    loadingAnimation.style.textAlign = "center";
+                    loadingAnimation.style.fontSize = "14px";
+                    loadingAnimation.style.color = "#9df";
+                    loadingAnimation.textContent = "Running.";
+
+                    popupContainer.appendChild(statusDiv);
+                    popupContainer.appendChild(loadingAnimation);
+
+                    IMPORT_COHORT_POPUP_REF = createPopup({
+                        title: "Import Cohort Subject",
+                        content: popupContainer,
+                        width: "400px",
+                        height: "auto",
+                        onClose: function() {
+                            log("Import Cohort: cancelled by user (close button)");
+                            clearAllRunState();
+                            clearCohortGuard();
+                            try {
+                                localStorage.removeItem(STORAGE_RUN_MODE);
+                                localStorage.removeItem(STORAGE_IMPORT_COHORT_POPUP);
+                            } catch (e) {}
+                            IMPORT_COHORT_POPUP_REF = null;
+                        }
+                    });
+
+                    var dots = 1;
+                    var loadingInterval = setInterval(function() {
+                        if (!IMPORT_COHORT_POPUP_REF || !document.body.contains(IMPORT_COHORT_POPUP_REF.element)) {
+                            clearInterval(loadingInterval);
+                            return;
+                        }
+                        dots = dots + 1;
+                        if (dots > 3) {
+                            dots = 1;
+                        }
+                        var text = "Running";
+                        var i = 0;
+                        while (i < dots) {
+                            text = text + ".";
+                            i = i + 1;
+                        }
+                        if (loadingAnimation) {
+                            loadingAnimation.textContent = text;
+                        }
+                    }, 500);
+                }
+            }
+
+            // Recreate Add Cohort Subjects popup
+            if (runMode === "epochAddCohort") {
+                var addCohortPopupActive = localStorage.getItem(STORAGE_ADD_COHORT_POPUP);
+                if (addCohortPopupActive === "1" && (!ADD_COHORT_POPUP_REF || !document.body.contains(ADD_COHORT_POPUP_REF.element))) {
+                    var popupContainer = document.createElement("div");
+                    popupContainer.style.display = "flex";
+                    popupContainer.style.flexDirection = "column";
+                    popupContainer.style.gap = "16px";
+                    popupContainer.style.padding = "8px";
+
+                    var statusDiv = document.createElement("div");
+                    statusDiv.id = "addCohortStatus";
+                    statusDiv.style.textAlign = "center";
+                    statusDiv.style.fontSize = "18px";
+                    statusDiv.style.color = "#fff";
+                    statusDiv.style.fontWeight = "500";
+                    statusDiv.textContent = "Running Add Cohort Subjects";
+
+                    var loadingAnimation = document.createElement("div");
+                    loadingAnimation.id = "addCohortLoading";
+                    loadingAnimation.style.textAlign = "center";
+                    loadingAnimation.style.fontSize = "14px";
+                    loadingAnimation.style.color = "#9df";
+                    loadingAnimation.textContent = "Running.";
+
+                    popupContainer.appendChild(statusDiv);
+                    popupContainer.appendChild(loadingAnimation);
+
+                    ADD_COHORT_POPUP_REF = createPopup({
+                        title: "Add Cohort Subjects",
+                        content: popupContainer,
+                        width: "400px",
+                        height: "auto",
+                        onClose: function() {
+                            log("Add Cohort: cancelled by user (close button)");
+                            clearAllRunState();
+                            clearCohortGuard();
+                            try {
+                                localStorage.removeItem(STORAGE_RUN_MODE);
+                                localStorage.removeItem(STORAGE_ADD_COHORT_POPUP);
+                            } catch (e) {}
+                            ADD_COHORT_POPUP_REF = null;
+                        }
+                    });
+
+                    var dots = 1;
+                    var loadingInterval = setInterval(function() {
+                        if (!ADD_COHORT_POPUP_REF || !document.body.contains(ADD_COHORT_POPUP_REF.element)) {
+                            clearInterval(loadingInterval);
+                            return;
+                        }
+                        dots = dots + 1;
+                        if (dots > 3) {
+                            dots = 1;
+                        }
+                        var text = "Running";
+                        var i = 0;
+                        while (i < dots) {
+                            text = text + ".";
+                            i = i + 1;
+                        }
+                        if (loadingAnimation) {
+                            loadingAnimation.textContent = text;
+                        }
+                    }, 500);
+                }
+            }
+        } catch (e) {
+            log("Error recreating popups: " + e);
+        }
+    }
+
+    function clearEligibilityWorkingState() {
+        try {
+            localStorage.removeItem(STORAGE_ELIG_IMPORTED);
+            log("ImportElig: cleared imported items");
+        } catch(e) {}
+
+        try {
+            localStorage.removeItem(STORAGE_ELIG_CHECKITEM_CACHE);
+            log("ImportElig: cleared checkItemCache");
+        } catch(e) {}
+
+        log("ImportElig: working state fully cleared");
+    }
+
+    // Clear all Collect All related data
+    function clearCollectAllData() {
+        COLLECT_ALL_CANCELLED = false;
+        COLLECT_ALL_POPUP_REF = null;
+        log("CollectAll: data cleared");
+    }
+
+    // Update Run All popup status
+    function updateRunAllPopupStatus(statusText) {
+        // Store status in localStorage for persistence
+        try {
+            localStorage.setItem(STORAGE_RUN_ALL_STATUS, statusText);
+        } catch (e) {}
+
+        if (!RUN_ALL_POPUP_REF) {
+            return;
+        }
+        try {
+            var statusDiv = RUN_ALL_POPUP_REF.element.querySelector("#runAllStatus");
+            if (statusDiv) {
+                statusDiv.textContent = statusText;
+            }
+        } catch (e) {
+            log("Error updating Run All popup status: " + e);
+        }
+    }
+
     // Find and navigate to eligibility locking form when required.
     async function processStudyMetadataPageForEligibilityLock() {
         if (isPaused()) {
@@ -4861,7 +5235,7 @@
         log("Routing to Eligibility form for locking");
         location.href = url;
     }
-    
+
     // Normalize (lowercase, remove punctuation/spaces) a text string used for label matching.
     function normalizeText(t) {
         if (typeof t !== "string") {
@@ -4904,7 +5278,7 @@
         }
         return false;
     }
-    
+
     // Wait for and click a Bootbox confirmation OK button.
     async function clickBootboxOk(timeoutMs) {
         var okBtn = await waitForSelector('button[data-bb-handler="confirm"].btn.btn-primary', timeoutMs);
@@ -5000,7 +5374,7 @@
         log("Actions dropdown not found");
         return false;
     }
-    
+
     // Locate and click the edit-state link for activity plans, opening its modal.
     async function findAndOpenEditStateModal() {
         var link = document.querySelector('a[href^="/secure/crfdesign/activityplans/updatestate/"]');
@@ -5108,17 +5482,7 @@
         }
         clearTimeout(closeTimeout);
         await sleep(300);
-        try {
-            window.close();
-        } catch (e) {
-            log("Error closing window: " + String(e));
-        }
-        setTimeout(function() {
-            try { window.close(); } catch (e2) {}
-        }, 500);
-        setTimeout(function() {
-            try { window.close(); } catch (e3) {}
-        }, 2000);
+        closeTabWithFallback("Activity Plan updated successfully.");
     }
 
     // Read current run mode from storage.
@@ -5153,6 +5517,75 @@
         }
         window.open(url, "_blank");
         return null;
+    }
+
+    // Reliably close the current tab with fallback UI if window.close() fails.
+    function closeTabWithFallback(message) {
+        var msg = message || "Task completed. You may close this tab.";
+        log("closeTabWithFallback: attempting to close tab");
+
+        // Try to close the window
+        try {
+            window.close();
+        } catch (e) {
+            log("closeTabWithFallback: window.close() failed: " + String(e));
+        }
+
+        // Check if window is still open after a short delay
+        setTimeout(function() {
+            // If we're still here, the window didn't close - show fallback UI
+            if (!window.closed) {
+                log("closeTabWithFallback: window still open, showing fallback UI");
+                showCloseTabFallbackUI(msg);
+            }
+        }, 500);
+
+        // Additional close attempts
+        setTimeout(function() {
+            try { window.close(); } catch (e) {}
+        }, 1000);
+        setTimeout(function() {
+            try { window.close(); } catch (e) {}
+        }, 2000);
+    }
+
+    // Show a fallback UI when window.close() fails
+    function showCloseTabFallbackUI(message) {
+        // Check if fallback UI already exists
+        if (document.getElementById("closeTabFallbackUI")) {
+            return;
+        }
+
+        var overlay = document.createElement("div");
+        overlay.id = "closeTabFallbackUI";
+        overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:999999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;";
+
+        var msgDiv = document.createElement("div");
+        msgDiv.style.cssText = "color:#fff;font-size:24px;font-weight:600;text-align:center;padding:20px;";
+        msgDiv.textContent = message;
+
+        var subMsg = document.createElement("div");
+        subMsg.style.cssText = "color:#9df;font-size:16px;text-align:center;";
+        subMsg.textContent = "Click the button below or press Ctrl+W to close this tab.";
+
+        var closeBtn = document.createElement("button");
+        closeBtn.textContent = "Close This Tab";
+        closeBtn.style.cssText = "background:#28a745;color:#fff;border:none;border-radius:8px;padding:15px 40px;font-size:18px;font-weight:600;cursor:pointer;";
+        closeBtn.addEventListener("click", function() {
+            try { window.close(); } catch (e) {}
+            // If still here, try focus trick
+            setTimeout(function() {
+                try {
+                    window.open("", "_self");
+                    window.close();
+                } catch (e2) {}
+            }, 100);
+        });
+
+        overlay.appendChild(msgDiv);
+        overlay.appendChild(subMsg);
+        overlay.appendChild(closeBtn);
+        document.body.appendChild(overlay);
     }
 
     // Promise-based sleep helper.
@@ -5361,8 +5794,52 @@
     // Clear run mode.
     function clearRunMode() {
         try {
+            var runMode = getRunMode();
             localStorage.removeItem(STORAGE_RUN_MODE);
             log("RunMode cleared");
+            // Clear popup flags
+            if (runMode === "all") {
+                localStorage.removeItem(STORAGE_RUN_ALL_POPUP);
+                localStorage.removeItem(STORAGE_RUN_ALL_STATUS);
+                if (RUN_ALL_POPUP_REF && RUN_ALL_POPUP_REF.close) {
+                    try {
+                        RUN_ALL_POPUP_REF.close();
+                    } catch (e2) {}
+                }
+                RUN_ALL_POPUP_REF = null;
+            } else if (runMode === RUNMODE_CLEAR_MAPPING) {
+                localStorage.removeItem(STORAGE_CLEAR_MAPPING_POPUP);
+                if (CLEAR_MAPPING_POPUP_REF && CLEAR_MAPPING_POPUP_REF.close) {
+                    try {
+                        CLEAR_MAPPING_POPUP_REF.close();
+                    } catch (e3) {}
+                }
+                CLEAR_MAPPING_POPUP_REF = null;
+            } else if (runMode === RUNMODE_ELIG_IMPORT) {
+                localStorage.removeItem(STORAGE_IMPORT_ELIG_POPUP);
+                if (IMPORT_ELIG_POPUP_REF && IMPORT_ELIG_POPUP_REF.close) {
+                    try {
+                        IMPORT_ELIG_POPUP_REF.close();
+                    } catch (e4) {}
+                }
+                IMPORT_ELIG_POPUP_REF = null;
+            } else if (runMode === "nonscrn" || runMode === "epochImport") {
+                localStorage.removeItem(STORAGE_IMPORT_COHORT_POPUP);
+                if (IMPORT_COHORT_POPUP_REF && IMPORT_COHORT_POPUP_REF.close) {
+                    try {
+                        IMPORT_COHORT_POPUP_REF.close();
+                    } catch (e5) {}
+                }
+                IMPORT_COHORT_POPUP_REF = null;
+            } else if (runMode === "epochAddCohort") {
+                localStorage.removeItem(STORAGE_ADD_COHORT_POPUP);
+                if (ADD_COHORT_POPUP_REF && ADD_COHORT_POPUP_REF.close) {
+                    try {
+                        ADD_COHORT_POPUP_REF.close();
+                    } catch (e6) {}
+                }
+                ADD_COHORT_POPUP_REF = null;
+            }
         } catch (e) {}
     }
 
@@ -5416,6 +5893,7 @@
     }
     // Clear all run state from storage.
     function clearAllRunState() {
+        var runMode = getRunMode();
         clearRunMode();
         clearContinueEpoch();
         clearCohortGuard();
@@ -5429,6 +5907,15 @@
             localStorage.removeItem(STORAGE_CHECK_ELIG_LOCK);
             localStorage.removeItem("activityPlanState.cohortAdd.editDoneMap");
             log("Cleared cohortAdd.editDoneMap");
+            // Also clear popup flags
+            if (runMode === "all") {
+                localStorage.removeItem(STORAGE_RUN_ALL_POPUP);
+                localStorage.removeItem(STORAGE_RUN_ALL_STATUS);
+            } else if (runMode === RUNMODE_CLEAR_MAPPING) {
+                localStorage.removeItem(STORAGE_CLEAR_MAPPING_POPUP);
+            } else if (runMode === RUNMODE_ELIG_IMPORT) {
+                localStorage.removeItem(STORAGE_IMPORT_ELIG_POPUP);
+            }
         } catch (e) {}
     }
 
@@ -5452,7 +5939,7 @@
         } catch (e) {}
     }
 
-    
+
     // Detect activity plans list page.
     function isListPage() {
         var path = location.pathname;
@@ -5542,16 +6029,6 @@
         var path = location.pathname;
         var expected = "/secure/crfdesign/studylibrary/show/studymetadata";
         if (path === expected) {
-            return true;
-        }
-        return false;
-    }
-
-    // Detect if current path is a Study Library form-show page.
-    function isStudyLibraryFormShowPage() {
-        var path = location.pathname;
-        var ok = path.indexOf("/secure/crfdesign/studylibrary/show/form/") !== -1;
-        if (ok) {
             return true;
         }
         return false;
@@ -5658,6 +6135,8 @@
 
 
     // Create a draggable, closeable popup styled like the panel
+
+    // Create a draggable, closeable popup styled like the panel
     function createPopup(options) {
         options = options || {};
         var title = options.title || "Popup";
@@ -5743,18 +6222,24 @@
             if (onClose) {
                 try { onClose(); } catch (e2) { log("Popup onClose error: " + e2); }
             }
+            document.removeEventListener("keydown", escapeHandler);
             popup.remove();
         });
 
         headerBar.appendChild(closeBtn);
         popup.appendChild(headerBar);
 
-        document.addEventListener("keydown", function(e) {
-            if (e.key === "Escape") {
+        var escapeHandler = function(e) {
+            if (e.key === "Escape" && document.body.contains(popup)) {
                 try { clearAllRunState(); } catch(e2){}
+                if (onClose) {
+                    try { onClose(); } catch (e3) { log("Popup onClose error (Escape): " + e3); }
+                }
                 if (popup && popup.remove) popup.remove();
+                document.removeEventListener("keydown", escapeHandler);
             }
-        });
+        };
+        document.addEventListener("keydown", escapeHandler);
 
         var bodyContainer = document.createElement("div");
         bodyContainer.style.flex = "1";
@@ -5871,6 +6356,7 @@
                 }
                 document.removeEventListener("mousemove", mouseMoveHandler);
                 document.removeEventListener("mouseup", mouseUpHandler);
+                document.removeEventListener("keydown", escapeHandler);
                 popup.remove();
             },
             setContent: function(newContent) {
@@ -6086,7 +6572,6 @@
     // This section contains functions used to create and manage the panel UI.
     // These functions are used to create the panel UI and manage its state.
     //==========================
-
     function makePanel() {
         var prior = document.getElementById(PANEL_ID);
         if (prior) {
@@ -6168,160 +6653,145 @@
         btnRow.style.gap = "8px";
         btnRowRef = btnRow;
         var runPlansBtn = document.createElement("button");
-        runPlansBtn.textContent = "1. Run Activity Plans";
-        runPlansBtn.style.background = "#2d7";
-        runPlansBtn.style.color = "#000";
+        runPlansBtn.textContent = "Lock Activity Plans";
+        runPlansBtn.style.background = "#4a90e2";
+        runPlansBtn.style.color = "#fff";
         runPlansBtn.style.border = "none";
         runPlansBtn.style.borderRadius = "6px";
         runPlansBtn.style.padding = "8px";
         runPlansBtn.style.cursor = "pointer";
+        runPlansBtn.style.fontWeight = "500";
+        runPlansBtn.style.transition = "background 0.2s";
+        runPlansBtn.onmouseenter = function() { this.style.background = "#357abd"; };
+        runPlansBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+
         var runStudyBtn = document.createElement("button");
-        runStudyBtn.textContent = "3. Run Study Update";
-        runStudyBtn.style.background = "#4af";
-        runStudyBtn.style.color = "#000";
+        runStudyBtn.textContent = "Update Study Status";
+        runStudyBtn.style.background = "#4a90e2";
+        runStudyBtn.style.color = "#fff";
         runStudyBtn.style.border = "none";
         runStudyBtn.style.borderRadius = "6px";
         runStudyBtn.style.padding = "8px";
         runStudyBtn.style.cursor = "pointer";
-        var runEpochBtn = document.createElement("button");
-        runEpochBtn.textContent = "3. Run Add Cohort Subject";
-        runEpochBtn.style.background = "#fd4";
-        runEpochBtn.style.color = "#000";
-        runEpochBtn.style.border = "none";
-        runEpochBtn.style.borderRadius = "6px";
-        runEpochBtn.style.padding = "8px";
-        runEpochBtn.style.cursor = "pointer";
+        runStudyBtn.style.fontWeight = "500";
+        runStudyBtn.style.transition = "background 0.2s";
+        runStudyBtn.onmouseenter = function() { this.style.background = "#357abd"; };
+        runStudyBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
         var runAddCohortBtn = document.createElement("button");
-        runAddCohortBtn.textContent = "4. Run Add Cohort Subjects";
-        runAddCohortBtn.style.background = "#fd4";
-        runAddCohortBtn.style.color = "#000";
+        runAddCohortBtn.textContent = "Add Cohort Subjects";
+        runAddCohortBtn.style.background = "#4a90e2";
+        runAddCohortBtn.style.color = "#fff";
         runAddCohortBtn.style.border = "none";
         runAddCohortBtn.style.borderRadius = "6px";
         runAddCohortBtn.style.padding = "8px";
         runAddCohortBtn.style.cursor = "pointer";
+        runAddCohortBtn.style.fontWeight = "500";
+        runAddCohortBtn.style.transition = "background 0.2s";
+        runAddCohortBtn.onmouseenter = function() { this.style.background = "#357abd"; };
+        runAddCohortBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+
         var runConsentBtn = document.createElement("button");
-        runConsentBtn.textContent = "5. Run ICF Barcode";
-        runConsentBtn.style.background = "#a8f";
-        runConsentBtn.style.color = "#000";
+        runConsentBtn.textContent = "Run ICF Barcode";
+        runConsentBtn.style.background = "#4a90e2";
+        runConsentBtn.style.color = "#fff";
         runConsentBtn.style.border = "none";
         runConsentBtn.style.borderRadius = "6px";
         runConsentBtn.style.padding = "8px";
         runConsentBtn.style.cursor = "pointer";
+        runConsentBtn.style.fontWeight = "500";
+        runConsentBtn.style.transition = "background 0.2s";
+        runConsentBtn.onmouseenter = function() { this.style.background = "#357abd"; };
+        runConsentBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
         var runAllBtn = document.createElement("button");
-        runAllBtn.textContent = "6. Run Button (1-5)";
-        runAllBtn.style.background = "#fb6";
-        runAllBtn.style.color = "#000";
+        runAllBtn.textContent = "Run Button (1-5)";
+        runAllBtn.style.background = "#5cb85c";
+        runAllBtn.style.color = "#fff";
         runAllBtn.style.border = "none";
         runAllBtn.style.borderRadius = "6px";
         runAllBtn.style.padding = "8px";
         runAllBtn.style.cursor = "pointer";
+        runAllBtn.style.fontWeight = "600";
+        runAllBtn.style.transition = "background 0.2s";
+        runAllBtn.onmouseenter = function() { this.style.background = "#449d44"; };
+        runAllBtn.onmouseleave = function() { this.style.background = "#5cb85c"; };
+
         var runNonScrnBtn = document.createElement("button");
-        runNonScrnBtn.textContent = "7. Run Import Cohort Subject";
-        runNonScrnBtn.style.background = "#ff7";
-        runNonScrnBtn.style.color = "#000";
+        runNonScrnBtn.textContent = "Import Cohort Subject";
+        runNonScrnBtn.style.background = "#5b43c7";
+        runNonScrnBtn.style.color = "#fff";
         runNonScrnBtn.style.border = "none";
         runNonScrnBtn.style.borderRadius = "6px";
         runNonScrnBtn.style.padding = "8px";
         runNonScrnBtn.style.cursor = "pointer";
+        runNonScrnBtn.style.fontWeight = "500";
+        runNonScrnBtn.style.transition = "background 0.2s";
+        runNonScrnBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
+        runNonScrnBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
+
         var runBarcodeBtn = document.createElement("button");
-        runBarcodeBtn.textContent = "8. Run Barcode";
-        runBarcodeBtn.style.background = "#9df";
-        runBarcodeBtn.style.color = "#000";
+        runBarcodeBtn.textContent = "Run Barcode";
+        runBarcodeBtn.style.background = "#5b43c7";
+        runBarcodeBtn.style.color = "#fff";
         runBarcodeBtn.style.border = "none";
         runBarcodeBtn.style.borderRadius = "6px";
         runBarcodeBtn.style.padding = "8px";
         runBarcodeBtn.style.cursor = "pointer";
-        // var runFormOORBtn = document.createElement("button");
-        // runFormOORBtn.textContent = "9. Run Form (OOR) B";
-        // runFormOORBtn.style.background = "#f99";
-        // runFormOORBtn.style.color = "#000";
-        // runFormOORBtn.style.border = "none";
-        // runFormOORBtn.style.borderRadius = "6px";
-        // runFormOORBtn.style.padding = "8px";
-        // runFormOORBtn.style.cursor = "pointer";
-        // var runFormOORABtn = document.createElement("button");
-        // runFormOORABtn.textContent = "10. Run Form (OOR) A";
-        // runFormOORABtn.style.background = "#f99";
-        // runFormOORABtn.style.color = "#000";
-        // runFormOORABtn.style.border = "none";
-        // runFormOORABtn.style.borderRadius = "6px";
-        // runFormOORABtn.style.padding = "8px";
-        // runFormOORABtn.style.cursor = "pointer";
-        // var runFormIRBtn = document.createElement("button");
-        // runFormIRBtn.textContent = "11. Run Form (IR)";
-        // runFormIRBtn.style.background = "#9f9";
-        // runFormIRBtn.style.color = "#000";
-        // runFormIRBtn.style.border = "none";
-        // runFormIRBtn.style.borderRadius = "6px";
-        // runFormIRBtn.style.padding = "8px";
-        // runFormIRBtn.style.cursor = "pointer";
+        runBarcodeBtn.style.fontWeight = "500";
+        runBarcodeBtn.style.transition = "background 0.2s";
+        runBarcodeBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
+        runBarcodeBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
+
         var pauseBtn = document.createElement("button");
         pauseBtn.textContent = isPaused() ? "Resume" : "Pause";
-        pauseBtn.style.background = "#ccc";
-        pauseBtn.style.color = "#000";
+        pauseBtn.style.background = "#6c757d";
+        pauseBtn.style.color = "#fff";
         pauseBtn.style.border = "none";
         pauseBtn.style.borderRadius = "6px";
         pauseBtn.style.padding = "8px";
         pauseBtn.style.cursor = "pointer";
+        pauseBtn.style.fontWeight = "500";
+        pauseBtn.style.transition = "background 0.2s";
+        pauseBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
+        pauseBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
 
         var clearLogsBtn = document.createElement("button");
         clearLogsBtn.textContent = "Clear Logs";
-        clearLogsBtn.style.background = "#555";
+        clearLogsBtn.style.background = "#6c757d";
         clearLogsBtn.style.color = "#fff";
         clearLogsBtn.style.border = "none";
         clearLogsBtn.style.borderRadius = "6px";
         clearLogsBtn.style.padding = "8px";
         clearLogsBtn.style.cursor = "pointer";
+        clearLogsBtn.style.fontWeight = "500";
+        clearLogsBtn.style.transition = "background 0.2s";
+        clearLogsBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
+        clearLogsBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
 
         var toggleLogsBtn = document.createElement("button");
         var logVisible = getLogVisible();
         toggleLogsBtn.textContent = logVisible ? "Hide Logs" : "Show Logs";
-        toggleLogsBtn.style.background = "#555";
+        toggleLogsBtn.style.background = "#6c757d";
         toggleLogsBtn.style.color = "#fff";
         toggleLogsBtn.style.border = "none";
         toggleLogsBtn.style.borderRadius = "6px";
         toggleLogsBtn.style.padding = "8px";
         toggleLogsBtn.style.cursor = "pointer";
-
-        var runLockSamplePathsBtn = document.createElement("button");
-        runLockSamplePathsBtn.textContent = "2. Run Sample Paths";
-        runLockSamplePathsBtn.style.background = "#f77";
-        runLockSamplePathsBtn.style.color = "#000";
-        runLockSamplePathsBtn.style.border = "none";
-        runLockSamplePathsBtn.style.borderRadius = "6px";
-        runLockSamplePathsBtn.style.padding = "8px";
-        runLockSamplePathsBtn.style.cursor = "pointer";
+        toggleLogsBtn.style.fontWeight = "500";
+        toggleLogsBtn.style.transition = "background 0.2s";
+        toggleLogsBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
+        toggleLogsBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
 
         btnRow.appendChild(runPlansBtn);
-        btnRow.appendChild(runLockSamplePathsBtn);
         btnRow.appendChild(runStudyBtn);
         btnRow.appendChild(runAddCohortBtn);
-        btnRow.appendChild(runEpochBtn);
         btnRow.appendChild(runConsentBtn);
         btnRow.appendChild(runAllBtn);
         btnRow.appendChild(runNonScrnBtn);
         btnRow.appendChild(runBarcodeBtn);
-        // btnRow.appendChild(runFormOORBtn);
-        // btnRow.appendChild(runFormOORABtn);
-        // btnRow.appendChild(runFormIRBtn);
         btnRow.appendChild(pauseBtn);
         btnRow.appendChild(clearLogsBtn);
         btnRow.appendChild(toggleLogsBtn);
-
-
-
-        runLockSamplePathsBtn.addEventListener("click", function () {
-            try {
-                localStorage.setItem(STORAGE_RUN_LOCK_SAMPLE_PATHS, "1");
-            } catch (e) { }
-
-            status.textContent = "Navigating to Sample Paths…";
-            log("Run Lock Sample Paths clicked");
-            location.href = "https://cenexeltest.clinspark.com/secure/samples/configure/paths";
-        });
-
-
         bodyContainer.appendChild(btnRow);
         var status = document.createElement("div");
         status.style.marginTop = "10px";
@@ -6355,6 +6825,75 @@
             status.textContent = "Preparing non-SCRN subject import...";
             log("Run Add non-SCRN Subject clicked");
             localStorage.setItem(STORAGE_RUN_MODE, "nonscrn");
+
+            // Create progress popup
+            var popupContainer = document.createElement("div");
+            popupContainer.style.display = "flex";
+            popupContainer.style.flexDirection = "column";
+            popupContainer.style.gap = "16px";
+            popupContainer.style.padding = "8px";
+
+            var statusDiv = document.createElement("div");
+            statusDiv.id = "importCohortStatus";
+            statusDiv.style.textAlign = "center";
+            statusDiv.style.fontSize = "18px";
+            statusDiv.style.color = "#fff";
+            statusDiv.style.fontWeight = "500";
+            statusDiv.textContent = "Running Import Cohort Subject";
+
+            var loadingAnimation = document.createElement("div");
+            loadingAnimation.id = "importCohortLoading";
+            loadingAnimation.style.textAlign = "center";
+            loadingAnimation.style.fontSize = "14px";
+            loadingAnimation.style.color = "#9df";
+            loadingAnimation.textContent = "Running.";
+
+            popupContainer.appendChild(statusDiv);
+            popupContainer.appendChild(loadingAnimation);
+
+            IMPORT_COHORT_POPUP_REF = createPopup({
+                title: "Import Cohort Subject",
+                content: popupContainer,
+                width: "400px",
+                height: "auto",
+                onClose: function() {
+                    log("Import Cohort: cancelled by user (close button)");
+                    clearAllRunState();
+                    clearCohortGuard();
+                    try {
+                        localStorage.removeItem(STORAGE_RUN_MODE);
+                        localStorage.removeItem(STORAGE_IMPORT_COHORT_POPUP);
+                    } catch (e) {}
+                    IMPORT_COHORT_POPUP_REF = null;
+                }
+            });
+
+            try {
+                localStorage.setItem(STORAGE_IMPORT_COHORT_POPUP, "1");
+            } catch (e) {}
+
+            // Animate loading dots
+            var dots = 1;
+            var loadingInterval = setInterval(function() {
+                if (!IMPORT_COHORT_POPUP_REF || !document.body.contains(IMPORT_COHORT_POPUP_REF.element)) {
+                    clearInterval(loadingInterval);
+                    return;
+                }
+                dots = dots + 1;
+                if (dots > 3) {
+                    dots = 1;
+                }
+                var text = "Running";
+                var i = 0;
+                while (i < dots) {
+                    text = text + ".";
+                    i = i + 1;
+                }
+                if (loadingAnimation) {
+                    loadingAnimation.textContent = text;
+                }
+            }, 500);
+
             location.href = STUDY_SHOW_URL + "?autononscrn=1";
         });
         runAddCohortBtn.addEventListener("click", function () {
@@ -6365,6 +6904,75 @@
                 localStorage.removeItem("activityPlanState.cohortAdd.editDoneMap");
                 log("Cleared cohortAdd.editDoneMap for new run");
             } catch (e) {}
+
+            // Create progress popup
+            var popupContainer = document.createElement("div");
+            popupContainer.style.display = "flex";
+            popupContainer.style.flexDirection = "column";
+            popupContainer.style.gap = "16px";
+            popupContainer.style.padding = "8px";
+
+            var statusDiv = document.createElement("div");
+            statusDiv.id = "addCohortStatus";
+            statusDiv.style.textAlign = "center";
+            statusDiv.style.fontSize = "18px";
+            statusDiv.style.color = "#fff";
+            statusDiv.style.fontWeight = "500";
+            statusDiv.textContent = "Running Add Cohort Subjects";
+
+            var loadingAnimation = document.createElement("div");
+            loadingAnimation.id = "addCohortLoading";
+            loadingAnimation.style.textAlign = "center";
+            loadingAnimation.style.fontSize = "14px";
+            loadingAnimation.style.color = "#9df";
+            loadingAnimation.textContent = "Running.";
+
+            popupContainer.appendChild(statusDiv);
+            popupContainer.appendChild(loadingAnimation);
+
+            ADD_COHORT_POPUP_REF = createPopup({
+                title: "Add Cohort Subjects",
+                content: popupContainer,
+                width: "400px",
+                height: "auto",
+                onClose: function() {
+                    log("Add Cohort: cancelled by user (close button)");
+                    clearAllRunState();
+                    clearCohortGuard();
+                    try {
+                        localStorage.removeItem(STORAGE_RUN_MODE);
+                        localStorage.removeItem(STORAGE_ADD_COHORT_POPUP);
+                    } catch (e) {}
+                    ADD_COHORT_POPUP_REF = null;
+                }
+            });
+
+            try {
+                localStorage.setItem(STORAGE_ADD_COHORT_POPUP, "1");
+            } catch (e) {}
+
+            // Animate loading dots
+            var dots = 1;
+            var loadingInterval = setInterval(function() {
+                if (!ADD_COHORT_POPUP_REF || !document.body.contains(ADD_COHORT_POPUP_REF.element)) {
+                    clearInterval(loadingInterval);
+                    return;
+                }
+                dots = dots + 1;
+                if (dots > 3) {
+                    dots = 1;
+                }
+                var text = "Running";
+                var i = 0;
+                while (i < dots) {
+                    text = text + ".";
+                    i = i + 1;
+                }
+                if (loadingAnimation) {
+                    loadingAnimation.textContent = text;
+                }
+            }, 500);
+
             location.href = STUDY_SHOW_URL + "?autoaddcohort=1";
         });
         try {
@@ -6383,7 +6991,6 @@
                 }
             }
         } catch (e) {}
-
         panel.appendChild(bodyContainer);
         var resizeHandle = setupResizeHandle(panel, bodyContainer);
         panel.appendChild(resizeHandle);
@@ -6407,18 +7014,6 @@
             log("Run Study Update clicked");
             location.href = STUDY_SHOW_URL + "?autoupdate=1";
         });
-        runEpochBtn.addEventListener("click", function () {
-            try {
-                localStorage.setItem(STORAGE_RUN_MODE, "epoch");
-            } catch (e) {}
-            try {
-                localStorage.setItem(STORAGE_CONTINUE_EPOCH, "1");
-            } catch (e2) {}
-            status.textContent = "Navigating to Study Show for Cohort Add…";
-            log("Run Cohort Add clicked");
-            location.href = STUDY_SHOW_URL;
-            clearCohortGuard();
-        });
         runConsentBtn.addEventListener("click", function () {
             try {
                 localStorage.setItem(STORAGE_RUN_MODE, "consent");
@@ -6427,6 +7022,7 @@
             log("Run Informed Consent clicked");
             location.href = STUDY_SHOW_URL + "?autoconsent=1";
         });
+        
         runAllBtn.addEventListener("click", function () {
             try {
                 localStorage.setItem(STORAGE_KEY, "1");
@@ -6436,6 +7032,77 @@
             } catch (e) {}
             status.textContent = "Starting ALL: Activity Plans…";
             log("Run ALL clicked");
+
+            // Create progress popup
+            var popupContainer = document.createElement("div");
+            popupContainer.style.display = "flex";
+            popupContainer.style.flexDirection = "column";
+            popupContainer.style.gap = "16px";
+            popupContainer.style.padding = "8px";
+
+            var statusDiv = document.createElement("div");
+            statusDiv.id = "runAllStatus";
+            statusDiv.style.textAlign = "center";
+            statusDiv.style.fontSize = "18px";
+            statusDiv.style.color = "#fff";
+            statusDiv.style.fontWeight = "500";
+            statusDiv.textContent = "Running Lock Activity Plans";
+
+            var loadingAnimation = document.createElement("div");
+            loadingAnimation.id = "runAllLoading";
+            loadingAnimation.style.textAlign = "center";
+            loadingAnimation.style.fontSize = "14px";
+            loadingAnimation.style.color = "#9df";
+            loadingAnimation.textContent = "Running.";
+
+            popupContainer.appendChild(statusDiv);
+            popupContainer.appendChild(loadingAnimation);
+
+            RUN_ALL_POPUP_REF = createPopup({
+                title: "Run Button (1-5) Progress",
+                content: popupContainer,
+                width: "400px",
+                height: "auto",
+                onClose: function() {
+                    log("Run All: cancelled by user (close button)");
+                    clearAllRunState();
+                    clearCohortGuard();
+                    try {
+                        localStorage.removeItem(STORAGE_RUN_MODE);
+                        localStorage.removeItem(STORAGE_KEY);
+                        localStorage.removeItem(STORAGE_CONTINUE_EPOCH);
+                        localStorage.removeItem(STORAGE_RUN_ALL_POPUP);
+                    } catch (e) {}
+                    RUN_ALL_POPUP_REF = null;
+                }
+            });
+
+            try {
+                localStorage.setItem(STORAGE_RUN_ALL_POPUP, "1");
+            } catch (e) {}
+
+            // Animate loading dots
+            var dots = 1;
+            var loadingInterval = setInterval(function() {
+                if (!RUN_ALL_POPUP_REF || !document.body.contains(RUN_ALL_POPUP_REF.element)) {
+                    clearInterval(loadingInterval);
+                    return;
+                }
+                dots = dots + 1;
+                if (dots > 3) {
+                    dots = 1;
+                }
+                var text = "Running";
+                var i = 0;
+                while (i < dots) {
+                    text = text + ".";
+                    i = i + 1;
+                }
+                if (loadingAnimation) {
+                    loadingAnimation.textContent = text;
+                }
+            }, 500);
+
             location.href = LIST_URL;
             clearCohortGuard();
         });
@@ -6452,6 +7119,9 @@
                 status.textContent = "Paused";
                 log("Paused");
                 clearAllRunState();
+                COLLECT_ALL_CANCELLED = true;
+                clearCollectAllData();
+                clearEligibilityWorkingState();
             }
         });
 
@@ -6585,24 +7255,6 @@
                 }
             }, intervalMs);
         });
-        // runFormOORBtn.addEventListener("click", function () {
-        //     RUN_FORM_V2_START_TS = Date.now();
-        //     log("Run Form (OOR) A clicked");
-        //     setFormValueMode("oorA");
-        //     runFormAutomationV2();
-        // });
-        // runFormOORABtn.addEventListener("click", function () {
-        //     RUN_FORM_V2_START_TS = Date.now();
-        //     log("Run Form (OOR) B clicked");
-        //     setFormValueMode("oorB");
-        //     runFormAutomationV2();
-        // });
-        // runFormIRBtn.addEventListener("click", function () {
-        //     RUN_FORM_V2_START_TS = Date.now();
-        //     log("Run Form (IR) clicked");
-        //     setFormValueMode("ir");
-        //     runFormAutomationV2();
-        // });
         collapseBtn.addEventListener("click", function () {
             var collapsed = getPanelCollapsed();
             if (collapsed) {
@@ -6732,10 +7384,15 @@
             addButtonToPanel(label, handler);
         };
         bindPanelHotkeyOnce();
+
+        // Recreate popups if needed
+        recreatePopupsIfNeeded();
+
         if (isPaused()) {
             log("Paused; automation halted");
             return;
         }
+
         var isSamplePathsPage = location.pathname === "/secure/samples/configure/paths";
         if (isSamplePathsPage) {
             processLockSamplePathsPage();
