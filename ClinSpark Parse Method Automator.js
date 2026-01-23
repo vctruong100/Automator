@@ -78,7 +78,6 @@
     var STORAGE_FIND_FORM_SUBJECT = "activityPlanState.findForm.subject";
     var STORAGE_FIND_FORM_STATUS_VALUES = "activityPlanState.findForm.statusValues";
 
-
     const STORAGE_PANEL_HIDDEN = "activityPlanState.panel.hidden";
     const PANEL_TOGGLE_KEY = "F2";
 
@@ -4938,8 +4937,8 @@
         log("ParseMethod: Find Form with " + formNames.length + " forms");
         try { localStorage.setItem(STORAGE_PARSE_METHOD_RESULTS, JSON.stringify(PARSE_METHOD_COLLECTED_METHODS)); localStorage.setItem(STORAGE_PARSE_METHOD_COMPLETED, "1"); } catch (e) {}
         try { localStorage.removeItem(STORAGE_FIND_FORM_STATUS_VALUES); } catch (e) {}
-        localStorage.setItem(STORAGE_FIND_FORM_PENDING, "1");
-        localStorage.setItem(STORAGE_FIND_FORM_KEYWORD, formNames.join(" "));
+        var formNamesJson = JSON.stringify(formNames);
+        localStorage.setItem(STORAGE_FIND_FORM_KEYWORD, formNamesJson);
         localStorage.setItem(STORAGE_FIND_FORM_SUBJECT, "");
         window.location.href = FORM_LIST_URL;
     }
@@ -4982,26 +4981,43 @@
         var kw = "";
         try { kw = localStorage.getItem(STORAGE_FIND_FORM_KEYWORD) || ""; } catch (e) {}
         if (!kw) { log("ParseMethod: no stored keyword for forms"); return; }
-        log("ParseMethod: populating forms with keyword='" + kw + "'");
+        var formNames = [];
+        try { formNames = JSON.parse(kw); } catch (e) { log("ParseMethod: failed to parse form names JSON"); return; }
+        if (!Array.isArray(formNames) || formNames.length === 0) { log("ParseMethod: no form names in array"); return; }
+        log("ParseMethod: looking for " + formNames.length + " form names");
         var waitCount = 0;
         var waitInterval = setInterval(function() {
             waitCount++;
             if (waitCount > 60) { clearInterval(waitInterval); log("ParseMethod: timeout waiting for form select"); return; }
             var formsSel = document.querySelector('select#formIds, select[name="formIds"]');
-            var formsBoxReady = document.getElementById("s2id_formIds");
-            if (!formsSel || !formsBoxReady) return;
+            if (!formsSel) return;
             clearInterval(waitInterval);
             var fos = formsSel.querySelectorAll("option");
-            var selectedCount = 0;
+            var formIds = [];
             for (var i = 0; i < fos.length; i++) {
                 var fop = fos[i];
-                var ftxt = (fop.textContent || "") + "";
-                if (formMatchContainsAllTokens(ftxt, kw)) { fop.selected = true; selectedCount++; }
+                var ftxt = (fop.textContent || "").trim();
+                var fval = fop.value || "";
+                for (var j = 0; j < formNames.length; j++) {
+                    var formName = formNames[j].trim();
+                    if (formName && ftxt === formName && fval) {
+                        formIds.push(fval);
+                        log("ParseMethod: matched form '" + formName + "' with id=" + fval);
+                        break;
+                    }
+                }
             }
-            var evtForms = new Event("change", { bubbles: true });
-            formsSel.dispatchEvent(evtForms);
-            log("ParseMethod: selected forms count=" + selectedCount);
-            try { localStorage.removeItem(STORAGE_FIND_FORM_PENDING); localStorage.removeItem(STORAGE_FIND_FORM_KEYWORD); localStorage.removeItem(STORAGE_FIND_FORM_SUBJECT); } catch (e) {}
+            log("ParseMethod: found " + formIds.length + " form IDs");
+            if (formIds.length > 0) {
+                var url = FORM_LIST_URL + "?search=true";
+                for (var k = 0; k < formIds.length; k++) { url += "&formIds=" + encodeURIComponent(formIds[k]); }
+                log("ParseMethod: navigating to URL with formIds");
+                try { localStorage.removeItem(STORAGE_FIND_FORM_KEYWORD); localStorage.removeItem(STORAGE_FIND_FORM_SUBJECT); } catch (e) {}
+                window.location.href = url;
+            } else {
+                log("ParseMethod: no matching forms found");
+                try { localStorage.removeItem(STORAGE_FIND_FORM_KEYWORD); localStorage.removeItem(STORAGE_FIND_FORM_SUBJECT); } catch (e) {}
+            }
         }, 100);
     }
 
