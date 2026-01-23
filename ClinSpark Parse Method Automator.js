@@ -4649,8 +4649,14 @@
             return;
         }
         if (location.pathname === "/secure/study/data/list") {
-            processFindFormOnList();
-            checkAndRestoreParseMethodPopup();
+            var parseMethodCompleted = null;
+            try { parseMethodCompleted = localStorage.getItem(STORAGE_PARSE_METHOD_COMPLETED); } catch (e) {}
+            if (parseMethodCompleted === "1") {
+                log("ParseMethod: skipping processFindFormOnList because Parse Method completed");
+                checkAndRestoreParseMethodPopup();
+            } else {
+                processFindFormOnList();
+            }
         }
 
         // Check for manual navigation away from Import Eligibility process
@@ -4858,7 +4864,7 @@
                 var method = methodsData[idx];
                 var formalExpr = await getMethodFormalExpr(method.url);
                 if (PARSE_METHOD_CANCELED) return;
-                if (!formalExpr || formalExpr.indexOf(itemName) < 0) continue;
+                if (!formalExpr || formalExpr.indexOf('"' + itemName + '"') < 0) continue;
                 log("ParseMethod: " + method.name + " matches");
                 var itemRefs = await getMethodItemRefs(method.url);
                 if (PARSE_METHOD_CANCELED) return;
@@ -4961,10 +4967,42 @@
         if (!resultsRaw) { clearParseMethodStoredResults(); return false; }
         try {
             var methods = JSON.parse(resultsRaw);
-            if (Array.isArray(methods)) { log("ParseMethod: restoring completed popup"); showParseMethodCompletedPopup(methods); return true; }
+            if (Array.isArray(methods)) {
+                log("ParseMethod: restoring completed popup");
+                populateFormsFromParseMethod();
+                showParseMethodCompletedPopup(methods);
+                return true;
+            }
         } catch (e) { log("ParseMethod: failed to parse stored results"); }
         clearParseMethodStoredResults();
         return false;
+    }
+
+    function populateFormsFromParseMethod() {
+        var kw = "";
+        try { kw = localStorage.getItem(STORAGE_FIND_FORM_KEYWORD) || ""; } catch (e) {}
+        if (!kw) { log("ParseMethod: no stored keyword for forms"); return; }
+        log("ParseMethod: populating forms with keyword='" + kw + "'");
+        var waitCount = 0;
+        var waitInterval = setInterval(function() {
+            waitCount++;
+            if (waitCount > 60) { clearInterval(waitInterval); log("ParseMethod: timeout waiting for form select"); return; }
+            var formsSel = document.querySelector('select#formIds, select[name="formIds"]');
+            var formsBoxReady = document.getElementById("s2id_formIds");
+            if (!formsSel || !formsBoxReady) return;
+            clearInterval(waitInterval);
+            var fos = formsSel.querySelectorAll("option");
+            var selectedCount = 0;
+            for (var i = 0; i < fos.length; i++) {
+                var fop = fos[i];
+                var ftxt = (fop.textContent || "") + "";
+                if (formMatchContainsAllTokens(ftxt, kw)) { fop.selected = true; selectedCount++; }
+            }
+            var evtForms = new Event("change", { bubbles: true });
+            formsSel.dispatchEvent(evtForms);
+            log("ParseMethod: selected forms count=" + selectedCount);
+            try { localStorage.removeItem(STORAGE_FIND_FORM_PENDING); localStorage.removeItem(STORAGE_FIND_FORM_KEYWORD); localStorage.removeItem(STORAGE_FIND_FORM_SUBJECT); } catch (e) {}
+        }, 100);
     }
 
     if (document.readyState === "loading") {
