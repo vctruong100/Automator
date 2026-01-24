@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Start Automator
 // @namespace vinh.activity.plan.state
-// @version 1.0.0
+// @version 1.1.0
 // @description
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/heads/main/ClinSpark%20Start%20Automator.js

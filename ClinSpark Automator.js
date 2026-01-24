@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.3.6
+// @version     1.4.0
 // @description Retain only Barcode feature; production environment only
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -85,12 +85,1280 @@
 
     const STORAGE_PANEL_HIDDEN = "activityPlanState.panel.hidden";
     const PANEL_TOGGLE_KEY = "F2";
+    const RUNMODE_CLEAR_MAPPING = "clearMapping";
 
     const ELIGIBILITY_LIST_URL = "https://cenexel.clinspark.com/secure/crfdesign/studylibrary/eligibility/list";
     const STORAGE_ELIG_IMPORTED = "activityPlanState.eligibility.importedItems";
     const RUNMODE_ELIG_IMPORT = "eligibilityImport";
     const STORAGE_ELIG_CHECKITEM_CACHE = "activityPlanState.eligibility.checkItemCache";
     const STORAGE_ELIG_IMPORT_PENDING_POPUP = "activityPlanState.eligibility.importPendingPopup";
+
+    // Run Parse Method
+    var STORAGE_PARSE_METHOD_RUNNING = "activityPlanState.parseMethod.running";
+    var STORAGE_PARSE_METHOD_ITEM_NAME = "activityPlanState.parseMethod.itemName";
+    var STORAGE_PARSE_METHOD_RESULTS = "activityPlanState.parseMethod.results";
+    var STORAGE_PARSE_METHOD_COMPLETED = "activityPlanState.parseMethod.completed";
+    var RUNMODE_PARSE_METHOD = "parseMethod";
+    var METHOD_LIBRARY_URL = "https://cenexel.clinspark.com/secure/crfdesign/studylibrary/list/method";
+    var PARSE_METHOD_CANCELED = false;
+    var PARSE_METHOD_COLLECTED_METHODS = [];
+    var PARSE_METHOD_COLLECTED_FORMS = [];
+
+    //==========================
+    // FIND FORM FEATURE
+    //==========================
+    // This section contains all functions related to finding forms.
+    // This feature automates pull any subject identifier found on page,
+    // request user for form keyword, and then search for form based on the keyword.
+    //==========================
+    
+    function setPanelHidden(flag) {
+        try {
+            localStorage.setItem(STORAGE_PANEL_HIDDEN, flag ? "1" : "0");
+            log("Panel hidden state set to " + String(flag));
+        } catch (e) {
+        }
+    }
+
+    function getPanelHidden() {
+        var raw = null;
+        try {
+            raw = localStorage.getItem(STORAGE_PANEL_HIDDEN);
+        } catch (e) {
+        }
+        if (raw === "1") {
+            return true;
+        }
+        return false;
+    }
+
+    function applyPanelHiddenState(panel) {
+        if (!panel) {
+            log("applyPanelHiddenState: panel not found");
+            return;
+        }
+        var hidden = getPanelHidden();
+        if (hidden) {
+            panel.style.display = "none";
+            panel.style.pointerEvents = "none";
+            log("applyPanelHiddenState: applied hidden");
+        } else {
+            panel.style.display = "block";
+            panel.style.pointerEvents = "auto";
+            log("applyPanelHiddenState: applied visible");
+        }
+    }
+
+    function togglePanelHiddenViaHotkey() {
+        var panel = document.getElementById(PANEL_ID);
+        if (!panel) {
+            log("Hotkey toggle: panel element not found; nothing to toggle");
+            return;
+        }
+        var isHidden = getPanelHidden();
+        if (isHidden) {
+            panel.style.display = "block";
+            panel.style.pointerEvents = "auto";
+            setPanelHidden(false);
+            log("Hotkey toggle: panel unhidden");
+        } else {
+            panel.style.display = "none";
+            panel.style.pointerEvents = "none";
+            setPanelHidden(true);
+            log("Hotkey toggle: panel hidden");
+        }
+    }
+
+    function normalizeKeyForMatch(e) {
+        var k = "";
+        var c = "";
+        try {
+            k = e.key ? String(e.key) : "";
+        } catch (ex1) {
+            k = "";
+        }
+        try {
+            c = e.code ? String(e.code) : "";
+        } catch (ex2) {
+            c = "";
+        }
+        return { key: k, code: c, keyCode: typeof e.keyCode === "number" ? e.keyCode : null };
+    }
+
+    function keyMatchesToggle(e) {
+        var n = normalizeKeyForMatch(e);
+        var match = false;
+        if (n.key && n.key.toUpperCase() === PANEL_TOGGLE_KEY.toUpperCase()) {
+            match = true;
+        } else {
+            if (n.code && n.code.toUpperCase() === PANEL_TOGGLE_KEY.toUpperCase()) {
+                match = true;
+            } else {
+                if (typeof n.keyCode === "number") {
+                    if (PANEL_TOGGLE_KEY.toUpperCase() === "F2") {
+                        if (n.keyCode === 113) {
+                            match = true;
+                        }
+                    }
+                }
+            }
+        }
+        return match;
+    }
+
+    function bindPanelHotkeyOnce() {
+        if (window.__APS_HOTKEY_BOUND === true) {
+            log("Hotkey: already bound; skipping rebind");
+            return;
+        }
+        function handler(e) {
+            if (keyMatchesToggle(e)) {
+                log("Hotkey: toggle request received");
+                togglePanelHiddenViaHotkey();
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        }
+        document.addEventListener("keydown", handler, true);
+        window.addEventListener("keydown", handler, true);
+        window.__APS_HOTKEY_BOUND = true;
+        log("Hotkey: bound for " + String(PANEL_TOGGLE_KEY));
+    }
+
+
+    function resetStudyEventsOnList() {
+        var cont = document.getElementById("s2id_studyEventIds");
+        if (cont) {
+            clearSelect2ChoicesByContainerId("s2id_studyEventIds");
+        }
+        var sel = document.getElementById("studyEventIds");
+        if (!sel) {
+            log("Find Form: studyEventIds select not found for reset");
+            return;
+        }
+        var ops = sel.querySelectorAll("option");
+        var cleared = 0;
+        if (ops && ops.length > 0) {
+            var i = 0;
+            while (i < ops.length) {
+                if (ops[i].selected) {
+                    ops[i].selected = false;
+                    cleared = cleared + 1;
+                }
+                i = i + 1;
+            }
+            var ev = new Event("change", { bubbles: true });
+            sel.dispatchEvent(ev);
+        }
+        log("Find Form: studyEventIds reset; cleared count=" + String(cleared));
+    }
+
+    function deselectAllOptionsBySelect(selectEl) {
+        if (!selectEl) {
+            return 0;
+        }
+        var ops = selectEl.querySelectorAll("option");
+        var count = 0;
+        if (ops && ops.length > 0) {
+            var i = 0;
+            while (i < ops.length) {
+                if (ops[i].selected) {
+                    ops[i].selected = false;
+                    count = count + 1;
+                }
+                i = i + 1;
+            }
+            var ev = new Event("change", { bubbles: true });
+            selectEl.dispatchEvent(ev);
+        }
+        log("Find Form: deselected all options count=" + String(count));
+        return count;
+    }
+
+    function formMatchContainsAllTokens(text, keyword) {
+        var nt = formNormalize(text || "");
+        var kw = formNormalize(keyword || "");
+        if (!kw || kw.length === 0) {
+            return false;
+        }
+        var tokens = kw.split(" ");
+        var all = true;
+        var i = 0;
+        while (i < tokens.length) {
+            var tok = tokens[i];
+            if (tok && tok.length > 0) {
+                if (nt.indexOf(tok) < 0) {
+                    all = false;
+                    break;
+                }
+            }
+            i = i + 1;
+        }
+        return all;
+    }
+
+    function resetStatusValuesOnList() {
+        var cont = document.getElementById("s2id_statusValues");
+        if (cont) {
+            clearSelect2ChoicesByContainerId("s2id_statusValues");
+        }
+        var sel = document.getElementById("statusValues");
+        if (!sel) {
+            log("Find Form: status select not found for reset");
+            return;
+        }
+        var ops = sel.querySelectorAll("option");
+        if (ops && ops.length > 0) {
+            var i = 0;
+            while (i < ops.length) {
+                ops[i].selected = false;
+                i = i + 1;
+            }
+            var ev = new Event("change", { bubbles: true });
+            sel.dispatchEvent(ev);
+        }
+        log("Find Form: status values reset");
+    }
+
+    function applyStatusValuesOnList(values) {
+        if (!Array.isArray(values)) {
+            log("Find Form: status values not array; skipping apply");
+            return;
+        }
+        var sel = document.getElementById("statusValues");
+        if (!sel) {
+            log("Find Form: status select not found for apply");
+            return;
+        }
+        var selectedCount = 0;
+        var j = 0;
+        while (j < values.length) {
+            var v = String(values[j]);
+            var op = sel.querySelector('option[value="' + v.replace(/"/g, '\\"') + '"]');
+            if (op) {
+                op.selected = true;
+                selectedCount = selectedCount + 1;
+            }
+            j = j + 1;
+        }
+        var ev = new Event("change", { bubbles: true });
+        sel.dispatchEvent(ev);
+        log("Find Form: status values applied count=" + String(selectedCount));
+    }
+
+    function showFormNoMatchPopup() {
+        log("Find Form: showing 'No form is found' popup");
+        var box = document.createElement("div");
+        box.style.textAlign = "center";
+        box.style.fontSize = "16px";
+        box.style.color = "#fff";
+        box.style.padding = "20px";
+        box.textContent = FORM_NO_MATCH_MESSAGE;
+        createPopup({ title: FORM_NO_MATCH_TITLE, content: box, width: "320px", height: "auto" });
+    }
+
+    function clearSelect2ChoicesByContainerId(containerId) {
+        var cont = document.getElementById(containerId);
+        if (!cont) {
+            log("Find Form: select2 container not found id='" + String(containerId) + "'");
+            return 0;
+        }
+        var removed = 0;
+        var tries = 0;
+        while (tries < 50) {
+            var closeBtn = cont.querySelector("ul.select2-choices li.select2-search-choice a.select2-search-choice-close");
+            if (!closeBtn) {
+                break;
+            }
+            try {
+                closeBtn.click();
+                removed = removed + 1;
+            } catch (e) {}
+            tries = tries + 1;
+        }
+        log("Find Form: cleared select2 choices id='" + String(containerId) + "' count=" + String(removed));
+        return removed;
+    }
+
+    function findSubjectIdentifierForFindForm() {
+        var s = "";
+        var cont = document.getElementById("s2id_subjectIds");
+        if (cont) {
+            var choiceDiv = cont.querySelector("ul.select2-choices li.select2-search-choice div");
+            if (choiceDiv) {
+                var t = (choiceDiv.textContent + "").trim();
+                if (t.length > 0) {
+                    s = t;
+                    log("Find Form: subject from select2 choice='" + String(s) + "'");
+                }
+            }
+        }
+        if (!s || s.length === 0) {
+            var bc = document.querySelector("ul.page-breadcrumb.breadcrumb > li:nth-child(3)");
+            if (bc) {
+                var bt = (bc.textContent + "").trim();
+                if (bt.length > 0) {
+                    var parts = bt.split("/");
+                    if (parts && parts.length > 0) {
+                        var p0 = (parts[0] + "").trim();
+                        if (p0.length > 0) {
+                            s = p0;
+                            log("Find Form: subject from breadcrumb='" + String(s) + "'");
+                        }
+                    }
+                }
+            }
+        }
+        if (!s || s.length === 0) {
+            var info = getSubjectIdentifierForAE();
+            if (info && info.raw && info.raw.length > 0) {
+                s = info.raw;
+                log("Find Form: subject from AE fallback='" + String(s) + "'");
+            }
+        }
+        return s;
+    }
+
+        function getSubjectIdentifierForAE() {
+        var normalized = "";
+        var rawCandidate = "";
+        var confident = false;
+
+        var items = document.querySelectorAll(".page-breadcrumb.breadcrumb > li");
+        if (items && items.length >= 3) {
+            var el3 = items[2];
+            var t3 = "";
+            if (el3) {
+                t3 = el3.textContent + "";
+            }
+            var n3 = aeNormalize(t3);
+            if (n3.length > 0) {
+                rawCandidate = t3;
+                normalized = n3;
+            }
+        }
+
+        if ((!normalized || normalized.length === 0) && items) {
+            var c = 0;
+            while (c < items.length) {
+                var li = items[c];
+                var tt = "";
+                if (li) {
+                    tt = (li.textContent + "").trim();
+                }
+                var hasSlash = tt.indexOf("/") >= 0;
+                if (hasSlash) {
+                    rawCandidate = tt;
+                    normalized = aeNormalize(tt);
+                    if (normalized.length > 0) {
+                        break;
+                    }
+                }
+                c = c + 1;
+            }
+        }
+
+        if (!normalized || normalized.length === 0) {
+            var cap = document.querySelector("div.portlet-title div.caption");
+            if (cap) {
+                var ct = (cap.textContent + "").trim();
+                var nc = aeNormalize(ct);
+                if (nc.length > 0) {
+                    rawCandidate = ct;
+                    normalized = nc;
+                }
+            }
+        }
+
+        var sid = "";
+        var a = document.querySelector('span.tooltips[data-original-title="Subject"] a[data-target="#ajaxModal"][data-toggle="modal"]');
+        if (a) {
+            var href = a.getAttribute("href") + "";
+            var m = href.match(/\/show\/subject\/(\d+)\//);
+            if (m && m[1]) {
+                sid = m[1];
+            }
+        }
+
+        if (sid && sid.length > 0) {
+            confident = true;
+        } else {
+            if (normalized && normalized.length > 0) {
+                var looksNumeric = /^[0-9]+$/.test(rawCandidate.trim());
+                var hasIdPattern = /^S?[0-9]{3,}$/.test(rawCandidate.trim());
+                if (looksNumeric || hasIdPattern) {
+                    confident = true;
+                } else {
+                    confident = false;
+                }
+            } else {
+                confident = false;
+            }
+        }
+
+        log("Find AE: subject normalized='" + String(normalized) + "' subjectId='" + String(sid) + "' confident=" + String(confident) + " raw='" + String(rawCandidate) + "'");
+        return { normalizedIdentifier: normalized, subjectId: sid, confident: confident, raw: rawCandidate };
+    }
+
+    function previewFormsByKeyword(keyword, done) {
+        log("Find Form: preview request started");
+        var url = FORM_LIST_URL;
+        try {
+            GM.xmlHttpRequest({
+                method: "GET",
+                url: url,
+                onload: function (resp) {
+                    var html = resp && resp.responseText ? resp.responseText + "" : "";
+                    var tmp = document.createElement("div");
+                    tmp.innerHTML = html;
+                    var formsSel = tmp.querySelector('select#formIds, select[name="formIds"]');
+                    var matched = 0;
+                    if (formsSel) {
+                        var fos = formsSel.querySelectorAll("option");
+                        if (fos && fos.length > 0) {
+                            var i = 0;
+                            while (i < fos.length) {
+                                var fop = fos[i];
+                                var ftxt = "";
+                                if (fop) {
+                                    ftxt = fop.textContent + "";
+                                }
+                                var hit = formMatchContainsAllTokens(ftxt, keyword);
+                                if (hit) {
+                                    matched = matched + 1;
+                                }
+                                i = i + 1;
+                            }
+                        }
+                    }
+                    log("Find Form: preview matched count=" + String(matched));
+                    if (typeof done === "function") {
+                        done(matched > 0);
+                    }
+                },
+                onerror: function () {
+                    log("Find Form: preview request error");
+                    if (typeof done === "function") {
+                        done(true);
+                    }
+                }
+            });
+        } catch (e) {
+            log("Find Form: preview exception " + String(e));
+            if (typeof done === "function") {
+                done(true);
+            }
+        }
+    }
+
+
+    function formNormalize(x) {
+        var s = x || "";
+        s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        s = s.replace(/\s+/g, " ");
+        s = s.trim();
+        s = s.toUpperCase();
+        return s;
+    }
+
+
+    function showFindFormPopup(prefillSubject, onDone) {
+        log("Find Form: showing popup");
+        var container = document.createElement("div");
+        container.style.display = "grid";
+        container.style.gridTemplateRows = "auto auto auto auto auto";
+        container.style.gap = "10px";
+
+        var row1 = document.createElement("div");
+        row1.style.display = "grid";
+        row1.style.gridTemplateColumns = "140px 1fr";
+        row1.style.alignItems = "center";
+        row1.style.gap = "8px";
+        var label1 = document.createElement("div");
+        label1.textContent = FORM_POPUP_KEYWORD_LABEL;
+        label1.style.fontWeight = "600";
+        var inputKeyword = document.createElement("input");
+        inputKeyword.type = "text";
+        inputKeyword.placeholder = "Required: any word";
+        inputKeyword.style.width = "100%";
+        inputKeyword.style.boxSizing = "border-box";
+        inputKeyword.style.padding = "8px";
+        inputKeyword.style.borderRadius = "6px";
+        inputKeyword.style.border = "1px solid #444";
+        inputKeyword.style.background = "#1a1a1a";
+        inputKeyword.style.color = "#fff";
+        row1.appendChild(label1);
+        row1.appendChild(inputKeyword);
+        container.appendChild(row1);
+
+        var row2 = document.createElement("div");
+        row2.style.display = "grid";
+        row2.style.gridTemplateColumns = "140px 1fr";
+        row2.style.alignItems = "center";
+        row2.style.gap = "8px";
+        var label2 = document.createElement("div");
+        label2.textContent = FORM_POPUP_SUBJECT_LABEL;
+        label2.style.fontWeight = "600";
+        var inputSubject = document.createElement("input");
+        inputSubject.type = "text";
+        inputSubject.placeholder = "Optional: subject id or label";
+        inputSubject.style.width = "100%";
+        inputSubject.style.boxSizing = "border-box";
+        inputSubject.style.padding = "8px";
+        inputSubject.style.borderRadius = "6px";
+        inputSubject.style.border = "1px solid #444";
+        inputSubject.style.background = "#1a1a1a";
+        inputSubject.style.color = "#fff";
+        row2.appendChild(label2);
+        row2.appendChild(inputSubject);
+        container.appendChild(row2);
+
+        var row3 = document.createElement("div");
+        row3.style.display = "grid";
+        row3.style.gridTemplateColumns = "140px 1fr";
+        row3.style.alignItems = "center";
+        row3.style.gap = "8px";
+        var labelIG = document.createElement("div");
+        labelIG.textContent = "Item Group Data";
+        labelIG.style.fontWeight = "600";
+        var igWrap = document.createElement("div");
+        igWrap.style.display = "inline-flex";
+        igWrap.style.gap = "12px";
+        var igC = document.createElement("label");
+        var igCBox = document.createElement("input");
+        igCBox.type = "checkbox";
+        igCBox.value = "Complete";
+        igC.appendChild(igCBox);
+        igC.appendChild(document.createTextNode(" Complete"));
+        var igI = document.createElement("label");
+        var igIBox = document.createElement("input");
+        igIBox.type = "checkbox";
+        igIBox.value = "Incomplete";
+        igI.appendChild(igIBox);
+        igI.appendChild(document.createTextNode(" Incomplete"));
+        var igN = document.createElement("label");
+        var igNBox = document.createElement("input");
+        igNBox.type = "checkbox";
+        igNBox.value = "Nonconformant";
+        igN.appendChild(igNBox);
+        igN.appendChild(document.createTextNode(" Nonconformant"));
+        igWrap.appendChild(igC);
+        igWrap.appendChild(igI);
+        igWrap.appendChild(igN);
+        row3.appendChild(labelIG);
+        row3.appendChild(igWrap);
+        container.appendChild(row3);
+
+        var row4 = document.createElement("div");
+        row4.style.display = "grid";
+        row4.style.gridTemplateColumns = "140px 1fr";
+        row4.style.alignItems = "center";
+        row4.style.gap = "8px";
+        var labelFD = document.createElement("div");
+        labelFD.textContent = "Form Data";
+        labelFD.style.fontWeight = "600";
+        var fdWrap = document.createElement("div");
+        fdWrap.style.display = "inline-flex";
+        fdWrap.style.gap = "12px";
+        var fdNC = document.createElement("label");
+        var fdNCBox = document.createElement("input");
+        fdNCBox.type = "checkbox";
+        fdNCBox.value = "formDataNotCanceled";
+        fdNC.appendChild(fdNCBox);
+        fdNC.appendChild(document.createTextNode(" Not Canceled"));
+        var fdTM = document.createElement("label");
+        var fdTMBox = document.createElement("input");
+        fdTMBox.type = "checkbox";
+        fdTMBox.value = "timedAndMissed";
+        fdTM.appendChild(fdTMBox);
+        fdTM.appendChild(document.createTextNode(" Time and Missed"));
+        fdWrap.appendChild(fdNC);
+        fdWrap.appendChild(fdTM);
+        row4.appendChild(labelFD);
+        row4.appendChild(fdWrap);
+        container.appendChild(row4);
+
+        try {
+            var prevRaw = localStorage.getItem(STORAGE_FIND_FORM_STATUS_VALUES);
+            if (prevRaw) {
+                var prevArr = JSON.parse(prevRaw);
+                if (Array.isArray(prevArr) && prevArr.length > 0) {
+                    var hasComplete = prevArr.indexOf("Complete") >= 0;
+                    var hasIncomplete = prevArr.indexOf("Incomplete") >= 0;
+                    var hasNonconf = prevArr.indexOf("Nonconformant") >= 0;
+                    var hasFormNotCanceled = prevArr.indexOf("formDataNotCanceled") >= 0;
+                    var hasTimedMissed = prevArr.indexOf("timedAndMissed") >= 0;
+                    igCBox.checked = !!hasComplete;
+                    igIBox.checked = !!hasIncomplete;
+                    igNBox.checked = !!hasNonconf;
+                    fdNCBox.checked = !!hasFormNotCanceled;
+                    fdTMBox.checked = !!hasTimedMissed;
+                    log("Find Form: restored checkbox prefs count=" + String(prevArr.length));
+                } else {
+                    log("Find Form: no prior checkbox prefs to restore");
+                }
+            } else {
+                log("Find Form: checkbox prefs not present in storage");
+            }
+        } catch (e) {
+            log("Find Form: error restoring checkbox prefs");
+        }
+
+        if (prefillSubject && prefillSubject.length > 0) {
+            inputSubject.value = prefillSubject;
+            var ev0 = new Event("input", { bubbles: true });
+            inputSubject.dispatchEvent(ev0);
+            log("Find Form: subject prefilled='" + String(prefillSubject) + "'");
+        }
+
+        var btnRow = document.createElement("div");
+        btnRow.style.display = "inline-flex";
+        btnRow.style.justifyContent = "flex-end";
+        btnRow.style.gap = "8px";
+        var clearIdBtn = document.createElement("button");
+        clearIdBtn.textContent = "Clear ID";
+        clearIdBtn.style.background = "#777";
+        clearIdBtn.style.color = "#fff";
+        clearIdBtn.style.border = "none";
+        clearIdBtn.style.borderRadius = "6px";
+        clearIdBtn.style.padding = "8px 12px";
+        clearIdBtn.style.cursor = "pointer";
+        var cancelBtn = document.createElement("button");
+        cancelBtn.textContent = FORM_POPUP_CANCEL_TEXT;
+        cancelBtn.style.background = "#333";
+        cancelBtn.style.color = "#fff";
+        cancelBtn.style.border = "none";
+        cancelBtn.style.borderRadius = "6px";
+        cancelBtn.style.padding = "8px 12px";
+        cancelBtn.style.cursor = "pointer";
+        var okBtn = document.createElement("button");
+        okBtn.textContent = FORM_POPUP_OK_TEXT;
+        okBtn.style.background = "#0b82ff";
+        okBtn.style.color = "#fff";
+        okBtn.style.border = "none";
+        okBtn.style.borderRadius = "6px";
+        okBtn.style.padding = "8px 12px";
+        okBtn.style.cursor = "pointer";
+        btnRow.appendChild(clearIdBtn);
+        btnRow.appendChild(cancelBtn);
+        btnRow.appendChild(okBtn);
+        container.appendChild(btnRow);
+
+        var popup = createPopup({ title: FORM_POPUP_TITLE, content: container, width: "520px", height: "auto" });
+
+        window.setTimeout(function () {
+            try {
+                inputKeyword.focus();
+                inputKeyword.select();
+                log("Find Form: keyword input focused");
+            } catch (e) {
+                log("Find Form: failed to focus keyword input");
+            }
+        }, 50);
+
+        function gatherStatusSelections() {
+            var out = [];
+            if (igCBox && igCBox.checked) {
+                out.push("Complete");
+            }
+            if (igIBox && igIBox.checked) {
+                out.push("Incomplete");
+            }
+            if (igNBox && igNBox.checked) {
+                out.push("Nonconformant");
+            }
+            if (fdNCBox && fdNCBox.checked) {
+                out.push("formDataNotCanceled");
+            }
+            if (fdTMBox && fdTMBox.checked) {
+                out.push("timedAndMissed");
+            }
+            return out;
+        }
+
+        function doContinue() {
+            var kw = inputKeyword.value + "";
+            var sbj = inputSubject.value + "";
+            var kwt = kw.trim();
+            var sbjt = sbj.trim();
+            if (!kwt || kwt.length === 0) {
+                log("Find Form: keyword required");
+                return;
+            }
+            var statuses = gatherStatusSelections();
+            try {
+                if (statuses && statuses.length > 0) {
+                    localStorage.setItem(STORAGE_FIND_FORM_STATUS_VALUES, JSON.stringify(statuses));
+                    log("Find Form: statuses saved count=" + String(statuses.length));
+                } else {
+                    localStorage.removeItem(STORAGE_FIND_FORM_STATUS_VALUES);
+                    log("Find Form: no statuses selected; cleared storage");
+                }
+            } catch (e) {}
+            log("Find Form: popup inputs keyword='" + String(kwt) + "' subject='" + String(sbjt) + "'");
+            if (popup && popup.close) {
+                popup.close();
+            }
+            if (typeof onDone === "function") {
+                onDone({ keyword: kwt, subject: sbjt });
+            }
+        }
+
+        function keyHandler(e) {
+            var code = e.key || e.code || "";
+            if (code === "Enter") {
+                log("Find Form: Enter pressed; continuing");
+                doContinue();
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+            if (code === "Escape" || code === "Esc") {
+                log("Find Form: Esc pressed; closing");
+                if (popup && popup.close) {
+                    popup.close();
+                }
+                document.removeEventListener("keydown", keyHandler, true);
+                if (typeof onDone === "function") {
+                    onDone(null);
+                }
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+        }
+
+        document.addEventListener("keydown", keyHandler, true);
+
+        clearIdBtn.addEventListener("click", function () {
+            inputSubject.value = "";
+            var ev = new Event("input", { bubbles: true });
+            inputSubject.dispatchEvent(ev);
+            log("Find Form: subject cleared by user");
+        });
+
+        cancelBtn.addEventListener("click", function () {
+            log("Find Form: popup canceled");
+            if (popup && popup.close) {
+                popup.close();
+            }
+            document.removeEventListener("keydown", keyHandler, true);
+            if (typeof onDone === "function") {
+                onDone(null);
+            }
+        });
+
+        okBtn.addEventListener("click", function () {
+            document.removeEventListener("keydown", keyHandler, true);
+            doContinue();
+        });
+    }
+
+    function openFindForm() {
+        log("Find Form: starting");
+        var prefill = findSubjectIdentifierForFindForm();
+        showFindFormPopup(prefill, function (userInput) {
+            if (userInput === null) {
+                log("Find Form: canceled by user; stopping");
+                return;
+            }
+            var kw = userInput.keyword || "";
+            var sbj = userInput.subject || "";
+            previewFormsByKeyword(kw, function (hasMatch) {
+                if (!hasMatch) {
+                    log("Find Form: preview found no matching forms; stopping");
+                    showFormNoMatchPopup();
+                    return;
+                }
+                localStorage.setItem(STORAGE_FIND_FORM_PENDING, "1");
+                localStorage.setItem(STORAGE_FIND_FORM_KEYWORD, String(kw));
+                localStorage.setItem(STORAGE_FIND_FORM_SUBJECT, String(sbj));
+                log("Find Form: state saved; redirecting same tab");
+                window.location.href = FORM_LIST_URL;
+            });
+        });
+    }
+
+    function processFindFormOnList() {
+        var pending = localStorage.getItem(STORAGE_FIND_FORM_PENDING);
+        if (!pending || pending !== "1") {
+            return;
+        }
+        var kw = localStorage.getItem(STORAGE_FIND_FORM_KEYWORD) || "";
+        var sbj = localStorage.getItem(STORAGE_FIND_FORM_SUBJECT) || "";
+        log("Find Form: post-reload processing started keyword='" + String(kw) + "' subject='" + String(sbj) + "'");
+        var t = 0;
+        var r = setInterval(function () {
+            t = t + 1;
+            if (t > 120) {
+                clearInterval(r);
+                log("Find Form: timeout waiting for controls");
+                localStorage.removeItem(STORAGE_FIND_FORM_PENDING);
+                return;
+            }
+            var d = document;
+            var formsSel = d.querySelector('select#formIds, select[name="formIds"]');
+            var subjSel = d.querySelector('select#subjectIds, select[name="subjectIds"]');
+            var formsBoxReady = document.getElementById("s2id_formIds");
+            var statusSel = d.getElementById("statusValues");
+            var statusBoxReady = d.getElementById("s2id_statusValues");
+            if (!formsSel || !formsBoxReady) {
+                log("Find Form: selects not ready at t=" + String(t));
+                return;
+            }
+
+            resetStudyEventsOnList();
+            resetStatusValuesOnList();
+
+            var rawStatuses = null;
+            try {
+                rawStatuses = localStorage.getItem(STORAGE_FIND_FORM_STATUS_VALUES);
+            } catch (e) {}
+            if (rawStatuses) {
+                try {
+                    var arr = JSON.parse(rawStatuses);
+                    if (Array.isArray(arr) && arr.length > 0) {
+                        applyStatusValuesOnList(arr);
+                    } else {
+                        log("Find Form: no statuses to apply");
+                    }
+                } catch (e2) {
+                    log("Find Form: status parse error");
+                }
+            } else {
+                log("Find Form: no stored statuses");
+            }
+
+            clearSelect2ChoicesByContainerId("s2id_formIds");
+            deselectAllOptionsBySelect(formsSel);
+
+            var selectedCount = 0;
+            var fos = formsSel.querySelectorAll("option");
+            if (fos && fos.length > 0) {
+                var i = 0;
+                while (i < fos.length) {
+                    var fop = fos[i];
+                    var ftxt = "";
+                    if (fop) {
+                        ftxt = fop.textContent + "";
+                    }
+                    var hit = formMatchContainsAllTokens(ftxt, kw);
+                    if (hit) {
+                        fop.selected = true;
+                        selectedCount = selectedCount + 1;
+                    }
+                    i = i + 1;
+                }
+                var evtForms = new Event("change", { bubbles: true });
+                formsSel.dispatchEvent(evtForms);
+                log("Find Form: selected forms count=" + String(selectedCount));
+            } else {
+                log("Find Form: forms options list empty");
+            }
+
+            if (selectedCount === 0) {
+                clearInterval(r);
+                log("Find Form: no forms selected; notifying user");
+                showFormNoMatchPopup();
+                localStorage.removeItem(STORAGE_FIND_FORM_PENDING);
+                localStorage.removeItem(STORAGE_FIND_FORM_KEYWORD);
+                localStorage.removeItem(STORAGE_FIND_FORM_SUBJECT);
+                return;
+            }
+
+            var subjNorm = aeNormalize(sbj || "");
+            if (subjNorm && subjNorm.length > 0 && subjSel) {
+                var os = subjSel.querySelectorAll("option");
+                var y = "";
+                if (os && os.length > 0) {
+                    var j = 0;
+                    while (j < os.length) {
+                        var op = os[j];
+                        var txt = "";
+                        var val = "";
+                        if (op) {
+                            txt = op.textContent + "";
+                            val = op.value + "";
+                        }
+                        var nt = aeNormalize(txt);
+                        var matchByTextExact = nt === subjNorm;
+                        var matchByTextContains = nt.indexOf(subjNorm) >= 0;
+                        var matchById = val === sbj;
+                        var matched = false;
+                        if (matchByTextExact) {
+                            matched = true;
+                        } else {
+                            if (matchByTextContains) {
+                                matched = true;
+                            } else {
+                                if (matchById) {
+                                    matched = true;
+                                }
+                            }
+                        }
+                        if (matched) {
+                            y = val;
+                            break;
+                        }
+                        j = j + 1;
+                    }
+                }
+                if (y && y.length > 0) {
+                    subjSel.value = y;
+                    var evtSubj = new Event("change", { bubbles: true });
+                    subjSel.dispatchEvent(evtSubj);
+                    log("Find Form: subject applied value='" + String(y) + "'");
+                } else {
+                    log("Find Form: no subject match applied");
+                }
+            } else {
+                log("Find Form: subject input empty or select not found");
+            }
+
+            var searchBtn = d.getElementById("dataSearchButton");
+            if (searchBtn) {
+                searchBtn.click();
+                log("Find Form: Search button clicked");
+            } else {
+                log("Find Form: Search button not found");
+            }
+
+            clearInterval(r);
+            localStorage.removeItem(STORAGE_FIND_FORM_PENDING);
+            localStorage.removeItem(STORAGE_FIND_FORM_KEYWORD);
+            localStorage.removeItem(STORAGE_FIND_FORM_SUBJECT);
+            log("Find Form: post-reload processing completed");
+        }, 200);
+    }
+
+    function aeNormalize(x) {
+        var s = x || "";
+        s = s.replace(/\s+/g, "");
+        s = s.replace(/›|»|▶|►|→/g, "");
+        s = s.trim();
+        s = s.toUpperCase();
+        return s;
+    }
+    //==========================
+    //==========================
+    // Parse Method Functions
+    //==========================
+    //==========================
+
+    function ParseMethodFunctions() {}
+
+    function clearParseMethodState() {
+        PARSE_METHOD_CANCELED = false;
+        PARSE_METHOD_COLLECTED_METHODS = [];
+        PARSE_METHOD_COLLECTED_FORMS = [];
+        try { localStorage.removeItem(STORAGE_PARSE_METHOD_RUNNING); localStorage.removeItem(STORAGE_PARSE_METHOD_ITEM_NAME); } catch (e) {}
+    }
+
+    function stopParseMethodAutomation() {
+        PARSE_METHOD_CANCELED = true;
+        clearParseMethodState();
+        try { localStorage.removeItem(STORAGE_RUN_MODE); } catch (e) {}
+    }
+
+    function clearParseMethodStoredResults() {
+        try { localStorage.removeItem(STORAGE_PARSE_METHOD_RESULTS); localStorage.removeItem(STORAGE_PARSE_METHOD_COMPLETED); localStorage.removeItem(STORAGE_PARSE_METHOD_ITEM_NAME); } catch (e) {}
+    }
+
+    function openParseMethod() {
+        log("ParseMethod: button clicked");
+        if (isPaused()) return;
+        clearParseMethodState();
+        showParseMethodPopup();
+    }
+
+    function showParseMethodPopup() {
+        var container = document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;gap:16px";
+        var inputRow = document.createElement("div");
+        inputRow.style.cssText = "display:grid;grid-template-columns:100px 1fr;align-items:center;gap:12px";
+        var label = document.createElement("div");
+        label.textContent = "Item name";
+        label.style.fontWeight = "600";
+        var inputEl = document.createElement("input");
+        inputEl.type = "text";
+        inputEl.placeholder = "Required (case sensitive)";
+        inputEl.style.cssText = "width:100%;box-sizing:border-box;padding:10px;border-radius:6px;border:1px solid #444;background:#1a1a1a;color:#fff";
+        inputRow.appendChild(label);
+        inputRow.appendChild(inputEl);
+        container.appendChild(inputRow);
+        var btnRow = document.createElement("div");
+        btnRow.style.cssText = "display:flex;justify-content:flex-end";
+        var confirmBtn = document.createElement("button");
+        confirmBtn.textContent = "Confirmed";
+        confirmBtn.style.cssText = "background:#28a745;color:#fff;border:none;border-radius:6px;padding:10px 20px;cursor:pointer;font-weight:600";
+        btnRow.appendChild(confirmBtn);
+        container.appendChild(btnRow);
+        var statusBox = document.createElement("div");
+        statusBox.style.cssText = "display:none;margin-top:8px;padding:12px;background:#1a1a1a;border-radius:6px;border:1px solid #333;text-align:center";
+        statusBox.textContent = "Running.";
+        container.appendChild(statusBox);
+        var resultsBox = document.createElement("div");
+        resultsBox.style.cssText = "display:none;margin-top:8px;max-height:300px;overflow-y:auto;background:#1a1a1a;border-radius:6px;border:1px solid #333;padding:12px";
+        container.appendChild(resultsBox);
+        var okRow = document.createElement("div");
+        okRow.style.cssText = "display:none;justify-content:center;margin-top:8px";
+        var okBtn = document.createElement("button");
+        okBtn.textContent = "Ok";
+        okBtn.style.cssText = "background:#0b82ff;color:#fff;border:none;border-radius:6px;padding:10px 30px;cursor:pointer;font-weight:600";
+        okRow.appendChild(okBtn);
+        container.appendChild(okRow);
+        var popup = createPopup({ title: "Parse Method", content: container, width: "480px", height: "auto", onClose: function() { stopParseMethodAutomation(); } });
+        setTimeout(function() { try { inputEl.focus(); } catch (e) {} }, 50);
+
+        function doConfirm() {
+            var itemName = (inputEl.value + "").trim();
+            if (!itemName) { inputEl.style.border = "2px solid #dc3545"; return; }
+            inputEl.style.border = "1px solid #444";
+            log("ParseMethod: Confirmed itemName=" + itemName);
+            try { localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_PARSE_METHOD); localStorage.setItem(STORAGE_PARSE_METHOD_RUNNING, "1"); localStorage.setItem(STORAGE_PARSE_METHOD_ITEM_NAME, itemName); } catch (e) {}
+            inputRow.style.display = "none";
+            btnRow.style.display = "none";
+            statusBox.style.display = "block";
+            resultsBox.style.display = "block";
+            var dots = 1;
+            var interval = setInterval(function() { if (PARSE_METHOD_CANCELED) { clearInterval(interval); return; } dots = (dots % 3) + 1; var t = "Running"; for (var d = 0; d < dots; d++) t += "."; statusBox.textContent = t; }, 400);
+            runParseMethodAutomation(itemName, function(methods, forms) {
+                clearInterval(interval);
+                if (PARSE_METHOD_CANCELED) return;
+                statusBox.textContent = "Completed. Proceed to Study -> Data ?";
+                showParseMethodResults(resultsBox, methods);
+                okRow.style.display = "flex";
+                okBtn.addEventListener("click", function() { okRow.style.display = "none"; statusBox.textContent = "Running Find Form..."; doFindFormWithForms(forms); });
+            }, function(name, fms) { addParseMethodResult(resultsBox, name, fms); });
+        }
+
+        function keyHandler(e) {
+            var code = e.key || e.code || "";
+            if (code === "Enter") {
+                log("ParseMethod: Enter pressed; confirming");
+                doConfirm();
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+        }
+
+        inputEl.addEventListener("keydown", keyHandler);
+
+        confirmBtn.addEventListener("click", function() {
+            doConfirm();
+        });
+    }
+
+    function showParseMethodResults(box, methods) {
+        box.innerHTML = "";
+        if (!methods || methods.length === 0) { box.innerHTML = "<div style='color:#999;text-align:center;padding:20px'>No methods found.</div>"; return; }
+        for (var i = 0; i < methods.length; i++) {
+            var m = methods[i];
+            var block = document.createElement("div");
+            block.style.cssText = "margin-bottom:12px;padding:10px;background:#222;border-radius:6px;border:1px solid #444";
+            var title = document.createElement("div");
+            title.style.cssText = "font-weight:600;color:#4a90e2;margin-bottom:6px";
+            title.textContent = m.name;
+            block.appendChild(title);
+            if (m.forms && m.forms.length > 0) {
+                var list = document.createElement("div");
+                list.style.paddingLeft = "16px";
+                for (var j = 0; j < m.forms.length; j++) { var it = document.createElement("div"); it.style.cssText = "color:#ccc;font-size:12px"; it.textContent = "- " + m.forms[j]; list.appendChild(it); }
+                block.appendChild(list);
+            }
+            box.appendChild(block);
+        }
+    }
+
+    function addParseMethodResult(box, name, forms) {
+        var block = document.createElement("div");
+        block.style.cssText = "margin-bottom:12px;padding:10px;background:#222;border-radius:6px;border:1px solid #444";
+        var title = document.createElement("div");
+        title.style.cssText = "font-weight:600;color:#4a90e2;margin-bottom:6px";
+        title.textContent = name;
+        block.appendChild(title);
+        if (forms && forms.length > 0) {
+            var list = document.createElement("div");
+            list.style.paddingLeft = "16px";
+            for (var j = 0; j < forms.length; j++) { var it = document.createElement("div"); it.style.cssText = "color:#ccc;font-size:12px"; it.textContent = "- " + forms[j]; list.appendChild(it); }
+            block.appendChild(list);
+        }
+        box.appendChild(block);
+        box.scrollTop = box.scrollHeight;
+    }
+
+    async function runParseMethodAutomation(itemName, onComplete, onFound) {
+        PARSE_METHOD_CANCELED = false;
+        PARSE_METHOD_COLLECTED_METHODS = [];
+        PARSE_METHOD_COLLECTED_FORMS = [];
+        try {
+            var methodsData = await getMethodLibraryData();
+            if (PARSE_METHOD_CANCELED) return;
+            if (!methodsData || methodsData.length === 0) { onComplete([], []); return; }
+            for (var idx = 0; idx < methodsData.length; idx++) {
+                if (PARSE_METHOD_CANCELED) return;
+                if (isPaused()) { stopParseMethodAutomation(); return; }
+                var method = methodsData[idx];
+                var formalExpr = await getMethodFormalExpr(method.url);
+                if (PARSE_METHOD_CANCELED) return;
+                if (!formalExpr || formalExpr.indexOf('"' + itemName + '"') < 0) continue;
+                log("ParseMethod: " + method.name + " matches");
+                var itemRefs = await getMethodItemRefs(method.url);
+                if (PARSE_METHOD_CANCELED) return;
+                if (!itemRefs || itemRefs.length === 0) continue;
+                var mForms = [];
+                for (var ri = 0; ri < itemRefs.length; ri++) {
+                    if (PARSE_METHOD_CANCELED) return;
+                    var fs = await getItemRefForms(itemRefs[ri].url);
+                    if (PARSE_METHOD_CANCELED) return;
+                    if (fs) { for (var fi = 0; fi < fs.length; fi++) { if (mForms.indexOf(fs[fi]) < 0) mForms.push(fs[fi]); if (PARSE_METHOD_COLLECTED_FORMS.indexOf(fs[fi]) < 0) PARSE_METHOD_COLLECTED_FORMS.push(fs[fi]); } }
+                }
+                if (mForms.length > 0) { PARSE_METHOD_COLLECTED_METHODS.push({ name: method.name, forms: mForms }); if (typeof onFound === "function") onFound(method.name, mForms); }
+            }
+            onComplete(PARSE_METHOD_COLLECTED_METHODS, PARSE_METHOD_COLLECTED_FORMS);
+        } catch (err) { log("ParseMethod: error - " + err); onComplete([], []); }
+    }
+
+    async function getMethodLibraryData() {
+        return new Promise(function(resolve) {
+            GM.xmlHttpRequest({ method: "GET", url: METHOD_LIBRARY_URL, onload: function(resp) {
+                var html = resp && resp.responseText ? resp.responseText : "";
+                var methods = [];
+                var tmp = document.createElement("div"); tmp.innerHTML = html;
+                var table = tmp.querySelector("table#listTable") || tmp.querySelector("table");
+                if (table) { var tbody = table.querySelector("tbody"); if (tbody) { var rows = tbody.querySelectorAll("tr"); for (var i = 0; i < rows.length; i++) { var tds = rows[i].querySelectorAll("td"); if (tds.length >= 1) { var link = tds[0].querySelector("a"); if (link) { var name = (link.textContent || "").trim(); var href = link.getAttribute("href") || ""; if (name && href) { var url = href.indexOf("http") === 0 ? href : "https://cenexel.clinspark.com" + href; methods.push({ name: name, url: url }); } } } } } }
+                resolve(methods);
+            }, onerror: function() { resolve([]); } });
+        });
+    }
+
+    async function getMethodFormalExpr(methodUrl) {
+        return new Promise(function(resolve) {
+            GM.xmlHttpRequest({ method: "GET", url: methodUrl, onload: function(resp) {
+                var html = resp && resp.responseText ? resp.responseText : "";
+                var tmp = document.createElement("div"); tmp.innerHTML = html;
+                var tables = tmp.querySelectorAll("table.table.table-striped.table-bordered");
+                for (var i = 0; i < tables.length; i++) { var tbody = tables[i].querySelector("tbody"); if (tbody) { var rows = tbody.querySelectorAll("tr"); for (var j = 0; j < rows.length; j++) { var tds = rows[j].querySelectorAll("td"); if (tds.length >= 2 && (tds[0].textContent || "").trim() === "Formal Expression:") { resolve((tds[1].textContent || "").trim()); return; } } } }
+                resolve("");
+            }, onerror: function() { resolve(""); } });
+        });
+    }
+
+    async function getMethodItemRefs(methodUrl) {
+        return new Promise(function(resolve) {
+            GM.xmlHttpRequest({ method: "GET", url: methodUrl + "?references=references", onload: function(resp) {
+                var html = resp && resp.responseText ? resp.responseText : "";
+                var refs = [];
+                var tmp = document.createElement("div"); tmp.innerHTML = html;
+                var groups = tmp.querySelectorAll("ul.list-group");
+                for (var i = 0; i < groups.length; i++) { var items = groups[i].querySelectorAll("li.list-group-item a"); for (var j = 0; j < items.length; j++) { var href = items[j].getAttribute("href") || ""; if (href.indexOf("/show/itemgroup/") >= 0) { var fullUrl = href.indexOf("http") === 0 ? href : "https://cenexel.clinspark.com" + href; refs.push({ url: fullUrl }); } } }
+                resolve(refs);
+            }, onerror: function() { resolve([]); } });
+        });
+    }
+
+    async function getItemRefForms(itemRefUrl) {
+        return new Promise(function(resolve) {
+            GM.xmlHttpRequest({ method: "GET", url: itemRefUrl + "?references=references", onload: function(resp) {
+                var html = resp && resp.responseText ? resp.responseText : "";
+                var forms = [];
+                var tmp = document.createElement("div"); tmp.innerHTML = html;
+                var groups = tmp.querySelectorAll("ul.list-group");
+                for (var i = 0; i < groups.length; i++) { var items = groups[i].querySelectorAll("li.list-group-item a"); for (var j = 0; j < items.length; j++) { var href = items[j].getAttribute("href") || ""; var text = (items[j].textContent || "").trim(); if (href.indexOf("/show/form/") >= 0 && text) { forms.push(text); } } }
+                resolve(forms);
+            }, onerror: function() { resolve([]); } });
+        });
+    }
+
+    function doFindFormWithForms(formNames) {
+        if (!formNames || formNames.length === 0) { log("ParseMethod: no forms"); return; }
+        log("ParseMethod: Find Form with " + formNames.length + " forms");
+        try { localStorage.setItem(STORAGE_PARSE_METHOD_RESULTS, JSON.stringify(PARSE_METHOD_COLLECTED_METHODS)); localStorage.setItem(STORAGE_PARSE_METHOD_COMPLETED, "1"); } catch (e) {}
+        try { localStorage.removeItem(STORAGE_FIND_FORM_STATUS_VALUES); } catch (e) {}
+        var formNamesJson = JSON.stringify(formNames);
+        localStorage.setItem(STORAGE_FIND_FORM_KEYWORD, formNamesJson);
+        localStorage.setItem(STORAGE_FIND_FORM_SUBJECT, "");
+        window.location.href = FORM_LIST_URL;
+    }
+
+    function showParseMethodCompletedPopup(methods) {
+        var container = document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;gap:16px";
+        var statusBox = document.createElement("div");
+        statusBox.style.cssText = "padding:12px;background:#1a1a1a;border-radius:6px;border:1px solid #333;text-align:center";
+        statusBox.textContent = "Find Form completed.";
+        container.appendChild(statusBox);
+        var resultsBox = document.createElement("div");
+        resultsBox.style.cssText = "max-height:300px;overflow-y:auto;background:#1a1a1a;border-radius:6px;border:1px solid #333;padding:12px";
+        showParseMethodResults(resultsBox, methods);
+        container.appendChild(resultsBox);
+        createPopup({ title: "Parse Method", content: container, width: "480px", height: "auto", onClose: function() { clearParseMethodStoredResults(); } });
+    }
+
+    function checkAndRestoreParseMethodPopup() {
+        var completed = null;
+        try { completed = localStorage.getItem(STORAGE_PARSE_METHOD_COMPLETED); } catch (e) {}
+        if (completed !== "1") return false;
+        var resultsRaw = null;
+        try { resultsRaw = localStorage.getItem(STORAGE_PARSE_METHOD_RESULTS); } catch (e) {}
+        if (!resultsRaw) { clearParseMethodStoredResults(); return false; }
+        try {
+            var methods = JSON.parse(resultsRaw);
+            if (Array.isArray(methods)) {
+                log("ParseMethod: restoring completed popup");
+                populateFormsFromParseMethod();
+                showParseMethodCompletedPopup(methods);
+                return true;
+            }
+        } catch (e) { log("ParseMethod: failed to parse stored results"); }
+        clearParseMethodStoredResults();
+        return false;
+    }
+
+    function populateFormsFromParseMethod() {
+        var kw = "";
+        try { kw = localStorage.getItem(STORAGE_FIND_FORM_KEYWORD) || ""; } catch (e) {}
+        if (!kw) { log("ParseMethod: no stored keyword for forms"); return; }
+        var formNames = [];
+        try { formNames = JSON.parse(kw); } catch (e) { log("ParseMethod: failed to parse form names JSON"); return; }
+        if (!Array.isArray(formNames) || formNames.length === 0) { log("ParseMethod: no form names in array"); return; }
+        log("ParseMethod: looking for " + formNames.length + " form names");
+        var waitCount = 0;
+        var waitInterval = setInterval(function() {
+            waitCount++;
+            if (waitCount > 60) { clearInterval(waitInterval); log("ParseMethod: timeout waiting for form select"); return; }
+            var formsSel = document.querySelector('select#formIds, select[name="formIds"]');
+            if (!formsSel) return;
+            clearInterval(waitInterval);
+            var fos = formsSel.querySelectorAll("option");
+            var formIds = [];
+            for (var i = 0; i < fos.length; i++) {
+                var fop = fos[i];
+                var ftxt = (fop.textContent || "").trim();
+                var fval = fop.value || "";
+                for (var j = 0; j < formNames.length; j++) {
+                    var formName = formNames[j].trim();
+                    if (formName && ftxt === formName && fval) {
+                        formIds.push(fval);
+                        log("ParseMethod: matched form '" + formName + "' with id=" + fval);
+                        break;
+                    }
+                }
+            }
+            log("ParseMethod: found " + formIds.length + " form IDs");
+            if (formIds.length > 0) {
+                var url = FORM_LIST_URL + "?search=true";
+                for (var k = 0; k < formIds.length; k++) { url += "&formIds=" + encodeURIComponent(formIds[k]); }
+                log("ParseMethod: navigating to URL with formIds");
+                try { localStorage.removeItem(STORAGE_FIND_FORM_KEYWORD); localStorage.removeItem(STORAGE_FIND_FORM_SUBJECT); } catch (e) {}
+                window.location.href = url;
+            } else {
+                log("ParseMethod: no matching forms found");
+                try { localStorage.removeItem(STORAGE_FIND_FORM_KEYWORD); localStorage.removeItem(STORAGE_FIND_FORM_SUBJECT); } catch (e) {}
+            }
+        }, 100);
+    }
 
     //==========================
     // RUN SUBJECT ELIGIBILITY FEATURE
@@ -3614,8 +4882,14 @@
         continueFindAdverseEvent(b, subjId);
     }
 
-
-    // ================
+    //==========================
+    // RUN BARCODE FEATURE
+    //==========================
+    // This section contains all functions related to barcode lookup and data entry.
+    // This feature automates finding subject barcodes by searching through epochs,
+    // cohorts, and subjects. Functions handle subject identification, barcode retrieval,
+    // and populating barcode input modals.
+    //==========================
     async function openBarcodeDataEntryModalIfNeeded(timeoutMs) {
         var inputBox = document.querySelector("input.bootbox-input.bootbox-input-text.form-control");
         if (inputBox) {
@@ -4292,8 +5566,6 @@
         }
     }
 
-
-
     function createPopup(options) {
         options = options || {};
         var title = options.title || "Popup";
@@ -4647,6 +5919,18 @@
         findFormBtn.style.cursor = "pointer";
         findFormBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         findFormBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+        
+        var parseMethodBtn = document.createElement("button");
+        parseMethodBtn.textContent = "Parse Method";
+        parseMethodBtn.style.background = "#4a90e2";
+        parseMethodBtn.style.color = "#fff";
+        parseMethodBtn.style.border = "none";
+        parseMethodBtn.style.borderRadius = "6px";
+        parseMethodBtn.style.padding = "8px";
+        parseMethodBtn.style.cursor = "pointer";
+        parseMethodBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
+        parseMethodBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+
         var toggleLogsBtn = document.createElement("button");
         var logVisible = getLogVisible();
         toggleLogsBtn.textContent = logVisible ? "Hide Logs" : "Show Logs";
@@ -4672,6 +5956,7 @@
         btnRow.appendChild(findAeBtn);
         btnRow.appendChild(findFormBtn);
         btnRow.appendChild(importEligBtn);
+        btnRow.appendChild(parseMethodBtn);
         btnRow.appendChild(pauseBtn);
         btnRow.appendChild(toggleLogsBtn);
         bodyContainer.appendChild(btnRow);
@@ -4725,6 +6010,9 @@
         importEligBtn.addEventListener("click", function () {
             log("ImportElig: button clicked");
             startImportEligibilityMapping();
+        });
+        parseMethodBtn.addEventListener("click", function () {
+            openParseMethod();
         });
         pauseBtn.addEventListener("click", function () {
             var nowPaused = isPaused();
@@ -5041,8 +6329,16 @@
             return;
         }
         if (location.pathname === "/secure/study/data/list") {
-            processFindFormOnList();
+            var parseMethodCompleted = null;
+            try { parseMethodCompleted = localStorage.getItem(STORAGE_PARSE_METHOD_COMPLETED); } catch (e) {}
+            if (parseMethodCompleted === "1") {
+                log("ParseMethod: skipping processFindFormOnList because Parse Method completed");
+                checkAndRestoreParseMethodPopup();
+            } else {
+                processFindFormOnList();
+            }
         }
+        
 
         // Check for manual navigation away from Import Eligibility process
         var pendingPopup = null;
@@ -5109,7 +6405,6 @@
         }
 
     }
-
 
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", init, { once: true });

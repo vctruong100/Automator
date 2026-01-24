@@ -1,8 +1,8 @@
 
 // ==UserScript==
-// @name ClinSpark Form Automator v2
+// @name ClinSpark Form Automator
 // @namespace vinh.activity.plan.state
-// @version 1.0.1
+// @version 1.1.0
 // @description
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/heads/main/ClinSpark%20Form%20Automator.js

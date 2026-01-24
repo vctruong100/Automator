@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Eligibility Mapping Automator
 // @namespace vinh.activity.plan.state
-// @version 1.3.3
+// @version 1.4.0
 // @description
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/heads/main/ClinSpark%20Basic%20Automator.js

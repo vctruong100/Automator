@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 2.6.1
+// @version 2.7.0
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -1394,297 +1394,6 @@
     // COLLECT ALL FEATURES
     //==========================
     //==========================
-
-
-    // Recreate popups on page load if they should be active
-    function recreatePopupsIfNeeded() {
-        try {
-            var runMode = getRunMode();
-
-            // Recreate Run All popup
-            if (runMode === "all") {
-                var runAllPopupActive = localStorage.getItem(STORAGE_RUN_ALL_POPUP);
-                if (runAllPopupActive === "1" && (!RUN_ALL_POPUP_REF || !document.body.contains(RUN_ALL_POPUP_REF.element))) {
-                    var popupContainer = document.createElement("div");
-                    popupContainer.style.display = "flex";
-                    popupContainer.style.flexDirection = "column";
-                    popupContainer.style.gap = "16px";
-                    popupContainer.style.padding = "8px";
-
-                    // Restore status from localStorage
-                    var savedStatus = "Running Lock Activity Plans";
-                    try {
-                        var storedStatus = localStorage.getItem(STORAGE_RUN_ALL_STATUS);
-                        if (storedStatus && storedStatus.length > 0) {
-                            savedStatus = storedStatus;
-                        }
-                    } catch (e) {}
-
-                    var statusDiv = document.createElement("div");
-                    statusDiv.id = "runAllStatus";
-                    statusDiv.style.textAlign = "center";
-                    statusDiv.style.fontSize = "18px";
-                    statusDiv.style.color = "#fff";
-                    statusDiv.style.fontWeight = "500";
-                    statusDiv.textContent = savedStatus;
-
-                    var loadingAnimation = document.createElement("div");
-                    loadingAnimation.id = "runAllLoading";
-                    loadingAnimation.style.textAlign = "center";
-                    loadingAnimation.style.fontSize = "14px";
-                    loadingAnimation.style.color = "#9df";
-                    loadingAnimation.textContent = "Running.";
-
-                    popupContainer.appendChild(statusDiv);
-                    popupContainer.appendChild(loadingAnimation);
-
-                    RUN_ALL_POPUP_REF = createPopup({
-                        title: "Run Button (1-5) Progress",
-                        content: popupContainer,
-                        width: "400px",
-                        height: "auto",
-                        onClose: function() {
-                            log("Run All: cancelled by user (close button)");
-                            clearAllRunState();
-                            clearCohortGuard();
-                            try {
-                                localStorage.removeItem(STORAGE_RUN_MODE);
-                                localStorage.removeItem(STORAGE_KEY);
-                                localStorage.removeItem(STORAGE_CONTINUE_EPOCH);
-                                localStorage.removeItem(STORAGE_RUN_ALL_POPUP);
-                                localStorage.removeItem(STORAGE_RUN_ALL_STATUS);
-                            } catch (e) {}
-                            RUN_ALL_POPUP_REF = null;
-                        }
-                    });
-
-                    var dots = 1;
-                    var loadingInterval = setInterval(function() {
-                        if (!RUN_ALL_POPUP_REF || !document.body.contains(RUN_ALL_POPUP_REF.element)) {
-                            clearInterval(loadingInterval);
-                            return;
-                        }
-                        dots = dots + 1;
-                        if (dots > 3) {
-                            dots = 1;
-                        }
-                        var text = "Running";
-                        var i = 0;
-                        while (i < dots) {
-                            text = text + ".";
-                            i = i + 1;
-                        }
-                        if (loadingAnimation) {
-                            loadingAnimation.textContent = text;
-                        }
-                    }, 500);
-                }
-            }
-
-            // Recreate Clear Mapping popup
-            if (runMode === RUNMODE_CLEAR_MAPPING) {
-                var clearMappingPopupActive = localStorage.getItem(STORAGE_CLEAR_MAPPING_POPUP);
-                if (clearMappingPopupActive === "1" && (!CLEAR_MAPPING_POPUP_REF || !document.body.contains(CLEAR_MAPPING_POPUP_REF.element))) {
-                    var popupContainer = document.createElement("div");
-                    popupContainer.style.display = "flex";
-                    popupContainer.style.flexDirection = "column";
-                    popupContainer.style.gap = "16px";
-                    popupContainer.style.padding = "8px";
-
-                    var statusDiv = document.createElement("div");
-                    statusDiv.style.textAlign = "center";
-                    statusDiv.style.fontSize = "18px";
-                    statusDiv.style.color = "#fff";
-                    statusDiv.style.fontWeight = "500";
-                    statusDiv.textContent = "Running Clear Mapping";
-
-                    var loadingAnimation = document.createElement("div");
-                    loadingAnimation.id = "clearMappingLoading";
-                    loadingAnimation.style.textAlign = "center";
-                    loadingAnimation.style.fontSize = "14px";
-                    loadingAnimation.style.color = "#9df";
-                    loadingAnimation.textContent = "Running.";
-
-                    popupContainer.appendChild(statusDiv);
-                    popupContainer.appendChild(loadingAnimation);
-
-                    CLEAR_MAPPING_POPUP_REF = createPopup({
-                        title: "Clear Mapping",
-                        content: popupContainer,
-                        width: "350px",
-                        height: "auto",
-                        onClose: function() {
-                            log("ClearMapping: cancelled by user (close button)");
-                            try {
-                                localStorage.removeItem(STORAGE_RUN_MODE);
-                                localStorage.removeItem(STORAGE_CLEAR_MAPPING_POPUP);
-                            } catch (e) {}
-                            CLEAR_MAPPING_POPUP_REF = null;
-                        }
-                    });
-
-                    var dots = 1;
-                    var loadingInterval = setInterval(function() {
-                        if (!CLEAR_MAPPING_POPUP_REF || !document.body.contains(CLEAR_MAPPING_POPUP_REF.element)) {
-                            clearInterval(loadingInterval);
-                            return;
-                        }
-                        dots = dots + 1;
-                        if (dots > 3) {
-                            dots = 1;
-                        }
-                        var text = "Running";
-                        var i = 0;
-                        while (i < dots) {
-                            text = text + ".";
-                            i = i + 1;
-                        }
-                        if (loadingAnimation) {
-                            loadingAnimation.textContent = text;
-                        }
-                    }, 500);
-                }
-            }
-
-            // Recreate Import Cohort Subject popup
-            if (runMode === "nonscrn" || runMode === "epochImport") {
-                var importCohortPopupActive = localStorage.getItem(STORAGE_IMPORT_COHORT_POPUP);
-                if (importCohortPopupActive === "1" && (!IMPORT_COHORT_POPUP_REF || !document.body.contains(IMPORT_COHORT_POPUP_REF.element))) {
-                    var popupContainer = document.createElement("div");
-                    popupContainer.style.display = "flex";
-                    popupContainer.style.flexDirection = "column";
-                    popupContainer.style.gap = "16px";
-                    popupContainer.style.padding = "8px";
-
-                    var statusDiv = document.createElement("div");
-                    statusDiv.id = "importCohortStatus";
-                    statusDiv.style.textAlign = "center";
-                    statusDiv.style.fontSize = "18px";
-                    statusDiv.style.color = "#fff";
-                    statusDiv.style.fontWeight = "500";
-                    statusDiv.textContent = "Running Import Cohort Subject";
-
-                    var loadingAnimation = document.createElement("div");
-                    loadingAnimation.id = "importCohortLoading";
-                    loadingAnimation.style.textAlign = "center";
-                    loadingAnimation.style.fontSize = "14px";
-                    loadingAnimation.style.color = "#9df";
-                    loadingAnimation.textContent = "Running.";
-
-                    popupContainer.appendChild(statusDiv);
-                    popupContainer.appendChild(loadingAnimation);
-
-                    IMPORT_COHORT_POPUP_REF = createPopup({
-                        title: "Import Cohort Subject",
-                        content: popupContainer,
-                        width: "400px",
-                        height: "auto",
-                        onClose: function() {
-                            log("Import Cohort: cancelled by user (close button)");
-                            clearAllRunState();
-                            clearCohortGuard();
-                            try {
-                                localStorage.removeItem(STORAGE_RUN_MODE);
-                                localStorage.removeItem(STORAGE_IMPORT_COHORT_POPUP);
-                            } catch (e) {}
-                            IMPORT_COHORT_POPUP_REF = null;
-                        }
-                    });
-
-                    var dots = 1;
-                    var loadingInterval = setInterval(function() {
-                        if (!IMPORT_COHORT_POPUP_REF || !document.body.contains(IMPORT_COHORT_POPUP_REF.element)) {
-                            clearInterval(loadingInterval);
-                            return;
-                        }
-                        dots = dots + 1;
-                        if (dots > 3) {
-                            dots = 1;
-                        }
-                        var text = "Running";
-                        var i = 0;
-                        while (i < dots) {
-                            text = text + ".";
-                            i = i + 1;
-                        }
-                        if (loadingAnimation) {
-                            loadingAnimation.textContent = text;
-                        }
-                    }, 500);
-                }
-            }
-
-            // Recreate Add Cohort Subjects popup
-            if (runMode === "epochAddCohort") {
-                var addCohortPopupActive = localStorage.getItem(STORAGE_ADD_COHORT_POPUP);
-                if (addCohortPopupActive === "1" && (!ADD_COHORT_POPUP_REF || !document.body.contains(ADD_COHORT_POPUP_REF.element))) {
-                    var popupContainer = document.createElement("div");
-                    popupContainer.style.display = "flex";
-                    popupContainer.style.flexDirection = "column";
-                    popupContainer.style.gap = "16px";
-                    popupContainer.style.padding = "8px";
-
-                    var statusDiv = document.createElement("div");
-                    statusDiv.id = "addCohortStatus";
-                    statusDiv.style.textAlign = "center";
-                    statusDiv.style.fontSize = "18px";
-                    statusDiv.style.color = "#fff";
-                    statusDiv.style.fontWeight = "500";
-                    statusDiv.textContent = "Running Add Cohort Subjects";
-
-                    var loadingAnimation = document.createElement("div");
-                    loadingAnimation.id = "addCohortLoading";
-                    loadingAnimation.style.textAlign = "center";
-                    loadingAnimation.style.fontSize = "14px";
-                    loadingAnimation.style.color = "#9df";
-                    loadingAnimation.textContent = "Running.";
-
-                    popupContainer.appendChild(statusDiv);
-                    popupContainer.appendChild(loadingAnimation);
-
-                    ADD_COHORT_POPUP_REF = createPopup({
-                        title: "Add Cohort Subjects",
-                        content: popupContainer,
-                        width: "400px",
-                        height: "auto",
-                        onClose: function() {
-                            log("Add Cohort: cancelled by user (close button)");
-                            clearAllRunState();
-                            clearCohortGuard();
-                            try {
-                                localStorage.removeItem(STORAGE_RUN_MODE);
-                                localStorage.removeItem(STORAGE_ADD_COHORT_POPUP);
-                            } catch (e) {}
-                            ADD_COHORT_POPUP_REF = null;
-                        }
-                    });
-
-                    var dots = 1;
-                    var loadingInterval = setInterval(function() {
-                        if (!ADD_COHORT_POPUP_REF || !document.body.contains(ADD_COHORT_POPUP_REF.element)) {
-                            clearInterval(loadingInterval);
-                            return;
-                        }
-                        dots = dots + 1;
-                        if (dots > 3) {
-                            dots = 1;
-                        }
-                        var text = "Running";
-                        var i = 0;
-                        while (i < dots) {
-                            text = text + ".";
-                            i = i + 1;
-                        }
-                        if (loadingAnimation) {
-                            loadingAnimation.textContent = text;
-                        }
-                    }, 500);
-                }
-            }
-        } catch (e) {
-            log("Error recreating popups: " + e);
-        }
-    }
 
     // Return true if we are on the Data Collection > Subject page.
     function isDataCollectionSubjectPage() {
@@ -10451,6 +10160,296 @@
     function SharedUtilityFunctions() {}
 
     
+    // Recreate popups on page load if they should be active
+    function recreatePopupsIfNeeded() {
+        try {
+            var runMode = getRunMode();
+
+            // Recreate Run All popup
+            if (runMode === "all") {
+                var runAllPopupActive = localStorage.getItem(STORAGE_RUN_ALL_POPUP);
+                if (runAllPopupActive === "1" && (!RUN_ALL_POPUP_REF || !document.body.contains(RUN_ALL_POPUP_REF.element))) {
+                    var popupContainer = document.createElement("div");
+                    popupContainer.style.display = "flex";
+                    popupContainer.style.flexDirection = "column";
+                    popupContainer.style.gap = "16px";
+                    popupContainer.style.padding = "8px";
+
+                    // Restore status from localStorage
+                    var savedStatus = "Running Lock Activity Plans";
+                    try {
+                        var storedStatus = localStorage.getItem(STORAGE_RUN_ALL_STATUS);
+                        if (storedStatus && storedStatus.length > 0) {
+                            savedStatus = storedStatus;
+                        }
+                    } catch (e) {}
+
+                    var statusDiv = document.createElement("div");
+                    statusDiv.id = "runAllStatus";
+                    statusDiv.style.textAlign = "center";
+                    statusDiv.style.fontSize = "18px";
+                    statusDiv.style.color = "#fff";
+                    statusDiv.style.fontWeight = "500";
+                    statusDiv.textContent = savedStatus;
+
+                    var loadingAnimation = document.createElement("div");
+                    loadingAnimation.id = "runAllLoading";
+                    loadingAnimation.style.textAlign = "center";
+                    loadingAnimation.style.fontSize = "14px";
+                    loadingAnimation.style.color = "#9df";
+                    loadingAnimation.textContent = "Running.";
+
+                    popupContainer.appendChild(statusDiv);
+                    popupContainer.appendChild(loadingAnimation);
+
+                    RUN_ALL_POPUP_REF = createPopup({
+                        title: "Run Button (1-5) Progress",
+                        content: popupContainer,
+                        width: "400px",
+                        height: "auto",
+                        onClose: function() {
+                            log("Run All: cancelled by user (close button)");
+                            clearAllRunState();
+                            clearCohortGuard();
+                            try {
+                                localStorage.removeItem(STORAGE_RUN_MODE);
+                                localStorage.removeItem(STORAGE_KEY);
+                                localStorage.removeItem(STORAGE_CONTINUE_EPOCH);
+                                localStorage.removeItem(STORAGE_RUN_ALL_POPUP);
+                                localStorage.removeItem(STORAGE_RUN_ALL_STATUS);
+                            } catch (e) {}
+                            RUN_ALL_POPUP_REF = null;
+                        }
+                    });
+
+                    var dots = 1;
+                    var loadingInterval = setInterval(function() {
+                        if (!RUN_ALL_POPUP_REF || !document.body.contains(RUN_ALL_POPUP_REF.element)) {
+                            clearInterval(loadingInterval);
+                            return;
+                        }
+                        dots = dots + 1;
+                        if (dots > 3) {
+                            dots = 1;
+                        }
+                        var text = "Running";
+                        var i = 0;
+                        while (i < dots) {
+                            text = text + ".";
+                            i = i + 1;
+                        }
+                        if (loadingAnimation) {
+                            loadingAnimation.textContent = text;
+                        }
+                    }, 500);
+                }
+            }
+
+            // Recreate Clear Mapping popup
+            if (runMode === RUNMODE_CLEAR_MAPPING) {
+                var clearMappingPopupActive = localStorage.getItem(STORAGE_CLEAR_MAPPING_POPUP);
+                if (clearMappingPopupActive === "1" && (!CLEAR_MAPPING_POPUP_REF || !document.body.contains(CLEAR_MAPPING_POPUP_REF.element))) {
+                    var popupContainer = document.createElement("div");
+                    popupContainer.style.display = "flex";
+                    popupContainer.style.flexDirection = "column";
+                    popupContainer.style.gap = "16px";
+                    popupContainer.style.padding = "8px";
+
+                    var statusDiv = document.createElement("div");
+                    statusDiv.style.textAlign = "center";
+                    statusDiv.style.fontSize = "18px";
+                    statusDiv.style.color = "#fff";
+                    statusDiv.style.fontWeight = "500";
+                    statusDiv.textContent = "Running Clear Mapping";
+
+                    var loadingAnimation = document.createElement("div");
+                    loadingAnimation.id = "clearMappingLoading";
+                    loadingAnimation.style.textAlign = "center";
+                    loadingAnimation.style.fontSize = "14px";
+                    loadingAnimation.style.color = "#9df";
+                    loadingAnimation.textContent = "Running.";
+
+                    popupContainer.appendChild(statusDiv);
+                    popupContainer.appendChild(loadingAnimation);
+
+                    CLEAR_MAPPING_POPUP_REF = createPopup({
+                        title: "Clear Mapping",
+                        content: popupContainer,
+                        width: "350px",
+                        height: "auto",
+                        onClose: function() {
+                            log("ClearMapping: cancelled by user (close button)");
+                            try {
+                                localStorage.removeItem(STORAGE_RUN_MODE);
+                                localStorage.removeItem(STORAGE_CLEAR_MAPPING_POPUP);
+                            } catch (e) {}
+                            CLEAR_MAPPING_POPUP_REF = null;
+                        }
+                    });
+
+                    var dots = 1;
+                    var loadingInterval = setInterval(function() {
+                        if (!CLEAR_MAPPING_POPUP_REF || !document.body.contains(CLEAR_MAPPING_POPUP_REF.element)) {
+                            clearInterval(loadingInterval);
+                            return;
+                        }
+                        dots = dots + 1;
+                        if (dots > 3) {
+                            dots = 1;
+                        }
+                        var text = "Running";
+                        var i = 0;
+                        while (i < dots) {
+                            text = text + ".";
+                            i = i + 1;
+                        }
+                        if (loadingAnimation) {
+                            loadingAnimation.textContent = text;
+                        }
+                    }, 500);
+                }
+            }
+
+            // Recreate Import Cohort Subject popup
+            if (runMode === "nonscrn" || runMode === "epochImport") {
+                var importCohortPopupActive = localStorage.getItem(STORAGE_IMPORT_COHORT_POPUP);
+                if (importCohortPopupActive === "1" && (!IMPORT_COHORT_POPUP_REF || !document.body.contains(IMPORT_COHORT_POPUP_REF.element))) {
+                    var popupContainer = document.createElement("div");
+                    popupContainer.style.display = "flex";
+                    popupContainer.style.flexDirection = "column";
+                    popupContainer.style.gap = "16px";
+                    popupContainer.style.padding = "8px";
+
+                    var statusDiv = document.createElement("div");
+                    statusDiv.id = "importCohortStatus";
+                    statusDiv.style.textAlign = "center";
+                    statusDiv.style.fontSize = "18px";
+                    statusDiv.style.color = "#fff";
+                    statusDiv.style.fontWeight = "500";
+                    statusDiv.textContent = "Running Import Cohort Subject";
+
+                    var loadingAnimation = document.createElement("div");
+                    loadingAnimation.id = "importCohortLoading";
+                    loadingAnimation.style.textAlign = "center";
+                    loadingAnimation.style.fontSize = "14px";
+                    loadingAnimation.style.color = "#9df";
+                    loadingAnimation.textContent = "Running.";
+
+                    popupContainer.appendChild(statusDiv);
+                    popupContainer.appendChild(loadingAnimation);
+
+                    IMPORT_COHORT_POPUP_REF = createPopup({
+                        title: "Import Cohort Subject",
+                        content: popupContainer,
+                        width: "400px",
+                        height: "auto",
+                        onClose: function() {
+                            log("Import Cohort: cancelled by user (close button)");
+                            clearAllRunState();
+                            clearCohortGuard();
+                            try {
+                                localStorage.removeItem(STORAGE_RUN_MODE);
+                                localStorage.removeItem(STORAGE_IMPORT_COHORT_POPUP);
+                            } catch (e) {}
+                            IMPORT_COHORT_POPUP_REF = null;
+                        }
+                    });
+
+                    var dots = 1;
+                    var loadingInterval = setInterval(function() {
+                        if (!IMPORT_COHORT_POPUP_REF || !document.body.contains(IMPORT_COHORT_POPUP_REF.element)) {
+                            clearInterval(loadingInterval);
+                            return;
+                        }
+                        dots = dots + 1;
+                        if (dots > 3) {
+                            dots = 1;
+                        }
+                        var text = "Running";
+                        var i = 0;
+                        while (i < dots) {
+                            text = text + ".";
+                            i = i + 1;
+                        }
+                        if (loadingAnimation) {
+                            loadingAnimation.textContent = text;
+                        }
+                    }, 500);
+                }
+            }
+
+            // Recreate Add Cohort Subjects popup
+            if (runMode === "epochAddCohort") {
+                var addCohortPopupActive = localStorage.getItem(STORAGE_ADD_COHORT_POPUP);
+                if (addCohortPopupActive === "1" && (!ADD_COHORT_POPUP_REF || !document.body.contains(ADD_COHORT_POPUP_REF.element))) {
+                    var popupContainer = document.createElement("div");
+                    popupContainer.style.display = "flex";
+                    popupContainer.style.flexDirection = "column";
+                    popupContainer.style.gap = "16px";
+                    popupContainer.style.padding = "8px";
+
+                    var statusDiv = document.createElement("div");
+                    statusDiv.id = "addCohortStatus";
+                    statusDiv.style.textAlign = "center";
+                    statusDiv.style.fontSize = "18px";
+                    statusDiv.style.color = "#fff";
+                    statusDiv.style.fontWeight = "500";
+                    statusDiv.textContent = "Running Add Cohort Subjects";
+
+                    var loadingAnimation = document.createElement("div");
+                    loadingAnimation.id = "addCohortLoading";
+                    loadingAnimation.style.textAlign = "center";
+                    loadingAnimation.style.fontSize = "14px";
+                    loadingAnimation.style.color = "#9df";
+                    loadingAnimation.textContent = "Running.";
+
+                    popupContainer.appendChild(statusDiv);
+                    popupContainer.appendChild(loadingAnimation);
+
+                    ADD_COHORT_POPUP_REF = createPopup({
+                        title: "Add Cohort Subjects",
+                        content: popupContainer,
+                        width: "400px",
+                        height: "auto",
+                        onClose: function() {
+                            log("Add Cohort: cancelled by user (close button)");
+                            clearAllRunState();
+                            clearCohortGuard();
+                            try {
+                                localStorage.removeItem(STORAGE_RUN_MODE);
+                                localStorage.removeItem(STORAGE_ADD_COHORT_POPUP);
+                            } catch (e) {}
+                            ADD_COHORT_POPUP_REF = null;
+                        }
+                    });
+
+                    var dots = 1;
+                    var loadingInterval = setInterval(function() {
+                        if (!ADD_COHORT_POPUP_REF || !document.body.contains(ADD_COHORT_POPUP_REF.element)) {
+                            clearInterval(loadingInterval);
+                            return;
+                        }
+                        dots = dots + 1;
+                        if (dots > 3) {
+                            dots = 1;
+                        }
+                        var text = "Running";
+                        var i = 0;
+                        while (i < dots) {
+                            text = text + ".";
+                            i = i + 1;
+                        }
+                        if (loadingAnimation) {
+                            loadingAnimation.textContent = text;
+                        }
+                    }, 500);
+                }
+            }
+        } catch (e) {
+            log("Error recreating popups: " + e);
+        }
+    }
+
     function clearEligibilityWorkingState() {
         try {
             localStorage.removeItem(STORAGE_ELIG_IMPORTED);
@@ -10464,7 +10463,7 @@
 
         log("ImportElig: working state fully cleared");
     }
-    
+
     // Clear all Collect All related data
     function clearCollectAllData() {
         COLLECT_ALL_CANCELLED = false;
@@ -13279,6 +13278,9 @@
                 executeClearMappingAutomation();
             }, 4000);
             return;
+        }
+        if (location.pathname === "/secure/study/data/list") {
+            processFindFormOnList();
         }
     }
 
