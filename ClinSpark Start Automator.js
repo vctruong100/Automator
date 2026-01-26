@@ -61,6 +61,11 @@
     var STORAGE_LOG_VISIBLE = "activityPlanState.log.visible";
     var STORAGE_MANUAL_SELECT_INITIAL_REF_TIME = "activityPlanState.manualSelectInitialRefTime";
     var STORAGE_RUN_LOCK_SAMPLE_PATHS = "activityPlanState.runLockSamplePaths";
+    var STORAGE_SAMPLE_PATH_AUTO_CLOSE = "activityPlanState.samplePath.autoClose";
+    var STORAGE_LOCK_SAMPLE_PATHS_POPUP = "activityPlanState.lockSamplePaths.popup";
+    var LOCK_SAMPLE_PATHS_POPUP_REF = null;
+    var STORAGE_LOCK_ACTIVITY_PLANS_POPUP = "activityPlanState.lockActivityPlans.popup";
+    var LOCK_ACTIVITY_PLANS_POPUP_REF = null;
 
     const STORAGE_PANEL_HIDDEN = "activityPlanState.panel.hidden";
     const PANEL_TOGGLE_KEY = "F2";
@@ -115,7 +120,9 @@
     var IMPORT_ELIG_POPUP_REF = null;
     var IMPORT_COHORT_POPUP_REF = null;
     var ADD_COHORT_POPUP_REF = null;
+    var ICF_BARCODE_POPUP_REF = null;
     const STORAGE_RUN_ALL_POPUP = "activityPlanState.runAllPopup";
+    const STORAGE_ICF_BARCODE_POPUP = "activityPlanState.icfBarcodePopup";
     const STORAGE_RUN_ALL_STATUS = "activityPlanState.runAllStatus";
     const STORAGE_CLEAR_MAPPING_POPUP = "activityPlanState.clearMappingPopup";
     const STORAGE_IMPORT_ELIG_POPUP = "activityPlanState.importEligPopup";
@@ -137,6 +144,59 @@
     var DEFAULT_FORM_PRIORITY = "mh, bm, review, process, dm, rep, subs, med, elg_pi, vitals, ecg";
 
     //==========================
+    // BACKGROUND HTTP REQUEST HELPERS
+    //==========================
+    // Helper functions for making background HTTP requests without opening tabs
+    //==========================
+
+    function fetchPage(url) {
+        return new Promise(function(resolve, reject) {
+            if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") {
+                GM.xmlHttpRequest({
+                    method: "GET",
+                    url: url,
+                    onload: function(response) {
+                        resolve(response.responseText);
+                    },
+                    onerror: function(error) {
+                        reject(error);
+                    }
+                });
+            } else {
+                reject(new Error("GM.xmlHttpRequest not available"));
+            }
+        });
+    }
+
+    function submitForm(url, formData) {
+        return new Promise(function(resolve, reject) {
+            if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") {
+                GM.xmlHttpRequest({
+                    method: "POST",
+                    url: url,
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded"
+                    },
+                    data: formData,
+                    onload: function(response) {
+                        resolve(response.responseText);
+                    },
+                    onerror: function(error) {
+                        reject(error);
+                    }
+                });
+            } else {
+                reject(new Error("GM.xmlHttpRequest not available"));
+            }
+        });
+    }
+
+    function parseHtml(htmlString) {
+        var parser = new DOMParser();
+        return parser.parseFromString(htmlString, "text/html");
+    }
+
+    //==========================
     // RUN SAMPLE PATHS FEATURE
     //==========================
     // This section contains all functions and constants related to the Run Sample Paths feature.
@@ -144,6 +204,122 @@
     // the sample paths list, detail pages, and update pages to set the locked status.
     //==========================
     function RunSamplePathsFunctions() {}
+
+    async function fetchAndLockSamplePath(samplePathUrl, samplePathName) {
+        try {
+            log("Locking Sample Path: " + samplePathName);
+            
+            var detailHtml = await fetchPage(samplePathUrl);
+            var detailDoc = parseHtml(detailHtml);
+            
+            var successAlert = detailDoc.querySelector('div.alert.alert-success.alert-dismissable');
+            if (successAlert) {
+                var alertText = (successAlert.textContent + "").trim();
+                if (alertText.indexOf("The sample path has been updated") !== -1) {
+                    log("Sample Path already locked: " + samplePathName);
+                    return { success: true, message: "Already locked" };
+                }
+            }
+            
+            var editLink = detailDoc.querySelector('a[href*="/secure/samples/configure/paths/update/"]');
+            if (!editLink) {
+                log("Edit link not found for: " + samplePathName);
+                return { success: false, message: "Edit link not found" };
+            }
+            
+            var updatePath = editLink.getAttribute("href");
+            var updateUrl = location.origin + updatePath;
+            
+            var updateHtml = await fetchPage(updateUrl);
+            var updateDoc = parseHtml(updateHtml);
+            
+            var lockCheckbox = updateDoc.querySelector('input#locked');
+            if (!lockCheckbox) {
+                log("Lock checkbox not found for: " + samplePathName);
+                return { success: false, message: "Lock checkbox not found" };
+            }
+            
+            var isAlreadyLocked = lockCheckbox.hasAttribute("checked") || lockCheckbox.checked;
+            if (isAlreadyLocked) {
+                log("Sample Path already locked (checkbox): " + samplePathName);
+                return { success: true, message: "Already locked" };
+            }
+            
+            var formElement = updateDoc.querySelector('form');
+            if (!formElement) {
+                log("Form not found for: " + samplePathName);
+                return { success: false, message: "Form not found" };
+            }
+            
+            var formData = "";
+            var inputs = formElement.querySelectorAll('input, textarea, select');
+            var i = 0;
+            while (i < inputs.length) {
+                var input = inputs[i];
+                var name = input.getAttribute("name");
+                var type = input.getAttribute("type");
+                var value = "";
+                
+                if (name) {
+                    if (name === "locked") {
+                        value = "on";
+                    } else if (name === "reasonForChange") {
+                        value = "Automated lock via script";
+                    } else if (type === "checkbox" || type === "radio") {
+                        if (input.checked || input.hasAttribute("checked")) {
+                            value = input.value || "on";
+                        } else {
+                            i = i + 1;
+                            continue;
+                        }
+                    } else if (input.tagName.toLowerCase() === "select") {
+                        var selectedOption = input.querySelector("option[selected]");
+                        if (selectedOption) {
+                            value = selectedOption.value || "";
+                        } else {
+                            value = input.value || "";
+                        }
+                    } else {
+                        value = input.value || "";
+                    }
+                    
+                    if (formData.length > 0) {
+                        formData += "&";
+                    }
+                    formData += encodeURIComponent(name) + "=" + encodeURIComponent(value);
+                }
+                i = i + 1;
+            }
+            
+            log("Submitting lock for: " + samplePathName);
+            var submitUrl = formElement.getAttribute("action");
+            if (!submitUrl || submitUrl === "" || submitUrl === "#") {
+                submitUrl = updateUrl;
+            } else if (submitUrl.indexOf("http") !== 0) {
+                submitUrl = location.origin + submitUrl;
+            }
+            
+            var resultHtml = await submitForm(submitUrl, formData);
+            var resultDoc = parseHtml(resultHtml);
+            
+            var resultAlert = resultDoc.querySelector('div.alert.alert-success.alert-dismissable');
+            if (resultAlert) {
+                var resultText = (resultAlert.textContent + "").trim();
+                if (resultText.indexOf("The sample path has been updated") !== -1) {
+                    log("Successfully locked: " + samplePathName);
+                    return { success: true, message: "Locked successfully" };
+                }
+            }
+            
+            log("Lock submitted but success not confirmed for: " + samplePathName);
+            return { success: true, message: "Submitted (unconfirmed)" };
+            
+        } catch (error) {
+            log("Error locking " + samplePathName + ": " + String(error));
+            return { success: false, message: String(error) };
+        }
+    }
+
     async function processLockSamplePathsPage() {
         log("processLockSamplePathsPage: start");
 
@@ -169,6 +345,7 @@
         var rows = tbody.querySelectorAll("tr");
         log("processLockSamplePathsPage: rows found=" + String(rows.length));
 
+        var unlockedPaths = [];
         var i = 0;
         while (i < rows.length) {
             var row = rows[i];
@@ -180,17 +357,16 @@
                 var lockCell = tds[3];
                 var lockText = (lockCell.textContent + "").trim();
 
-                log("Row " + String(i) + " lockText=" + lockText);
-
                 if (lockText.toLowerCase() === "no") {
                     var link = tds[0].querySelector("a");
+                    var nameCell = tds[0];
+                    var pathName = (nameCell.textContent + "").trim();
 
                     if (link) {
                         var href = link.getAttribute("href") + "";
                         if (href.length > 0) {
                             var fullUrl = location.origin + href;
-                            log("Opening unlocked Sample Path: " + fullUrl);
-                            openInTab(fullUrl + "?autolocksamplepath=1", false);
+                            unlockedPaths.push({ url: fullUrl, name: pathName });
                         }
                     }
                 }
@@ -199,16 +375,158 @@
             i = i + 1;
         }
 
-        log("processLockSamplePathsPage: all unlocked paths opened");
+        log("processLockSamplePathsPage: found " + String(unlockedPaths.length) + " unlocked paths");
+
+        if (unlockedPaths.length === 0) {
+            log("processLockSamplePathsPage: no unlocked paths to process");
+            try {
+                localStorage.removeItem(STORAGE_RUN_LOCK_SAMPLE_PATHS);
+            } catch (e) { }
+
+            var mode = getRunMode();
+            if (mode === "all") {
+                await sleep(1000);
+                log("processLockSamplePathsPage: continuing to Study Show for ALL mode");
+                updateRunAllPopupStatus("Running Update Study Status");
+                location.href = STUDY_SHOW_URL + "?autoupdate=1";
+            }
+            return;
+        }
+
+        var popupContainer = document.createElement("div");
+        popupContainer.style.display = "flex";
+        popupContainer.style.flexDirection = "column";
+        popupContainer.style.gap = "16px";
+        popupContainer.style.padding = "8px";
+
+        var statusDiv = document.createElement("div");
+        statusDiv.id = "lockSamplePathsStatus";
+        statusDiv.style.textAlign = "center";
+        statusDiv.style.fontSize = "18px";
+        statusDiv.style.color = "#fff";
+        statusDiv.style.fontWeight = "500";
+        statusDiv.textContent = "Locking Sample Paths";
+
+        var progressDiv = document.createElement("div");
+        progressDiv.id = "lockSamplePathsProgress";
+        progressDiv.style.textAlign = "center";
+        progressDiv.style.fontSize = "16px";
+        progressDiv.style.color = "#9df";
+        progressDiv.textContent = "Processing 0/" + String(unlockedPaths.length);
+
+        var loadingAnimation = document.createElement("div");
+        loadingAnimation.id = "lockSamplePathsLoading";
+        loadingAnimation.style.textAlign = "center";
+        loadingAnimation.style.fontSize = "14px";
+        loadingAnimation.style.color = "#9df";
+        loadingAnimation.textContent = "Running.";
+
+        var countsDiv = document.createElement("div");
+        countsDiv.id = "lockSamplePathsCounts";
+        countsDiv.style.textAlign = "center";
+        countsDiv.style.fontSize = "14px";
+        countsDiv.style.color = "#ccc";
+        countsDiv.innerHTML = "<span style='color:#9f9'>Success: 0</span> | <span style='color:#f99'>Failed: 0</span>";
+
+        popupContainer.appendChild(statusDiv);
+        popupContainer.appendChild(progressDiv);
+        popupContainer.appendChild(loadingAnimation);
+        popupContainer.appendChild(countsDiv);
+
+        LOCK_SAMPLE_PATHS_POPUP_REF = createPopup({
+            title: "Lock Sample Paths",
+            content: popupContainer,
+            width: "400px",
+            height: "auto",
+            onClose: function() {
+                log("Lock Sample Paths: cancelled by user");
+                try {
+                    localStorage.removeItem(STORAGE_RUN_LOCK_SAMPLE_PATHS);
+                    localStorage.removeItem(STORAGE_LOCK_SAMPLE_PATHS_POPUP);
+                } catch (e) {}
+                LOCK_SAMPLE_PATHS_POPUP_REF = null;
+            }
+        });
+
+        try {
+            localStorage.setItem(STORAGE_LOCK_SAMPLE_PATHS_POPUP, "1");
+        } catch (e) {}
+
+        var dots = 1;
+        var loadingInterval = setInterval(function() {
+            if (!LOCK_SAMPLE_PATHS_POPUP_REF || !document.body.contains(LOCK_SAMPLE_PATHS_POPUP_REF.element)) {
+                clearInterval(loadingInterval);
+                return;
+            }
+            dots = dots + 1;
+            if (dots > 3) {
+                dots = 1;
+            }
+            var text = "Running";
+            var d = 0;
+            while (d < dots) {
+                text = text + ".";
+                d = d + 1;
+            }
+            if (loadingAnimation) {
+                loadingAnimation.textContent = text;
+            }
+        }, 500);
+
+        var successCount = 0;
+        var failCount = 0;
+        var j = 0;
+        while (j < unlockedPaths.length) {
+            var path = unlockedPaths[j];
+            log("Processing (" + String(j + 1) + "/" + String(unlockedPaths.length) + "): " + path.name);
+            
+            if (progressDiv) {
+                progressDiv.textContent = "Processing " + String(j + 1) + "/" + String(unlockedPaths.length) + ": " + path.name;
+            }
+            
+            var result = await fetchAndLockSamplePath(path.url, path.name);
+            if (result.success) {
+                successCount = successCount + 1;
+            } else {
+                failCount = failCount + 1;
+            }
+            
+            if (countsDiv) {
+                countsDiv.innerHTML = "<span style='color:#9f9'>Success: " + String(successCount) + "</span> | <span style='color:#f99'>Failed: " + String(failCount) + "</span>";
+            }
+            
+            await sleep(500);
+            j = j + 1;
+        }
+
+        clearInterval(loadingInterval);
+
+        log("processLockSamplePathsPage: completed. Success=" + String(successCount) + " Failed=" + String(failCount));
+
+        if (statusDiv) {
+            statusDiv.textContent = "Completed";
+            statusDiv.style.color = "#9f9";
+        }
+        if (loadingAnimation) {
+            loadingAnimation.textContent = "All sample paths processed";
+        }
+        if (progressDiv) {
+            progressDiv.textContent = "Processed " + String(unlockedPaths.length) + "/" + String(unlockedPaths.length);
+        }
 
         try {
             localStorage.removeItem(STORAGE_RUN_LOCK_SAMPLE_PATHS);
+            localStorage.removeItem(STORAGE_LOCK_SAMPLE_PATHS_POPUP);
             log("processLockSamplePathsPage: flag cleared");
         } catch (e) { }
 
         var mode = getRunMode();
         if (mode === "all") {
-            await sleep(1000);
+            await sleep(2000);
+            if (LOCK_SAMPLE_PATHS_POPUP_REF && LOCK_SAMPLE_PATHS_POPUP_REF.close) {
+                LOCK_SAMPLE_PATHS_POPUP_REF.close();
+            }
+            LOCK_SAMPLE_PATHS_POPUP_REF = null;
             log("processLockSamplePathsPage: continuing to Study Show for ALL mode");
             updateRunAllPopupStatus("Running Update Study Status");
             location.href = STUDY_SHOW_URL + "?autoupdate=1";
@@ -216,230 +534,11 @@
     }
 
     async function processLockSamplePathDetailPage() {
-        log("processLockSamplePathDetailPage: start");
-
-        var successAlert = document.querySelector('div.alert.alert-success.alert-dismissable');
-        if (successAlert) {
-            var alertText = (successAlert.textContent + "").trim();
-            if (alertText.indexOf("The sample path has been updated") !== -1) {
-                log("processLockSamplePathDetailPage: success alert detected, closing tab");
-                await sleep(300);
-                closeTabWithFallback("Sample Path locked successfully.");
-                return;
-            }
-        }
-
-        var auto = getQueryParam("autolocksamplepath");
-        var isAuto = auto === "1";
-
-        if (!isAuto) {
-            log("processLockSamplePathDetailPage: not auto mode");
-
-            var checkSuccess = setInterval(function() {
-                var alert = document.querySelector('div.alert.alert-success.alert-dismissable');
-                if (alert) {
-                    var text = (alert.textContent + "").trim();
-                    if (text.indexOf("The sample path has been updated") !== -1) {
-                        clearInterval(checkSuccess);
-                        log("processLockSamplePathDetailPage: success alert detected, closing tab");
-                        closeTabWithFallback("Sample Path locked successfully.");
-                    }
-                }
-            }, 500);
-
-            setTimeout(function() {
-                clearInterval(checkSuccess);
-            }, 5000);
-
-            return;
-        }
-
-        var checkSuccessInterval = setInterval(function() {
-            var alert = document.querySelector('div.alert.alert-success.alert-dismissable');
-            if (alert) {
-                var text = (alert.textContent + "").trim();
-                if (text.indexOf("The sample path has been updated") !== -1) {
-                    clearInterval(checkSuccessInterval);
-                    log("processLockSamplePathDetailPage: success alert detected during processing, closing tab");
-                    closeTabWithFallback("Sample Path locked successfully.");
-                }
-            }
-        }, 500);
-
-        var closeTimeout = setTimeout(function() {
-            clearInterval(checkSuccessInterval);
-            log("processLockSamplePathDetailPage: timeout, closing tab");
-            closeTabWithFallback("Sample Path processing completed.");
-        }, 5000);
-
-        var actionsOpened = await clickActionsDropdownIfNeeded();
-        await sleep(500);
-        log("Actions dropdown opened=" + String(actionsOpened));
-
-        if (!actionsOpened) {
-            log("Actions dropdown not found");
-            clearTimeout(closeTimeout);
-            clearInterval(checkSuccessInterval);
-            await sleep(500);
-            closeTabWithFallback("Sample Path processing completed.");
-            return;
-        }
-
-        var editLink = await waitForSelector('a[href*="/secure/samples/configure/paths/update/"]', 5000);
-        if (!editLink) {
-            editLink = document.querySelector('a[href*="/secure/samples/configure/paths/update/"]');
-        }
-        var hasEditLink = !!editLink;
-
-        log("Edit Path link exists=" + String(hasEditLink));
-
-        if (!hasEditLink) {
-            log("Edit Path link missing");
-            clearTimeout(closeTimeout);
-            clearInterval(checkSuccessInterval);
-            await sleep(500);
-            closeTabWithFallback("Sample Path processing completed.");
-            return;
-        }
-
-        clearTimeout(closeTimeout);
-
-        var href = editLink.getAttribute("href") + "";
-        var updateUrl = location.origin + href;
-        if (href.indexOf("?") === -1) {
-            updateUrl = updateUrl + "?autolocksamplepath=1";
-        } else {
-            updateUrl = updateUrl + "&autolocksamplepath=1";
-        }
-        log("Edit Path clicked, navigating to: " + updateUrl);
-
-        clearInterval(checkSuccessInterval);
-        location.href = updateUrl;
+        log("processLockSamplePathDetailPage: not needed with background approach");
     }
 
     async function processLockSamplePathUpdatePage() {
-        log("processLockSamplePathUpdatePage: start");
-
-        var auto = getQueryParam("autolocksamplepath");
-        var isAuto = auto === "1";
-
-        if (!isAuto) {
-            log("processLockSamplePathUpdatePage: not auto mode");
-            setTimeout(function() {
-                closeTabWithFallback("Sample Path processing completed.");
-            }, 5000);
-            return;
-        }
-
-        var closeTimeout = setTimeout(function() {
-            log("processLockSamplePathUpdatePage: timeout, closing tab");
-            closeTabWithFallback("Sample Path processing completed.");
-        }, 5000);
-
-        var lockBox = await waitForSelector('input#locked', 10000);
-        var lockBoxExists = !!lockBox;
-        log("Lock checkbox exists=" + String(lockBoxExists));
-
-        if (lockBox) {
-            if (!lockBox.checked) {
-                lockBox.checked = true;
-                var evtL = new Event("change", { bubbles: true });
-                lockBox.dispatchEvent(evtL);
-
-                var wrapper = lockBox.closest("div.checker");
-                if (wrapper) {
-                    var span = wrapper.querySelector("span");
-                    if (span) {
-                        span.classList.add("checked");
-                    }
-                }
-
-                log("Lock checkbox set to true");
-            } else {
-                log("Lock checkbox already checked");
-            }
-        } else {
-            log("Lock checkbox not found");
-            clearTimeout(closeTimeout);
-            await sleep(500);
-            closeTabWithFallback("Sample Path processing completed.");
-            return;
-        }
-
-        var reason = await waitForSelector("textarea#reasonForChange", 10000);
-        var hasReason = !!reason;
-        log("Reason textarea exists=" + String(hasReason));
-
-        if (reason) {
-            reason.value = "Locking...";
-            var evtR = new Event("input", { bubbles: true });
-            reason.dispatchEvent(evtR);
-            log("Reason for Change set");
-        } else {
-            log("Reason textarea not found");
-            clearTimeout(closeTimeout);
-            await sleep(500);
-            closeTabWithFallback("Sample Path processing completed.");
-            return;
-        }
-
-        var saveBtn = await waitForSelector("button.btn.green[type='submit']", 10000);
-        var hasSave = !!saveBtn;
-        log("Save button exists=" + String(hasSave));
-
-        if (saveBtn) {
-            clearTimeout(closeTimeout);
-            saveBtn.click();
-            log("Save clicked");
-
-            var successDetected = false;
-            var checkStart = Date.now();
-            var checkMax = 15000;
-            var checkInterval = 300;
-
-            while (Date.now() - checkStart < checkMax && !successDetected) {
-                await sleep(checkInterval);
-
-                var successAlert = document.querySelector('div.alert.alert-success.alert-dismissable');
-                if (successAlert) {
-                    var alertText = (successAlert.textContent + "").trim();
-                    if (alertText.indexOf("The sample path has been updated") !== -1) {
-                        log("processLockSamplePathUpdatePage: success alert detected, closing tab");
-                        successDetected = true;
-                        await sleep(300);
-                        closeTabWithFallback("Sample Path locked successfully.");
-                        return;
-                    }
-                }
-
-                var currentPath = location.pathname;
-                if (currentPath.indexOf("/secure/samples/configure/paths/show/") !== -1) {
-                    var showPageAlert = document.querySelector('div.alert.alert-success.alert-dismissable');
-                    if (showPageAlert) {
-                        var showAlertText = (showPageAlert.textContent + "").trim();
-                        if (showAlertText.indexOf("The sample path has been updated") !== -1) {
-                            log("processLockSamplePathUpdatePage: success alert detected on show page, closing tab");
-                            successDetected = true;
-                            await sleep(300);
-                            closeTabWithFallback("Sample Path locked successfully.");
-                            return;
-                        }
-                    }
-                }
-            }
-
-            if (!successDetected) {
-                log("processLockSamplePathUpdatePage: success alert not detected within timeout, closing tab anyway");
-                await sleep(300);
-                closeTabWithFallback("Sample Path processing completed.");
-            }
-        } else {
-            log("Save button not found");
-            clearTimeout(closeTimeout);
-            await sleep(500);
-            closeTabWithFallback("Sample Path processing completed.");
-            return;
-        }
+        log("processLockSamplePathUpdatePage: not needed with background approach");
     }
 
     //==========================
@@ -459,12 +558,27 @@
         } catch (e) {}
     }
 
-    // Pick a random unused letter from a-z.
+    // Pick a random unused letter from a-z (excluding 'u' and 'x' which have no results).
     function pickRandomUnusedLetter(allLetters, usedLetters) {
+        var excludedLetters = ["u", "x"];
         var unused = [];
         var i = 0;
         while (i < allLetters.length) {
             var letter = allLetters[i];
+            // Skip excluded letters
+            var isExcluded = false;
+            var k = 0;
+            while (k < excludedLetters.length) {
+                if (excludedLetters[k] === letter) {
+                    isExcluded = true;
+                    break;
+                }
+                k = k + 1;
+            }
+            if (isExcluded) {
+                i = i + 1;
+                continue;
+            }
             var found = false;
             var j = 0;
             while (j < usedLetters.length) {
@@ -989,6 +1103,7 @@
                 setRunMode("consent");
                 await sleep(3000);
                 location.href = STUDY_SHOW_URL + "?autoconsent=1";
+                updateRunAllPopupStatus("Running ICF Barcode");
                 log("Continuing ALL to consent after pause");
                 return;
             }
@@ -1532,7 +1647,7 @@
         }
             if (getRunMode() === "all") {
                 setRunMode("consent");
-                updateRunAllPopupStatus("Running Run ICF Barcode");
+                updateRunAllPopupStatus("Running ICF Barcode");
                 await sleep(3000);
                 location.href = STUDY_SHOW_URL + "?autoconsent=1";
                 log("Continuing ALL to consent after pause");
@@ -4443,6 +4558,153 @@
         location.href = LIST_URL;
     }
 
+    // Background function to lock a single activity plan using HTTP requests
+    async function fetchAndLockActivityPlan(planUrl, planName) {
+        try {
+            log("Locking Activity Plan: " + planName);
+            
+            var detailHtml = await fetchPage(planUrl);
+            var detailDoc = parseHtml(detailHtml);
+            
+            var editLink = detailDoc.querySelector('a[href^="/secure/crfdesign/activityplans/updatestate/"]');
+            if (!editLink) {
+                log("Edit state link not found for: " + planName);
+                return { success: false, message: "Edit state link not found" };
+            }
+            
+            var updatePath = editLink.getAttribute("href");
+            var updateUrl = location.origin + updatePath;
+            
+            log("Fetching modal content from: " + updateUrl);
+            var modalHtml = await fetchPage(updateUrl);
+            var modalDoc = parseHtml(modalHtml);
+            
+            log("Modal HTML length: " + String(modalHtml.length));
+            var saveButton = modalDoc.querySelector('button#actionButton');
+            if (saveButton) {
+                log("Save button found: " + saveButton.outerHTML);
+            } else {
+                log("Save button NOT found in modal");
+            }
+            
+            var formGroups = modalDoc.querySelectorAll('.form-group');
+            if (!formGroups || formGroups.length < 2) {
+                log("Form groups not found for: " + planName);
+                return { success: false, message: "Form groups not found" };
+            }
+            
+            var secondFormGroup = formGroups[1];
+            var formControlStatic = secondFormGroup.querySelector('p.form-control-static');
+            
+            var hasReadyState = false;
+            if (formControlStatic) {
+                var staticText = (formControlStatic.textContent + "").trim();
+                var hasLockIcon = formControlStatic.querySelector('i.fa.fa-lock');
+                if (staticText.indexOf("Ready") !== -1 || hasLockIcon) {
+                    hasReadyState = true;
+                    log("Activity Plan " + planName + " is in Ready state, will lock");
+                }
+            }
+            
+            if (!hasReadyState) {
+                log("Activity Plan " + planName + " is not in Ready state, skipping");
+                return { success: true, message: "Not in Ready state, skipped" };
+            }
+            
+            var formElement = modalDoc.querySelector('form');
+            if (!formElement) {
+                log("Form not found for: " + planName);
+                return { success: false, message: "Form not found" };
+            }
+            
+            var allInputs = formElement.querySelectorAll('input, textarea, select');
+            log("Found " + String(allInputs.length) + " form inputs");
+            
+            var formData = "";
+            var i = 0;
+            while (i < allInputs.length) {
+                var input = allInputs[i];
+                var name = input.getAttribute("name");
+                var type = input.getAttribute("type") || "";
+                var tagName = input.tagName.toLowerCase();
+                var value = "";
+                
+                log("Input " + String(i) + ": name=" + String(name) + ", type=" + String(type) + ", tag=" + tagName + ", value=" + String(input.value || input.getAttribute("value") || ""));
+                
+                if (name) {
+                    if (type === "checkbox" || type === "radio") {
+                        if (input.checked || input.hasAttribute("checked")) {
+                            value = input.value || input.getAttribute("value") || "on";
+                        } else {
+                            i = i + 1;
+                            continue;
+                        }
+                    } else if (tagName === "select") {
+                        var selectedOption = input.querySelector("option[selected]");
+                        if (selectedOption) {
+                            value = selectedOption.value || selectedOption.getAttribute("value") || "";
+                        } else {
+                            var firstOption = input.querySelector("option");
+                            value = firstOption ? (firstOption.value || firstOption.getAttribute("value") || "") : "";
+                        }
+                    } else {
+                        value = input.value || input.getAttribute("value") || "";
+                    }
+                    
+                    if (formData.length > 0) {
+                        formData += "&";
+                    }
+                    formData += encodeURIComponent(name) + "=" + encodeURIComponent(value);
+                }
+                i = i + 1;
+            }
+            
+            var formAction = formElement.getAttribute("action");
+            var formMethod = formElement.getAttribute("method") || "POST";
+            log("Form action (ignored): " + formAction);
+            log("Form method: " + formMethod);
+            log("Form data: " + formData);
+            log("Submitting lock for: " + planName);
+            
+            var submitUrl = updateUrl;
+            
+            log("Submit URL: " + submitUrl);
+            var resultHtml = await submitForm(submitUrl, formData);
+            var resultDoc = parseHtml(resultHtml);
+            
+            var errorAlert = resultDoc.querySelector('div.alert.alert-danger.alert-dismissable');
+            if (errorAlert) {
+                var errorText = (errorAlert.textContent + "").trim();
+                if (errorText.indexOf("Each segment must contain at least one visible activity") !== -1) {
+                    log("Activity Plan " + planName + " has validation error (no visible activities), skipping");
+                    return { success: true, message: "Validation error, skipped" };
+                }
+            }
+            
+            log("Waiting for page refresh after submission...");
+            await sleep(1000);
+            
+            var verifyHtml = await fetchPage(planUrl);
+            var verifyDoc = parseHtml(verifyHtml);
+            
+            var verifyAlert = verifyDoc.querySelector('div.alert.alert-success.alert-dismissable');
+            if (verifyAlert) {
+                var verifyText = (verifyAlert.textContent + "").trim();
+                if (verifyText.indexOf("activity plan has been updated") !== -1 || verifyText.indexOf("Activity plan has been updated") !== -1) {
+                    log("Successfully locked: " + planName);
+                    return { success: true, message: "Locked successfully" };
+                }
+            }
+            
+            log("Lock submitted but success not confirmed for: " + planName);
+            return { success: true, message: "Submitted (unconfirmed)" };
+            
+        } catch (error) {
+            log("Error locking " + planName + ": " + String(error));
+            return { success: false, message: String(error) };
+        }
+    }
+
     // Orchestrate opening plan show pages and queuing pending ids when run flag present.
     async function processListPage() {
         log("processListPage start");
@@ -4471,23 +4733,195 @@
             return;
         }
         clearRunFlag();
-        var links = getPlanLinks();
-        log("Found plan links=" + String(links.length));
-        var ids = [];
+        
+        var mode = getRunMode();
+        var showPopup = mode === "activity" || mode === "all";
+        
+        var planData = [];
+        var rows = document.querySelectorAll("table.table.table-striped.table-bordered.table-hover tbody tr");
         var i = 0;
-        while (i < links.length) {
-            var url = links[i];
-            openInTab(url, false);
-            var id = extractAutostateIdFromUrl(url);
-            if (id) {
-                ids.push(id);
+        while (i < rows.length) {
+            var row = rows[i];
+            var a = row.querySelector('td.highlight a[href^="/secure/crfdesign/activityplans/show/"]');
+            if (a) {
+                var href = a.getAttribute("href") + "";
+                var planName = (a.textContent + "").trim();
+                if (href.length > 0) {
+                    var fullUrl = location.origin + href;
+                    planData.push({ url: fullUrl, name: planName });
+                }
             }
-            await sleep(200);
             i = i + 1;
         }
-        if (ids.length > 0) {
-            setPendingIds(ids);
-            monitorCompletionThenAdvance();
+        
+        log("Found " + String(planData.length) + " activity plans to lock");
+        
+        if (planData.length === 0) {
+            log("No activity plans to lock");
+            var mode2 = getRunMode();
+            if (mode2 === "all") {
+                await sleep(1000);
+                log("Continuing to Lock Sample Paths for ALL mode");
+                try {
+                    localStorage.setItem(STORAGE_RUN_LOCK_SAMPLE_PATHS, "1");
+                } catch (e) {}
+                updateRunAllPopupStatus("Running Lock Sample Paths");
+                location.href = "https://cenexeltest.clinspark.com/secure/samples/configure/paths";
+            }
+            return;
+        }
+        
+        var statusDiv = null;
+        var progressDiv = null;
+        var loadingAnimation = null;
+        var countsDiv = null;
+        var loadingInterval = null;
+        
+        if (showPopup) {
+            var popupContainer = document.createElement("div");
+            popupContainer.style.display = "flex";
+            popupContainer.style.flexDirection = "column";
+            popupContainer.style.gap = "16px";
+            popupContainer.style.padding = "8px";
+
+            statusDiv = document.createElement("div");
+            statusDiv.id = "lockActivityPlansStatus";
+            statusDiv.style.textAlign = "center";
+            statusDiv.style.fontSize = "18px";
+            statusDiv.style.color = "#fff";
+            statusDiv.style.fontWeight = "500";
+            statusDiv.textContent = "Locking Activity Plans";
+
+            progressDiv = document.createElement("div");
+            progressDiv.id = "lockActivityPlansProgress";
+            progressDiv.style.textAlign = "center";
+            progressDiv.style.fontSize = "16px";
+            progressDiv.style.color = "#9df";
+            progressDiv.textContent = "Processing 0/" + String(planData.length);
+
+            loadingAnimation = document.createElement("div");
+            loadingAnimation.id = "lockActivityPlansLoading";
+            loadingAnimation.style.textAlign = "center";
+            loadingAnimation.style.fontSize = "14px";
+            loadingAnimation.style.color = "#9df";
+            loadingAnimation.textContent = "Running.";
+
+            countsDiv = document.createElement("div");
+            countsDiv.id = "lockActivityPlansCounts";
+            countsDiv.style.textAlign = "center";
+            countsDiv.style.fontSize = "14px";
+            countsDiv.style.color = "#ccc";
+            countsDiv.innerHTML = "<span style='color:#9f9'>Success: 0</span> | <span style='color:#f99'>Failed: 0</span>";
+
+            popupContainer.appendChild(statusDiv);
+            popupContainer.appendChild(progressDiv);
+            popupContainer.appendChild(loadingAnimation);
+            popupContainer.appendChild(countsDiv);
+
+            LOCK_ACTIVITY_PLANS_POPUP_REF = createPopup({
+                title: "Lock Activity Plans",
+                content: popupContainer,
+                width: "400px",
+                height: "auto",
+                onClose: function() {
+                    log("Lock Activity Plans: cancelled by user");
+                    try {
+                        localStorage.removeItem(STORAGE_KEY);
+                        localStorage.removeItem(STORAGE_LOCK_ACTIVITY_PLANS_POPUP);
+                    } catch (e) {}
+                    LOCK_ACTIVITY_PLANS_POPUP_REF = null;
+                }
+            });
+
+            try {
+                localStorage.setItem(STORAGE_LOCK_ACTIVITY_PLANS_POPUP, "1");
+                localStorage.setItem("activityPlanState.lockActivityPlans.successCount", "0");
+                localStorage.setItem("activityPlanState.lockActivityPlans.failCount", "0");
+            } catch (e) {}
+
+            var dots = 1;
+            loadingInterval = setInterval(function() {
+                if (!LOCK_ACTIVITY_PLANS_POPUP_REF || !document.body.contains(LOCK_ACTIVITY_PLANS_POPUP_REF.element)) {
+                    clearInterval(loadingInterval);
+                    return;
+                }
+                dots = dots + 1;
+                if (dots > 3) {
+                    dots = 1;
+                }
+                var text = "Running";
+                var d = 0;
+                while (d < dots) {
+                    text = text + ".";
+                    d = d + 1;
+                }
+                if (loadingAnimation) {
+                    loadingAnimation.textContent = text;
+                }
+            }, 500);
+        }
+        
+        var successCount = 0;
+        var failCount = 0;
+        var j = 0;
+        while (j < planData.length) {
+            var plan = planData[j];
+            log("Processing (" + String(j + 1) + "/" + String(planData.length) + "): " + plan.name);
+            
+            if (showPopup && progressDiv) {
+                progressDiv.textContent = "Processing " + String(j + 1) + "/" + String(planData.length) + ": " + plan.name;
+            }
+            
+            var result = await fetchAndLockActivityPlan(plan.url, plan.name);
+            if (result.success) {
+                successCount = successCount + 1;
+            } else {
+                failCount = failCount + 1;
+            }
+            
+            if (showPopup && countsDiv) {
+                countsDiv.innerHTML = "<span style='color:#9f9'>Success: " + String(successCount) + "</span> | <span style='color:#f99'>Failed: " + String(failCount) + "</span>";
+            }
+            
+            await sleep(500);
+            j = j + 1;
+        }
+        
+        if (showPopup && loadingInterval) {
+            clearInterval(loadingInterval);
+        }
+        
+        log("Lock Activity Plans completed. Success=" + String(successCount) + " Failed=" + String(failCount));
+        
+        if (showPopup && statusDiv) {
+            statusDiv.textContent = "Completed";
+            statusDiv.style.color = "#9f9";
+        }
+        if (showPopup && loadingAnimation) {
+            loadingAnimation.textContent = "All activity plans processed";
+        }
+        if (showPopup && progressDiv) {
+            progressDiv.textContent = "Processed " + String(planData.length) + "/" + String(planData.length);
+        }
+        
+        try {
+            localStorage.removeItem(STORAGE_LOCK_ACTIVITY_PLANS_POPUP);
+            log("Lock Activity Plans: popup flag cleared");
+        } catch (e) {}
+        
+        var mode3 = getRunMode();
+        if (mode3 === "all") {
+            await sleep(2000);
+            if (LOCK_ACTIVITY_PLANS_POPUP_REF && LOCK_ACTIVITY_PLANS_POPUP_REF.close) {
+                LOCK_ACTIVITY_PLANS_POPUP_REF.close();
+            }
+            LOCK_ACTIVITY_PLANS_POPUP_REF = null;
+            log("Continuing to Lock Sample Paths for ALL mode");
+            try {
+                localStorage.setItem(STORAGE_RUN_LOCK_SAMPLE_PATHS, "1");
+            } catch (e) {}
+            updateRunAllPopupStatus("Running Lock Sample Paths");
+            location.href = "https://cenexeltest.clinspark.com/secure/samples/configure/paths";
         }
     }
 
@@ -4818,7 +5252,6 @@
         return false;
     }
 
-
     //==========================
     // SHARED UTILITY FUNCTIONS
     //==========================
@@ -4829,14 +5262,15 @@
     //==========================
 
     function SharedUtilityFunctions() {}
+
     
     // Recreate popups on page load if they should be active
     function recreatePopupsIfNeeded() {
         try {
             var runMode = getRunMode();
 
-            // Recreate Run All popup
-            if (runMode === "all") {
+            // Recreate Run All popup (also for consent phase which is part of Run All flow)
+            if (runMode === "all" || runMode === "consent") {
                 var runAllPopupActive = localStorage.getItem(STORAGE_RUN_ALL_POPUP);
                 if (runAllPopupActive === "1" && (!RUN_ALL_POPUP_REF || !document.body.contains(RUN_ALL_POPUP_REF.element))) {
                     var popupContainer = document.createElement("div");
@@ -5115,6 +5549,7 @@
                     }, 500);
                 }
             }
+
         } catch (e) {
             log("Error recreating popups: " + e);
         }
@@ -5429,60 +5864,9 @@
     }
 
     // If autostate param present, open and save edit state modal and close tab.
+    // NOTE: This function is now stubbed out because Lock Activity Plans uses background HTTP requests.
     async function processShowPageIfAuto() {
-        var autoVal = getQueryParam("autostate");
-        var doAuto = !!autoVal;
-        if (!doAuto) {
-            setTimeout(function() {
-                try { window.close(); } catch (e) {}
-            }, 5000);
-            return;
-        }
-        var mode = getRunMode();
-        var id = getCurrentPlanId();
-        var ids = getPendingIds();
-        var isPending = false;
-        var k = 0;
-        while (k < ids.length) {
-            var v = String(ids[k]);
-            if (id && String(id) === v) {
-                isPending = true;
-                break;
-            }
-            k = k + 1;
-        }
-        if (!(mode === "activity" || isPending)) {
-            log("processShowPageIfAuto ignored; run not active");
-            setTimeout(function() {
-                try { window.close(); } catch (e) {}
-            }, 5000);
-            return;
-        }
-
-        var closeTimeout = setTimeout(function() {
-            log("processShowPageIfAuto: timeout, closing tab");
-            try { window.close(); } catch (e) {}
-        }, 5000);
-
-        log("processShowPageIfAuto autostate=" + String(autoVal));
-        var opened = await findAndOpenEditStateModal();
-        if (!opened) {
-            clearTimeout(closeTimeout);
-            await sleep(1000);
-            try { window.close(); } catch (e) {}
-            setTimeout(function() {
-                try { window.close(); } catch (e2) {}
-            }, 500);
-            return;
-        }
-        var saved = await clickSaveInModal();
-        var id2 = getCurrentPlanId();
-        if (id2) {
-            removePendingId(id2);
-        }
-        clearTimeout(closeTimeout);
-        await sleep(300);
-        closeTabWithFallback("Activity Plan updated successfully.");
+        log("processShowPageIfAuto: not needed with background approach");
     }
 
     // Read current run mode from storage.
@@ -5839,6 +6223,14 @@
                     } catch (e6) {}
                 }
                 ADD_COHORT_POPUP_REF = null;
+            } else if (runMode === "consent" || runMode === "allconsent") {
+                localStorage.removeItem(STORAGE_ICF_BARCODE_POPUP);
+                if (ICF_BARCODE_POPUP_REF && ICF_BARCODE_POPUP_REF.close) {
+                    try {
+                        ICF_BARCODE_POPUP_REF.close();
+                    } catch (e7) {}
+                }
+                ICF_BARCODE_POPUP_REF = null;
             }
         } catch (e) {}
     }
@@ -6566,6 +6958,7 @@
     }
 
 
+
     //==========================
     // MAKE PANEL FUNCTIONS
     //==========================
@@ -6664,7 +7057,6 @@
         runPlansBtn.style.transition = "background 0.2s";
         runPlansBtn.onmouseenter = function() { this.style.background = "#357abd"; };
         runPlansBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
-
         var runStudyBtn = document.createElement("button");
         runStudyBtn.textContent = "Update Study Status";
         runStudyBtn.style.background = "#4a90e2";
@@ -6677,7 +7069,6 @@
         runStudyBtn.style.transition = "background 0.2s";
         runStudyBtn.onmouseenter = function() { this.style.background = "#357abd"; };
         runStudyBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
-
         var runAddCohortBtn = document.createElement("button");
         runAddCohortBtn.textContent = "Add Cohort Subjects";
         runAddCohortBtn.style.background = "#4a90e2";
@@ -6690,7 +7081,6 @@
         runAddCohortBtn.style.transition = "background 0.2s";
         runAddCohortBtn.onmouseenter = function() { this.style.background = "#357abd"; };
         runAddCohortBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
-
         var runConsentBtn = document.createElement("button");
         runConsentBtn.textContent = "Run ICF Barcode";
         runConsentBtn.style.background = "#4a90e2";
@@ -6715,7 +7105,6 @@
         runAllBtn.style.transition = "background 0.2s";
         runAllBtn.onmouseenter = function() { this.style.background = "#449d44"; };
         runAllBtn.onmouseleave = function() { this.style.background = "#5cb85c"; };
-
         var runNonScrnBtn = document.createElement("button");
         runNonScrnBtn.textContent = "Import Cohort Subject";
         runNonScrnBtn.style.background = "#5b43c7";
@@ -6728,7 +7117,6 @@
         runNonScrnBtn.style.transition = "background 0.2s";
         runNonScrnBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
         runNonScrnBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
-
         var runBarcodeBtn = document.createElement("button");
         runBarcodeBtn.textContent = "Run Barcode";
         runBarcodeBtn.style.background = "#5b43c7";
@@ -6741,7 +7129,52 @@
         runBarcodeBtn.style.transition = "background 0.2s";
         runBarcodeBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
         runBarcodeBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
-
+        var runFormOORBtn = document.createElement("button");
+        runFormOORBtn.textContent = "Run Form (OOR) Below Range";
+        runFormOORBtn.style.background = "#f0ad4e";
+        runFormOORBtn.style.color = "#fff";
+        runFormOORBtn.style.border = "none";
+        runFormOORBtn.style.borderRadius = "6px";
+        runFormOORBtn.style.padding = "8px";
+        runFormOORBtn.style.cursor = "pointer";
+        runFormOORBtn.style.fontWeight = "500";
+        runFormOORBtn.style.transition = "background 0.2s";
+        runFormOORBtn.onmouseenter = function() { this.style.background = "#ec971f"; };
+        runFormOORBtn.onmouseleave = function() { this.style.background = "#f0ad4e"; };
+        var runFormOORABtn = document.createElement("button");
+        runFormOORABtn.textContent = "Run Form (OOR) Above Range";
+        runFormOORABtn.style.background = "#f0ad4e";
+        runFormOORABtn.style.color = "#fff";
+        runFormOORABtn.style.border = "none";
+        runFormOORABtn.style.borderRadius = "6px";
+        runFormOORABtn.style.padding = "8px";
+        runFormOORABtn.style.cursor = "pointer";
+        runFormOORABtn.style.fontWeight = "500";
+        runFormOORABtn.style.transition = "background 0.2s";
+        runFormOORABtn.onmouseenter = function() { this.style.background = "#ec971f"; };
+        runFormOORABtn.onmouseleave = function() { this.style.background = "#f0ad4e"; };
+        var runFormIRBtn = document.createElement("button");
+        runFormIRBtn.textContent = "Run Form (In Range)";
+        runFormIRBtn.style.background = "#f0ad4e";
+        runFormIRBtn.style.color = "#fff";
+        runFormIRBtn.style.border = "none";
+        runFormIRBtn.style.borderRadius = "6px";
+        runFormIRBtn.style.padding = "8px";
+        runFormIRBtn.style.cursor = "pointer";
+        runFormIRBtn.style.fontWeight = "500";
+        runFormIRBtn.style.transition = "background 0.2s";
+        runFormIRBtn.onmouseenter = function() { this.style.background = "#ec971f"; };
+        runFormIRBtn.onmouseleave = function() { this.style.background = "#f0ad4e"; };
+        var parseMethodBtn = document.createElement("button");
+        parseMethodBtn.textContent = "Parse Method";
+        parseMethodBtn.style.background = "#4a90e2";
+        parseMethodBtn.style.color = "#fff";
+        parseMethodBtn.style.border = "none";
+        parseMethodBtn.style.borderRadius = "6px";
+        parseMethodBtn.style.padding = "8px";
+        parseMethodBtn.style.cursor = "pointer";
+        parseMethodBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
+        parseMethodBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
         var pauseBtn = document.createElement("button");
         pauseBtn.textContent = isPaused() ? "Resume" : "Pause";
         pauseBtn.style.background = "#6c757d";
@@ -6782,16 +7215,79 @@
         toggleLogsBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
         toggleLogsBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
 
+        var runLockSamplePathsBtn = document.createElement("button");
+        runLockSamplePathsBtn.textContent = "Lock Sample Paths";
+        runLockSamplePathsBtn.style.background = "#4a90e2";
+        runLockSamplePathsBtn.style.color = "#fff";
+        runLockSamplePathsBtn.style.border = "none";
+        runLockSamplePathsBtn.style.borderRadius = "6px";
+        runLockSamplePathsBtn.style.padding = "8px";
+        runLockSamplePathsBtn.style.cursor = "pointer";
+        runLockSamplePathsBtn.style.fontWeight = "500";
+        runLockSamplePathsBtn.style.transition = "background 0.2s";
+        runLockSamplePathsBtn.onmouseenter = function() { this.style.background = "#357abd"; };
+        runLockSamplePathsBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+
+        var importEligBtn = document.createElement("button");
+        importEligBtn.textContent = "Import I/E";
+        importEligBtn.style.background = "#38dae6";
+        importEligBtn.style.color = "#fff";
+        importEligBtn.style.border = "none";
+        importEligBtn.style.borderRadius = "6px";
+        importEligBtn.style.padding = "8px";
+        importEligBtn.style.cursor = "pointer";
+        importEligBtn.style.fontWeight = "500";
+        importEligBtn.style.transition = "background 0.2s";
+        importEligBtn.onmouseenter = function() { this.style.background = "#2bb9c4"; };
+        importEligBtn.onmouseleave = function() { this.style.background = "#38dae6"; };
+
+        var clearMappingBtn = document.createElement("button");
+        clearMappingBtn.textContent = "Clear Mapping";
+        clearMappingBtn.style.background = "#38dae6";
+        clearMappingBtn.style.color = "#fff";
+        clearMappingBtn.style.border = "none";
+        clearMappingBtn.style.borderRadius = "6px";
+        clearMappingBtn.style.padding = "8px";
+        clearMappingBtn.style.cursor = "pointer";
+        clearMappingBtn.style.fontWeight = "500";
+        clearMappingBtn.style.transition = "background 0.2s";
+        clearMappingBtn.onmouseenter = function() { this.style.background = "#2bb9c4"; };
+        clearMappingBtn.onmouseleave = function() { this.style.background = "#38dae6"; };
+
+        var collectAllBtn = document.createElement("button");
+        collectAllBtn.textContent = "Collect All";
+        collectAllBtn.style.background = "#f0ad4e";
+        collectAllBtn.style.color = "#fff";
+        collectAllBtn.style.border = "none";
+        collectAllBtn.style.borderRadius = "6px";
+        collectAllBtn.style.padding = "8px";
+        collectAllBtn.style.cursor = "pointer";
+        collectAllBtn.style.fontWeight = "500";
+        collectAllBtn.style.transition = "background 0.2s";
+        collectAllBtn.onmouseenter = function() { this.style.background = "#ec971f"; };
+        collectAllBtn.onmouseleave = function() { this.style.background = "#f0ad4e"; };
+
         btnRow.appendChild(runPlansBtn);
+        btnRow.appendChild(runLockSamplePathsBtn);
         btnRow.appendChild(runStudyBtn);
         btnRow.appendChild(runAddCohortBtn);
         btnRow.appendChild(runConsentBtn);
         btnRow.appendChild(runAllBtn);
-        btnRow.appendChild(runNonScrnBtn);
         btnRow.appendChild(runBarcodeBtn);
         btnRow.appendChild(pauseBtn);
         btnRow.appendChild(clearLogsBtn);
         btnRow.appendChild(toggleLogsBtn);
+
+        runLockSamplePathsBtn.addEventListener("click", function () {
+            try {
+                localStorage.setItem(STORAGE_RUN_LOCK_SAMPLE_PATHS, "1");
+            } catch (e) { }
+
+            status.textContent = "Navigating to Sample Paths…";
+            log("Run Lock Sample Paths clicked");
+            location.href = "https://cenexeltest.clinspark.com/secure/samples/configure/paths";
+        });
+
         bodyContainer.appendChild(btnRow);
         var status = document.createElement("div");
         status.style.marginTop = "10px";
@@ -7020,6 +7516,74 @@
             } catch (e) {}
             status.textContent = "Navigating to Study Show for Consent…";
             log("Run Informed Consent clicked");
+
+            // Create progress popup for ICF Barcode
+            var popupContainer = document.createElement("div");
+            popupContainer.style.display = "flex";
+            popupContainer.style.flexDirection = "column";
+            popupContainer.style.gap = "16px";
+            popupContainer.style.padding = "8px";
+
+            var statusDiv = document.createElement("div");
+            statusDiv.id = "icfBarcodeStatus";
+            statusDiv.style.textAlign = "center";
+            statusDiv.style.fontSize = "18px";
+            statusDiv.style.color = "#fff";
+            statusDiv.style.fontWeight = "500";
+            statusDiv.textContent = "Running ICF Barcode";
+
+            var loadingAnimation = document.createElement("div");
+            loadingAnimation.id = "icfBarcodeLoading";
+            loadingAnimation.style.textAlign = "center";
+            loadingAnimation.style.fontSize = "14px";
+            loadingAnimation.style.color = "#9df";
+            loadingAnimation.textContent = "Running.";
+
+            popupContainer.appendChild(statusDiv);
+            popupContainer.appendChild(loadingAnimation);
+
+            ICF_BARCODE_POPUP_REF = createPopup({
+                title: "Run ICF Barcode Progress",
+                content: popupContainer,
+                width: "400px",
+                height: "auto",
+                onClose: function() {
+                    log("ICF Barcode: cancelled by user (close button)");
+                    clearAllRunState();
+                    try {
+                        localStorage.removeItem(STORAGE_RUN_MODE);
+                        localStorage.removeItem(STORAGE_ICF_BARCODE_POPUP);
+                    } catch (e) {}
+                    ICF_BARCODE_POPUP_REF = null;
+                }
+            });
+
+            try {
+                localStorage.setItem(STORAGE_ICF_BARCODE_POPUP, "1");
+            } catch (e) {}
+
+            // Animate loading dots
+            var dots = 1;
+            var loadingInterval = setInterval(function() {
+                if (!ICF_BARCODE_POPUP_REF || !document.body.contains(ICF_BARCODE_POPUP_REF.element)) {
+                    clearInterval(loadingInterval);
+                    return;
+                }
+                dots = dots + 1;
+                if (dots > 3) {
+                    dots = 1;
+                }
+                var text = "Running";
+                var i = 0;
+                while (i < dots) {
+                    text = text + ".";
+                    i = i + 1;
+                }
+                if (loadingAnimation) {
+                    loadingAnimation.textContent = text;
+                }
+            }, 500);
+
             location.href = STUDY_SHOW_URL + "?autoconsent=1";
         });
         
@@ -7255,14 +7819,94 @@
                 }
             }, intervalMs);
         });
-        collapseBtn.addEventListener("click", function () {
-            var collapsed = getPanelCollapsed();
-            if (collapsed) {
-                setPanelCollapsed(false);
-            } else {
-                setPanelCollapsed(true);
-            }
-            updatePanelCollapsedState(panel, bodyContainer, resizeHandle, collapseBtn, headerBar);
+        clearMappingBtn.addEventListener("click", function () {
+            log("ClearMapping: button clicked");
+
+            // Create running animation popup
+            var popupContainer = document.createElement("div");
+            popupContainer.style.display = "flex";
+            popupContainer.style.flexDirection = "column";
+            popupContainer.style.gap = "16px";
+            popupContainer.style.padding = "8px";
+
+            var statusDiv = document.createElement("div");
+            statusDiv.style.textAlign = "center";
+            statusDiv.style.fontSize = "18px";
+            statusDiv.style.color = "#fff";
+            statusDiv.style.fontWeight = "500";
+            statusDiv.textContent = "Running Clear Mapping";
+
+            var loadingAnimation = document.createElement("div");
+            loadingAnimation.id = "clearMappingLoading";
+            loadingAnimation.style.textAlign = "center";
+            loadingAnimation.style.fontSize = "14px";
+            loadingAnimation.style.color = "#9df";
+            loadingAnimation.textContent = "Running.";
+
+            popupContainer.appendChild(statusDiv);
+            popupContainer.appendChild(loadingAnimation);
+
+            var clearMappingPopup = createPopup({
+                title: "Clear Mapping",
+                content: popupContainer,
+                width: "350px",
+                height: "auto",
+                onClose: function() {
+                    log("ClearMapping: cancelled by user (close button)");
+                    try {
+                        localStorage.removeItem(STORAGE_RUN_MODE);
+                        localStorage.removeItem(STORAGE_CLEAR_MAPPING_POPUP);
+                    } catch (e) {}
+                    CLEAR_MAPPING_POPUP_REF = null;
+                }
+            });
+
+            CLEAR_MAPPING_POPUP_REF = clearMappingPopup;
+            try {
+                localStorage.setItem(STORAGE_CLEAR_MAPPING_POPUP, "1");
+            } catch (e) {}
+
+            // Animate loading dots
+            var dots = 1;
+            var loadingInterval = setInterval(function() {
+                if (!clearMappingPopup || !document.body.contains(clearMappingPopup.element)) {
+                    clearInterval(loadingInterval);
+                    return;
+                }
+                dots = dots + 1;
+                if (dots > 3) {
+                    dots = 1;
+                }
+                var text = "Running";
+                var i = 0;
+                while (i < dots) {
+                    text = text + ".";
+                    i = i + 1;
+                }
+                if (loadingAnimation) {
+                    loadingAnimation.textContent = text;
+                }
+            }, 500);
+
+            // Close popup when done (check periodically)
+            var checkInterval = setInterval(function() {
+                try {
+                    var runMode = localStorage.getItem(STORAGE_RUN_MODE);
+                    if (runMode !== RUNMODE_CLEAR_MAPPING) {
+                        clearInterval(loadingInterval);
+                        clearInterval(checkInterval);
+                        if (clearMappingPopup && clearMappingPopup.close) {
+                            try {
+                                localStorage.removeItem(STORAGE_CLEAR_MAPPING_POPUP);
+                            } catch (e) {}
+                            clearMappingPopup.close();
+                        }
+                        CLEAR_MAPPING_POPUP_REF = null;
+                    }
+                } catch (e) {}
+            }, 1000);
+
+            startClearMapping();
         });
         closeBtn.addEventListener("click", function () {
             panel.remove();
@@ -7392,7 +8036,7 @@
             log("Paused; automation halted");
             return;
         }
-
+        
         var isSamplePathsPage = location.pathname === "/secure/samples/configure/paths";
         if (isSamplePathsPage) {
             processLockSamplePathsPage();
@@ -7482,6 +8126,21 @@
         if (onBarcodeSubjects) {
             processBarcodeSubjectsPage();
             return;
+        }
+
+        // Check for manual navigation away from Import Eligibility process
+        var pendingPopup = null;
+        try {
+            pendingPopup = localStorage.getItem(STORAGE_ELIG_IMPORT_PENDING_POPUP);
+        } catch (e) {
+            pendingPopup = null;
+        }
+
+        var runModeRaw = null;
+        try {
+            runModeRaw = localStorage.getItem(STORAGE_RUN_MODE);
+        } catch (e) {
+            runModeRaw = null;
         }
     }
 

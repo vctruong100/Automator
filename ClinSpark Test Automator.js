@@ -59,6 +59,8 @@
     var STORAGE_LOG_VISIBLE = "activityPlanState.log.visible";
     var STORAGE_MANUAL_SELECT_INITIAL_REF_TIME = "activityPlanState.manualSelectInitialRefTime";
     var STORAGE_RUN_LOCK_SAMPLE_PATHS = "activityPlanState.runLockSamplePaths";
+    var STORAGE_LOCK_ACTIVITY_PLANS_POPUP = "activityPlanState.lockActivityPlans.popup";
+    var LOCK_ACTIVITY_PLANS_POPUP_REF = null;
 
     const STORAGE_PANEL_HIDDEN = "activityPlanState.panel.hidden";
     const PANEL_TOGGLE_KEY = "F2";
@@ -133,6 +135,59 @@
 
     var DEFAULT_FORM_EXCLUSION = "check";
     var DEFAULT_FORM_PRIORITY = "mh, bm, review, process, dm, rep, subs, med, elg_pi, vitals, ecg";
+
+    //==========================
+    // BACKGROUND HTTP REQUEST HELPERS
+    //==========================
+    // Helper functions for making background HTTP requests without opening tabs
+    //==========================
+
+    function fetchPage(url) {
+        return new Promise(function(resolve, reject) {
+            if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") {
+                GM.xmlHttpRequest({
+                    method: "GET",
+                    url: url,
+                    onload: function(response) {
+                        resolve(response.responseText);
+                    },
+                    onerror: function(error) {
+                        reject(error);
+                    }
+                });
+            } else {
+                reject(new Error("GM.xmlHttpRequest not available"));
+            }
+        });
+    }
+
+    function submitForm(url, formData) {
+        return new Promise(function(resolve, reject) {
+            if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") {
+                GM.xmlHttpRequest({
+                    method: "POST",
+                    url: url,
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded"
+                    },
+                    data: formData,
+                    onload: function(response) {
+                        resolve(response.responseText);
+                    },
+                    onerror: function(error) {
+                        reject(error);
+                    }
+                });
+            } else {
+                reject(new Error("GM.xmlHttpRequest not available"));
+            }
+        });
+    }
+
+    function parseHtml(htmlString) {
+        var parser = new DOMParser();
+        return parser.parseFromString(htmlString, "text/html");
+    }
 
     //==========================
     // FIND FORM FEATURE
@@ -9758,6 +9813,145 @@
         } catch (e) {}
     }
 
+    // Background function to fetch and lock a single activity plan
+    async function fetchAndLockActivityPlan(planUrl, planName) {
+        try {
+            log("Locking Activity Plan: " + planName);
+            
+            var detailHtml = await fetchPage(planUrl);
+            var detailDoc = parseHtml(detailHtml);
+            
+            var successAlert = detailDoc.querySelector('div.alert.alert-success.alert-dismissable');
+            if (successAlert) {
+                var alertText = (successAlert.textContent + "").trim();
+                if (alertText.indexOf("activity plan has been updated") !== -1 || alertText.indexOf("Activity plan has been updated") !== -1) {
+                    log("Activity Plan already locked: " + planName);
+                    return { success: true, message: "Already locked" };
+                }
+            }
+            
+            var editLink = detailDoc.querySelector('a[href^="/secure/crfdesign/activityplans/updatestate/"]');
+            if (!editLink) {
+                log("Edit state link not found for: " + planName);
+                return { success: false, message: "Edit state link not found" };
+            }
+            
+            var updatePath = editLink.getAttribute("href");
+            var updateUrl = location.origin + updatePath;
+            
+            var updateHtml = await fetchPage(updateUrl);
+            var updateDoc = parseHtml(updateHtml);
+            
+            var formElement = updateDoc.querySelector('form');
+            if (!formElement) {
+                log("Form not found for: " + planName);
+                return { success: false, message: "Form not found" };
+            }
+            
+            var formData = "";
+            var inputs = formElement.querySelectorAll('input, textarea, select');
+            var i = 0;
+            while (i < inputs.length) {
+                var input = inputs[i];
+                var name = input.getAttribute("name");
+                var type = input.getAttribute("type");
+                var value = "";
+                
+                if (name) {
+                    if (type === "checkbox" || type === "radio") {
+                        if (input.checked || input.hasAttribute("checked")) {
+                            value = input.value || "on";
+                        } else {
+                            i = i + 1;
+                            continue;
+                        }
+                    } else if (input.tagName.toLowerCase() === "select") {
+                        var selectedOption = input.querySelector("option[selected]");
+                        if (selectedOption) {
+                            value = selectedOption.value || "";
+                        } else {
+                            value = input.value || "";
+                        }
+                    } else {
+                        value = input.value || "";
+                    }
+                    
+                    if (formData.length > 0) {
+                        formData += "&";
+                    }
+                    formData += encodeURIComponent(name) + "=" + encodeURIComponent(value);
+                }
+                i = i + 1;
+            }
+            
+            log("Submitting lock for: " + planName);
+            var submitUrl = formElement.getAttribute("action");
+            if (!submitUrl || submitUrl === "" || submitUrl === "#") {
+                submitUrl = updateUrl;
+            } else if (submitUrl.indexOf("http") !== 0) {
+                submitUrl = location.origin + submitUrl;
+            }
+            
+            var resultHtml = await submitForm(submitUrl, formData);
+            var resultDoc = parseHtml(resultHtml);
+            
+            var resultAlert = resultDoc.querySelector('div.alert.alert-success.alert-dismissable');
+            if (resultAlert) {
+                var resultText = (resultAlert.textContent + "").trim();
+                if (resultText.indexOf("activity plan has been updated") !== -1 || resultText.indexOf("Activity plan has been updated") !== -1) {
+                    log("Successfully locked: " + planName);
+                    return { success: true, message: "Locked successfully" };
+                }
+            }
+            
+            log("Lock submitted but success not confirmed for: " + planName);
+            return { success: true, message: "Submitted (unconfirmed)" };
+            
+        } catch (error) {
+            log("Error locking " + planName + ": " + String(error));
+            return { success: false, message: String(error) };
+        }
+    }
+
+    // Update Lock Activity Plans popup with success/failure counts
+    function updateLockActivityPlansPopup(success) {
+        var countsDiv = document.getElementById("lockActivityPlansCounts");
+        if (!countsDiv) {
+            return;
+        }
+        
+        var STORAGE_SUCCESS_COUNT = "activityPlanState.lockActivityPlans.successCount";
+        var STORAGE_FAIL_COUNT = "activityPlanState.lockActivityPlans.failCount";
+        
+        var successCount = 0;
+        var failCount = 0;
+        
+        try {
+            var rawSuccess = localStorage.getItem(STORAGE_SUCCESS_COUNT);
+            var rawFail = localStorage.getItem(STORAGE_FAIL_COUNT);
+            if (rawSuccess) {
+                successCount = parseInt(rawSuccess, 10) || 0;
+            }
+            if (rawFail) {
+                failCount = parseInt(rawFail, 10) || 0;
+            }
+        } catch (e) {}
+        
+        if (success) {
+            successCount = successCount + 1;
+        } else {
+            failCount = failCount + 1;
+        }
+        
+        try {
+            localStorage.setItem(STORAGE_SUCCESS_COUNT, String(successCount));
+            localStorage.setItem(STORAGE_FAIL_COUNT, String(failCount));
+        } catch (e) {}
+        
+        countsDiv.innerHTML = "<span style='color:#9f9'>Success: " + String(successCount) + "</span> | <span style='color:#f99'>Failed: " + String(failCount) + "</span>";
+        log("Lock Activity Plans: updated counts - Success: " + String(successCount) + ", Failed: " + String(failCount));
+    }
+
     // After activity plan processing, route to next step (study/show) as required.
     function monitorCompletionThenAdvance() {
         var mode = getRunMode();
@@ -9802,23 +9996,199 @@
             return;
         }
         clearRunFlag();
-        var links = getPlanLinks();
-        log("Found plan links=" + String(links.length));
-        var ids = [];
+        
+        var mode = getRunMode();
+        var showPopup = mode === "activity" || mode === "all";
+        
+        var planData = [];
+        var rows = document.querySelectorAll("table.table.table-striped.table-bordered.table-hover tbody tr");
         var i = 0;
-        while (i < links.length) {
-            var url = links[i];
-            openInTab(url, false);
-            var id = extractAutostateIdFromUrl(url);
-            if (id) {
-                ids.push(id);
+        while (i < rows.length) {
+            var row = rows[i];
+            var a = row.querySelector('td.highlight a[href^="/secure/crfdesign/activityplans/show/"]');
+            if (a) {
+                var href = a.getAttribute("href") + "";
+                var planName = (a.textContent + "").trim();
+                if (href.length > 0) {
+                    var fullUrl = location.origin + href;
+                    planData.push({ url: fullUrl, name: planName });
+                }
             }
-            await sleep(200);
             i = i + 1;
         }
-        if (ids.length > 0) {
-            setPendingIds(ids);
-            monitorCompletionThenAdvance();
+        
+        log("Found " + String(planData.length) + " activity plans to lock");
+        
+        if (planData.length === 0) {
+            log("No activity plans to lock");
+            try {
+                localStorage.removeItem(STORAGE_LOCK_ACTIVITY_PLANS_POPUP);
+            } catch (e) {}
+            
+            var mode2 = getRunMode();
+            if (mode2 === "all") {
+                await sleep(1000);
+                log("Continuing to Lock Sample Paths for ALL mode");
+                try {
+                    localStorage.setItem(STORAGE_RUN_LOCK_SAMPLE_PATHS, "1");
+                } catch (e) {}
+                updateRunAllPopupStatus("Running Lock Sample Paths");
+                location.href = "https://cenexeltest.clinspark.com/secure/samples/configure/paths";
+            }
+            return;
+        }
+        
+        var statusDiv = null;
+        var progressDiv = null;
+        var loadingAnimation = null;
+        var countsDiv = null;
+        var loadingInterval = null;
+        
+        if (showPopup) {
+            var popupContainer = document.createElement("div");
+            popupContainer.style.display = "flex";
+            popupContainer.style.flexDirection = "column";
+            popupContainer.style.gap = "16px";
+            popupContainer.style.padding = "8px";
+
+            statusDiv = document.createElement("div");
+            statusDiv.id = "lockActivityPlansStatus";
+            statusDiv.style.textAlign = "center";
+            statusDiv.style.fontSize = "18px";
+            statusDiv.style.color = "#fff";
+            statusDiv.style.fontWeight = "500";
+            statusDiv.textContent = "Locking Activity Plans";
+
+            progressDiv = document.createElement("div");
+            progressDiv.id = "lockActivityPlansProgress";
+            progressDiv.style.textAlign = "center";
+            progressDiv.style.fontSize = "16px";
+            progressDiv.style.color = "#9df";
+            progressDiv.textContent = "Processing 0/" + String(planData.length);
+
+            loadingAnimation = document.createElement("div");
+            loadingAnimation.id = "lockActivityPlansLoading";
+            loadingAnimation.style.textAlign = "center";
+            loadingAnimation.style.fontSize = "14px";
+            loadingAnimation.style.color = "#9df";
+            loadingAnimation.textContent = "Running.";
+
+            countsDiv = document.createElement("div");
+            countsDiv.id = "lockActivityPlansCounts";
+            countsDiv.style.textAlign = "center";
+            countsDiv.style.fontSize = "14px";
+            countsDiv.style.color = "#ccc";
+            countsDiv.innerHTML = "<span style='color:#9f9'>Success: 0</span> | <span style='color:#f99'>Failed: 0</span>";
+
+            popupContainer.appendChild(statusDiv);
+            popupContainer.appendChild(progressDiv);
+            popupContainer.appendChild(loadingAnimation);
+            popupContainer.appendChild(countsDiv);
+
+            LOCK_ACTIVITY_PLANS_POPUP_REF = createPopup({
+                title: "Lock Activity Plans",
+                content: popupContainer,
+                width: "400px",
+                height: "auto",
+                onClose: function() {
+                    log("Lock Activity Plans: cancelled by user");
+                    try {
+                        localStorage.removeItem(STORAGE_KEY);
+                        localStorage.removeItem(STORAGE_LOCK_ACTIVITY_PLANS_POPUP);
+                    } catch (e) {}
+                    LOCK_ACTIVITY_PLANS_POPUP_REF = null;
+                }
+            });
+
+            try {
+                localStorage.setItem(STORAGE_LOCK_ACTIVITY_PLANS_POPUP, "1");
+                localStorage.setItem("activityPlanState.lockActivityPlans.successCount", "0");
+                localStorage.setItem("activityPlanState.lockActivityPlans.failCount", "0");
+            } catch (e) {}
+
+            var dots = 1;
+            loadingInterval = setInterval(function() {
+                if (!LOCK_ACTIVITY_PLANS_POPUP_REF || !document.body.contains(LOCK_ACTIVITY_PLANS_POPUP_REF.element)) {
+                    clearInterval(loadingInterval);
+                    return;
+                }
+                dots = dots + 1;
+                if (dots > 3) {
+                    dots = 1;
+                }
+                var text = "Running";
+                var d = 0;
+                while (d < dots) {
+                    text = text + ".";
+                    d = d + 1;
+                }
+                if (loadingAnimation) {
+                    loadingAnimation.textContent = text;
+                }
+            }, 500);
+        }
+        
+        var successCount = 0;
+        var failCount = 0;
+        var j = 0;
+        while (j < planData.length) {
+            var plan = planData[j];
+            log("Processing (" + String(j + 1) + "/" + String(planData.length) + "): " + plan.name);
+            
+            if (showPopup && progressDiv) {
+                progressDiv.textContent = "Processing " + String(j + 1) + "/" + String(planData.length) + ": " + plan.name;
+            }
+            
+            var result = await fetchAndLockActivityPlan(plan.url, plan.name);
+            if (result.success) {
+                successCount = successCount + 1;
+            } else {
+                failCount = failCount + 1;
+            }
+            
+            if (showPopup && countsDiv) {
+                countsDiv.innerHTML = "<span style='color:#9f9'>Success: " + String(successCount) + "</span> | <span style='color:#f99'>Failed: " + String(failCount) + "</span>";
+            }
+            
+            await sleep(500);
+            j = j + 1;
+        }
+        
+        if (showPopup && loadingInterval) {
+            clearInterval(loadingInterval);
+        }
+        
+        log("Lock Activity Plans completed. Success=" + String(successCount) + " Failed=" + String(failCount));
+        
+        if (showPopup && statusDiv) {
+            statusDiv.textContent = "Completed";
+            statusDiv.style.color = "#9f9";
+        }
+        if (showPopup && loadingAnimation) {
+            loadingAnimation.textContent = "All activity plans processed";
+        }
+        if (showPopup && progressDiv) {
+            progressDiv.textContent = "Processed " + String(planData.length) + "/" + String(planData.length);
+        }
+        
+        try {
+            localStorage.removeItem(STORAGE_LOCK_ACTIVITY_PLANS_POPUP);
+            log("Lock Activity Plans: popup flag cleared");
+        } catch (e) {}
+        
+        var mode = getRunMode();
+        if (mode === "all") {
+            await sleep(2000);
+            if (LOCK_ACTIVITY_PLANS_POPUP_REF && LOCK_ACTIVITY_PLANS_POPUP_REF.close) {
+                LOCK_ACTIVITY_PLANS_POPUP_REF.close();
+            }
+            LOCK_ACTIVITY_PLANS_POPUP_REF = null;
+            log("Continuing to Lock Sample Paths for ALL mode");
+            try {
+                localStorage.setItem(STORAGE_RUN_LOCK_SAMPLE_PATHS, "1");
+            } catch (e) {}
+            updateRunAllPopupStatus("Running Lock Sample Paths");
+            location.href = "https://cenexeltest.clinspark.com/secure/samples/configure/paths";
         }
     }
 
@@ -10759,60 +11129,9 @@
     }
 
     // If autostate param present, open and save edit state modal and close tab.
+    // NOTE: This function is now stubbed out because Lock Activity Plans uses background HTTP requests.
     async function processShowPageIfAuto() {
-        var autoVal = getQueryParam("autostate");
-        var doAuto = !!autoVal;
-        if (!doAuto) {
-            setTimeout(function() {
-                try { window.close(); } catch (e) {}
-            }, 5000);
-            return;
-        }
-        var mode = getRunMode();
-        var id = getCurrentPlanId();
-        var ids = getPendingIds();
-        var isPending = false;
-        var k = 0;
-        while (k < ids.length) {
-            var v = String(ids[k]);
-            if (id && String(id) === v) {
-                isPending = true;
-                break;
-            }
-            k = k + 1;
-        }
-        if (!(mode === "activity" || isPending)) {
-            log("processShowPageIfAuto ignored; run not active");
-            setTimeout(function() {
-                try { window.close(); } catch (e) {}
-            }, 5000);
-            return;
-        }
-
-        var closeTimeout = setTimeout(function() {
-            log("processShowPageIfAuto: timeout, closing tab");
-            try { window.close(); } catch (e) {}
-        }, 5000);
-
-        log("processShowPageIfAuto autostate=" + String(autoVal));
-        var opened = await findAndOpenEditStateModal();
-        if (!opened) {
-            clearTimeout(closeTimeout);
-            await sleep(1000);
-            try { window.close(); } catch (e) {}
-            setTimeout(function() {
-                try { window.close(); } catch (e2) {}
-            }, 500);
-            return;
-        }
-        var saved = await clickSaveInModal();
-        var id2 = getCurrentPlanId();
-        if (id2) {
-            removePendingId(id2);
-        }
-        clearTimeout(closeTimeout);
-        await sleep(300);
-        closeTabWithFallback("Activity Plan updated successfully.");
+        log("processShowPageIfAuto: not needed with background approach");
     }
 
     // Read current run mode from storage.
