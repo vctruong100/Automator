@@ -1075,9 +1075,10 @@
         if (spec.kind === "lt") {
             var t1 = Math.floor(spec.t);
             if (mode === "ir") {
-                var v1 = t1 - 1;
-                if (v1 >= 0) {
-                    return v1;
+                // For "< X", generate random number between 0 and X-1
+                var maxVal = t1 - 1;
+                if (maxVal >= 0) {
+                    return randomIntInInclusiveRange(0, maxVal);
                 } else {
                     return 0;
                 }
@@ -1096,7 +1097,12 @@
         if (spec.kind === "le") {
             var t2 = Math.floor(spec.t);
             if (mode === "ir") {
-                return t2;
+                // For "≤ X", generate random number between 0 and X
+                if (t2 >= 0) {
+                    return randomIntInInclusiveRange(0, t2);
+                } else {
+                    return 0;
+                }
             }
             if (mode === "oorA") {
                 return t2 + 1;
@@ -1112,7 +1118,10 @@
         if (spec.kind === "gt") {
             var t3 = Math.floor(spec.t);
             if (mode === "ir") {
-                return t3 + 1;
+                // For "> X", generate random number between X+1 and X+100 (reasonable upper bound)
+                var minVal = t3 + 1;
+                var maxVal = t3 + 100; // Reasonable upper bound to avoid infinite ranges
+                return randomIntInInclusiveRange(minVal, maxVal);
             }
             if (mode === "oorA") {
                 var v3a = t3 - 1;
@@ -1138,7 +1147,10 @@
         if (spec.kind === "ge") {
             var t4 = Math.floor(spec.t);
             if (mode === "ir") {
-                return t4;
+                // For "≥ X", generate random number between X and X+100 (reasonable upper bound)
+                var minVal = t4;
+                var maxVal = t4 + 100; // Reasonable upper bound to avoid infinite ranges
+                return randomIntInInclusiveRange(minVal, maxVal);
             }
             if (mode === "oorA") {
                 var v4a = t4 - 1;

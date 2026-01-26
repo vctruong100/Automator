@@ -4505,25 +4505,6 @@
         return null;
     }
 
-    // Update Run All popup status
-    function updateRunAllPopupStatus(statusText) {
-        // Store status in localStorage for persistence
-        try {
-            localStorage.setItem(STORAGE_RUN_ALL_STATUS, statusText);
-        } catch (e) {}
-
-        if (!RUN_ALL_POPUP_REF) {
-            return;
-        }
-        try {
-            var statusDiv = RUN_ALL_POPUP_REF.element.querySelector("#runAllStatus");
-            if (statusDiv) {
-                statusDiv.textContent = statusText;
-            }
-        } catch (e) {
-            log("Error updating Run All popup status: " + e);
-        }
-    }
 
     // Store pending autostate ids list.
     function setPendingIds(ids) {
@@ -7517,7 +7498,6 @@
             status.textContent = "Navigating to Study Show for Consent…";
             log("Run Informed Consent clicked");
 
-            // Create progress popup for ICF Barcode
             var popupContainer = document.createElement("div");
             popupContainer.style.display = "flex";
             popupContainer.style.flexDirection = "column";

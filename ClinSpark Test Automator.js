@@ -11,6 +11,7 @@
 // @grant GM.openInTab
 // @grant GM_openInTab
 // @grant GM.xmlHttpRequest
+// @ts-check
 // ==/UserScript==
 
 (function () {
@@ -59,6 +60,9 @@
     var STORAGE_LOG_VISIBLE = "activityPlanState.log.visible";
     var STORAGE_MANUAL_SELECT_INITIAL_REF_TIME = "activityPlanState.manualSelectInitialRefTime";
     var STORAGE_RUN_LOCK_SAMPLE_PATHS = "activityPlanState.runLockSamplePaths";
+    var STORAGE_SAMPLE_PATH_AUTO_CLOSE = "activityPlanState.samplePath.autoClose";
+    var STORAGE_LOCK_SAMPLE_PATHS_POPUP = "activityPlanState.lockSamplePaths.popup";
+    var LOCK_SAMPLE_PATHS_POPUP_REF = null;
     var STORAGE_LOCK_ACTIVITY_PLANS_POPUP = "activityPlanState.lockActivityPlans.popup";
     var LOCK_ACTIVITY_PLANS_POPUP_REF = null;
 
@@ -89,12 +93,6 @@
     var STORAGE_FIND_FORM_SUBJECT = "activityPlanState.findForm.subject";
     var STORAGE_FIND_FORM_STATUS_VALUES = "activityPlanState.findForm.statusValues";
 
-    var FORM_LIST_URL = "https://cenexeltest.clinspark.com/secure/study/data/list";
-    var STORAGE_FIND_FORM_PENDING = "activityPlanState.findForm.pending";
-    var STORAGE_FIND_FORM_KEYWORD = "activityPlanState.findForm.keyword";
-    var STORAGE_FIND_FORM_SUBJECT = "activityPlanState.findForm.subject";
-    var STORAGE_FIND_FORM_STATUS_VALUES = "activityPlanState.findForm.statusValues";
-
     // Run Parse Method
     var STORAGE_PARSE_METHOD_RUNNING = "activityPlanState.parseMethod.running";
     var STORAGE_PARSE_METHOD_ITEM_NAME = "activityPlanState.parseMethod.itemName";
@@ -115,7 +113,9 @@
     var IMPORT_ELIG_POPUP_REF = null;
     var IMPORT_COHORT_POPUP_REF = null;
     var ADD_COHORT_POPUP_REF = null;
+    var ICF_BARCODE_POPUP_REF = null;
     const STORAGE_RUN_ALL_POPUP = "activityPlanState.runAllPopup";
+    const STORAGE_ICF_BARCODE_POPUP = "activityPlanState.icfBarcodePopup";
     const STORAGE_RUN_ALL_STATUS = "activityPlanState.runAllStatus";
     const STORAGE_CLEAR_MAPPING_POPUP = "activityPlanState.clearMappingPopup";
     const STORAGE_IMPORT_ELIG_POPUP = "activityPlanState.importEligPopup";
@@ -196,7 +196,7 @@
     // This feature automates pull any subject identifier found on page,
     // request user for form keyword, and then search for form based on the keyword.
     //==========================
-    
+
     function setPanelHidden(flag) {
         try {
             localStorage.setItem(STORAGE_PANEL_HIDDEN, flag ? "1" : "0");
@@ -215,23 +215,6 @@
             return true;
         }
         return false;
-    }
-
-    function applyPanelHiddenState(panel) {
-        if (!panel) {
-            log("applyPanelHiddenState: panel not found");
-            return;
-        }
-        var hidden = getPanelHidden();
-        if (hidden) {
-            panel.style.display = "none";
-            panel.style.pointerEvents = "none";
-            log("applyPanelHiddenState: applied hidden");
-        } else {
-            panel.style.display = "block";
-            panel.style.pointerEvents = "auto";
-            log("applyPanelHiddenState: applied visible");
-        }
     }
 
     function togglePanelHiddenViaHotkey() {
@@ -253,63 +236,6 @@
             log("Hotkey toggle: panel hidden");
         }
     }
-
-    function normalizeKeyForMatch(e) {
-        var k = "";
-        var c = "";
-        try {
-            k = e.key ? String(e.key) : "";
-        } catch (ex1) {
-            k = "";
-        }
-        try {
-            c = e.code ? String(e.code) : "";
-        } catch (ex2) {
-            c = "";
-        }
-        return { key: k, code: c, keyCode: typeof e.keyCode === "number" ? e.keyCode : null };
-    }
-
-    function keyMatchesToggle(e) {
-        var n = normalizeKeyForMatch(e);
-        var match = false;
-        if (n.key && n.key.toUpperCase() === PANEL_TOGGLE_KEY.toUpperCase()) {
-            match = true;
-        } else {
-            if (n.code && n.code.toUpperCase() === PANEL_TOGGLE_KEY.toUpperCase()) {
-                match = true;
-            } else {
-                if (typeof n.keyCode === "number") {
-                    if (PANEL_TOGGLE_KEY.toUpperCase() === "F2") {
-                        if (n.keyCode === 113) {
-                            match = true;
-                        }
-                    }
-                }
-            }
-        }
-        return match;
-    }
-
-    function bindPanelHotkeyOnce() {
-        if (window.__APS_HOTKEY_BOUND === true) {
-            log("Hotkey: already bound; skipping rebind");
-            return;
-        }
-        function handler(e) {
-            if (keyMatchesToggle(e)) {
-                log("Hotkey: toggle request received");
-                togglePanelHiddenViaHotkey();
-                e.preventDefault();
-                e.stopPropagation();
-            }
-        }
-        document.addEventListener("keydown", handler, true);
-        window.addEventListener("keydown", handler, true);
-        window.__APS_HOTKEY_BOUND = true;
-        log("Hotkey: bound for " + String(PANEL_TOGGLE_KEY));
-    }
-
 
     function resetStudyEventsOnList() {
         var cont = document.getElementById("s2id_studyEventIds");
@@ -2473,7 +2399,6 @@
         log("ImportElig: waitForComparatorReady timeout");
         return null;
     }
-
     function clearEligibilityWorkingState() {
         try {
             localStorage.removeItem(STORAGE_ELIG_IMPORTED);
@@ -3668,7 +3593,7 @@
         return true;
     }
 
-
+    // Return index of first option with non-empty value.
     function firstNonEmptyOptionIndex(selectEl) {
         if (!selectEl) {
             return -1;
@@ -4633,9 +4558,9 @@
         if (spec.kind === "lt") {
             var t1 = Math.floor(spec.t);
             if (mode === "ir") {
-                var v1 = t1 - 1;
-                if (v1 >= 0) {
-                    return v1;
+                var maxVal = t1 - 1;
+                if (maxVal >= 0) {
+                    return randomIntInInclusiveRange(0, maxVal);
                 } else {
                     return 0;
                 }
@@ -4654,7 +4579,11 @@
         if (spec.kind === "le") {
             var t2 = Math.floor(spec.t);
             if (mode === "ir") {
-                return t2;
+                if (t2 >= 0) {
+                    return randomIntInInclusiveRange(0, t2);
+                } else {
+                    return 0;
+                }
             }
             if (mode === "oorA") {
                 return t2 + 1;
@@ -4670,7 +4599,9 @@
         if (spec.kind === "gt") {
             var t3 = Math.floor(spec.t);
             if (mode === "ir") {
-                return t3 + 1;
+                var minVal = t3 + 1;
+                var maxVal = t3 + 100; // Reasonable upper bound to avoid infinite ranges
+                return randomIntInInclusiveRange(minVal, maxVal);
             }
             if (mode === "oorA") {
                 var v3a = t3 - 1;
@@ -4696,7 +4627,9 @@
         if (spec.kind === "ge") {
             var t4 = Math.floor(spec.t);
             if (mode === "ir") {
-                return t4;
+                var minVal = t4;
+                var maxVal = t4 + 100; // Reasonable upper bound to avoid infinite ranges
+                return randomIntInInclusiveRange(minVal, maxVal);
             }
             if (mode === "oorA") {
                 var v4a = t4 - 1;
@@ -5550,6 +5483,122 @@
     // the sample paths list, detail pages, and update pages to set the locked status.
     //==========================
     function RunSamplePathsFunctions() {}
+
+    async function fetchAndLockSamplePath(samplePathUrl, samplePathName) {
+        try {
+            log("Locking Sample Path: " + samplePathName);
+
+            var detailHtml = await fetchPage(samplePathUrl);
+            var detailDoc = parseHtml(detailHtml);
+
+            var successAlert = detailDoc.querySelector('div.alert.alert-success.alert-dismissable');
+            if (successAlert) {
+                var alertText = (successAlert.textContent + "").trim();
+                if (alertText.indexOf("The sample path has been updated") !== -1) {
+                    log("Sample Path already locked: " + samplePathName);
+                    return { success: true, message: "Already locked" };
+                }
+            }
+
+            var editLink = detailDoc.querySelector('a[href*="/secure/samples/configure/paths/update/"]');
+            if (!editLink) {
+                log("Edit link not found for: " + samplePathName);
+                return { success: false, message: "Edit link not found" };
+            }
+
+            var updatePath = editLink.getAttribute("href");
+            var updateUrl = location.origin + updatePath;
+
+            var updateHtml = await fetchPage(updateUrl);
+            var updateDoc = parseHtml(updateHtml);
+
+            var lockCheckbox = updateDoc.querySelector('input#locked');
+            if (!lockCheckbox) {
+                log("Lock checkbox not found for: " + samplePathName);
+                return { success: false, message: "Lock checkbox not found" };
+            }
+
+            var isAlreadyLocked = lockCheckbox.hasAttribute("checked") || lockCheckbox.checked;
+            if (isAlreadyLocked) {
+                log("Sample Path already locked (checkbox): " + samplePathName);
+                return { success: true, message: "Already locked" };
+            }
+
+            var formElement = updateDoc.querySelector('form');
+            if (!formElement) {
+                log("Form not found for: " + samplePathName);
+                return { success: false, message: "Form not found" };
+            }
+
+            var formData = "";
+            var inputs = formElement.querySelectorAll('input, textarea, select');
+            var i = 0;
+            while (i < inputs.length) {
+                var input = inputs[i];
+                var name = input.getAttribute("name");
+                var type = input.getAttribute("type");
+                var value = "";
+
+                if (name) {
+                    if (name === "locked") {
+                        value = "on";
+                    } else if (name === "reasonForChange") {
+                        value = "Automated lock via script";
+                    } else if (type === "checkbox" || type === "radio") {
+                        if (input.checked || input.hasAttribute("checked")) {
+                            value = input.value || "on";
+                        } else {
+                            i = i + 1;
+                            continue;
+                        }
+                    } else if (input.tagName.toLowerCase() === "select") {
+                        var selectedOption = input.querySelector("option[selected]");
+                        if (selectedOption) {
+                            value = selectedOption.value || "";
+                        } else {
+                            value = input.value || "";
+                        }
+                    } else {
+                        value = input.value || "";
+                    }
+
+                    if (formData.length > 0) {
+                        formData += "&";
+                    }
+                    formData += encodeURIComponent(name) + "=" + encodeURIComponent(value);
+                }
+                i = i + 1;
+            }
+
+            log("Submitting lock for: " + samplePathName);
+            var submitUrl = formElement.getAttribute("action");
+            if (!submitUrl || submitUrl === "" || submitUrl === "#") {
+                submitUrl = updateUrl;
+            } else if (submitUrl.indexOf("http") !== 0) {
+                submitUrl = location.origin + submitUrl;
+            }
+
+            var resultHtml = await submitForm(submitUrl, formData);
+            var resultDoc = parseHtml(resultHtml);
+
+            var resultAlert = resultDoc.querySelector('div.alert.alert-success.alert-dismissable');
+            if (resultAlert) {
+                var resultText = (resultAlert.textContent + "").trim();
+                if (resultText.indexOf("The sample path has been updated") !== -1) {
+                    log("Successfully locked: " + samplePathName);
+                    return { success: true, message: "Locked successfully" };
+                }
+            }
+
+            log("Lock submitted but success not confirmed for: " + samplePathName);
+            return { success: true, message: "Submitted (unconfirmed)" };
+
+        } catch (error) {
+            log("Error locking " + samplePathName + ": " + String(error));
+            return { success: false, message: String(error) };
+        }
+    }
+
     async function processLockSamplePathsPage() {
         log("processLockSamplePathsPage: start");
 
@@ -5575,6 +5624,7 @@
         var rows = tbody.querySelectorAll("tr");
         log("processLockSamplePathsPage: rows found=" + String(rows.length));
 
+        var unlockedPaths = [];
         var i = 0;
         while (i < rows.length) {
             var row = rows[i];
@@ -5586,17 +5636,16 @@
                 var lockCell = tds[3];
                 var lockText = (lockCell.textContent + "").trim();
 
-                log("Row " + String(i) + " lockText=" + lockText);
-
                 if (lockText.toLowerCase() === "no") {
                     var link = tds[0].querySelector("a");
+                    var nameCell = tds[0];
+                    var pathName = (nameCell.textContent + "").trim();
 
                     if (link) {
                         var href = link.getAttribute("href") + "";
                         if (href.length > 0) {
                             var fullUrl = location.origin + href;
-                            log("Opening unlocked Sample Path: " + fullUrl);
-                            openInTab(fullUrl + "?autolocksamplepath=1", false);
+                            unlockedPaths.push({ url: fullUrl, name: pathName });
                         }
                     }
                 }
@@ -5605,16 +5654,158 @@
             i = i + 1;
         }
 
-        log("processLockSamplePathsPage: all unlocked paths opened");
+        log("processLockSamplePathsPage: found " + String(unlockedPaths.length) + " unlocked paths");
+
+        if (unlockedPaths.length === 0) {
+            log("processLockSamplePathsPage: no unlocked paths to process");
+            try {
+                localStorage.removeItem(STORAGE_RUN_LOCK_SAMPLE_PATHS);
+            } catch (e) { }
+
+            var mode = getRunMode();
+            if (mode === "all") {
+                await sleep(1000);
+                log("processLockSamplePathsPage: continuing to Study Show for ALL mode");
+                updateRunAllPopupStatus("Running Update Study Status");
+                location.href = STUDY_SHOW_URL + "?autoupdate=1";
+            }
+            return;
+        }
+
+        var popupContainer = document.createElement("div");
+        popupContainer.style.display = "flex";
+        popupContainer.style.flexDirection = "column";
+        popupContainer.style.gap = "16px";
+        popupContainer.style.padding = "8px";
+
+        var statusDiv = document.createElement("div");
+        statusDiv.id = "lockSamplePathsStatus";
+        statusDiv.style.textAlign = "center";
+        statusDiv.style.fontSize = "18px";
+        statusDiv.style.color = "#fff";
+        statusDiv.style.fontWeight = "500";
+        statusDiv.textContent = "Locking Sample Paths";
+
+        var progressDiv = document.createElement("div");
+        progressDiv.id = "lockSamplePathsProgress";
+        progressDiv.style.textAlign = "center";
+        progressDiv.style.fontSize = "16px";
+        progressDiv.style.color = "#9df";
+        progressDiv.textContent = "Processing 0/" + String(unlockedPaths.length);
+
+        var loadingAnimation = document.createElement("div");
+        loadingAnimation.id = "lockSamplePathsLoading";
+        loadingAnimation.style.textAlign = "center";
+        loadingAnimation.style.fontSize = "14px";
+        loadingAnimation.style.color = "#9df";
+        loadingAnimation.textContent = "Running.";
+
+        var countsDiv = document.createElement("div");
+        countsDiv.id = "lockSamplePathsCounts";
+        countsDiv.style.textAlign = "center";
+        countsDiv.style.fontSize = "14px";
+        countsDiv.style.color = "#ccc";
+        countsDiv.innerHTML = "<span style='color:#9f9'>Success: 0</span> | <span style='color:#f99'>Failed: 0</span>";
+
+        popupContainer.appendChild(statusDiv);
+        popupContainer.appendChild(progressDiv);
+        popupContainer.appendChild(loadingAnimation);
+        popupContainer.appendChild(countsDiv);
+
+        LOCK_SAMPLE_PATHS_POPUP_REF = createPopup({
+            title: "Lock Sample Paths",
+            content: popupContainer,
+            width: "400px",
+            height: "auto",
+            onClose: function() {
+                log("Lock Sample Paths: cancelled by user");
+                try {
+                    localStorage.removeItem(STORAGE_RUN_LOCK_SAMPLE_PATHS);
+                    localStorage.removeItem(STORAGE_LOCK_SAMPLE_PATHS_POPUP);
+                } catch (e) {}
+                LOCK_SAMPLE_PATHS_POPUP_REF = null;
+            }
+        });
+
+        try {
+            localStorage.setItem(STORAGE_LOCK_SAMPLE_PATHS_POPUP, "1");
+        } catch (e) {}
+
+        var dots = 1;
+        var loadingInterval = setInterval(function() {
+            if (!LOCK_SAMPLE_PATHS_POPUP_REF || !document.body.contains(LOCK_SAMPLE_PATHS_POPUP_REF.element)) {
+                clearInterval(loadingInterval);
+                return;
+            }
+            dots = dots + 1;
+            if (dots > 3) {
+                dots = 1;
+            }
+            var text = "Running";
+            var d = 0;
+            while (d < dots) {
+                text = text + ".";
+                d = d + 1;
+            }
+            if (loadingAnimation) {
+                loadingAnimation.textContent = text;
+            }
+        }, 500);
+
+        var successCount = 0;
+        var failCount = 0;
+        var j = 0;
+        while (j < unlockedPaths.length) {
+            var path = unlockedPaths[j];
+            log("Processing (" + String(j + 1) + "/" + String(unlockedPaths.length) + "): " + path.name);
+
+            if (progressDiv) {
+                progressDiv.textContent = "Processing " + String(j + 1) + "/" + String(unlockedPaths.length) + ": " + path.name;
+            }
+
+            var result = await fetchAndLockSamplePath(path.url, path.name);
+            if (result.success) {
+                successCount = successCount + 1;
+            } else {
+                failCount = failCount + 1;
+            }
+
+            if (countsDiv) {
+                countsDiv.innerHTML = "<span style='color:#9f9'>Success: " + String(successCount) + "</span> | <span style='color:#f99'>Failed: " + String(failCount) + "</span>";
+            }
+
+            await sleep(500);
+            j = j + 1;
+        }
+
+        clearInterval(loadingInterval);
+
+        log("processLockSamplePathsPage: completed. Success=" + String(successCount) + " Failed=" + String(failCount));
+
+        if (statusDiv) {
+            statusDiv.textContent = "Completed";
+            statusDiv.style.color = "#9f9";
+        }
+        if (loadingAnimation) {
+            loadingAnimation.textContent = "All sample paths processed";
+        }
+        if (progressDiv) {
+            progressDiv.textContent = "Processed " + String(unlockedPaths.length) + "/" + String(unlockedPaths.length);
+        }
 
         try {
             localStorage.removeItem(STORAGE_RUN_LOCK_SAMPLE_PATHS);
+            localStorage.removeItem(STORAGE_LOCK_SAMPLE_PATHS_POPUP);
             log("processLockSamplePathsPage: flag cleared");
         } catch (e) { }
 
         var mode = getRunMode();
         if (mode === "all") {
-            await sleep(1000);
+            await sleep(2000);
+            if (LOCK_SAMPLE_PATHS_POPUP_REF && LOCK_SAMPLE_PATHS_POPUP_REF.close) {
+                LOCK_SAMPLE_PATHS_POPUP_REF.close();
+            }
+            LOCK_SAMPLE_PATHS_POPUP_REF = null;
             log("processLockSamplePathsPage: continuing to Study Show for ALL mode");
             updateRunAllPopupStatus("Running Update Study Status");
             location.href = STUDY_SHOW_URL + "?autoupdate=1";
@@ -5622,230 +5813,11 @@
     }
 
     async function processLockSamplePathDetailPage() {
-        log("processLockSamplePathDetailPage: start");
-
-        var successAlert = document.querySelector('div.alert.alert-success.alert-dismissable');
-        if (successAlert) {
-            var alertText = (successAlert.textContent + "").trim();
-            if (alertText.indexOf("The sample path has been updated") !== -1) {
-                log("processLockSamplePathDetailPage: success alert detected, closing tab");
-                await sleep(300);
-                closeTabWithFallback("Sample Path locked successfully.");
-                return;
-            }
-        }
-
-        var auto = getQueryParam("autolocksamplepath");
-        var isAuto = auto === "1";
-
-        if (!isAuto) {
-            log("processLockSamplePathDetailPage: not auto mode");
-
-            var checkSuccess = setInterval(function() {
-                var alert = document.querySelector('div.alert.alert-success.alert-dismissable');
-                if (alert) {
-                    var text = (alert.textContent + "").trim();
-                    if (text.indexOf("The sample path has been updated") !== -1) {
-                        clearInterval(checkSuccess);
-                        log("processLockSamplePathDetailPage: success alert detected, closing tab");
-                        closeTabWithFallback("Sample Path locked successfully.");
-                    }
-                }
-            }, 500);
-
-            setTimeout(function() {
-                clearInterval(checkSuccess);
-            }, 5000);
-
-            return;
-        }
-
-        var checkSuccessInterval = setInterval(function() {
-            var alert = document.querySelector('div.alert.alert-success.alert-dismissable');
-            if (alert) {
-                var text = (alert.textContent + "").trim();
-                if (text.indexOf("The sample path has been updated") !== -1) {
-                    clearInterval(checkSuccessInterval);
-                    log("processLockSamplePathDetailPage: success alert detected during processing, closing tab");
-                    closeTabWithFallback("Sample Path locked successfully.");
-                }
-            }
-        }, 500);
-
-        var closeTimeout = setTimeout(function() {
-            clearInterval(checkSuccessInterval);
-            log("processLockSamplePathDetailPage: timeout, closing tab");
-            closeTabWithFallback("Sample Path processing completed.");
-        }, 5000);
-
-        var actionsOpened = await clickActionsDropdownIfNeeded();
-        await sleep(500);
-        log("Actions dropdown opened=" + String(actionsOpened));
-
-        if (!actionsOpened) {
-            log("Actions dropdown not found");
-            clearTimeout(closeTimeout);
-            clearInterval(checkSuccessInterval);
-            await sleep(500);
-            closeTabWithFallback("Sample Path processing completed.");
-            return;
-        }
-
-        var editLink = await waitForSelector('a[href*="/secure/samples/configure/paths/update/"]', 5000);
-        if (!editLink) {
-            editLink = document.querySelector('a[href*="/secure/samples/configure/paths/update/"]');
-        }
-        var hasEditLink = !!editLink;
-
-        log("Edit Path link exists=" + String(hasEditLink));
-
-        if (!hasEditLink) {
-            log("Edit Path link missing");
-            clearTimeout(closeTimeout);
-            clearInterval(checkSuccessInterval);
-            await sleep(500);
-            closeTabWithFallback("Sample Path processing completed.");
-            return;
-        }
-
-        clearTimeout(closeTimeout);
-
-        var href = editLink.getAttribute("href") + "";
-        var updateUrl = location.origin + href;
-        if (href.indexOf("?") === -1) {
-            updateUrl = updateUrl + "?autolocksamplepath=1";
-        } else {
-            updateUrl = updateUrl + "&autolocksamplepath=1";
-        }
-        log("Edit Path clicked, navigating to: " + updateUrl);
-
-        clearInterval(checkSuccessInterval);
-        location.href = updateUrl;
+        log("processLockSamplePathDetailPage: not needed with background approach");
     }
 
     async function processLockSamplePathUpdatePage() {
-        log("processLockSamplePathUpdatePage: start");
-
-        var auto = getQueryParam("autolocksamplepath");
-        var isAuto = auto === "1";
-
-        if (!isAuto) {
-            log("processLockSamplePathUpdatePage: not auto mode");
-            setTimeout(function() {
-                closeTabWithFallback("Sample Path processing completed.");
-            }, 5000);
-            return;
-        }
-
-        var closeTimeout = setTimeout(function() {
-            log("processLockSamplePathUpdatePage: timeout, closing tab");
-            closeTabWithFallback("Sample Path processing completed.");
-        }, 5000);
-
-        var lockBox = await waitForSelector('input#locked', 10000);
-        var lockBoxExists = !!lockBox;
-        log("Lock checkbox exists=" + String(lockBoxExists));
-
-        if (lockBox) {
-            if (!lockBox.checked) {
-                lockBox.checked = true;
-                var evtL = new Event("change", { bubbles: true });
-                lockBox.dispatchEvent(evtL);
-
-                var wrapper = lockBox.closest("div.checker");
-                if (wrapper) {
-                    var span = wrapper.querySelector("span");
-                    if (span) {
-                        span.classList.add("checked");
-                    }
-                }
-
-                log("Lock checkbox set to true");
-            } else {
-                log("Lock checkbox already checked");
-            }
-        } else {
-            log("Lock checkbox not found");
-            clearTimeout(closeTimeout);
-            await sleep(500);
-            closeTabWithFallback("Sample Path processing completed.");
-            return;
-        }
-
-        var reason = await waitForSelector("textarea#reasonForChange", 10000);
-        var hasReason = !!reason;
-        log("Reason textarea exists=" + String(hasReason));
-
-        if (reason) {
-            reason.value = "Locking...";
-            var evtR = new Event("input", { bubbles: true });
-            reason.dispatchEvent(evtR);
-            log("Reason for Change set");
-        } else {
-            log("Reason textarea not found");
-            clearTimeout(closeTimeout);
-            await sleep(500);
-            closeTabWithFallback("Sample Path processing completed.");
-            return;
-        }
-
-        var saveBtn = await waitForSelector("button.btn.green[type='submit']", 10000);
-        var hasSave = !!saveBtn;
-        log("Save button exists=" + String(hasSave));
-
-        if (saveBtn) {
-            clearTimeout(closeTimeout);
-            saveBtn.click();
-            log("Save clicked");
-
-            var successDetected = false;
-            var checkStart = Date.now();
-            var checkMax = 15000;
-            var checkInterval = 300;
-
-            while (Date.now() - checkStart < checkMax && !successDetected) {
-                await sleep(checkInterval);
-
-                var successAlert = document.querySelector('div.alert.alert-success.alert-dismissable');
-                if (successAlert) {
-                    var alertText = (successAlert.textContent + "").trim();
-                    if (alertText.indexOf("The sample path has been updated") !== -1) {
-                        log("processLockSamplePathUpdatePage: success alert detected, closing tab");
-                        successDetected = true;
-                        await sleep(300);
-                        closeTabWithFallback("Sample Path locked successfully.");
-                        return;
-                    }
-                }
-
-                var currentPath = location.pathname;
-                if (currentPath.indexOf("/secure/samples/configure/paths/show/") !== -1) {
-                    var showPageAlert = document.querySelector('div.alert.alert-success.alert-dismissable');
-                    if (showPageAlert) {
-                        var showAlertText = (showPageAlert.textContent + "").trim();
-                        if (showAlertText.indexOf("The sample path has been updated") !== -1) {
-                            log("processLockSamplePathUpdatePage: success alert detected on show page, closing tab");
-                            successDetected = true;
-                            await sleep(300);
-                            closeTabWithFallback("Sample Path locked successfully.");
-                            return;
-                        }
-                    }
-                }
-            }
-
-            if (!successDetected) {
-                log("processLockSamplePathUpdatePage: success alert not detected within timeout, closing tab anyway");
-                await sleep(300);
-                closeTabWithFallback("Sample Path processing completed.");
-            }
-        } else {
-            log("Save button not found");
-            clearTimeout(closeTimeout);
-            await sleep(500);
-            closeTabWithFallback("Sample Path processing completed.");
-            return;
-        }
+        log("processLockSamplePathUpdatePage: not needed with background approach");
     }
 
     //==========================
@@ -5865,12 +5837,27 @@
         } catch (e) {}
     }
 
-    // Pick a random unused letter from a-z.
+    // Pick a random unused letter from a-z (excluding 'u' and 'x' which have no results).
     function pickRandomUnusedLetter(allLetters, usedLetters) {
+        var excludedLetters = ["u", "x"];
         var unused = [];
         var i = 0;
         while (i < allLetters.length) {
             var letter = allLetters[i];
+            // Skip excluded letters
+            var isExcluded = false;
+            var k = 0;
+            while (k < excludedLetters.length) {
+                if (excludedLetters[k] === letter) {
+                    isExcluded = true;
+                    break;
+                }
+                k = k + 1;
+            }
+            if (isExcluded) {
+                i = i + 1;
+                continue;
+            }
             var found = false;
             var j = 0;
             while (j < usedLetters.length) {
@@ -6395,6 +6382,7 @@
                 setRunMode("consent");
                 await sleep(3000);
                 location.href = STUDY_SHOW_URL + "?autoconsent=1";
+                updateRunAllPopupStatus("Running ICF Barcode");
                 log("Continuing ALL to consent after pause");
                 return;
             }
@@ -6938,7 +6926,7 @@
         }
             if (getRunMode() === "all") {
                 setRunMode("consent");
-                updateRunAllPopupStatus("Running Run ICF Barcode");
+                updateRunAllPopupStatus("Running ICF Barcode");
                 await sleep(3000);
                 location.href = STUDY_SHOW_URL + "?autoconsent=1";
                 log("Continuing ALL to consent after pause");
@@ -8492,7 +8480,6 @@
         return "";
     }
 
-
     //==========================
     // RUN ADD COHORT SUBJECTS FEATURE
     //==========================
@@ -9416,8 +9403,7 @@
             maxHeight: "80%"
         });
     }
-
-    //==========================
+        //==========================
     // RUN STUDY UPDATES FEATURE
     //==========================
     // This section contains all functions related to study update automation.
@@ -9796,6 +9782,26 @@
         return null;
     }
 
+    // Update Run All popup status
+    function updateRunAllPopupStatus(statusText) {
+        // Store status in localStorage for persistence
+        try {
+            localStorage.setItem(STORAGE_RUN_ALL_STATUS, statusText);
+        } catch (e) {}
+
+        if (!RUN_ALL_POPUP_REF) {
+            return;
+        }
+        try {
+            var statusDiv = RUN_ALL_POPUP_REF.element.querySelector("#runAllStatus");
+            if (statusDiv) {
+                statusDiv.textContent = statusText;
+            }
+        } catch (e) {
+            log("Error updating Run All popup status: " + e);
+        }
+    }
+
     // Store pending autostate ids list.
     function setPendingIds(ids) {
         var payload = JSON.stringify(ids);
@@ -9813,145 +9819,6 @@
         } catch (e) {}
     }
 
-    // Background function to fetch and lock a single activity plan
-    async function fetchAndLockActivityPlan(planUrl, planName) {
-        try {
-            log("Locking Activity Plan: " + planName);
-            
-            var detailHtml = await fetchPage(planUrl);
-            var detailDoc = parseHtml(detailHtml);
-            
-            var successAlert = detailDoc.querySelector('div.alert.alert-success.alert-dismissable');
-            if (successAlert) {
-                var alertText = (successAlert.textContent + "").trim();
-                if (alertText.indexOf("activity plan has been updated") !== -1 || alertText.indexOf("Activity plan has been updated") !== -1) {
-                    log("Activity Plan already locked: " + planName);
-                    return { success: true, message: "Already locked" };
-                }
-            }
-            
-            var editLink = detailDoc.querySelector('a[href^="/secure/crfdesign/activityplans/updatestate/"]');
-            if (!editLink) {
-                log("Edit state link not found for: " + planName);
-                return { success: false, message: "Edit state link not found" };
-            }
-            
-            var updatePath = editLink.getAttribute("href");
-            var updateUrl = location.origin + updatePath;
-            
-            var updateHtml = await fetchPage(updateUrl);
-            var updateDoc = parseHtml(updateHtml);
-            
-            var formElement = updateDoc.querySelector('form');
-            if (!formElement) {
-                log("Form not found for: " + planName);
-                return { success: false, message: "Form not found" };
-            }
-            
-            var formData = "";
-            var inputs = formElement.querySelectorAll('input, textarea, select');
-            var i = 0;
-            while (i < inputs.length) {
-                var input = inputs[i];
-                var name = input.getAttribute("name");
-                var type = input.getAttribute("type");
-                var value = "";
-                
-                if (name) {
-                    if (type === "checkbox" || type === "radio") {
-                        if (input.checked || input.hasAttribute("checked")) {
-                            value = input.value || "on";
-                        } else {
-                            i = i + 1;
-                            continue;
-                        }
-                    } else if (input.tagName.toLowerCase() === "select") {
-                        var selectedOption = input.querySelector("option[selected]");
-                        if (selectedOption) {
-                            value = selectedOption.value || "";
-                        } else {
-                            value = input.value || "";
-                        }
-                    } else {
-                        value = input.value || "";
-                    }
-                    
-                    if (formData.length > 0) {
-                        formData += "&";
-                    }
-                    formData += encodeURIComponent(name) + "=" + encodeURIComponent(value);
-                }
-                i = i + 1;
-            }
-            
-            log("Submitting lock for: " + planName);
-            var submitUrl = formElement.getAttribute("action");
-            if (!submitUrl || submitUrl === "" || submitUrl === "#") {
-                submitUrl = updateUrl;
-            } else if (submitUrl.indexOf("http") !== 0) {
-                submitUrl = location.origin + submitUrl;
-            }
-            
-            var resultHtml = await submitForm(submitUrl, formData);
-            var resultDoc = parseHtml(resultHtml);
-            
-            var resultAlert = resultDoc.querySelector('div.alert.alert-success.alert-dismissable');
-            if (resultAlert) {
-                var resultText = (resultAlert.textContent + "").trim();
-                if (resultText.indexOf("activity plan has been updated") !== -1 || resultText.indexOf("Activity plan has been updated") !== -1) {
-                    log("Successfully locked: " + planName);
-                    return { success: true, message: "Locked successfully" };
-                }
-            }
-            
-            log("Lock submitted but success not confirmed for: " + planName);
-            return { success: true, message: "Submitted (unconfirmed)" };
-            
-        } catch (error) {
-            log("Error locking " + planName + ": " + String(error));
-            return { success: false, message: String(error) };
-        }
-    }
-
-    // Update Lock Activity Plans popup with success/failure counts
-    function updateLockActivityPlansPopup(success) {
-        var countsDiv = document.getElementById("lockActivityPlansCounts");
-        if (!countsDiv) {
-            return;
-        }
-        
-        var STORAGE_SUCCESS_COUNT = "activityPlanState.lockActivityPlans.successCount";
-        var STORAGE_FAIL_COUNT = "activityPlanState.lockActivityPlans.failCount";
-        
-        var successCount = 0;
-        var failCount = 0;
-        
-        try {
-            var rawSuccess = localStorage.getItem(STORAGE_SUCCESS_COUNT);
-            var rawFail = localStorage.getItem(STORAGE_FAIL_COUNT);
-            if (rawSuccess) {
-                successCount = parseInt(rawSuccess, 10) || 0;
-            }
-            if (rawFail) {
-                failCount = parseInt(rawFail, 10) || 0;
-            }
-        } catch (e) {}
-        
-        if (success) {
-            successCount = successCount + 1;
-        } else {
-            failCount = failCount + 1;
-        }
-        
-        try {
-            localStorage.setItem(STORAGE_SUCCESS_COUNT, String(successCount));
-            localStorage.setItem(STORAGE_FAIL_COUNT, String(failCount));
-        } catch (e) {}
-        
-        countsDiv.innerHTML = "<span style='color:#9f9'>Success: " + String(successCount) + "</span> | <span style='color:#f99'>Failed: " + String(failCount) + "</span>";
-        log("Lock Activity Plans: updated counts - Success: " + String(successCount) + ", Failed: " + String(failCount));
-    }
-
     // After activity plan processing, route to next step (study/show) as required.
     function monitorCompletionThenAdvance() {
         var mode = getRunMode();
@@ -9966,6 +9833,153 @@
         }
         setAfterRefresh("goStudyShow");
         location.href = LIST_URL;
+    }
+
+    // Background function to lock a single activity plan using HTTP requests
+    async function fetchAndLockActivityPlan(planUrl, planName) {
+        try {
+            log("Locking Activity Plan: " + planName);
+
+            var detailHtml = await fetchPage(planUrl);
+            var detailDoc = parseHtml(detailHtml);
+
+            var editLink = detailDoc.querySelector('a[href^="/secure/crfdesign/activityplans/updatestate/"]');
+            if (!editLink) {
+                log("Edit state link not found for: " + planName);
+                return { success: false, message: "Edit state link not found" };
+            }
+
+            var updatePath = editLink.getAttribute("href");
+            var updateUrl = location.origin + updatePath;
+
+            log("Fetching modal content from: " + updateUrl);
+            var modalHtml = await fetchPage(updateUrl);
+            var modalDoc = parseHtml(modalHtml);
+
+            log("Modal HTML length: " + String(modalHtml.length));
+            var saveButton = modalDoc.querySelector('button#actionButton');
+            if (saveButton) {
+                log("Save button found: " + saveButton.outerHTML);
+            } else {
+                log("Save button NOT found in modal");
+            }
+
+            var formGroups = modalDoc.querySelectorAll('.form-group');
+            if (!formGroups || formGroups.length < 2) {
+                log("Form groups not found for: " + planName);
+                return { success: false, message: "Form groups not found" };
+            }
+
+            var secondFormGroup = formGroups[1];
+            var formControlStatic = secondFormGroup.querySelector('p.form-control-static');
+
+            var hasReadyState = false;
+            if (formControlStatic) {
+                var staticText = (formControlStatic.textContent + "").trim();
+                var hasLockIcon = formControlStatic.querySelector('i.fa.fa-lock');
+                if (staticText.indexOf("Ready") !== -1 || hasLockIcon) {
+                    hasReadyState = true;
+                    log("Activity Plan " + planName + " is in Ready state, will lock");
+                }
+            }
+
+            if (!hasReadyState) {
+                log("Activity Plan " + planName + " is not in Ready state, skipping");
+                return { success: true, message: "Not in Ready state, skipped" };
+            }
+
+            var formElement = modalDoc.querySelector('form');
+            if (!formElement) {
+                log("Form not found for: " + planName);
+                return { success: false, message: "Form not found" };
+            }
+
+            var allInputs = formElement.querySelectorAll('input, textarea, select');
+            log("Found " + String(allInputs.length) + " form inputs");
+
+            var formData = "";
+            var i = 0;
+            while (i < allInputs.length) {
+                var input = allInputs[i];
+                var name = input.getAttribute("name");
+                var type = input.getAttribute("type") || "";
+                var tagName = input.tagName.toLowerCase();
+                var value = "";
+
+                log("Input " + String(i) + ": name=" + String(name) + ", type=" + String(type) + ", tag=" + tagName + ", value=" + String(input.value || input.getAttribute("value") || ""));
+
+                if (name) {
+                    if (type === "checkbox" || type === "radio") {
+                        if (input.checked || input.hasAttribute("checked")) {
+                            value = input.value || input.getAttribute("value") || "on";
+                        } else {
+                            i = i + 1;
+                            continue;
+                        }
+                    } else if (tagName === "select") {
+                        var selectedOption = input.querySelector("option[selected]");
+                        if (selectedOption) {
+                            value = selectedOption.value || selectedOption.getAttribute("value") || "";
+                        } else {
+                            var firstOption = input.querySelector("option");
+                            value = firstOption ? (firstOption.value || firstOption.getAttribute("value") || "") : "";
+                        }
+                    } else {
+                        value = input.value || input.getAttribute("value") || "";
+                    }
+
+                    if (formData.length > 0) {
+                        formData += "&";
+                    }
+                    formData += encodeURIComponent(name) + "=" + encodeURIComponent(value);
+                }
+                i = i + 1;
+            }
+
+            var formAction = formElement.getAttribute("action");
+            var formMethod = formElement.getAttribute("method") || "POST";
+            log("Form action (ignored): " + formAction);
+            log("Form method: " + formMethod);
+            log("Form data: " + formData);
+            log("Submitting lock for: " + planName);
+
+            var submitUrl = updateUrl;
+
+            log("Submit URL: " + submitUrl);
+            var resultHtml = await submitForm(submitUrl, formData);
+            var resultDoc = parseHtml(resultHtml);
+
+            var errorAlert = resultDoc.querySelector('div.alert.alert-danger.alert-dismissable');
+            if (errorAlert) {
+                var errorText = (errorAlert.textContent + "").trim();
+                if (errorText.indexOf("Each segment must contain at least one visible activity") !== -1) {
+                    log("Activity Plan " + planName + " has validation error (no visible activities), skipping");
+                    return { success: true, message: "Validation error, skipped" };
+                }
+            }
+
+            log("Waiting for page refresh after submission...");
+            await sleep(1000);
+
+            var verifyHtml = await fetchPage(planUrl);
+            var verifyDoc = parseHtml(verifyHtml);
+
+            var verifyAlert = verifyDoc.querySelector('div.alert.alert-success.alert-dismissable');
+            if (verifyAlert) {
+                var verifyText = (verifyAlert.textContent + "").trim();
+                if (verifyText.indexOf("activity plan has been updated") !== -1 || verifyText.indexOf("Activity plan has been updated") !== -1) {
+                    log("Successfully locked: " + planName);
+                    return { success: true, message: "Locked successfully" };
+                }
+            }
+
+            log("Lock submitted but success not confirmed for: " + planName);
+            return { success: true, message: "Submitted (unconfirmed)" };
+
+        } catch (error) {
+            log("Error locking " + planName + ": " + String(error));
+            return { success: false, message: String(error) };
+        }
     }
 
     // Orchestrate opening plan show pages and queuing pending ids when run flag present.
@@ -9996,10 +10010,10 @@
             return;
         }
         clearRunFlag();
-        
+
         var mode = getRunMode();
         var showPopup = mode === "activity" || mode === "all";
-        
+
         var planData = [];
         var rows = document.querySelectorAll("table.table.table-striped.table-bordered.table-hover tbody tr");
         var i = 0;
@@ -10016,15 +10030,11 @@
             }
             i = i + 1;
         }
-        
+
         log("Found " + String(planData.length) + " activity plans to lock");
-        
+
         if (planData.length === 0) {
             log("No activity plans to lock");
-            try {
-                localStorage.removeItem(STORAGE_LOCK_ACTIVITY_PLANS_POPUP);
-            } catch (e) {}
-            
             var mode2 = getRunMode();
             if (mode2 === "all") {
                 await sleep(1000);
@@ -10037,13 +10047,13 @@
             }
             return;
         }
-        
+
         var statusDiv = null;
         var progressDiv = null;
         var loadingAnimation = null;
         var countsDiv = null;
         var loadingInterval = null;
-        
+
         if (showPopup) {
             var popupContainer = document.createElement("div");
             popupContainer.style.display = "flex";
@@ -10127,39 +10137,39 @@
                 }
             }, 500);
         }
-        
+
         var successCount = 0;
         var failCount = 0;
         var j = 0;
         while (j < planData.length) {
             var plan = planData[j];
             log("Processing (" + String(j + 1) + "/" + String(planData.length) + "): " + plan.name);
-            
+
             if (showPopup && progressDiv) {
                 progressDiv.textContent = "Processing " + String(j + 1) + "/" + String(planData.length) + ": " + plan.name;
             }
-            
+
             var result = await fetchAndLockActivityPlan(plan.url, plan.name);
             if (result.success) {
                 successCount = successCount + 1;
             } else {
                 failCount = failCount + 1;
             }
-            
+
             if (showPopup && countsDiv) {
                 countsDiv.innerHTML = "<span style='color:#9f9'>Success: " + String(successCount) + "</span> | <span style='color:#f99'>Failed: " + String(failCount) + "</span>";
             }
-            
+
             await sleep(500);
             j = j + 1;
         }
-        
+
         if (showPopup && loadingInterval) {
             clearInterval(loadingInterval);
         }
-        
+
         log("Lock Activity Plans completed. Success=" + String(successCount) + " Failed=" + String(failCount));
-        
+
         if (showPopup && statusDiv) {
             statusDiv.textContent = "Completed";
             statusDiv.style.color = "#9f9";
@@ -10170,14 +10180,14 @@
         if (showPopup && progressDiv) {
             progressDiv.textContent = "Processed " + String(planData.length) + "/" + String(planData.length);
         }
-        
+
         try {
             localStorage.removeItem(STORAGE_LOCK_ACTIVITY_PLANS_POPUP);
             log("Lock Activity Plans: popup flag cleared");
         } catch (e) {}
-        
-        var mode = getRunMode();
-        if (mode === "all") {
+
+        var mode3 = getRunMode();
+        if (mode3 === "all") {
             await sleep(2000);
             if (LOCK_ACTIVITY_PLANS_POPUP_REF && LOCK_ACTIVITY_PLANS_POPUP_REF.close) {
                 LOCK_ACTIVITY_PLANS_POPUP_REF.close();
@@ -10191,6 +10201,7 @@
             location.href = "https://cenexeltest.clinspark.com/secure/samples/configure/paths";
         }
     }
+
 
     //==========================
     // RUN BARCODE FEATURE
@@ -10303,22 +10314,7 @@
         }
         return String(raw);
     }
-    // Return index of first option with non-empty value.
-    function firstNonEmptyOptionIndex(selectEl) {
-        if (!selectEl) {
-            return -1;
-        }
-        var opts = selectEl.querySelectorAll("option");
-        var i = 0;
-        while (i < opts.length) {
-            var v = (opts[i].value + "").trim();
-            if (v.length > 0) {
-                return i;
-            }
-            i = i + 1;
-        }
-        return -1;
-    }
+
     // Normalize subject text by trimming and collapsing whitespace.
     function normalizeSubjectString(t) {
         if (typeof t !== "string") {
@@ -10529,14 +10525,14 @@
 
     function SharedUtilityFunctions() {}
 
-    
+
     // Recreate popups on page load if they should be active
     function recreatePopupsIfNeeded() {
         try {
             var runMode = getRunMode();
 
-            // Recreate Run All popup
-            if (runMode === "all") {
+            // Recreate Run All popup (also for consent phase which is part of Run All flow)
+            if (runMode === "all" || runMode === "consent") {
                 var runAllPopupActive = localStorage.getItem(STORAGE_RUN_ALL_POPUP);
                 if (runAllPopupActive === "1" && (!RUN_ALL_POPUP_REF || !document.body.contains(RUN_ALL_POPUP_REF.element))) {
                     var popupContainer = document.createElement("div");
@@ -10815,23 +10811,10 @@
                     }, 500);
                 }
             }
+
         } catch (e) {
             log("Error recreating popups: " + e);
         }
-    }
-
-    function clearEligibilityWorkingState() {
-        try {
-            localStorage.removeItem(STORAGE_ELIG_IMPORTED);
-            log("ImportElig: cleared imported items");
-        } catch(e) {}
-
-        try {
-            localStorage.removeItem(STORAGE_ELIG_CHECKITEM_CACHE);
-            log("ImportElig: cleared checkItemCache");
-        } catch(e) {}
-
-        log("ImportElig: working state fully cleared");
     }
 
     // Clear all Collect All related data
@@ -10839,26 +10822,6 @@
         COLLECT_ALL_CANCELLED = false;
         COLLECT_ALL_POPUP_REF = null;
         log("CollectAll: data cleared");
-    }
-
-    // Update Run All popup status
-    function updateRunAllPopupStatus(statusText) {
-        // Store status in localStorage for persistence
-        try {
-            localStorage.setItem(STORAGE_RUN_ALL_STATUS, statusText);
-        } catch (e) {}
-
-        if (!RUN_ALL_POPUP_REF) {
-            return;
-        }
-        try {
-            var statusDiv = RUN_ALL_POPUP_REF.element.querySelector("#runAllStatus");
-            if (statusDiv) {
-                statusDiv.textContent = statusText;
-            }
-        } catch (e) {
-            log("Error updating Run All popup status: " + e);
-        }
     }
 
     // Find and navigate to eligibility locking form when required.
@@ -12101,14 +12064,6 @@
         return handle;
     }
 
-    function setPanelHidden(flag) {
-        try {
-            localStorage.setItem(STORAGE_PANEL_HIDDEN, flag ? "1" : "0");
-            log("Panel hidden state set to " + String(flag));
-        } catch (e) {
-        }
-    }
-
     function getPanelHidden() {
         var raw = null;
         try {
@@ -12135,26 +12090,6 @@
             panel.style.display = "block";
             panel.style.pointerEvents = "auto";
             log("applyPanelHiddenState: applied visible");
-        }
-    }
-
-    function togglePanelHiddenViaHotkey() {
-        var panel = document.getElementById(PANEL_ID);
-        if (!panel) {
-            log("Hotkey toggle: panel element not found; nothing to toggle");
-            return;
-        }
-        var isHidden = getPanelHidden();
-        if (isHidden) {
-            panel.style.display = "block";
-            panel.style.pointerEvents = "auto";
-            setPanelHidden(false);
-            log("Hotkey toggle: panel unhidden");
-        } else {
-            panel.style.display = "none";
-            panel.style.pointerEvents = "none";
-            setPanelHidden(true);
-            log("Hotkey toggle: panel hidden");
         }
     }
 
@@ -12780,9 +12715,76 @@
             } catch (e) {}
             status.textContent = "Navigating to Study Show for Consent…";
             log("Run Informed Consent clicked");
+
+            var popupContainer = document.createElement("div");
+            popupContainer.style.display = "flex";
+            popupContainer.style.flexDirection = "column";
+            popupContainer.style.gap = "16px";
+            popupContainer.style.padding = "8px";
+
+            var statusDiv = document.createElement("div");
+            statusDiv.id = "icfBarcodeStatus";
+            statusDiv.style.textAlign = "center";
+            statusDiv.style.fontSize = "18px";
+            statusDiv.style.color = "#fff";
+            statusDiv.style.fontWeight = "500";
+            statusDiv.textContent = "Running ICF Barcode";
+
+            var loadingAnimation = document.createElement("div");
+            loadingAnimation.id = "icfBarcodeLoading";
+            loadingAnimation.style.textAlign = "center";
+            loadingAnimation.style.fontSize = "14px";
+            loadingAnimation.style.color = "#9df";
+            loadingAnimation.textContent = "Running.";
+
+            popupContainer.appendChild(statusDiv);
+            popupContainer.appendChild(loadingAnimation);
+
+            ICF_BARCODE_POPUP_REF = createPopup({
+                title: "Run ICF Barcode Progress",
+                content: popupContainer,
+                width: "400px",
+                height: "auto",
+                onClose: function() {
+                    log("ICF Barcode: cancelled by user (close button)");
+                    clearAllRunState();
+                    try {
+                        localStorage.removeItem(STORAGE_RUN_MODE);
+                        localStorage.removeItem(STORAGE_ICF_BARCODE_POPUP);
+                    } catch (e) {}
+                    ICF_BARCODE_POPUP_REF = null;
+                }
+            });
+
+            try {
+                localStorage.setItem(STORAGE_ICF_BARCODE_POPUP, "1");
+            } catch (e) {}
+
+            // Animate loading dots
+            var dots = 1;
+            var loadingInterval = setInterval(function() {
+                if (!ICF_BARCODE_POPUP_REF || !document.body.contains(ICF_BARCODE_POPUP_REF.element)) {
+                    clearInterval(loadingInterval);
+                    return;
+                }
+                dots = dots + 1;
+                if (dots > 3) {
+                    dots = 1;
+                }
+                var text = "Running";
+                var i = 0;
+                while (i < dots) {
+                    text = text + ".";
+                    i = i + 1;
+                }
+                if (loadingAnimation) {
+                    loadingAnimation.textContent = text;
+                }
+            }, 500);
+
             location.href = STUDY_SHOW_URL + "?autoconsent=1";
         });
-        
+
         runAllBtn.addEventListener("click", function () {
             try {
                 localStorage.setItem(STORAGE_KEY, "1");
@@ -13281,7 +13283,7 @@
                 processFindFormOnList();
             }
         }
-        
+
         var isSamplePathsPage = location.pathname === "/secure/samples/configure/paths";
         if (isSamplePathsPage) {
             processLockSamplePathsPage();
