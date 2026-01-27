@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.4.0
+// @version     1.5.0
 // @description Retain only Barcode feature; production environment only
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -46,7 +46,7 @@
     var PANEL_DEFAULT_HEIGHT = "auto";
     var PANEL_HEADER_HEIGHT_PX = 48;
     var PANEL_HEADER_GAP_PX = 8;
-    var PANEL_MAX_WIDTH_PX = 600;
+    var PANEL_MAX_WIDTH_PX = 60;
     var FORM_DELAY_MS = 800;
     var DELAY_BETWEEN_ITEMS_MS = 100;
     var DELAY_AFTER_COLLECT_CLICK_MS = 500;
@@ -4890,6 +4890,268 @@
     // cohorts, and subjects. Functions handle subject identification, barcode retrieval,
     // and populating barcode input modals.
     //==========================
+
+    
+    // Run Barcode feature once from the current page context.
+    // Runs completely in the background without opening a new tab.
+    async function APS_RunBarcode() {
+        BARCODE_START_TS = Date.now();
+
+        var info = getSubjectFromBreadcrumbOrTooltip();
+        var hasText = !!(info.subjectText && info.subjectText.length > 0);
+        var hasId = !!(info.subjectId && info.subjectId.length > 0);
+
+        if (!hasText && !hasId) {
+            log("Run Barcode: subject breadcrumb or tooltip not found (APS_RunBarcode)");
+            return;
+        }
+
+        log("APS_RunBarcode: Fetching barcode in background…");
+
+        var loadingText = document.createElement("div");
+        loadingText.style.textAlign = "center";
+        loadingText.style.fontSize = "16px";
+        loadingText.style.color = "#fff";
+        loadingText.style.padding = "20px";
+        loadingText.textContent = "Locating barcode.";
+
+        var popup = createPopup({
+            title: "Locating Barcode",
+            content: loadingText,
+            width: "300px",
+            height: "auto"
+        });
+
+        var dots = 1;
+        var loadingInterval = setInterval(function () {
+            dots = dots + 1;
+            if (dots > 3) {
+                dots = 1;
+            }
+            var text = "Locating barcode";
+            var i = 0;
+            while (i < dots) {
+                text = text + ".";
+                i = i + 1;
+            }
+            loadingText.textContent = text;
+        }, 500);
+
+        // Fetch barcode in background using the new function
+        var r = await fetchBarcodeInBackground(info.subjectText, info.subjectId);
+
+        try {
+            clearInterval(loadingInterval);
+        } catch (e1) {}
+        try {
+            if (popup && popup.close) {
+                popup.close();
+            }
+        } catch (e2) {}
+
+        if (r && r.length > 0) {
+            log("APS_RunBarcode: got result '" + r + "'; attempting to populate input");
+
+            var inputBox = document.querySelector("input.bootbox-input.bootbox-input-text.form-control");
+            if (!inputBox) {
+                inputBox = await openBarcodeDataEntryModalIfNeeded(6000);
+            }
+
+            if (inputBox) {
+                inputBox.value = r;
+                var evt = new Event("input", { bubbles: true });
+                inputBox.dispatchEvent(evt);
+                log("APS_RunBarcode: populated barcode value in modal");
+
+                var okBtn = document.querySelector("button[data-bb-handler=\"confirm\"].btn.btn-primary");
+                if (!okBtn) {
+                    okBtn = document.querySelector("button.btn.btn-primary[data-bb-handler=\"confirm\"]");
+                }
+                if (okBtn) {
+                    okBtn.click();
+                    log("APS_RunBarcode: confirmed barcode modal");
+                } else {
+                    log("APS_RunBarcode: OK button not found after populating input");
+                }
+            } else {
+                log("APS_RunBarcode: unable to find or open barcode input modal");
+            }
+        } else {
+            log("APS_RunBarcode: no barcode result found");
+        }
+
+        try {
+            var secs = (Date.now() - BARCODE_START_TS) / 1000;
+            var s = secs.toFixed(2);
+            log("APS_RunBarcode: elapsed " + String(s) + " s");
+        } catch (e3) {}
+        BARCODE_START_TS = 0;
+    }
+
+    
+    // Fetch barcode completely in the background without opening a new tab.
+    // Uses the subject ID directly if available, or uses a hidden iframe to search.
+    async function fetchBarcodeInBackground(subjectText, subjectId) {
+        log("Background Barcode: starting search subjectText='" + String(subjectText) + "' subjectId='" + String(subjectId) + "'");
+
+        // If we have a subject ID, the barcode is simply "S" + subjectId
+        if (subjectId && subjectId.length > 0) {
+            var result = "S" + String(subjectId);
+            log("Background Barcode: using direct ID, result=" + result);
+            return result;
+        }
+
+        // If we only have subject text, we need to search through the barcode printing page
+        if (!subjectText || subjectText.length === 0) {
+            log("Background Barcode: no subjectText or subjectId provided");
+            return null;
+        }
+
+        // Use a hidden iframe to load the page and interact with it
+        // This allows JavaScript to execute and populate the dynamic dropdowns
+        return await searchBarcodeViaIframe(subjectText);
+    }
+
+    // Search for barcode using a hidden iframe that can execute JavaScript
+    async function searchBarcodeViaIframe(subjectText) {
+        log("Background Barcode: using hidden iframe approach");
+        
+        return new Promise(function(resolve) {
+            var iframe = document.createElement("iframe");
+            iframe.style.position = "fixed";
+            iframe.style.top = "-9999px";
+            iframe.style.left = "-9999px";
+            iframe.style.width = "1px";
+            iframe.style.height = "1px";
+            iframe.style.visibility = "hidden";
+            iframe.style.pointerEvents = "none";
+            
+            var timeoutId = null;
+            var resolved = false;
+            
+            function cleanup() {
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                    timeoutId = null;
+                }
+                if (iframe && iframe.parentNode) {
+                    iframe.parentNode.removeChild(iframe);
+                }
+            }
+            
+            function finishWithResult(result) {
+                if (resolved) return;
+                resolved = true;
+                cleanup();
+                resolve(result);
+            }
+            
+            // Set a maximum timeout
+            timeoutId = setTimeout(function() {
+                log("Background Barcode: iframe timeout reached");
+                finishWithResult(null);
+            }, 30000);
+            
+            iframe.onload = async function() {
+                try {
+                    var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                    
+                    // Wait a moment for page to initialize
+                    await sleep(500);
+                    
+                    var epochSel = iframeDoc.querySelector("select#epoch");
+                    if (!epochSel) {
+                        log("Background Barcode: iframe - epoch select not found");
+                        finishWithResult(null);
+                        return;
+                    }
+                    
+                    var epochOpts = epochSel.querySelectorAll("option");
+                    log("Background Barcode: iframe - found " + String(epochOpts.length) + " epoch options");
+                    
+                    // Iterate through epochs
+                    for (var eIdx = 0; eIdx < epochOpts.length; eIdx++) {
+                        if (resolved) return;
+                        
+                        var epochVal = (epochOpts[eIdx].value + "").trim();
+                        if (epochVal.length === 0) continue;
+                        
+                        log("Background Barcode: iframe - selecting epoch value='" + epochVal + "'");
+                        epochSel.value = epochVal;
+                        var epochEvt = new Event("change", { bubbles: true });
+                        epochSel.dispatchEvent(epochEvt);
+                        
+                        // Wait for cohorts to load
+                        await sleep(800);
+                        
+                        var cohortSel = iframeDoc.querySelector("select#cohort");
+                        if (!cohortSel) {
+                            log("Background Barcode: iframe - cohort select not found");
+                            continue;
+                        }
+                        
+                        var cohortOpts = cohortSel.querySelectorAll("option");
+                        log("Background Barcode: iframe - found " + String(cohortOpts.length) + " cohort options");
+                        
+                        for (var cIdx = 0; cIdx < cohortOpts.length; cIdx++) {
+                            if (resolved) return;
+                            
+                            var cohortVal = (cohortOpts[cIdx].value + "").trim();
+                            if (cohortVal.length === 0) continue;
+                            
+                            log("Background Barcode: iframe - selecting cohort value='" + cohortVal + "'");
+                            cohortSel.value = cohortVal;
+                            var cohortEvt = new Event("change", { bubbles: true });
+                            cohortSel.dispatchEvent(cohortEvt);
+                            
+                            // Wait for subjects to load
+                            await sleep(800);
+                            
+                            var subjectsSel = iframeDoc.querySelector("select#subjects");
+                            if (!subjectsSel) {
+                                log("Background Barcode: iframe - subjects select not found");
+                                continue;
+                            }
+                            
+                            var subjectOpts = subjectsSel.querySelectorAll("option");
+                            log("Background Barcode: iframe - found " + String(subjectOpts.length) + " subject options");
+                            
+                            for (var sIdx = 0; sIdx < subjectOpts.length; sIdx++) {
+                                var sVal = (subjectOpts[sIdx].value + "").trim();
+                                var sTxt = (subjectOpts[sIdx].textContent + "").trim();
+                                
+                                if (sVal.length > 0) {
+                                    var textMatch = normalizeSubjectString(sTxt) === normalizeSubjectString(subjectText);
+                                    if (textMatch) {
+                                        var result = "S" + String(sVal);
+                                        log("Background Barcode: iframe - found match! text='" + sTxt + "' value='" + sVal + "' result=" + result);
+                                        finishWithResult(result);
+                                        return;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    log("Background Barcode: iframe - subject not found after searching all epochs/cohorts");
+                    finishWithResult(null);
+                    
+                } catch (e) {
+                    log("Background Barcode: iframe error - " + String(e));
+                    finishWithResult(null);
+                }
+            };
+            
+            iframe.onerror = function() {
+                log("Background Barcode: iframe failed to load");
+                finishWithResult(null);
+            };
+            
+            document.body.appendChild(iframe);
+            iframe.src = location.origin + "/secure/barcodeprinting/subjects";
+        });
+    }
+
     async function openBarcodeDataEntryModalIfNeeded(timeoutMs) {
         var inputBox = document.querySelector("input.bootbox-input.bootbox-input-text.form-control");
         if (inputBox) {
@@ -5815,7 +6077,7 @@
         panel.style.color = "#fff";
         panel.style.border = "1px solid #444";
         panel.style.borderRadius = "8px";
-        panel.style.padding = "0";
+        panel.style.padding = "12px";
         panel.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
         panel.style.fontSize = "14px";
         panel.style.minWidth = PANEL_DEFAULT_WIDTH;
@@ -5836,17 +6098,16 @@
         headerBar.style.boxSizing = "border-box";
         headerBar.style.cursor = "grab";
         headerBar.style.userSelect = "none";
-        headerBar.style.padding = "0 12px";
         var leftSpacer = document.createElement("div");
         leftSpacer.style.width = "32px";
         var title = document.createElement("div");
-        title.textContent = "ClinSpark Automator";
+        title.textContent = "ClinSpark Test Automator";
         title.style.fontWeight = "600";
         title.style.textAlign = "center";
         title.style.justifySelf = "center";
-        title.style.transform = "translateX(16px)";
-        headerBar.appendChild(leftSpacer);
+        title.style.transform = "translateX(16px)"
         headerBar.appendChild(title);
+        headerBar.appendChild(leftSpacer);
         var rightControls = document.createElement("div");
         rightControls.style.display = "inline-flex";
         rightControls.style.alignItems = "center";
@@ -5873,7 +6134,6 @@
         bodyContainer.style.maxHeight = "calc(100% - " + String(PANEL_HEADER_HEIGHT_PX) + "px)";
         bodyContainer.style.overflowY = "auto";
         bodyContainer.style.boxSizing = "border-box";
-        bodyContainer.style.padding = "12px";
         var btnRow = document.createElement("div");
         btnRow.style.display = "grid";
         btnRow.style.gridTemplateColumns = "1fr 1fr";
@@ -6028,149 +6288,9 @@
                 log("Paused");
             }
         });
-        runBarcodeBtn.addEventListener("click", function () {
-            BARCODE_START_TS = Date.now();
-            clearBarcodeResult();
-            var info = getSubjectFromBreadcrumbOrTooltip();
-            var hasText = info.subjectText && info.subjectText.length > 0;
-            var hasId = info.subjectId && info.subjectId.length > 0;
-            if (!hasText && !hasId) {
-                log("Run Barcode: subject breadcrumb or tooltip not found");
-                return;
-            }
-            if (hasText) {
-                setBarcodeSubjectText(info.subjectText);
-            } else {
-                clearBarcodeSubjectText();
-            }
-            if (hasId) {
-                setBarcodeSubjectId(info.subjectId);
-            } else {
-                clearBarcodeSubjectId();
-            }
-            log("Opening Barcode Printing Subjects in background…");
-            BARCODE_BG_TAB = openInTab(location.origin + "/secure/barcodeprinting/subjects", false);
-            log("Run Barcode: background tab opened");
-            var loadingText = document.createElement("div");
-            loadingText.style.textAlign = "center";
-            loadingText.style.fontSize = "16px";
-            loadingText.style.color = "#fff";
-            loadingText.style.padding = "20px";
-            loadingText.textContent = "Locating barcode.";
-            var canceled = false;
-            var popup = createPopup({
-                title: "Locating Barcode",
-                content: loadingText,
-                width: "300px",
-                height: "auto",
-                onClose: function () {
-                    canceled = true;
-                    try {
-                        if (BARCODE_BG_TAB && typeof BARCODE_BG_TAB.close === "function") {
-                            BARCODE_BG_TAB.close();
-                            log("Run Barcode: background tab closed due to popup close");
-                        }
-                    } catch (e) {
-                        log("Run Barcode: error closing background tab " + String(e));
-                    }
-                    BARCODE_BG_TAB = null;
-                    clearBarcodeResult();
-                    BARCODE_START_TS = 0;
-                    log("Run Barcode: canceled by user; stopping");
-                }
-            });
-            var dots = 1;
-            var loadingInterval = setInterval(function () {
-                dots = dots + 1;
-                if (dots > 3) {
-                    dots = 1;
-                }
-                var text = "Locating barcode";
-                var i2 = 0;
-                while (i2 < dots) {
-                    text = text + ".";
-                    i2 = i2 + 1;
-                }
-                loadingText.textContent = text;
-            }, 500);
-            var waited = 0;
-            var maxWait = 15000;
-            var intervalMs = 500;
-            var timer = setInterval(async function () {
-                if (canceled) {
-                    clearInterval(loadingInterval);
-                    clearInterval(timer);
-                    return;
-                }
-                var r = getBarcodeResult();
-                if (r && r.length > 0) {
-                    clearInterval(loadingInterval);
-                    if (popup && popup.close) {
-                        popup.close();
-                    }
-                    log(r);
-                    var inputBox = document.querySelector("input.bootbox-input.bootbox-input-text.form-control");
-                    if (!inputBox) {
-                        inputBox = await openBarcodeDataEntryModalIfNeeded(6000);
-                    }
-                    if (inputBox) {
-                        inputBox.value = r;
-                        var evt = new Event("input", { bubbles: true });
-                        inputBox.dispatchEvent(evt);
-                        log("Run Barcode: bootbox input autopopulated in parent page");
-                        var okBtn = document.querySelector("button[data-bb-handler=\"confirm\"].btn.btn-primary");
-                        if (!okBtn) {
-                            okBtn = document.querySelector("button.btn.btn-primary[data-bb-handler=\"confirm\"]");
-                        }
-                        if (okBtn) {
-                            okBtn.click();
-                            log("Run Barcode: bootbox OK clicked in parent page");
-                        } else {
-                            log("Run Barcode: bootbox OK button not found in parent page");
-                        }
-                    } else {
-                        log("Run Barcode: Unable to open barcode modal or locate input field");
-                    }
-                    try {
-                        if (BARCODE_BG_TAB && typeof BARCODE_BG_TAB.close === "function") {
-                            BARCODE_BG_TAB.close();
-                            log("Run Barcode: background tab closed after success");
-                        }
-                    } catch (e) {
-                        log("Run Barcode: error closing background tab " + String(e));
-                    }
-                    BARCODE_BG_TAB = null;
-                    var secs1 = (Date.now() - BARCODE_START_TS) / 1000;
-                    var s1 = secs1.toFixed(2);
-                    log("Run Barcode: elapsed " + String(s1) + " s");
-                    BARCODE_START_TS = 0;
-                    clearBarcodeResult();
-                    clearInterval(timer);
-                } else {
-                    waited = waited + intervalMs;
-                    if (waited >= maxWait) {
-                        clearInterval(loadingInterval);
-                        if (popup && popup.close) {
-                            popup.close();
-                        }
-                        clearInterval(timer);
-                        log("Run Barcode: timeout with no result");
-                        try {
-                            if (BARCODE_BG_TAB && typeof BARCODE_BG_TAB.close === "function") {
-                                BARCODE_BG_TAB.close();
-                                log("Run Barcode: background tab closed after timeout");
-                            }
-                        } catch (e2) {
-                            log("Run Barcode: error closing background tab " + String(e2));
-                        }
-                        BARCODE_BG_TAB = null;
-                        var secs2 = (Date.now() - BARCODE_START_TS) / 1000;
-                        var s2 = secs2.toFixed(2);
-                        log("Run Barcode: elapsed " + String(s2) + " s");
-                        BARCODE_START_TS = 0;
-                    }
-                }
-            }, intervalMs);
+        runBarcodeBtn.addEventListener("click", async function () {
+            log("Run Barcode: button clicked");
+            await APS_RunBarcode();
         });
         findAeBtn.addEventListener("click", function () {
             openAndLocateAdverseEvent();
