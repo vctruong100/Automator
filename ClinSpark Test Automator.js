@@ -12526,7 +12526,7 @@
         runFormIRBtn.onmouseenter = function() { this.style.background = "#ec971f"; };
         runFormIRBtn.onmouseleave = function() { this.style.background = "#f0ad4e"; };
         var parseMethodBtn = document.createElement("button");
-        parseMethodBtn.textContent = "Parse Method";
+        parseMethodBtn.textContent = "Item Method Forms";
         parseMethodBtn.style.background = "#4a90e2";
         parseMethodBtn.style.color = "#fff";
         parseMethodBtn.style.border = "none";

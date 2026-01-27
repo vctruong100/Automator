@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.5.0
+// @version     1.5.1
 // @description Retain only Barcode feature; production environment only
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -6181,7 +6181,7 @@
         findFormBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
         
         var parseMethodBtn = document.createElement("button");
-        parseMethodBtn.textContent = "Parse Method";
+        parseMethodBtn.textContent = "Item Method Forms";
         parseMethodBtn.style.background = "#4a90e2";
         parseMethodBtn.style.color = "#fff";
         parseMethodBtn.style.border = "none";
