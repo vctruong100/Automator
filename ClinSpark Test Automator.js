@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 2.8.0
+// @version 2.8.1
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -2072,7 +2072,7 @@
             if (barcodeVisible) {
                 log("CollectAll: barcode required; executing Run Barcode feature");
                 await APS_RunBarcode();
-                var okClosed = await waitForAnyModalToClose(6000);
+                var okClosed = await waitForAnyModalToClose(3000);
                 if (okClosed) {
                     log("CollectAll: barcode modal flow appears closed");
                 } else {
@@ -4723,7 +4723,7 @@
             var t3 = Math.floor(spec.t);
             if (mode === "ir") {
                 var minVal = t3 + 1;
-                var maxVal = t3 + 100; // Reasonable upper bound to avoid infinite ranges
+                var maxVal = t3 + 100; 
                 return randomIntInInclusiveRange(minVal, maxVal);
             }
             if (mode === "oorA") {
@@ -4751,7 +4751,7 @@
             var t4 = Math.floor(spec.t);
             if (mode === "ir") {
                 var minVal = t4;
-                var maxVal = t4 + 100; // Reasonable upper bound to avoid infinite ranges
+                var maxVal = t4 + 100;
                 return randomIntInInclusiveRange(minVal, maxVal);
             }
             if (mode === "oorA") {
@@ -5044,6 +5044,27 @@
         if (finalBtn) {
             finalBtn.click();
             log("Run Form V2: clicked final Save and Return");
+            
+            await sleep(1000);
+            
+            var deviationTextarea = document.querySelector("textarea#userDeviationReason");
+            if (deviationTextarea) {
+                log("Run Form V2: deviation modal detected (found userDeviationReason textarea)");
+                deviationTextarea.value = "Test";
+                var evt = new Event("input", { bubbles: true });
+                deviationTextarea.dispatchEvent(evt);
+                log("Run Form V2: deviation reason set to 'Test'");
+                
+                await sleep(200);
+                
+                var saveBtn = document.querySelector("button.btn.btn.green[data-bb-handler=\"success\"]");
+                if (saveBtn) {
+                    saveBtn.click();
+                    log("Run Form V2: clicked deviation modal Save button");
+                } else {
+                    log("Run Form V2: deviation modal Save button not found");
+                }
+            }
         } else {
             log("Run Form V2: final Save and Return button not found");
         }
@@ -5092,7 +5113,24 @@
         if (radios && radios.length > 0) {
             var tr = controlTd.closest("tr[id^=\"itemDataCollectRow_\"]");
             var rowId = getItemRowId(tr);
-            var ok = await radioSelectBestEffort(controlTd, rowId);
+            
+            var repeatRadio = null;
+            var i = 0;
+            while (i < radios.length) {
+                var radio = radios[i];
+                var label = radio.closest("label");
+                if (label) {
+                    var labelText = (label.textContent + "").toLowerCase();
+                    if (labelText.indexOf("repeat") !== -1) {
+                        repeatRadio = radio;
+                        log("Run Form: found radio with 'repeat' in label rowId=" + String(rowId));
+                        break;
+                    }
+                }
+                i = i + 1;
+            }
+            
+            var ok = await radioSelectBestEffort(controlTd, rowId, repeatRadio);
             log("Run Form: radio-select result rowId=" + String(rowId) + " ok=" + String(ok));
             return;
         }
@@ -5400,12 +5438,20 @@
     }
 
     // Try multiple strategies to select a radio option reliably.
-    async function radioSelectBestEffort(controlTd, rowId) {
+    async function radioSelectBestEffort(controlTd, rowId, preferredRadio) {
         var radios = controlTd.querySelectorAll("div.radio-list input[type=\"radio\"]");
         if (!radios || radios.length === 0) {
             return false;
         }
-        var r = radios[0];
+        var r = null;
+        if (preferredRadio) {
+            r = preferredRadio;
+            log("Run Form: using preferred radio (repeat) rowId=" + String(rowId));
+        } else {
+            var randomIndex = Math.floor(Math.random() * radios.length);
+            r = radios[0];
+            log("Run Form: selecting radio index=" + String(randomIndex) + " rowId=" + String(rowId));
+        }
         if (r.disabled === true) {
             r.disabled = false;
             log("Run Form: radio enabled rowId=" + String(rowId));
