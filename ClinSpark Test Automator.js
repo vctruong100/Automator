@@ -1593,21 +1593,17 @@
     async function fetchBarcodeInBackground(subjectText, subjectId) {
         log("Background Barcode: starting search subjectText='" + String(subjectText) + "' subjectId='" + String(subjectId) + "'");
 
-        // If we have a subject ID, the barcode is simply "S" + subjectId
         if (subjectId && subjectId.length > 0) {
             var result = "S" + String(subjectId);
             log("Background Barcode: using direct ID, result=" + result);
             return result;
         }
 
-        // If we only have subject text, we need to search through the barcode printing page
         if (!subjectText || subjectText.length === 0) {
             log("Background Barcode: no subjectText or subjectId provided");
             return null;
         }
 
-        // Use a hidden iframe to load the page and interact with it
-        // This allows JavaScript to execute and populate the dynamic dropdowns
         return await searchBarcodeViaIframe(subjectText);
     }
 
@@ -1658,7 +1654,7 @@
                     // Wait for epoch select to appear and be populated (Edge needs more time than Chrome)
                     var epochSel = null;
                     var retryCount = 0;
-                    var maxRetries = 20;
+                    var maxRetries = 40;
                     while (retryCount < maxRetries && !epochSel) {
                         await sleep(300);
                         epochSel = iframeDoc.querySelector("select#epoch");
