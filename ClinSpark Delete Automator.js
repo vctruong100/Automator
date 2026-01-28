@@ -1,6 +1,6 @@
 
 // ==UserScript==
-// @name ClinSpark Basic Automator
+// @name ClinSpark Delete Automator
 // @namespace vinh.activity.plan.state
 // @version 1.1.0
 // @description
@@ -68,6 +68,20 @@
     const RUNMODE_ELIG_IMPORT = "eligibilityImport";
     const STORAGE_ELIG_CHECKITEM_CACHE = "activityPlanState.eligibility.checkItemCache";
     const STORAGE_ELIG_IMPORT_PENDING_POPUP = "activityPlanState.eligibility.importPendingPopup";
+
+    // Delete Templates Feature
+    var DELETE_TEMPLATES_CANCELLED = false;
+    var DELETE_TEMPLATES_POPUP_REF = null;
+    var DELETE_TEMPLATES_RUNNING = false;
+    var DELETE_TEMPLATES_CURRENT_ITEM = "";
+    var DELETE_TEMPLATES_TYPE = "";
+    const TEMPLATE_URLS = {
+        form: "https://cenexeltest.clinspark.com/secure/crfdesign/studylibrary/list/form",
+        itemgroup: "https://cenexeltest.clinspark.com/secure/crfdesign/studylibrary/list/itemgroup",
+        item: "https://cenexeltest.clinspark.com/secure/crfdesign/studylibrary/list/item",
+        codelist: "https://cenexeltest.clinspark.com/secure/crfdesign/studylibrary/list/codelist",
+        method: "https://cenexeltest.clinspark.com/secure/crfdesign/studylibrary/list/method"
+    };
 
     // Run Find Form
     var FORM_LIST_URL = "https://cenexeltest.clinspark.com/secure/study/data/list";
@@ -266,10 +280,9 @@
                 try {
                     var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
                     
-                    // Wait for epoch select to appear and be populated (Edge needs more time than Chrome)
                     var epochSel = null;
                     var retryCount = 0;
-                    var maxRetries = 20;
+                    var maxRetries = 40;
                     while (retryCount < maxRetries && !epochSel) {
                         await sleep(300);
                         epochSel = iframeDoc.querySelector("select#epoch");
@@ -1651,14 +1664,452 @@
         log("Hotkey: bound for " + String(PANEL_TOGGLE_KEY));
     }
 
+    //==========================
+    // DELETE TEMPLATES FEATURE
+    //==========================
+    // This section contains functions for deleting template items (Forms, Item Groups, Items, Codelists, Methods)
+    // from the ClinSpark study library in the background.
+    //==========================
 
-    //==========================
-    // MAKE PANEL FUNCTIONS
-    //==========================
-    // This section contains functions used to create and manage the panel UI.
-    // These functions are used to create the panel UI and manage its state.
-    //==========================
+    function resetDeleteTemplatesState() {
+        DELETE_TEMPLATES_CANCELLED = false;
+        DELETE_TEMPLATES_RUNNING = false;
+        DELETE_TEMPLATES_CURRENT_ITEM = "";
+        DELETE_TEMPLATES_TYPE = "";
+    }
 
+    function cancelDeleteTemplates() {
+        DELETE_TEMPLATES_CANCELLED = true;
+        DELETE_TEMPLATES_RUNNING = false;
+        log("DeleteTemplates: cancelled by user");
+    }
+
+    function updateDeleteTemplatesStatus(statusEl, text, isRunning) {
+        if (!statusEl) return;
+        var animationHtml = isRunning ? '<span class="delete-templates-spinner"></span> ' : '';
+        statusEl.innerHTML = animationHtml + text;
+    }
+
+    function addDeletedItemToStatus(statusEl, itemName) {
+        if (!statusEl) return;
+        var itemDiv = document.createElement("div");
+        itemDiv.style.padding = "4px 0";
+        itemDiv.style.borderBottom = "1px solid #2a2a2a";
+        itemDiv.textContent = "✓ " + itemName;
+        statusEl.appendChild(itemDiv);
+        statusEl.scrollTop = statusEl.scrollHeight;
+    }
+
+    async function deleteTemplatesForType(templateType, statusEl, countEl) {
+        if (DELETE_TEMPLATES_CANCELLED) {
+            log("DeleteTemplates: already cancelled before start");
+            return;
+        }
+
+        DELETE_TEMPLATES_RUNNING = true;
+        DELETE_TEMPLATES_TYPE = templateType;
+        var listUrl = TEMPLATE_URLS[templateType];
+        var deletedCount = 0;
+        var requiresUnlock = (templateType === "form");
+        var skippedItemNames = [];
+
+        log("DeleteTemplates: starting for type=" + templateType + " url=" + listUrl);
+        updateDeleteTemplatesStatus(statusEl, "Navigating to " + templateType + " list...", true);
+
+        try {
+            while (!DELETE_TEMPLATES_CANCELLED) {
+                var listHtml = await fetchPage(listUrl);
+                var listDoc = parseHtml(listHtml);
+                var tbody = listDoc.querySelector("#listTable tbody");
+
+                if (!tbody) {
+                    log("DeleteTemplates: listTable tbody not found");
+                    updateDeleteTemplatesStatus(statusEl, "Error: Could not find table", false);
+                    break;
+                }
+
+                var rows = tbody.querySelectorAll("tr");
+                log("DeleteTemplates: found " + rows.length + " rows");
+
+                if (rows.length < 1) {
+                    log("DeleteTemplates: no more items to delete (table empty)");
+                    updateDeleteTemplatesStatus(statusEl, "Completed! Deleted " + deletedCount + " items.", false);
+                    break;
+                }
+
+                // Check for pause frequently
+                if (DELETE_TEMPLATES_CANCELLED) break;
+
+                var targetRow = null;
+                var itemLink = null;
+                var itemName = null;
+                var itemHref = null;
+                
+                // Find first non-skipped item
+                for (var rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+                    if (DELETE_TEMPLATES_CANCELLED) break;
+                    
+                    var currentRow = rows[rowIndex];
+                    var firstTd = currentRow.querySelector("td");
+                    if (!firstTd) continue;
+                    
+                    var currentLink = firstTd.querySelector("a");
+                    if (!currentLink) continue;
+                    
+                    var currentName = (currentLink.textContent || "").trim();
+                    if (skippedItemNames.indexOf(currentName) === -1) {
+                        targetRow = currentRow;
+                        itemLink = currentLink;
+                        itemName = currentName;
+                        itemHref = itemLink.getAttribute("href");
+                        break;
+                    }
+                }
+                
+                if (!itemLink || !itemName) {
+                    log("DeleteTemplates: no non-skipped items found in table");
+                    updateDeleteTemplatesStatus(statusEl, "Completed! Deleted " + deletedCount + " items.", false);
+                    break;
+                }
+                
+                DELETE_TEMPLATES_CURRENT_ITEM = itemName;
+
+                log("DeleteTemplates: processing item '" + itemName + "' href=" + itemHref);
+                updateDeleteTemplatesStatus(statusEl, "Deleting: " + itemName, true);
+
+                // Check for pause before making requests
+                if (DELETE_TEMPLATES_CANCELLED) break;
+                
+                var itemUrl = location.origin + itemHref;
+                var itemHtml = await fetchPage(itemUrl);
+                var itemDoc = parseHtml(itemHtml);
+
+                if (DELETE_TEMPLATES_CANCELLED) break;
+
+                if (requiresUnlock) {
+                    var unlocked = await handleFormUnlockIfNeeded(itemDoc, itemUrl, statusEl);
+                    if (DELETE_TEMPLATES_CANCELLED) break;
+                    if (!unlocked) {
+                        log("DeleteTemplates: failed to unlock form, skipping");
+                        updateDeleteTemplatesStatus(statusEl, "Error unlocking: " + itemName, false);
+                        await sleep(1000);
+                        continue;
+                    }
+                    itemHtml = await fetchPage(itemUrl);
+                    itemDoc = parseHtml(itemHtml);
+                }
+
+                if (DELETE_TEMPLATES_CANCELLED) break;
+
+                var deleteResult = await performDelete(itemDoc, templateType, itemUrl);
+
+                if (deleteResult.success) {
+                    deletedCount++;
+                    if (countEl) {
+                        countEl.textContent = "Deleted: " + deletedCount;
+                    }
+                    addDeletedItemToStatus(statusEl, itemName);
+                    log("DeleteTemplates: successfully deleted '" + itemName + "' (total: " + deletedCount + ")");
+                } else if (deleteResult.hasAlert) {
+                    log("DeleteTemplates: alert detected for '" + itemName + "', adding to skip list");
+                    log("DeleteTemplates: alert message: " + deleteResult.alertMessage);
+                    skippedItemNames.push(itemName);
+                    await sleep(500);
+                } else {
+                    log("DeleteTemplates: failed to delete '" + itemName + "', adding to skip list");
+                    skippedItemNames.push(itemName);
+                    await sleep(500);
+                }
+
+                await sleep(300);
+            }
+
+        } catch (err) {
+            log("DeleteTemplates: error - " + String(err));
+            updateDeleteTemplatesStatus(statusEl, "Error: " + String(err), false);
+        }
+
+        DELETE_TEMPLATES_RUNNING = false;
+        DELETE_TEMPLATES_CURRENT_ITEM = "";
+        log("DeleteTemplates: finished. Total deleted: " + deletedCount);
+    }
+
+    async function handleFormUnlockIfNeeded(itemDoc, itemUrl, statusEl) {
+        var allLinks = itemDoc.querySelectorAll("a");
+        var unlockUrl = null;
+
+        for (var i = 0; i < allLinks.length; i++) {
+            var link = allLinks[i];
+            var href = link.getAttribute("href") || "";
+            var onclick = link.getAttribute("onclick") || "";
+            
+            if (href.indexOf("/locking/") !== -1 || onclick.indexOf("/locking/") !== -1) {
+                var icon = link.querySelector("i.fa-unlock");
+                if (icon) {
+                    if (href && href !== "#" && href.indexOf("/locking/") !== -1) {
+                        unlockUrl = href;
+                    } else {
+                        var match = onclick.match(/['"]([^'"]*\/locking\/[^'"]*)['"]/);
+                        if (match) {
+                            unlockUrl = match[1];
+                        }
+                    }
+                    if (unlockUrl) {
+                        log("DeleteTemplates: found unlock link: " + unlockUrl);
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!unlockUrl) {
+            log("DeleteTemplates: no unlock needed (form is not locked)");
+            return true;
+        }
+
+        log("DeleteTemplates: form is locked, need to unlock");
+        updateDeleteTemplatesStatus(statusEl, "Unlocking form...", true);
+
+        var fullUnlockUrl = location.origin + unlockUrl;
+        log("DeleteTemplates: fetching unlock modal from " + fullUnlockUrl);
+
+        var unlockHtml = await fetchPage(fullUnlockUrl);
+        var unlockDoc = parseHtml(unlockHtml);
+
+        var textarea = unlockDoc.querySelector("textarea#reasonForChange");
+        if (!textarea) {
+            log("DeleteTemplates: reasonForChange textarea not found in unlock modal");
+            return false;
+        }
+
+        var form = unlockDoc.querySelector("form");
+        if (!form) {
+            log("DeleteTemplates: unlock form not found");
+            return false;
+        }
+
+        var formAction = form.getAttribute("action");
+        if (!formAction) {
+            log("DeleteTemplates: form action not found");
+            return false;
+        }
+
+        var formData = new URLSearchParams();
+        var inputs = form.querySelectorAll("input, textarea, select");
+        for (var j = 0; j < inputs.length; j++) {
+            var input = inputs[j];
+            var name = input.getAttribute("name");
+            if (!name) continue;
+
+            var value = "";
+            var type = (input.getAttribute("type") || "").toLowerCase();
+
+            if (name === "reasonForChange") {
+                value = "Test";
+            } else if (type === "checkbox" || type === "radio") {
+                if (input.checked) {
+                    value = input.value || "on";
+                } else {
+                    continue;
+                }
+            } else {
+                value = input.value || "";
+            }
+
+            formData.append(name, value);
+        }
+
+        var submitUrl = location.origin + formAction;
+        log("DeleteTemplates: submitting unlock form to " + submitUrl);
+
+        await submitForm(submitUrl, formData.toString());
+        log("DeleteTemplates: unlock form submitted, waiting for page refresh");
+        await sleep(1500);
+
+        return true;
+    }
+
+    async function performDelete(itemDoc, templateType, itemUrl) {
+        var allLinks = itemDoc.querySelectorAll("a");
+        var deleteUrl = null;
+
+        for (var i = 0; i < allLinks.length; i++) {
+            var link = allLinks[i];
+            var onclick = link.getAttribute("onclick") || "";
+            var match = onclick.match(/maybeRedirect\(['"]([^'"]*delete[^'"]*)['"]\)/);
+            if (match) {
+                deleteUrl = match[1];
+                log("DeleteTemplates: found delete URL: " + deleteUrl);
+                break;
+            }
+        }
+
+        if (!deleteUrl) {
+            log("DeleteTemplates: no delete link found on page");
+            return { success: false, hasAlert: false };
+        }
+
+        var fullDeleteUrl = location.origin + deleteUrl;
+        log("DeleteTemplates: performing delete at " + fullDeleteUrl);
+
+        try {
+            var responseHtml = await fetchPage(fullDeleteUrl);
+            var responseDoc = parseHtml(responseHtml);
+            
+            var alertDanger = responseDoc.querySelector(".alert-danger");
+            if (alertDanger) {
+                var alertMessage = (alertDanger.textContent || "").trim();
+                log("DeleteTemplates: alert detected after delete attempt");
+                return { success: false, hasAlert: true, alertMessage: alertMessage };
+            }
+            
+            log("DeleteTemplates: delete request completed successfully");
+            return { success: true, hasAlert: false };
+        } catch (e) {
+            log("DeleteTemplates: delete request failed - " + String(e));
+            return { success: false, hasAlert: false };
+        }
+    }
+
+    function showDeleteTemplatesPopup() {
+        if (DELETE_TEMPLATES_POPUP_REF) {
+            try {
+                DELETE_TEMPLATES_POPUP_REF.close();
+            } catch (e) {}
+        }
+
+        resetDeleteTemplatesState();
+
+        var container = document.createElement("div");
+        container.style.display = "flex";
+        container.style.flexDirection = "column";
+        container.style.gap = "12px";
+
+        var spinnerStyle = document.createElement("style");
+        spinnerStyle.textContent = `
+            @keyframes deleteTemplatesSpinner {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            .delete-templates-spinner {
+                display: inline-block;
+                width: 14px;
+                height: 14px;
+                border: 2px solid #666;
+                border-top-color: #fff;
+                border-radius: 50%;
+                animation: deleteTemplatesSpinner 0.8s linear infinite;
+                vertical-align: middle;
+                margin-right: 6px;
+            }
+        `;
+        container.appendChild(spinnerStyle);
+
+        var instruction = document.createElement("div");
+        instruction.style.marginBottom = "8px";
+        instruction.style.fontSize = "14px";
+        instruction.textContent = "Select a template type to delete all items:";
+        container.appendChild(instruction);
+
+        var btnContainer = document.createElement("div");
+        btnContainer.style.display = "grid";
+        btnContainer.style.gridTemplateColumns = "1fr 1fr";
+        btnContainer.style.gap = "8px";
+
+        var templateTypes = [
+            { key: "form", label: "Forms" },
+            { key: "itemgroup", label: "Item Groups" },
+            { key: "item", label: "Items" },
+            { key: "codelist", label: "Codelists" },
+            { key: "method", label: "Methods" }
+        ];
+
+        var statusEl = document.createElement("div");
+        statusEl.style.marginTop = "12px";
+        statusEl.style.padding = "10px";
+        statusEl.style.background = "#1a1a1a";
+        statusEl.style.border = "1px solid #333";
+        statusEl.style.borderRadius = "6px";
+        statusEl.style.fontSize = "13px";
+        statusEl.style.minHeight = "100px";
+        statusEl.style.maxHeight = "300px";
+        statusEl.style.overflowY = "auto";
+        statusEl.textContent = "Ready - Select a template type to begin";
+
+        var countEl = document.createElement("div");
+        countEl.style.marginTop = "8px";
+        countEl.style.fontSize = "14px";
+        countEl.style.fontWeight = "600";
+        countEl.textContent = "Deleted: 0";
+
+        templateTypes.forEach(function(type) {
+            var btn = document.createElement("button");
+            btn.textContent = type.label;
+            btn.style.background = "#5b43c7";
+            btn.style.color = "#fff";
+            btn.style.border = "none";
+            btn.style.borderRadius = "6px";
+            btn.style.padding = "12px 16px";
+            btn.style.cursor = "pointer";
+            btn.style.fontWeight = "500";
+            btn.style.fontSize = "14px";
+            btn.style.transition = "background 0.2s";
+
+            btn.onmouseenter = function() { 
+                if (!DELETE_TEMPLATES_RUNNING) {
+                    btn.style.background = "#4a37a0"; 
+                }
+            };
+            btn.onmouseleave = function() { 
+                if (!DELETE_TEMPLATES_RUNNING) {
+                    btn.style.background = "#5b43c7"; 
+                }
+            };
+
+            btn.addEventListener("click", async function() {
+                if (DELETE_TEMPLATES_RUNNING) {
+                    log("DeleteTemplates: already running, ignoring click");
+                    return;
+                }
+
+                var allBtns = btnContainer.querySelectorAll("button");
+                allBtns.forEach(function(b) {
+                    b.style.background = "#444";
+                    b.style.cursor = "not-allowed";
+                });
+                btn.style.background = "#2d7d46";
+                btn.style.cursor = "default";
+
+                countEl.textContent = "Deleted: 0";
+
+                await deleteTemplatesForType(type.key, statusEl, countEl);
+
+                allBtns.forEach(function(b) {
+                    b.style.background = "#5b43c7";
+                    b.style.cursor = "pointer";
+                });
+            });
+
+            btnContainer.appendChild(btn);
+        });
+
+        container.appendChild(btnContainer);
+        container.appendChild(statusEl);
+        container.appendChild(countEl);
+
+        DELETE_TEMPLATES_POPUP_REF = createPopup({
+            title: "Delete Templates",
+            content: container,
+            width: "380px",
+            height: "auto",
+            onClose: function() {
+                cancelDeleteTemplates();
+                DELETE_TEMPLATES_POPUP_REF = null;
+            }
+        });
+
+        log("DeleteTemplates: popup opened");
+    }
 
     //==========================
     // MAKE PANEL FUNCTIONS
@@ -1798,10 +2249,24 @@
         toggleLogsBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
         toggleLogsBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
 
+        var deleteTemplatesBtn = document.createElement("button");
+        deleteTemplatesBtn.textContent = "Delete Templates";
+        deleteTemplatesBtn.style.background = "#dc3545";
+        deleteTemplatesBtn.style.color = "#fff";
+        deleteTemplatesBtn.style.border = "none";
+        deleteTemplatesBtn.style.borderRadius = "6px";
+        deleteTemplatesBtn.style.padding = "8px";
+        deleteTemplatesBtn.style.cursor = "pointer";
+        deleteTemplatesBtn.style.fontWeight = "500";
+        deleteTemplatesBtn.style.transition = "background 0.2s";
+        deleteTemplatesBtn.onmouseenter = function() { this.style.background = "#c82333"; };
+        deleteTemplatesBtn.onmouseleave = function() { this.style.background = "#dc3545"; };
+
         btnRow.appendChild(runBarcodeBtn);
         btnRow.appendChild(pauseBtn);
         btnRow.appendChild(clearLogsBtn);
         btnRow.appendChild(toggleLogsBtn);
+        btnRow.appendChild(deleteTemplatesBtn);
         
         bodyContainer.appendChild(btnRow);
         var status = document.createElement("div");
@@ -1892,6 +2357,10 @@
         runBarcodeBtn.addEventListener("click", async function () {
             log("Run Barcode: button clicked");
             await APS_RunBarcode();
+        });
+        deleteTemplatesBtn.addEventListener("click", function () {
+            log("Delete Templates: button clicked");
+            showDeleteTemplatesPopup();
         });
         collapseBtn.addEventListener("click", function () {
             var collapsed = getPanelCollapsed();
