@@ -266,12 +266,26 @@
                 try {
                     var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
                     
-                    // Wait a moment for page to initialize
-                    await sleep(500);
+                    // Wait for epoch select to appear and be populated (Edge needs more time than Chrome)
+                    var epochSel = null;
+                    var retryCount = 0;
+                    var maxRetries = 20;
+                    while (retryCount < maxRetries && !epochSel) {
+                        await sleep(300);
+                        epochSel = iframeDoc.querySelector("select#epoch");
+                        if (epochSel) {
+                            var opts = epochSel.querySelectorAll("option");
+                            if (opts.length === 0) {
+                                epochSel = null;
+                            } else {
+                                log("Background Barcode: iframe - epoch select ready with " + opts.length + " options (attempt " + (retryCount + 1) + ")");
+                            }
+                        } else {
+                        }
+                        retryCount++;
+                    }
                     
-                    var epochSel = iframeDoc.querySelector("select#epoch");
                     if (!epochSel) {
-                        log("Background Barcode: iframe - epoch select not found");
                         finishWithResult(null);
                         return;
                     }
@@ -291,8 +305,8 @@
                         var epochEvt = new Event("change", { bubbles: true });
                         epochSel.dispatchEvent(epochEvt);
                         
-                        // Wait for cohorts to load
-                        await sleep(800);
+                        // Wait for cohorts to load (Edge needs more time)
+                        await sleep(1200);
                         
                         var cohortSel = iframeDoc.querySelector("select#cohort");
                         if (!cohortSel) {
@@ -314,8 +328,8 @@
                             var cohortEvt = new Event("change", { bubbles: true });
                             cohortSel.dispatchEvent(cohortEvt);
                             
-                            // Wait for subjects to load
-                            await sleep(800);
+                            // Wait for subjects to load (Edge needs more time)
+                            await sleep(1200);
                             
                             var subjectsSel = iframeDoc.querySelector("select#subjects");
                             if (!subjectsSel) {
