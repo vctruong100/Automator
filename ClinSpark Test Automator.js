@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 2.8.3
+// @version 2.8.4
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
