@@ -316,9 +316,44 @@
                     addDeletedItemToStatus(statusEl, itemName);
                     log("DeleteTemplates: successfully deleted '" + itemName + "' (total: " + deletedCount + ")");
                 } else if (deleteResult.hasAlert) {
-                    log("DeleteTemplates: alert detected for '" + itemName + "', adding to skip list");
+                    log("DeleteTemplates: alert detected for '" + itemName + "'");
                     log("DeleteTemplates: alert message: " + deleteResult.alertMessage);
-                    skippedItemNames.push(itemName);
+                    await sleep (500);
+                    // For item groups, try to delete all item references first
+                    if (templateType === "itemgroup") {
+                        log("DeleteTemplates: attempting to clean up item references for item group");
+                        var deletedRefs = await deleteItemRefsFromItemGroup(itemUrl, statusEl);
+                        
+                        if (DELETE_TEMPLATES_CANCELLED) break;
+                        
+                        if (deletedRefs > 0) {
+                            // Retry deleting the item group after cleaning up references
+                            log("DeleteTemplates: retrying item group deletion after cleanup");
+                            updateDeleteTemplatesStatus(statusEl, "Retrying delete: " + itemName, true);
+                            
+                            itemHtml = await fetchPage(itemUrl);
+                            itemDoc = parseHtml(itemHtml);
+                            
+                            var retryResult = await performDelete(itemDoc, templateType, itemUrl);
+                            
+                            if (retryResult.success) {
+                                deletedCount++;
+                                if (countEl) {
+                                    countEl.textContent = "Deleted: " + deletedCount;
+                                }
+                                addDeletedItemToStatus(statusEl, itemName + " (after cleanup)");
+                                log("DeleteTemplates: successfully deleted '" + itemName + "' after cleanup (total: " + deletedCount + ")");
+                            } else {
+                                log("DeleteTemplates: still failed to delete '" + itemName + "' after cleanup, skipping");
+                                skippedItemNames.push(itemName);
+                            }
+                        } else {
+                            log("DeleteTemplates: no item references to clean up, skipping '" + itemName + "'");
+                            skippedItemNames.push(itemName);
+                        }
+                    } else {
+                        skippedItemNames.push(itemName);
+                    }
                     await sleep(500);
                 } else {
                     log("DeleteTemplates: failed to delete '" + itemName + "', adding to skip list");
@@ -474,6 +509,59 @@
             log("DeleteTemplates: delete request failed - " + String(e));
             return { success: false, hasAlert: false };
         }
+    }
+
+    async function deleteItemRefsFromItemGroup(itemUrl, statusEl) {
+        log("DeleteTemplates: cleaning up item references in item group");
+        updateDeleteTemplatesStatus(statusEl, "Cleaning up item references...", true);
+        
+        var deletedRefs = 0;
+        var maxIterations = 500;
+        var iteration = 0;
+        
+        while (iteration < maxIterations) {
+            iteration++;
+            if (DELETE_TEMPLATES_CANCELLED) break;
+            
+            var itemHtml = await fetchPage(itemUrl);
+            var itemDoc = parseHtml(itemHtml);
+            
+            // Simply find any delete/itemref link on the page
+            var allDeleteLinks = itemDoc.querySelectorAll("a[onclick*='/delete/itemref/']");
+            log("DeleteTemplates: found " + allDeleteLinks.length + " delete itemref links on page");
+            
+            if (allDeleteLinks.length === 0) {
+                log("DeleteTemplates: no delete itemref links found on page");
+                break;
+            }
+            
+            // Get the last delete link (to delete from bottom up)
+            var deleteLink = allDeleteLinks[allDeleteLinks.length - 1];
+            var onclick = deleteLink.getAttribute("onclick") || "";
+            var match = onclick.match(/maybeRedirect\(['"]([^'"]*)['"]\)/);
+            if (!match) {
+                log("DeleteTemplates: could not parse delete URL from onclick: " + onclick);
+                break;
+            }
+            
+            var deleteUrl = match[1];
+            var fullDeleteUrl = location.origin + deleteUrl;
+            log("DeleteTemplates: deleting item reference at " + fullDeleteUrl);
+            
+            try {
+                await fetchPage(fullDeleteUrl);
+                deletedRefs++;
+                log("DeleteTemplates: deleted item reference #" + deletedRefs);
+                updateDeleteTemplatesStatus(statusEl, "Deleted " + deletedRefs + " item reference(s)...", true);
+                await sleep(300);
+            } catch (e) {
+                log("DeleteTemplates: failed to delete item reference - " + String(e));
+                break;
+            }
+        }
+        
+        log("DeleteTemplates: finished cleaning up " + deletedRefs + " item references");
+        return deletedRefs;
     }
 
     function showDeleteTemplatesPopup() {
