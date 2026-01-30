@@ -2,11 +2,11 @@
 // ==UserScript==
 // @name        ClinSpark Barcode Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.1.0
+// @version     1.1.1
 // @description Retain only Barcode feature; production environment only
 // @match       https://cenexel.clinspark.com/*
-// @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
-// @downloadURL  https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
+// @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Barcode%20Automator.js
+// @downloadURL  https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Barcode%20Automator.js
 // @run-at      document-idle
 // @grant       GM.openInTab
 // @grant       GM_openInTab
