@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.5.1
+// @version     1.5.2
 // @description Retain only Barcode feature; production environment only
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -111,7 +111,7 @@
     // This feature automates pull any subject identifier found on page,
     // request user for form keyword, and then search for form based on the keyword.
     //==========================
-    
+
     function setPanelHidden(flag) {
         try {
             localStorage.setItem(STORAGE_PANEL_HIDDEN, flag ? "1" : "0");
@@ -4891,7 +4891,184 @@
     // and populating barcode input modals.
     //==========================
 
-    
+
+    // Fetch barcode completely in the background without opening a new tab.
+    // Uses the subject ID directly if available, or uses a hidden iframe to search.
+    async function fetchBarcodeInBackground(subjectText, subjectId) {
+        log("Background Barcode: starting search subjectText='" + String(subjectText) + "' subjectId='" + String(subjectId) + "'");
+
+        // If we have a subject ID, the barcode is simply "S" + subjectId
+        if (subjectId && subjectId.length > 0) {
+            var result = "S" + String(subjectId);
+            log("Background Barcode: using direct ID, result=" + result);
+            return result;
+        }
+
+        // If we only have subject text, we need to search through the barcode printing page
+        if (!subjectText || subjectText.length === 0) {
+            log("Background Barcode: no subjectText or subjectId provided");
+            return null;
+        }
+
+        // Use a hidden iframe to load the page and interact with it
+        // This allows JavaScript to execute and populate the dynamic dropdowns
+        return await searchBarcodeViaIframe(subjectText);
+    }
+
+    // Search for barcode using a hidden iframe that can execute JavaScript
+    async function searchBarcodeViaIframe(subjectText) {
+        log("Background Barcode: using hidden iframe approach");
+
+        return new Promise(function(resolve) {
+            var iframe = document.createElement("iframe");
+            iframe.style.position = "fixed";
+            iframe.style.top = "-9999px";
+            iframe.style.left = "-9999px";
+            iframe.style.width = "1px";
+            iframe.style.height = "1px";
+            iframe.style.visibility = "hidden";
+            iframe.style.pointerEvents = "none";
+
+            var timeoutId = null;
+            var resolved = false;
+
+            function cleanup() {
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                    timeoutId = null;
+                }
+                if (iframe && iframe.parentNode) {
+                    iframe.parentNode.removeChild(iframe);
+                }
+            }
+
+            function finishWithResult(result) {
+                if (resolved) return;
+                resolved = true;
+                cleanup();
+                resolve(result);
+            }
+
+            // Set a maximum timeout
+            timeoutId = setTimeout(function() {
+                log("Background Barcode: iframe timeout reached");
+                finishWithResult(null);
+            }, 30000);
+
+            iframe.onload = async function() {
+                try {
+                    var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+
+                    // Wait for epoch select to appear and be populated (Edge needs more time than Chrome)
+                    var epochSel = null;
+                    var retryCount = 0;
+                    var maxRetries = 20;
+                    while (retryCount < maxRetries && !epochSel) {
+                        await sleep(300);
+                        epochSel = iframeDoc.querySelector("select#epoch");
+                        if (epochSel) {
+                            var opts = epochSel.querySelectorAll("option");
+                            if (opts.length === 0) {
+                                epochSel = null;
+                            } else {
+                                log("Background Barcode: iframe - epoch select ready with " + opts.length + " options (attempt " + (retryCount + 1) + ")");
+                            }
+                        } else {
+                        }
+                        retryCount++;
+                    }
+
+                    if (!epochSel) {
+                        finishWithResult(null);
+                        return;
+                    }
+
+                    var epochOpts = epochSel.querySelectorAll("option");
+                    log("Background Barcode: iframe - found " + String(epochOpts.length) + " epoch options");
+
+                    // Iterate through epochs
+                    for (var eIdx = 0; eIdx < epochOpts.length; eIdx++) {
+                        if (resolved) return;
+
+                        var epochVal = (epochOpts[eIdx].value + "").trim();
+                        if (epochVal.length === 0) continue;
+
+                        log("Background Barcode: iframe - selecting epoch value='" + epochVal + "'");
+                        epochSel.value = epochVal;
+                        var epochEvt = new Event("change", { bubbles: true });
+                        epochSel.dispatchEvent(epochEvt);
+
+                        // Wait for cohorts to load (Edge needs more time)
+                        await sleep(1200);
+
+                        var cohortSel = iframeDoc.querySelector("select#cohort");
+                        if (!cohortSel) {
+                            log("Background Barcode: iframe - cohort select not found");
+                            continue;
+                        }
+
+                        var cohortOpts = cohortSel.querySelectorAll("option");
+                        log("Background Barcode: iframe - found " + String(cohortOpts.length) + " cohort options");
+
+                        for (var cIdx = 0; cIdx < cohortOpts.length; cIdx++) {
+                            if (resolved) return;
+
+                            var cohortVal = (cohortOpts[cIdx].value + "").trim();
+                            if (cohortVal.length === 0) continue;
+
+                            log("Background Barcode: iframe - selecting cohort value='" + cohortVal + "'");
+                            cohortSel.value = cohortVal;
+                            var cohortEvt = new Event("change", { bubbles: true });
+                            cohortSel.dispatchEvent(cohortEvt);
+
+                            // Wait for subjects to load (Edge needs more time)
+                            await sleep(1200);
+
+                            var subjectsSel = iframeDoc.querySelector("select#subjects");
+                            if (!subjectsSel) {
+                                log("Background Barcode: iframe - subjects select not found");
+                                continue;
+                            }
+
+                            var subjectOpts = subjectsSel.querySelectorAll("option");
+                            log("Background Barcode: iframe - found " + String(subjectOpts.length) + " subject options");
+
+                            for (var sIdx = 0; sIdx < subjectOpts.length; sIdx++) {
+                                var sVal = (subjectOpts[sIdx].value + "").trim();
+                                var sTxt = (subjectOpts[sIdx].textContent + "").trim();
+
+                                if (sVal.length > 0) {
+                                    var textMatch = normalizeSubjectString(sTxt) === normalizeSubjectString(subjectText);
+                                    if (textMatch) {
+                                        var result = "S" + String(sVal);
+                                        log("Background Barcode: iframe - found match! text='" + sTxt + "' value='" + sVal + "' result=" + result);
+                                        finishWithResult(result);
+                                        return;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    log("Background Barcode: iframe - subject not found after searching all epochs/cohorts");
+                    finishWithResult(null);
+
+                } catch (e) {
+                    log("Background Barcode: iframe error - " + String(e));
+                    finishWithResult(null);
+                }
+            };
+
+            iframe.onerror = function() {
+                log("Background Barcode: iframe failed to load");
+                finishWithResult(null);
+            };
+
+            document.body.appendChild(iframe);
+            iframe.src = location.origin + "/secure/barcodeprinting/subjects";
+        });
+    }
+
     // Run Barcode feature once from the current page context.
     // Runs completely in the background without opening a new tab.
     async function APS_RunBarcode() {
@@ -4988,169 +5165,6 @@
         BARCODE_START_TS = 0;
     }
 
-    
-    // Fetch barcode completely in the background without opening a new tab.
-    // Uses the subject ID directly if available, or uses a hidden iframe to search.
-    async function fetchBarcodeInBackground(subjectText, subjectId) {
-        log("Background Barcode: starting search subjectText='" + String(subjectText) + "' subjectId='" + String(subjectId) + "'");
-
-        // If we have a subject ID, the barcode is simply "S" + subjectId
-        if (subjectId && subjectId.length > 0) {
-            var result = "S" + String(subjectId);
-            log("Background Barcode: using direct ID, result=" + result);
-            return result;
-        }
-
-        // If we only have subject text, we need to search through the barcode printing page
-        if (!subjectText || subjectText.length === 0) {
-            log("Background Barcode: no subjectText or subjectId provided");
-            return null;
-        }
-
-        // Use a hidden iframe to load the page and interact with it
-        // This allows JavaScript to execute and populate the dynamic dropdowns
-        return await searchBarcodeViaIframe(subjectText);
-    }
-
-    // Search for barcode using a hidden iframe that can execute JavaScript
-    async function searchBarcodeViaIframe(subjectText) {
-        log("Background Barcode: using hidden iframe approach");
-        
-        return new Promise(function(resolve) {
-            var iframe = document.createElement("iframe");
-            iframe.style.position = "fixed";
-            iframe.style.top = "-9999px";
-            iframe.style.left = "-9999px";
-            iframe.style.width = "1px";
-            iframe.style.height = "1px";
-            iframe.style.visibility = "hidden";
-            iframe.style.pointerEvents = "none";
-            
-            var timeoutId = null;
-            var resolved = false;
-            
-            function cleanup() {
-                if (timeoutId) {
-                    clearTimeout(timeoutId);
-                    timeoutId = null;
-                }
-                if (iframe && iframe.parentNode) {
-                    iframe.parentNode.removeChild(iframe);
-                }
-            }
-            
-            function finishWithResult(result) {
-                if (resolved) return;
-                resolved = true;
-                cleanup();
-                resolve(result);
-            }
-            
-            // Set a maximum timeout
-            timeoutId = setTimeout(function() {
-                log("Background Barcode: iframe timeout reached");
-                finishWithResult(null);
-            }, 30000);
-            
-            iframe.onload = async function() {
-                try {
-                    var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-                    
-                    // Wait a moment for page to initialize
-                    await sleep(500);
-                    
-                    var epochSel = iframeDoc.querySelector("select#epoch");
-                    if (!epochSel) {
-                        log("Background Barcode: iframe - epoch select not found");
-                        finishWithResult(null);
-                        return;
-                    }
-                    
-                    var epochOpts = epochSel.querySelectorAll("option");
-                    log("Background Barcode: iframe - found " + String(epochOpts.length) + " epoch options");
-                    
-                    // Iterate through epochs
-                    for (var eIdx = 0; eIdx < epochOpts.length; eIdx++) {
-                        if (resolved) return;
-                        
-                        var epochVal = (epochOpts[eIdx].value + "").trim();
-                        if (epochVal.length === 0) continue;
-                        
-                        log("Background Barcode: iframe - selecting epoch value='" + epochVal + "'");
-                        epochSel.value = epochVal;
-                        var epochEvt = new Event("change", { bubbles: true });
-                        epochSel.dispatchEvent(epochEvt);
-                        
-                        // Wait for cohorts to load
-                        await sleep(800);
-                        
-                        var cohortSel = iframeDoc.querySelector("select#cohort");
-                        if (!cohortSel) {
-                            log("Background Barcode: iframe - cohort select not found");
-                            continue;
-                        }
-                        
-                        var cohortOpts = cohortSel.querySelectorAll("option");
-                        log("Background Barcode: iframe - found " + String(cohortOpts.length) + " cohort options");
-                        
-                        for (var cIdx = 0; cIdx < cohortOpts.length; cIdx++) {
-                            if (resolved) return;
-                            
-                            var cohortVal = (cohortOpts[cIdx].value + "").trim();
-                            if (cohortVal.length === 0) continue;
-                            
-                            log("Background Barcode: iframe - selecting cohort value='" + cohortVal + "'");
-                            cohortSel.value = cohortVal;
-                            var cohortEvt = new Event("change", { bubbles: true });
-                            cohortSel.dispatchEvent(cohortEvt);
-                            
-                            // Wait for subjects to load
-                            await sleep(800);
-                            
-                            var subjectsSel = iframeDoc.querySelector("select#subjects");
-                            if (!subjectsSel) {
-                                log("Background Barcode: iframe - subjects select not found");
-                                continue;
-                            }
-                            
-                            var subjectOpts = subjectsSel.querySelectorAll("option");
-                            log("Background Barcode: iframe - found " + String(subjectOpts.length) + " subject options");
-                            
-                            for (var sIdx = 0; sIdx < subjectOpts.length; sIdx++) {
-                                var sVal = (subjectOpts[sIdx].value + "").trim();
-                                var sTxt = (subjectOpts[sIdx].textContent + "").trim();
-                                
-                                if (sVal.length > 0) {
-                                    var textMatch = normalizeSubjectString(sTxt) === normalizeSubjectString(subjectText);
-                                    if (textMatch) {
-                                        var result = "S" + String(sVal);
-                                        log("Background Barcode: iframe - found match! text='" + sTxt + "' value='" + sVal + "' result=" + result);
-                                        finishWithResult(result);
-                                        return;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    log("Background Barcode: iframe - subject not found after searching all epochs/cohorts");
-                    finishWithResult(null);
-                    
-                } catch (e) {
-                    log("Background Barcode: iframe error - " + String(e));
-                    finishWithResult(null);
-                }
-            };
-            
-            iframe.onerror = function() {
-                log("Background Barcode: iframe failed to load");
-                finishWithResult(null);
-            };
-            
-            document.body.appendChild(iframe);
-            iframe.src = location.origin + "/secure/barcodeprinting/subjects";
-        });
-    }
 
     async function openBarcodeDataEntryModalIfNeeded(timeoutMs) {
         var inputBox = document.querySelector("input.bootbox-input.bootbox-input-text.form-control");
@@ -6179,7 +6193,7 @@
         findFormBtn.style.cursor = "pointer";
         findFormBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         findFormBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
-        
+
         var parseMethodBtn = document.createElement("button");
         parseMethodBtn.textContent = "Item Method Forms";
         parseMethodBtn.style.background = "#4a90e2";
@@ -6201,7 +6215,7 @@
         toggleLogsBtn.style.padding = "8px";
         toggleLogsBtn.style.cursor = "pointer";
         toggleLogsBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
-        toggleLogsBtn.onmouseleave = function() { this.style.background = "#6c757d"; }; 
+        toggleLogsBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
         var importEligBtn = document.createElement("button");
         importEligBtn.textContent = "Import I/E";
         importEligBtn.style.background = "#4a90e2";
@@ -6458,7 +6472,7 @@
                 processFindFormOnList();
             }
         }
-        
+
 
         // Check for manual navigation away from Import Eligibility process
         var pendingPopup = null;
