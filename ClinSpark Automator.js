@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.5.3
+// @version     1.5.4
 // @description Retain only Barcode feature; production environment only
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -81,6 +81,20 @@
     var STORAGE_FIND_FORM_KEYWORD = "activityPlanState.findForm.keyword";
     var STORAGE_FIND_FORM_SUBJECT = "activityPlanState.findForm.subject";
     var STORAGE_FIND_FORM_STATUS_VALUES = "activityPlanState.findForm.statusValues";
+
+    var STORAGE_FIND_STUDY_EVENT_PENDING = "activityPlanState.findStudyEvent.pending";
+    var STORAGE_FIND_STUDY_EVENT_KEYWORD = "activityPlanState.findStudyEvent.keyword";
+    var STORAGE_FIND_STUDY_EVENT_SUBJECT = "activityPlanState.findStudyEvent.subject";
+    var STORAGE_FIND_STUDY_EVENT_STATUS_VALUES = "activityPlanState.findStudyEvent.statusValues";
+
+    var STUDY_EVENT_POPUP_TITLE = "Find Study Events";
+    var STUDY_EVENT_POPUP_KEYWORD_LABEL = "Study Event Keyword";
+    var STUDY_EVENT_POPUP_SUBJECT_LABEL = "Subject Identifier";
+    var STUDY_EVENT_POPUP_OK_TEXT = "Continue";
+    var STUDY_EVENT_POPUP_CANCEL_TEXT = "Cancel";
+
+    var STUDY_EVENT_NO_MATCH_TITLE = "Find Study Events";
+    var STUDY_EVENT_NO_MATCH_MESSAGE = "No study event is found.";
 
 
     const STORAGE_PANEL_HIDDEN = "activityPlanState.panel.hidden";
@@ -1039,6 +1053,567 @@
         s = s.toUpperCase();
         return s;
     }
+
+    //==========================
+    // FIND STUDY EVENTS FEATURE
+    //==========================
+    // This section contains all functions related to finding study events.
+    // This feature automates pull any subject identifier found on page,
+    // request user for study event keyword, and then search for study events based on the keyword.
+    //==========================
+
+    function showStudyEventNoMatchPopup() {
+        log("Find Study Events: showing 'No study event is found' popup");
+        var box = document.createElement("div");
+        box.style.textAlign = "center";
+        box.style.fontSize = "16px";
+        box.style.color = "#fff";
+        box.style.padding = "20px";
+        box.textContent = STUDY_EVENT_NO_MATCH_MESSAGE;
+        createPopup({ title: STUDY_EVENT_NO_MATCH_TITLE, content: box, width: "320px", height: "auto" });
+    }
+
+    function studyEventMatchContainsAllTokens(text, keyword) {
+        var nt = formNormalize(text || "");
+        var kw = formNormalize(keyword || "");
+        if (!kw || kw.length === 0) {
+            return false;
+        }
+        var tokens = kw.split(" ");
+        var all = true;
+        var i = 0;
+        while (i < tokens.length) {
+            var tok = tokens[i];
+            if (tok && tok.length > 0) {
+                if (nt.indexOf(tok) < 0) {
+                    all = false;
+                    break;
+                }
+            }
+            i = i + 1;
+        }
+        return all;
+    }
+
+    function previewStudyEventsByKeyword(keyword, done) {
+        log("Find Study Events: preview request started");
+        var url = FORM_LIST_URL;
+        try {
+            GM.xmlHttpRequest({
+                method: "GET",
+                url: url,
+                onload: function (resp) {
+                    var html = resp && resp.responseText ? resp.responseText + "" : "";
+                    var tmp = document.createElement("div");
+                    tmp.innerHTML = html;
+                    var eventsSel = tmp.querySelector('select#studyEventIds, select[name="studyEventIds"]');
+                    var matched = 0;
+                    if (eventsSel) {
+                        var eos = eventsSel.querySelectorAll("option");
+                        if (eos && eos.length > 0) {
+                            var i = 0;
+                            while (i < eos.length) {
+                                var eop = eos[i];
+                                var etxt = "";
+                                if (eop) {
+                                    etxt = eop.textContent + "";
+                                }
+                                var hit = studyEventMatchContainsAllTokens(etxt, keyword);
+                                if (hit) {
+                                    matched = matched + 1;
+                                }
+                                i = i + 1;
+                            }
+                        }
+                    }
+                    log("Find Study Events: preview matched count=" + String(matched));
+                    if (typeof done === "function") {
+                        done(matched > 0);
+                    }
+                },
+                onerror: function () {
+                    log("Find Study Events: preview request error");
+                    if (typeof done === "function") {
+                        done(true);
+                    }
+                }
+            });
+        } catch (e) {
+            log("Find Study Events: preview exception " + String(e));
+            if (typeof done === "function") {
+                done(true);
+            }
+        }
+    }
+
+    function showFindStudyEventsPopup(prefillSubject, onDone) {
+        log("Find Study Events: showing popup");
+        var container = document.createElement("div");
+        container.style.display = "grid";
+        container.style.gridTemplateRows = "auto auto auto auto auto";
+        container.style.gap = "10px";
+
+        var row1 = document.createElement("div");
+        row1.style.display = "grid";
+        row1.style.gridTemplateColumns = "140px 1fr";
+        row1.style.alignItems = "center";
+        row1.style.gap = "8px";
+        var label1 = document.createElement("div");
+        label1.textContent = STUDY_EVENT_POPUP_KEYWORD_LABEL;
+        label1.style.fontWeight = "600";
+        var inputKeyword = document.createElement("input");
+        inputKeyword.type = "text";
+        inputKeyword.placeholder = "Required: any word";
+        inputKeyword.style.width = "100%";
+        inputKeyword.style.boxSizing = "border-box";
+        inputKeyword.style.padding = "8px";
+        inputKeyword.style.borderRadius = "6px";
+        inputKeyword.style.border = "1px solid #444";
+        inputKeyword.style.background = "#1a1a1a";
+        inputKeyword.style.color = "#fff";
+        row1.appendChild(label1);
+        row1.appendChild(inputKeyword);
+        container.appendChild(row1);
+
+        var row2 = document.createElement("div");
+        row2.style.display = "grid";
+        row2.style.gridTemplateColumns = "140px 1fr";
+        row2.style.alignItems = "center";
+        row2.style.gap = "8px";
+        var label2 = document.createElement("div");
+        label2.textContent = STUDY_EVENT_POPUP_SUBJECT_LABEL;
+        label2.style.fontWeight = "600";
+        var inputSubject = document.createElement("input");
+        inputSubject.type = "text";
+        inputSubject.placeholder = "Optional: subject id or label";
+        inputSubject.style.width = "100%";
+        inputSubject.style.boxSizing = "border-box";
+        inputSubject.style.padding = "8px";
+        inputSubject.style.borderRadius = "6px";
+        inputSubject.style.border = "1px solid #444";
+        inputSubject.style.background = "#1a1a1a";
+        inputSubject.style.color = "#fff";
+        row2.appendChild(label2);
+        row2.appendChild(inputSubject);
+        container.appendChild(row2);
+
+        var row3 = document.createElement("div");
+        row3.style.display = "grid";
+        row3.style.gridTemplateColumns = "140px 1fr";
+        row3.style.alignItems = "center";
+        row3.style.gap = "8px";
+        var labelIG = document.createElement("div");
+        labelIG.textContent = "Item Group Data";
+        labelIG.style.fontWeight = "600";
+        var igWrap = document.createElement("div");
+        igWrap.style.display = "inline-flex";
+        igWrap.style.gap = "12px";
+        var igC = document.createElement("label");
+        var igCBox = document.createElement("input");
+        igCBox.type = "checkbox";
+        igCBox.value = "Complete";
+        igC.appendChild(igCBox);
+        igC.appendChild(document.createTextNode(" Complete"));
+        var igI = document.createElement("label");
+        var igIBox = document.createElement("input");
+        igIBox.type = "checkbox";
+        igIBox.value = "Incomplete";
+        igI.appendChild(igIBox);
+        igI.appendChild(document.createTextNode(" Incomplete"));
+        var igN = document.createElement("label");
+        var igNBox = document.createElement("input");
+        igNBox.type = "checkbox";
+        igNBox.value = "Nonconformant";
+        igN.appendChild(igNBox);
+        igN.appendChild(document.createTextNode(" Nonconformant"));
+        igWrap.appendChild(igC);
+        igWrap.appendChild(igI);
+        igWrap.appendChild(igN);
+        row3.appendChild(labelIG);
+        row3.appendChild(igWrap);
+        container.appendChild(row3);
+
+        var row4 = document.createElement("div");
+        row4.style.display = "grid";
+        row4.style.gridTemplateColumns = "140px 1fr";
+        row4.style.alignItems = "center";
+        row4.style.gap = "8px";
+        var labelFD = document.createElement("div");
+        labelFD.textContent = "Form Data";
+        labelFD.style.fontWeight = "600";
+        var fdWrap = document.createElement("div");
+        fdWrap.style.display = "inline-flex";
+        fdWrap.style.gap = "12px";
+        var fdNC = document.createElement("label");
+        var fdNCBox = document.createElement("input");
+        fdNCBox.type = "checkbox";
+        fdNCBox.value = "formDataNotCanceled";
+        fdNC.appendChild(fdNCBox);
+        fdNC.appendChild(document.createTextNode(" Not Canceled"));
+        var fdTM = document.createElement("label");
+        var fdTMBox = document.createElement("input");
+        fdTMBox.type = "checkbox";
+        fdTMBox.value = "timedAndMissed";
+        fdTM.appendChild(fdTMBox);
+        fdTM.appendChild(document.createTextNode(" Time and Missed"));
+        fdWrap.appendChild(fdNC);
+        fdWrap.appendChild(fdTM);
+        row4.appendChild(labelFD);
+        row4.appendChild(fdWrap);
+        container.appendChild(row4);
+
+        try {
+            var prevRaw = localStorage.getItem(STORAGE_FIND_STUDY_EVENT_STATUS_VALUES);
+            if (prevRaw) {
+                var prevArr = JSON.parse(prevRaw);
+                if (Array.isArray(prevArr) && prevArr.length > 0) {
+                    var hasComplete = prevArr.indexOf("Complete") >= 0;
+                    var hasIncomplete = prevArr.indexOf("Incomplete") >= 0;
+                    var hasNonconf = prevArr.indexOf("Nonconformant") >= 0;
+                    var hasFormNotCanceled = prevArr.indexOf("formDataNotCanceled") >= 0;
+                    var hasTimedMissed = prevArr.indexOf("timedAndMissed") >= 0;
+                    igCBox.checked = !!hasComplete;
+                    igIBox.checked = !!hasIncomplete;
+                    igNBox.checked = !!hasNonconf;
+                    fdNCBox.checked = !!hasFormNotCanceled;
+                    fdTMBox.checked = !!hasTimedMissed;
+                    log("Find Study Events: restored checkbox prefs count=" + String(prevArr.length));
+                } else {
+                    log("Find Study Events: no prior checkbox prefs to restore");
+                }
+            } else {
+                log("Find Study Events: checkbox prefs not present in storage");
+            }
+        } catch (e) {
+            log("Find Study Events: error restoring checkbox prefs");
+        }
+
+        if (prefillSubject && prefillSubject.length > 0) {
+            inputSubject.value = prefillSubject;
+            var ev0 = new Event("input", { bubbles: true });
+            inputSubject.dispatchEvent(ev0);
+            log("Find Study Events: subject prefilled='" + String(prefillSubject) + "'");
+        }
+
+        var btnRow = document.createElement("div");
+        btnRow.style.display = "inline-flex";
+        btnRow.style.justifyContent = "flex-end";
+        btnRow.style.gap = "8px";
+        var clearIdBtn = document.createElement("button");
+        clearIdBtn.textContent = "Clear ID";
+        clearIdBtn.style.background = "#777";
+        clearIdBtn.style.color = "#fff";
+        clearIdBtn.style.border = "none";
+        clearIdBtn.style.borderRadius = "6px";
+        clearIdBtn.style.padding = "8px 12px";
+        clearIdBtn.style.cursor = "pointer";
+        var cancelBtn = document.createElement("button");
+        cancelBtn.textContent = STUDY_EVENT_POPUP_CANCEL_TEXT;
+        cancelBtn.style.background = "#333";
+        cancelBtn.style.color = "#fff";
+        cancelBtn.style.border = "none";
+        cancelBtn.style.borderRadius = "6px";
+        cancelBtn.style.padding = "8px 12px";
+        cancelBtn.style.cursor = "pointer";
+        var okBtn = document.createElement("button");
+        okBtn.textContent = STUDY_EVENT_POPUP_OK_TEXT;
+        okBtn.style.background = "#0b82ff";
+        okBtn.style.color = "#fff";
+        okBtn.style.border = "none";
+        okBtn.style.borderRadius = "6px";
+        okBtn.style.padding = "8px 12px";
+        okBtn.style.cursor = "pointer";
+        btnRow.appendChild(clearIdBtn);
+        btnRow.appendChild(cancelBtn);
+        btnRow.appendChild(okBtn);
+        container.appendChild(btnRow);
+
+        var popup = createPopup({ title: STUDY_EVENT_POPUP_TITLE, content: container, width: "520px", height: "auto" });
+
+        window.setTimeout(function () {
+            try {
+                inputKeyword.focus();
+                inputKeyword.select();
+                log("Find Study Events: keyword input focused");
+            } catch (e) {
+                log("Find Study Events: failed to focus keyword input");
+            }
+        }, 50);
+
+        function gatherStatusSelections() {
+            var out = [];
+            if (igCBox && igCBox.checked) {
+                out.push("Complete");
+            }
+            if (igIBox && igIBox.checked) {
+                out.push("Incomplete");
+            }
+            if (igNBox && igNBox.checked) {
+                out.push("Nonconformant");
+            }
+            if (fdNCBox && fdNCBox.checked) {
+                out.push("formDataNotCanceled");
+            }
+            if (fdTMBox && fdTMBox.checked) {
+                out.push("timedAndMissed");
+            }
+            return out;
+        }
+
+        function doContinue() {
+            var kw = inputKeyword.value + "";
+            var sbj = inputSubject.value + "";
+            var kwt = kw.trim();
+            var sbjt = sbj.trim();
+            if (!kwt || kwt.length === 0) {
+                log("Find Study Events: keyword required");
+                return;
+            }
+            var statuses = gatherStatusSelections();
+            try {
+                if (statuses && statuses.length > 0) {
+                    localStorage.setItem(STORAGE_FIND_STUDY_EVENT_STATUS_VALUES, JSON.stringify(statuses));
+                    log("Find Study Events: statuses saved count=" + String(statuses.length));
+                } else {
+                    localStorage.removeItem(STORAGE_FIND_STUDY_EVENT_STATUS_VALUES);
+                    log("Find Study Events: no statuses selected; cleared storage");
+                }
+            } catch (e) {}
+            log("Find Study Events: popup inputs keyword='" + String(kwt) + "' subject='" + String(sbjt) + "'");
+            if (popup && popup.close) {
+                popup.close();
+            }
+            if (typeof onDone === "function") {
+                onDone({ keyword: kwt, subject: sbjt });
+            }
+        }
+
+        function keyHandler(e) {
+            var code = e.key || e.code || "";
+            if (code === "Enter") {
+                log("Find Study Events: Enter pressed; continuing");
+                doContinue();
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+            if (code === "Escape" || code === "Esc") {
+                log("Find Study Events: Esc pressed; closing");
+                if (popup && popup.close) {
+                    popup.close();
+                }
+                document.removeEventListener("keydown", keyHandler, true);
+                if (typeof onDone === "function") {
+                    onDone(null);
+                }
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+        }
+
+        document.addEventListener("keydown", keyHandler, true);
+
+        clearIdBtn.addEventListener("click", function () {
+            inputSubject.value = "";
+            var ev = new Event("input", { bubbles: true });
+            inputSubject.dispatchEvent(ev);
+            log("Find Study Events: subject cleared by user");
+        });
+
+        cancelBtn.addEventListener("click", function () {
+            log("Find Study Events: popup canceled");
+            if (popup && popup.close) {
+                popup.close();
+            }
+            document.removeEventListener("keydown", keyHandler, true);
+            if (typeof onDone === "function") {
+                onDone(null);
+            }
+        });
+
+        okBtn.addEventListener("click", function () {
+            document.removeEventListener("keydown", keyHandler, true);
+            doContinue();
+        });
+    }
+
+    function openFindStudyEvents() {
+        log("Find Study Events: starting");
+        var prefill = findSubjectIdentifierForFindForm();
+        showFindStudyEventsPopup(prefill, function (userInput) {
+            if (userInput === null) {
+                log("Find Study Events: canceled by user; stopping");
+                return;
+            }
+            var kw = userInput.keyword || "";
+            var sbj = userInput.subject || "";
+            previewStudyEventsByKeyword(kw, function (hasMatch) {
+                if (!hasMatch) {
+                    log("Find Study Events: preview found no matching study events; stopping");
+                    showStudyEventNoMatchPopup();
+                    return;
+                }
+                localStorage.setItem(STORAGE_FIND_STUDY_EVENT_PENDING, "1");
+                localStorage.setItem(STORAGE_FIND_STUDY_EVENT_KEYWORD, String(kw));
+                localStorage.setItem(STORAGE_FIND_STUDY_EVENT_SUBJECT, String(sbj));
+                log("Find Study Events: state saved; redirecting same tab");
+                window.location.href = FORM_LIST_URL;
+            });
+        });
+    }
+
+    function processFindStudyEventsOnList() {
+        var pending = localStorage.getItem(STORAGE_FIND_STUDY_EVENT_PENDING);
+        if (!pending || pending !== "1") {
+            return;
+        }
+        var kw = localStorage.getItem(STORAGE_FIND_STUDY_EVENT_KEYWORD) || "";
+        var sbj = localStorage.getItem(STORAGE_FIND_STUDY_EVENT_SUBJECT) || "";
+        log("Find Study Events: post-reload processing started keyword='" + String(kw) + "' subject='" + String(sbj) + "'");
+        var t = 0;
+        var r = setInterval(function () {
+            t = t + 1;
+            if (t > 120) {
+                clearInterval(r);
+                log("Find Study Events: timeout waiting for controls");
+                localStorage.removeItem(STORAGE_FIND_STUDY_EVENT_PENDING);
+                return;
+            }
+            var d = document;
+            var eventsSel = d.querySelector('select#studyEventIds, select[name="studyEventIds"]');
+            var subjSel = d.querySelector('select#subjectIds, select[name="subjectIds"]');
+            var eventsBoxReady = document.getElementById("s2id_studyEventIds");
+            var statusSel = d.getElementById("statusValues");
+            var statusBoxReady = d.getElementById("s2id_statusValues");
+            if (!eventsSel || !eventsBoxReady) {
+                log("Find Study Events: selects not ready at t=" + String(t));
+                return;
+            }
+
+            resetStatusValuesOnList();
+
+            var rawStatuses = null;
+            try {
+                rawStatuses = localStorage.getItem(STORAGE_FIND_STUDY_EVENT_STATUS_VALUES);
+            } catch (e) {}
+            if (rawStatuses) {
+                try {
+                    var arr = JSON.parse(rawStatuses);
+                    if (Array.isArray(arr) && arr.length > 0) {
+                        applyStatusValuesOnList(arr);
+                    } else {
+                        log("Find Study Events: no statuses to apply");
+                    }
+                } catch (e2) {
+                    log("Find Study Events: status parse error");
+                }
+            } else {
+                log("Find Study Events: no stored statuses");
+            }
+
+            clearSelect2ChoicesByContainerId("s2id_studyEventIds");
+            deselectAllOptionsBySelect(eventsSel);
+
+            var selectedCount = 0;
+            var eos = eventsSel.querySelectorAll("option");
+            if (eos && eos.length > 0) {
+                var i = 0;
+                while (i < eos.length) {
+                    var eop = eos[i];
+                    var etxt = "";
+                    if (eop) {
+                        etxt = eop.textContent + "";
+                    }
+                    var hit = studyEventMatchContainsAllTokens(etxt, kw);
+                    if (hit) {
+                        eop.selected = true;
+                        selectedCount = selectedCount + 1;
+                    }
+                    i = i + 1;
+                }
+                var evtEvents = new Event("change", { bubbles: true });
+                eventsSel.dispatchEvent(evtEvents);
+                log("Find Study Events: selected study events count=" + String(selectedCount));
+            } else {
+                log("Find Study Events: study events options list empty");
+            }
+
+            if (selectedCount === 0) {
+                clearInterval(r);
+                log("Find Study Events: no study events selected; notifying user");
+                showStudyEventNoMatchPopup();
+                localStorage.removeItem(STORAGE_FIND_STUDY_EVENT_PENDING);
+                localStorage.removeItem(STORAGE_FIND_STUDY_EVENT_KEYWORD);
+                localStorage.removeItem(STORAGE_FIND_STUDY_EVENT_SUBJECT);
+                return;
+            }
+
+            var subjNorm = aeNormalize(sbj || "");
+            if (subjNorm && subjNorm.length > 0 && subjSel) {
+                var os = subjSel.querySelectorAll("option");
+                var y = "";
+                if (os && os.length > 0) {
+                    var j = 0;
+                    while (j < os.length) {
+                        var op = os[j];
+                        var txt = "";
+                        var val = "";
+                        if (op) {
+                            txt = op.textContent + "";
+                            val = op.value + "";
+                        }
+                        var nt = aeNormalize(txt);
+                        var matchByTextExact = nt === subjNorm;
+                        var matchByTextContains = nt.indexOf(subjNorm) >= 0;
+                        var matchById = val === sbj;
+                        var matched = false;
+                        if (matchByTextExact) {
+                            matched = true;
+                        } else {
+                            if (matchByTextContains) {
+                                matched = true;
+                            } else {
+                                if (matchById) {
+                                    matched = true;
+                                }
+                            }
+                        }
+                        if (matched) {
+                            y = val;
+                            break;
+                        }
+                        j = j + 1;
+                    }
+                }
+                if (y && y.length > 0) {
+                    subjSel.value = y;
+                    var evtSubj = new Event("change", { bubbles: true });
+                    subjSel.dispatchEvent(evtSubj);
+                    log("Find Study Events: subject applied value='" + String(y) + "'");
+                } else {
+                    log("Find Study Events: no subject match applied");
+                }
+            } else {
+                log("Find Study Events: subject input empty or select not found");
+            }
+
+            var searchBtn = d.getElementById("dataSearchButton");
+            if (searchBtn) {
+                searchBtn.click();
+                log("Find Study Events: Search button clicked");
+            } else {
+                log("Find Study Events: Search button not found");
+            }
+
+            clearInterval(r);
+            localStorage.removeItem(STORAGE_FIND_STUDY_EVENT_PENDING);
+            localStorage.removeItem(STORAGE_FIND_STUDY_EVENT_KEYWORD);
+            localStorage.removeItem(STORAGE_FIND_STUDY_EVENT_SUBJECT);
+            log("Find Study Events: post-reload processing completed");
+        }, 200);
+    }
+
     //==========================
     //==========================
     // Parse Method Functions
@@ -6194,6 +6769,17 @@
         findFormBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         findFormBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
+        var findStudyEventsBtn = document.createElement("button");
+        findStudyEventsBtn.textContent = "Find Study Events";
+        findStudyEventsBtn.style.background = "#4a90e2";
+        findStudyEventsBtn.style.color = "#fff";
+        findStudyEventsBtn.style.border = "none";
+        findStudyEventsBtn.style.borderRadius = "6px";
+        findStudyEventsBtn.style.padding = "8px";
+        findStudyEventsBtn.style.cursor = "pointer";
+        findStudyEventsBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
+        findStudyEventsBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+
         var parseMethodBtn = document.createElement("button");
         parseMethodBtn.textContent = "Item Method Forms";
         parseMethodBtn.style.background = "#4a90e2";
@@ -6229,6 +6815,7 @@
         btnRow.appendChild(runBarcodeBtn);
         btnRow.appendChild(findAeBtn);
         btnRow.appendChild(findFormBtn);
+        btnRow.appendChild(findStudyEventsBtn);
         btnRow.appendChild(importEligBtn);
         btnRow.appendChild(parseMethodBtn);
         btnRow.appendChild(pauseBtn);
@@ -6311,6 +6898,9 @@
         });
         findFormBtn.addEventListener("click", function () {
             openFindForm();
+        });
+        findStudyEventsBtn.addEventListener("click", function () {
+            openFindStudyEvents();
         });
         toggleLogsBtn.addEventListener("click", function () {
             var currentlyVisible = getLogVisible();
@@ -6470,6 +7060,7 @@
                 checkAndRestoreParseMethodPopup();
             } else {
                 processFindFormOnList();
+                processFindStudyEventsOnList();
             }
         }
 
