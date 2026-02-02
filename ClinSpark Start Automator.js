@@ -7254,6 +7254,7 @@
         btnRow.appendChild(runAddCohortBtn);
         btnRow.appendChild(runConsentBtn);
         btnRow.appendChild(runAllBtn);
+        btnRow.appendChild(runNonScrnBtn);
         btnRow.appendChild(runBarcodeBtn);
         btnRow.appendChild(pauseBtn);
         btnRow.appendChild(clearLogsBtn);
