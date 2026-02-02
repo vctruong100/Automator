@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.5.2
+// @version     1.5.3
 // @description Retain only Barcode feature; production environment only
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -4962,7 +4962,7 @@
                     // Wait for epoch select to appear and be populated (Edge needs more time than Chrome)
                     var epochSel = null;
                     var retryCount = 0;
-                    var maxRetries = 20;
+                    var maxRetries = 80;
                     while (retryCount < maxRetries && !epochSel) {
                         await sleep(300);
                         epochSel = iframeDoc.querySelector("select#epoch");
