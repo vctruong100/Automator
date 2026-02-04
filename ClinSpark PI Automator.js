@@ -6774,8 +6774,6 @@
         subjectEligBtn.style.borderRadius = "6px";
         subjectEligBtn.style.padding = "8px";
         subjectEligBtn.style.cursor = "pointer";
-        subjectEligBtn.style.fontWeight = "500";
-        subjectEligBtn.style.transition = "background 0.2s";
         subjectEligBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         subjectEligBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
@@ -6787,8 +6785,6 @@
         clearLogsBtn.style.borderRadius = "6px";
         clearLogsBtn.style.padding = "8px";
         clearLogsBtn.style.cursor = "pointer";
-        clearLogsBtn.style.fontWeight = "500";
-        clearLogsBtn.style.transition = "background 0.2s";
         clearLogsBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
         clearLogsBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
 

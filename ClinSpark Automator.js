@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.6.0
+// @version     1.6.1
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -6749,6 +6749,8 @@
         btnRow.appendChild(findStudyEventsBtn);
         btnRow.appendChild(importEligBtn);
         btnRow.appendChild(parseMethodBtn);
+        btnRow.appendChild(openEligBtn);
+        btnRow.appendChild(subjectEligBtn);
         btnRow.appendChild(pauseBtn);
         btnRow.appendChild(toggleLogsBtn);
         bodyContainer.appendChild(btnRow);
