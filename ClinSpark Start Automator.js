@@ -75,6 +75,26 @@
     const STORAGE_ELIG_CHECKITEM_CACHE = "activityPlanState.eligibility.checkItemCache";
     const STORAGE_ELIG_IMPORT_PENDING_POPUP = "activityPlanState.eligibility.importPendingPopup";
 
+    // Add Existing Subject feature storage keys
+    var STORAGE_ADD_EXISTING_SUBJECT_POPUP = "activityPlanState.addExistingSubject.popup";
+    var STORAGE_ADD_EXISTING_SUBJECT_MODE = "activityPlanState.addExistingSubject.mode";
+    var STORAGE_ADD_EXISTING_SUBJECT_SELECTED_EPOCH = "activityPlanState.addExistingSubject.selectedEpoch";
+    var STORAGE_ADD_EXISTING_SUBJECT_SELECTED_EPOCH_URL = "activityPlanState.addExistingSubject.selectedEpochUrl";
+    var STORAGE_ADD_EXISTING_SUBJECT_COLLECTED_DATA = "activityPlanState.addExistingSubject.collectedData";
+    var STORAGE_ADD_EXISTING_SUBJECT_SELECTED_SUBJECT = "activityPlanState.addExistingSubject.selectedSubject";
+    var STORAGE_ADD_EXISTING_SUBJECT_EDIT_DONE = "activityPlanState.addExistingSubject.editDone";
+    var STORAGE_ADD_EXISTING_SUBJECT_ADD_DONE = "activityPlanState.addExistingSubject.addDone";
+    var ADD_EXISTING_SUBJECT_POPUP_REF = null;
+    var ADD_EXISTING_SUBJECT_INTENTIONAL_CLOSE = false;
+    // Temp page coordination keys
+    var STORAGE_ADD_EXISTING_SUBJECT_SCAN_QUEUE = "activityPlanState.addExistingSubject.scanQueue";
+    var STORAGE_ADD_EXISTING_SUBJECT_SCAN_COMPLETE = "activityPlanState.addExistingSubject.scanComplete";
+    var STORAGE_ADD_EXISTING_SUBJECT_IS_TEMP_PAGE = "activityPlanState.addExistingSubject.isTempPage";
+    var STORAGE_ADD_EXISTING_SUBJECT_CURRENT_EPOCH = "activityPlanState.addExistingSubject.currentEpoch";
+    var STORAGE_ADD_EXISTING_SUBJECT_CURRENT_COHORT = "activityPlanState.addExistingSubject.currentCohort";
+    var STORAGE_ADD_EXISTING_SUBJECT_ALL_EPOCHS = "activityPlanState.addExistingSubject.allEpochs";
+    var STORAGE_ADD_EXISTING_SUBJECT_SELECTED_EPOCH_SUBJECTS = "activityPlanState.addExistingSubject.selectedEpochSubjects";
+
     // Run Find Form
     var FORM_LIST_URL = "https://cenexeltest.clinspark.com/secure/study/data/list";
     var FORM_POPUP_TITLE = "Find Form";
@@ -94,11 +114,6 @@
     var STORAGE_FIND_FORM_SUBJECT = "activityPlanState.findForm.subject";
     var STORAGE_FIND_FORM_STATUS_VALUES = "activityPlanState.findForm.statusValues";
 
-    var FORM_LIST_URL = "https://cenexeltest.clinspark.com/secure/study/data/list";
-    var STORAGE_FIND_FORM_PENDING = "activityPlanState.findForm.pending";
-    var STORAGE_FIND_FORM_KEYWORD = "activityPlanState.findForm.keyword";
-    var STORAGE_FIND_FORM_SUBJECT = "activityPlanState.findForm.subject";
-    var STORAGE_FIND_FORM_STATUS_VALUES = "activityPlanState.findForm.statusValues";
 
     // Run Parse Method
     var STORAGE_PARSE_METHOD_RUNNING = "activityPlanState.parseMethod.running";
@@ -208,10 +223,10 @@
     async function fetchAndLockSamplePath(samplePathUrl, samplePathName) {
         try {
             log("Locking Sample Path: " + samplePathName);
-            
+
             var detailHtml = await fetchPage(samplePathUrl);
             var detailDoc = parseHtml(detailHtml);
-            
+
             var successAlert = detailDoc.querySelector('div.alert.alert-success.alert-dismissable');
             if (successAlert) {
                 var alertText = (successAlert.textContent + "").trim();
@@ -220,37 +235,37 @@
                     return { success: true, message: "Already locked" };
                 }
             }
-            
+
             var editLink = detailDoc.querySelector('a[href*="/secure/samples/configure/paths/update/"]');
             if (!editLink) {
                 log("Edit link not found for: " + samplePathName);
                 return { success: false, message: "Edit link not found" };
             }
-            
+
             var updatePath = editLink.getAttribute("href");
             var updateUrl = location.origin + updatePath;
-            
+
             var updateHtml = await fetchPage(updateUrl);
             var updateDoc = parseHtml(updateHtml);
-            
+
             var lockCheckbox = updateDoc.querySelector('input#locked');
             if (!lockCheckbox) {
                 log("Lock checkbox not found for: " + samplePathName);
                 return { success: false, message: "Lock checkbox not found" };
             }
-            
+
             var isAlreadyLocked = lockCheckbox.hasAttribute("checked") || lockCheckbox.checked;
             if (isAlreadyLocked) {
                 log("Sample Path already locked (checkbox): " + samplePathName);
                 return { success: true, message: "Already locked" };
             }
-            
+
             var formElement = updateDoc.querySelector('form');
             if (!formElement) {
                 log("Form not found for: " + samplePathName);
                 return { success: false, message: "Form not found" };
             }
-            
+
             var formData = "";
             var inputs = formElement.querySelectorAll('input, textarea, select');
             var i = 0;
@@ -259,7 +274,7 @@
                 var name = input.getAttribute("name");
                 var type = input.getAttribute("type");
                 var value = "";
-                
+
                 if (name) {
                     if (name === "locked") {
                         value = "on";
@@ -282,7 +297,7 @@
                     } else {
                         value = input.value || "";
                     }
-                    
+
                     if (formData.length > 0) {
                         formData += "&";
                     }
@@ -290,7 +305,7 @@
                 }
                 i = i + 1;
             }
-            
+
             log("Submitting lock for: " + samplePathName);
             var submitUrl = formElement.getAttribute("action");
             if (!submitUrl || submitUrl === "" || submitUrl === "#") {
@@ -298,10 +313,10 @@
             } else if (submitUrl.indexOf("http") !== 0) {
                 submitUrl = location.origin + submitUrl;
             }
-            
+
             var resultHtml = await submitForm(submitUrl, formData);
             var resultDoc = parseHtml(resultHtml);
-            
+
             var resultAlert = resultDoc.querySelector('div.alert.alert-success.alert-dismissable');
             if (resultAlert) {
                 var resultText = (resultAlert.textContent + "").trim();
@@ -310,10 +325,10 @@
                     return { success: true, message: "Locked successfully" };
                 }
             }
-            
+
             log("Lock submitted but success not confirmed for: " + samplePathName);
             return { success: true, message: "Submitted (unconfirmed)" };
-            
+
         } catch (error) {
             log("Error locking " + samplePathName + ": " + String(error));
             return { success: false, message: String(error) };
@@ -479,22 +494,22 @@
         while (j < unlockedPaths.length) {
             var path = unlockedPaths[j];
             log("Processing (" + String(j + 1) + "/" + String(unlockedPaths.length) + "): " + path.name);
-            
+
             if (progressDiv) {
                 progressDiv.textContent = "Processing " + String(j + 1) + "/" + String(unlockedPaths.length) + ": " + path.name;
             }
-            
+
             var result = await fetchAndLockSamplePath(path.url, path.name);
             if (result.success) {
                 successCount = successCount + 1;
             } else {
                 failCount = failCount + 1;
             }
-            
+
             if (countsDiv) {
                 countsDiv.innerHTML = "<span style='color:#9f9'>Success: " + String(successCount) + "</span> | <span style='color:#f99'>Failed: " + String(failCount) + "</span>";
             }
-            
+
             await sleep(500);
             j = j + 1;
         }
@@ -4127,6 +4142,1531 @@
     }
 
     //==========================
+    // ADD EXISTING SUBJECT FEATURE
+    //==========================
+    // This section contains all functions related to adding an existing subject from another epoch.
+    // This feature collects subject data from all epochs (except the selected one), displays
+    // a selection popup, and automates adding the selected subject to the target epoch's first cohort.
+    //==========================
+
+    function AddExistingSubjectFunctions() {}
+
+    function clearAddExistingSubjectState() {
+        try {
+            localStorage.removeItem(STORAGE_ADD_EXISTING_SUBJECT_POPUP);
+            localStorage.removeItem(STORAGE_ADD_EXISTING_SUBJECT_MODE);
+            localStorage.removeItem(STORAGE_ADD_EXISTING_SUBJECT_SELECTED_EPOCH);
+            localStorage.removeItem(STORAGE_ADD_EXISTING_SUBJECT_SELECTED_EPOCH_URL);
+            localStorage.removeItem(STORAGE_ADD_EXISTING_SUBJECT_COLLECTED_DATA);
+            localStorage.removeItem(STORAGE_ADD_EXISTING_SUBJECT_SELECTED_SUBJECT);
+            localStorage.removeItem(STORAGE_ADD_EXISTING_SUBJECT_EDIT_DONE);
+            localStorage.removeItem(STORAGE_ADD_EXISTING_SUBJECT_ADD_DONE);
+            localStorage.removeItem(STORAGE_ADD_EXISTING_SUBJECT_SCAN_QUEUE);
+            localStorage.removeItem(STORAGE_ADD_EXISTING_SUBJECT_SCAN_COMPLETE);
+            localStorage.removeItem(STORAGE_ADD_EXISTING_SUBJECT_IS_TEMP_PAGE);
+            localStorage.removeItem(STORAGE_ADD_EXISTING_SUBJECT_CURRENT_EPOCH);
+            localStorage.removeItem(STORAGE_ADD_EXISTING_SUBJECT_CURRENT_COHORT);
+            localStorage.removeItem(STORAGE_ADD_EXISTING_SUBJECT_ALL_EPOCHS);
+            localStorage.removeItem(STORAGE_ADD_EXISTING_SUBJECT_SELECTED_EPOCH_SUBJECTS);
+            localStorage.removeItem("addExisting.isSelectedEpochCohort");
+        } catch (e) {}
+        ADD_EXISTING_SUBJECT_POPUP_REF = null;
+        ADD_EXISTING_SUBJECT_INTENTIONAL_CLOSE = false;
+        log("AddExistingSubject: state cleared");
+    }
+
+    function isTempPageForAddExisting() {
+        var raw = null;
+        try {
+            raw = localStorage.getItem(STORAGE_ADD_EXISTING_SUBJECT_IS_TEMP_PAGE);
+        } catch (e) {}
+        return raw === "1";
+    }
+
+    function getScanQueue() {
+        var raw = null;
+        try {
+            raw = localStorage.getItem(STORAGE_ADD_EXISTING_SUBJECT_SCAN_QUEUE);
+        } catch (e) {}
+        if (!raw) {
+            return [];
+        }
+        try {
+            return JSON.parse(raw);
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function setScanQueue(queue) {
+        try {
+            localStorage.setItem(STORAGE_ADD_EXISTING_SUBJECT_SCAN_QUEUE, JSON.stringify(queue));
+        } catch (e) {}
+    }
+
+    function appendCollectedSubjects(subjects) {
+        var existing = getAddExistingSubjectCollectedData();
+        var combined = existing.concat(subjects);
+        setAddExistingSubjectCollectedData(combined);
+        log("AddExistingSubject: Appended " + String(subjects.length) + " subjects, total=" + String(combined.length));
+    }
+
+    function markScanComplete() {
+        try {
+            localStorage.setItem(STORAGE_ADD_EXISTING_SUBJECT_SCAN_COMPLETE, "1");
+        } catch (e) {}
+    }
+
+    function isScanComplete() {
+        var raw = null;
+        try {
+            raw = localStorage.getItem(STORAGE_ADD_EXISTING_SUBJECT_SCAN_COMPLETE);
+        } catch (e) {}
+        return raw === "1";
+    }
+
+    function getSelectedEpochSubjects() {
+        var raw = null;
+        try {
+            raw = localStorage.getItem(STORAGE_ADD_EXISTING_SUBJECT_SELECTED_EPOCH_SUBJECTS);
+        } catch (e) {}
+        if (!raw) {
+            return [];
+        }
+        try {
+            return JSON.parse(raw);
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function setSelectedEpochSubjects(subjects) {
+        try {
+            localStorage.setItem(STORAGE_ADD_EXISTING_SUBJECT_SELECTED_EPOCH_SUBJECTS, JSON.stringify(subjects));
+        } catch (e) {}
+    }
+
+    function getAddExistingSubjectCollectedData() {
+        var raw = null;
+        try {
+            raw = localStorage.getItem(STORAGE_ADD_EXISTING_SUBJECT_COLLECTED_DATA);
+        } catch (e) {}
+        if (!raw) {
+            return [];
+        }
+        try {
+            return JSON.parse(raw);
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function setAddExistingSubjectCollectedData(data) {
+        try {
+            localStorage.setItem(STORAGE_ADD_EXISTING_SUBJECT_COLLECTED_DATA, JSON.stringify(data));
+        } catch (e) {}
+    }
+
+    function getAddExistingSubjectSelectedSubject() {
+        var raw = null;
+        try {
+            raw = localStorage.getItem(STORAGE_ADD_EXISTING_SUBJECT_SELECTED_SUBJECT);
+        } catch (e) {}
+        if (!raw) {
+            return null;
+        }
+        try {
+            return JSON.parse(raw);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function setAddExistingSubjectSelectedSubject(subject) {
+        try {
+            localStorage.setItem(STORAGE_ADD_EXISTING_SUBJECT_SELECTED_SUBJECT, JSON.stringify(subject));
+        } catch (e) {}
+    }
+
+    function isAddExistingSubjectEditDone() {
+        var raw = null;
+        try {
+            raw = localStorage.getItem(STORAGE_ADD_EXISTING_SUBJECT_EDIT_DONE);
+        } catch (e) {}
+        return raw === "1";
+    }
+
+    function setAddExistingSubjectEditDone() {
+        try {
+            localStorage.setItem(STORAGE_ADD_EXISTING_SUBJECT_EDIT_DONE, "1");
+        } catch (e) {}
+    }
+
+    function isAddExistingSubjectAddDone() {
+        var raw = null;
+        try {
+            raw = localStorage.getItem(STORAGE_ADD_EXISTING_SUBJECT_ADD_DONE);
+        } catch (e) {}
+        return raw === "1";
+    }
+
+    function setAddExistingSubjectAddDone() {
+        try {
+            localStorage.setItem(STORAGE_ADD_EXISTING_SUBJECT_ADD_DONE, "1");
+        } catch (e) {}
+    }
+
+    // Collect subjects from the current page's DOM (study subjects list or cohort pages)
+    function collectSubjectsFromCurrentPage() {
+        log("AddExistingSubject: Collecting subjects from current page DOM");
+        var subjects = [];
+        
+        // Look for the cohort assignment table on the current page
+        var tbody = document.querySelector('tbody#cohortAssignmentListBody');
+        if (tbody) {
+            log("AddExistingSubject: Found cohortAssignmentListBody on current page");
+            var rows = tbody.querySelectorAll('tr');
+            log("AddExistingSubject: Found " + String(rows.length) + " rows in cohortAssignmentListBody");
+            
+            var rowIdx = 0;
+            while (rowIdx < rows.length) {
+                var row = rows[rowIdx];
+                
+                // Extract subject number
+                var subjectSpan = row.querySelector('span.tooltips[data-original-title="Subject Number"]');
+                var subjectNumber = subjectSpan ? (subjectSpan.textContent + "").trim() : "";
+                
+                // Extract volunteer info and ID
+                var volunteerLink = row.querySelector('a[href^="/secure/volunteers/manage/show/"]');
+                var volunteerInfo = "";
+                var volunteerId = "";
+                if (volunteerLink) {
+                    volunteerInfo = (volunteerLink.textContent + "").trim().replace(/\s+/g, " ");
+                    var volunteerHref = volunteerLink.getAttribute("href");
+                    if (volunteerHref) {
+                        var volIdMatch = volunteerHref.match(/\/show\/(\d+)/);
+                        if (volIdMatch) {
+                            volunteerId = volIdMatch[1];
+                        }
+                    }
+                }
+                
+                if (subjectNumber && subjectNumber.length > 0) {
+                    subjects.push({
+                        subjectNumber: subjectNumber,
+                        volunteerInfo: volunteerInfo,
+                        volunteerId: volunteerId,
+                        epochName: "",
+                        cohortName: ""
+                    });
+                    log("AddExistingSubject: Collected subject " + subjectNumber + " (volunteerId: " + volunteerId + ", volunteer: " + volunteerInfo + ")");
+                }
+                
+                rowIdx = rowIdx + 1;
+            }
+        } else {
+            log("AddExistingSubject: cohortAssignmentListBody not found on current page");
+        }
+        
+        return subjects;
+    }
+
+    function showSubjectSelectionPopup(subjects, selectedEpochUrl) {
+        if (subjects.length === 0) {
+            var noSubjectsContent = document.createElement("div");
+            noSubjectsContent.style.textAlign = "center";
+            noSubjectsContent.style.padding = "20px";
+            noSubjectsContent.style.color = "#fff";
+            noSubjectsContent.textContent = "No subjects found in other epochs.";
+
+            if (ADD_EXISTING_SUBJECT_POPUP_REF && document.body.contains(ADD_EXISTING_SUBJECT_POPUP_REF.element)) {
+                var popupContent = ADD_EXISTING_SUBJECT_POPUP_REF.element.querySelector('.popup-content');
+                if (popupContent) {
+                    popupContent.innerHTML = "";
+                    popupContent.appendChild(noSubjectsContent);
+                }
+            } else {
+                ADD_EXISTING_SUBJECT_POPUP_REF = createPopup({
+                    title: "Add Existing Subject",
+                    content: noSubjectsContent,
+                    width: "400px",
+                    height: "auto",
+                    onClose: function() {
+                        clearAddExistingSubjectState();
+                    }
+                });
+            }
+            return;
+        }
+
+        var contentDiv = document.createElement("div");
+        contentDiv.style.display = "flex";
+        contentDiv.style.flexDirection = "column";
+        contentDiv.style.gap = "8px";
+        contentDiv.style.maxHeight = "400px";
+        contentDiv.style.overflowY = "auto";
+
+        var i = 0;
+        while (i < subjects.length) {
+            var subject = subjects[i];
+
+            var itemDiv = document.createElement("div");
+            itemDiv.style.display = "flex";
+            itemDiv.style.flexDirection = "column";
+            itemDiv.style.gap = "4px";
+            itemDiv.style.padding = "10px";
+            itemDiv.style.background = "#222";
+            itemDiv.style.borderRadius = "6px";
+            itemDiv.style.border = "1px solid #444";
+
+            var topRow = document.createElement("div");
+            topRow.style.display = "flex";
+            topRow.style.justifyContent = "space-between";
+            topRow.style.alignItems = "center";
+
+            var subjectInfo = document.createElement("div");
+            subjectInfo.style.display = "flex";
+            subjectInfo.style.flexDirection = "column";
+            subjectInfo.style.gap = "2px";
+
+            var subjectNumSpan = document.createElement("span");
+            subjectNumSpan.style.fontWeight = "600";
+            subjectNumSpan.style.fontSize = "14px";
+            subjectNumSpan.style.color = "#fff";
+            subjectNumSpan.textContent = subject.subjectNumber;
+            subjectInfo.appendChild(subjectNumSpan);
+
+            if (subject.volunteerInfo && subject.volunteerInfo.length > 0) {
+                var volunteerSpan = document.createElement("span");
+                volunteerSpan.style.fontSize = "12px";
+                volunteerSpan.style.color = "#aaa";
+                volunteerSpan.textContent = subject.volunteerInfo;
+                subjectInfo.appendChild(volunteerSpan);
+            }
+
+            var locationSpan = document.createElement("span");
+            locationSpan.style.fontSize = "11px";
+            locationSpan.style.color = "#888";
+            locationSpan.textContent = subject.epochName + " → " + subject.cohortName;
+            subjectInfo.appendChild(locationSpan);
+
+            topRow.appendChild(subjectInfo);
+
+            var selectBtn = document.createElement("button");
+            selectBtn.textContent = "Select";
+            selectBtn.style.padding = "6px 12px";
+            selectBtn.style.cursor = "pointer";
+            selectBtn.style.background = "#4a90e2";
+            selectBtn.style.color = "#fff";
+            selectBtn.style.border = "none";
+            selectBtn.style.borderRadius = "4px";
+            selectBtn.style.fontSize = "12px";
+            selectBtn.style.fontWeight = "500";
+            selectBtn.style.transition = "background 0.2s";
+
+            selectBtn.addEventListener("mouseenter", function() {
+                this.style.background = "#357abd";
+            });
+            selectBtn.addEventListener("mouseleave", function() {
+                this.style.background = "#4a90e2";
+            });
+
+(function(subj, popupContentDiv) {
+                selectBtn.addEventListener("click", function() {
+                    log("AddExistingSubject: Selected subject " + subj.subjectNumber);
+                    setAddExistingSubjectSelectedSubject(subj);
+                    setAddExistingSubjectCollectedData([]);
+
+                    try {
+                        localStorage.setItem(STORAGE_ADD_EXISTING_SUBJECT_MODE, "addSubject");
+                        localStorage.setItem(STORAGE_ADD_EXISTING_SUBJECT_POPUP, "1");
+                    } catch (e) {}
+
+                    popupContentDiv.innerHTML = "";
+                    var runningDiv = document.createElement("div");
+                    runningDiv.style.textAlign = "center";
+                    runningDiv.style.padding = "40px 20px";
+                    runningDiv.style.fontSize = "16px";
+                    runningDiv.style.color = "#fff";
+                    runningDiv.id = "addExistingRunningStatus";
+                    runningDiv.textContent = "Running.";
+                    popupContentDiv.appendChild(runningDiv);
+
+                    var dots = 1;
+                    var runningInterval = setInterval(function() {
+                        var statusEl = document.getElementById("addExistingRunningStatus");
+                        if (!statusEl) {
+                            clearInterval(runningInterval);
+                            return;
+                        }
+                        dots = dots + 1;
+                        if (dots > 3) {
+                            dots = 1;
+                        }
+                        var text = "Running";
+                        var d = 0;
+                        while (d < dots) {
+                            text = text + ".";
+                            d = d + 1;
+                        }
+                        statusEl.textContent = text;
+                    }, 500);
+
+                    var studyId = null;
+                    var studyShowMatch = location.pathname.match(/\/secure\/administration\/studies\/show\/(\d+)/);
+                    if (studyShowMatch) {
+                        studyId = studyShowMatch[1];
+                    }
+
+                    if (studyId) {
+                        log("AddExistingSubject: Navigating to study show page for study " + studyId);
+                        setTimeout(function() {
+                            location.href = location.origin + "/secure/administration/studies/show/" + studyId + "?autoaddexisting=1";
+                        }, 500);
+                    } else {
+                        log("AddExistingSubject: Could not determine study ID from current URL");
+                    }
+                });
+            })(subject, contentDiv);
+
+            topRow.appendChild(selectBtn);
+            itemDiv.appendChild(topRow);
+            contentDiv.appendChild(itemDiv);
+
+            i = i + 1;
+        }
+
+if (ADD_EXISTING_SUBJECT_POPUP_REF && document.body.contains(ADD_EXISTING_SUBJECT_POPUP_REF.element)) {
+            var popupContent = ADD_EXISTING_SUBJECT_POPUP_REF.element.querySelector('.popup-content');
+            if (popupContent) {
+                popupContent.innerHTML = "";
+                popupContent.appendChild(contentDiv);
+            }
+            var popupTitle = ADD_EXISTING_SUBJECT_POPUP_REF.element.querySelector('.popup-title');
+            if (popupTitle) {
+                popupTitle.textContent = "Select Subject to Add (" + String(subjects.length) + " found)";
+            }
+        } else {
+            ADD_EXISTING_SUBJECT_POPUP_REF = createPopup({
+                title: "Select Subject to Add (" + String(subjects.length) + " found)",
+                content: contentDiv,
+                width: "450px",
+                height: "auto",
+                maxHeight: "500px",
+                onClose: function() {
+                    log("AddExistingSubject: User closed popup, stopping and clearing state");
+                    clearAddExistingSubjectState();
+                }
+            });
+        }
+    }
+
+    async function processStudyShowPageForAddExistingSubject() {
+        var autoAddExisting = getQueryParam("autoaddexisting");
+        var mode = null;
+        try {
+            mode = localStorage.getItem(STORAGE_ADD_EXISTING_SUBJECT_MODE);
+        } catch (e) {}
+
+        // Handle mode "addSubject" - navigate to selected epoch
+        if (mode === "addSubject" && autoAddExisting === "1") {
+            var selectedEpochUrl = null;
+            try {
+                selectedEpochUrl = localStorage.getItem(STORAGE_ADD_EXISTING_SUBJECT_SELECTED_EPOCH_URL);
+            } catch (e) {}
+
+            if (!selectedEpochUrl) {
+                log("AddExistingSubject: No selected epoch URL found");
+                clearAddExistingSubjectState();
+                return;
+            }
+
+            log("AddExistingSubject: Navigating to selected epoch: " + selectedEpochUrl);
+            location.href = location.origin + selectedEpochUrl + "?autoaddexisting=1";
+            return;
+        }
+
+        // Handle mode "selectEpoch" - show epoch selection popup
+        if (!(mode === "selectEpoch" && getQueryParam("autoaddexistingsubject") === "1")) {
+            return;
+        }
+
+        var tbody = await waitForSelector('tbody#epochTableBody', 5000);
+        if (!tbody) {
+            log("AddExistingSubject: Epoch table not found");
+            return;
+        }
+
+        var anchors = tbody.querySelectorAll('a[href^="/secure/administration/studies/epoch/show/"]');
+        if (anchors.length === 0) {
+            log("AddExistingSubject: No epochs found");
+            return;
+        }
+
+        var allEpochs = [];
+        var i = 0;
+        while (i < anchors.length) {
+            var a = anchors[i];
+            var name = (a.textContent + "").trim();
+            var href = a.getAttribute("href");
+            allEpochs.push({
+                name: name,
+                url: location.origin + href,
+                href: href,
+                isScreening: isScreeningLabel(name)
+            });
+            i = i + 1;
+        }
+
+        // Store all epochs for later use
+        try {
+            localStorage.setItem(STORAGE_ADD_EXISTING_SUBJECT_ALL_EPOCHS, JSON.stringify(allEpochs));
+        } catch (e) {}
+
+        var contentDiv = document.createElement("div");
+        contentDiv.style.display = "flex";
+        contentDiv.style.flexDirection = "column";
+        contentDiv.style.gap = "8px";
+
+        var instructionDiv = document.createElement("div");
+        instructionDiv.style.color = "#aaa";
+        instructionDiv.style.fontSize = "12px";
+        instructionDiv.style.marginBottom = "8px";
+        instructionDiv.textContent = "Select the epoch where you want to add the existing subject. Screening epochs are excluded.";
+        contentDiv.appendChild(instructionDiv);
+
+        var popup = null;
+
+        var epochIndex = 0;
+        while (epochIndex < allEpochs.length) {
+            var epochInfo = allEpochs[epochIndex];
+
+            if (epochInfo.isScreening) {
+                epochIndex = epochIndex + 1;
+                continue;
+            }
+
+            var btn = document.createElement("button");
+            btn.textContent = epochInfo.name;
+            btn.style.display = "block";
+            btn.style.width = "100%";
+            btn.style.padding = "10px";
+            btn.style.cursor = "pointer";
+            btn.style.background = "#4a90e2";
+            btn.style.color = "#fff";
+            btn.style.border = "none";
+            btn.style.borderRadius = "6px";
+            btn.style.fontSize = "14px";
+            btn.style.fontWeight = "500";
+            btn.style.transition = "background 0.2s";
+
+            btn.addEventListener("mouseenter", function() {
+                this.style.background = "#357abd";
+            });
+            btn.addEventListener("mouseleave", function() {
+                this.style.background = "#4a90e2";
+            });
+
+            (function(selectedEpoch, allEpochsList) {
+                btn.addEventListener("click", async function() {
+                    log("AddExistingSubject: Selected target epoch: " + selectedEpoch.name);
+
+                    try {
+                        localStorage.setItem(STORAGE_ADD_EXISTING_SUBJECT_SELECTED_EPOCH, selectedEpoch.name);
+                        localStorage.setItem(STORAGE_ADD_EXISTING_SUBJECT_SELECTED_EPOCH_URL, selectedEpoch.href);
+                        // Clear previous collected data
+                        localStorage.removeItem(STORAGE_ADD_EXISTING_SUBJECT_COLLECTED_DATA);
+                        localStorage.removeItem(STORAGE_ADD_EXISTING_SUBJECT_SELECTED_EPOCH_SUBJECTS);
+                        localStorage.removeItem(STORAGE_ADD_EXISTING_SUBJECT_SCAN_COMPLETE);
+                    } catch (e) {}
+
+                    ADD_EXISTING_SUBJECT_INTENTIONAL_CLOSE = true;
+                    if (popup) {
+                        popup.close();
+                    }
+
+                    // Create progress popup
+                    var progressContainer = document.createElement("div");
+                    progressContainer.style.display = "flex";
+                    progressContainer.style.flexDirection = "column";
+                    progressContainer.style.gap = "16px";
+                    progressContainer.style.padding = "8px";
+
+                    var statusDiv = document.createElement("div");
+                    statusDiv.id = "addExistingScanStatus";
+                    statusDiv.style.textAlign = "center";
+                    statusDiv.style.fontSize = "14px";
+                    statusDiv.style.color = "#fff";
+                    statusDiv.textContent = "Opening temporary pages to scan epochs...";
+
+                    var progressDiv = document.createElement("div");
+                    progressDiv.id = "addExistingScanProgress";
+                    progressDiv.style.textAlign = "center";
+                    progressDiv.style.fontSize = "12px";
+                    progressDiv.style.color = "#9df";
+                    progressDiv.textContent = "Preparing scan queue...";
+
+                    var loadingDiv = document.createElement("div");
+                    loadingDiv.style.textAlign = "center";
+                    loadingDiv.style.fontSize = "14px";
+                    loadingDiv.style.color = "#9df";
+                    loadingDiv.textContent = "Running.";
+
+                    progressContainer.appendChild(statusDiv);
+                    progressContainer.appendChild(progressDiv);
+                    progressContainer.appendChild(loadingDiv);
+
+                    ADD_EXISTING_SUBJECT_POPUP_REF = createPopup({
+                        title: "Scanning Epochs",
+                        content: progressContainer,
+                        width: "400px",
+                        height: "auto",
+                        onClose: function() {
+                            clearAddExistingSubjectState();
+                        }
+                    });
+
+                    var dots = 1;
+                    var loadingInterval = setInterval(function() {
+                        if (!ADD_EXISTING_SUBJECT_POPUP_REF || !document.body.contains(ADD_EXISTING_SUBJECT_POPUP_REF.element)) {
+                            clearInterval(loadingInterval);
+                            return;
+                        }
+                        dots = dots + 1;
+                        if (dots > 3) {
+                            dots = 1;
+                        }
+                        var text = "Running";
+                        var d = 0;
+                        while (d < dots) {
+                            text = text + ".";
+                            d = d + 1;
+                        }
+                        loadingDiv.textContent = text;
+                    }, 500);
+
+                    // Build scan queue - one entry per epoch (we'll discover cohorts when we open the epoch page)
+                    var scanQueue = [];
+                    var scanIdx = 0;
+                    while (scanIdx < allEpochsList.length) {
+                        var ep = allEpochsList[scanIdx];
+                        scanQueue.push({
+                            type: "epoch",
+                            epochName: ep.name,
+                            epochUrl: ep.url,
+                            epochHref: ep.href,
+                            isSelectedEpoch: ep.name === selectedEpoch.name
+                        });
+                        scanIdx = scanIdx + 1;
+                    }
+
+                    log("AddExistingSubject: Created scan queue with " + String(scanQueue.length) + " epochs");
+                    setScanQueue(scanQueue);
+
+                    // Start scanning by opening the first epoch in a new tab
+                    if (scanQueue.length > 0) {
+                        var firstItem = scanQueue[0];
+                        // Remove first item from queue
+                        scanQueue.shift();
+                        setScanQueue(scanQueue);
+
+                        try {
+                            localStorage.setItem(STORAGE_ADD_EXISTING_SUBJECT_IS_TEMP_PAGE, "1");
+                            localStorage.setItem(STORAGE_ADD_EXISTING_SUBJECT_CURRENT_EPOCH, firstItem.epochName);
+                            localStorage.setItem(STORAGE_ADD_EXISTING_SUBJECT_MODE, "scanning");
+                        } catch (e) {}
+
+                        log("AddExistingSubject: Opening first epoch for scanning: " + firstItem.epochName);
+                        var scanUrl = firstItem.epochUrl + "?addexistingscan=1";
+                        
+                        // Open in a new tab using GM.openInTab
+                        if (typeof GM !== "undefined" && typeof GM.openInTab === "function") {
+                            GM.openInTab(scanUrl, { active: false, insert: true, setParent: true });
+                        } else if (typeof GM_openInTab === "function") {
+                            GM_openInTab(scanUrl, { active: false, insert: true, setParent: true });
+                        } else {
+                            window.open(scanUrl, "_blank");
+                        }
+
+                        // Monitor for scan completion
+                        var checkInterval = setInterval(function() {
+                            if (!ADD_EXISTING_SUBJECT_POPUP_REF || !document.body.contains(ADD_EXISTING_SUBJECT_POPUP_REF.element)) {
+                                clearInterval(checkInterval);
+                                clearInterval(loadingInterval);
+                                return;
+                            }
+
+                            var queue = getScanQueue();
+                            var complete = isScanComplete();
+                            var collected = getAddExistingSubjectCollectedData();
+                            var selectedEpochSubjs = getSelectedEpochSubjects();
+
+                            // Update progress
+                            var pDiv = document.getElementById("addExistingScanProgress");
+                            if (pDiv) {
+                                pDiv.textContent = "Collected " + String(collected.length) + " subjects, " + String(queue.length) + " items remaining";
+                            }
+
+                            if (complete) {
+                                clearInterval(checkInterval);
+                                clearInterval(loadingInterval);
+                                log("AddExistingSubject: Scan complete, collected " + String(collected.length) + " subjects");
+
+                                // Filter out subjects that exist in the selected epoch
+                                var filteredSubjects = [];
+                                var volunteerIdsInSelectedEpoch = {};
+                                var selIdx = 0;
+                                while (selIdx < selectedEpochSubjs.length) {
+                                    var selSubj = selectedEpochSubjs[selIdx];
+                                    if (selSubj.volunteerId) {
+                                        volunteerIdsInSelectedEpoch[selSubj.volunteerId] = true;
+                                    }
+                                    selIdx = selIdx + 1;
+                                }
+
+                                var colIdx = 0;
+                                while (colIdx < collected.length) {
+                                    var subj = collected[colIdx];
+                                    // Only include if not in selected epoch
+                                    if (!volunteerIdsInSelectedEpoch[subj.volunteerId]) {
+                                        filteredSubjects.push(subj);
+                                    }
+                                    colIdx = colIdx + 1;
+                                }
+
+                                log("AddExistingSubject: Filtered to " + String(filteredSubjects.length) + " subjects (excluded " + String(collected.length - filteredSubjects.length) + " from selected epoch)");
+
+                                // Clear temp page flag
+                                try {
+                                    localStorage.removeItem(STORAGE_ADD_EXISTING_SUBJECT_IS_TEMP_PAGE);
+                                } catch (e) {}
+
+                                // Don't close popup, just update its content
+                                showSubjectSelectionPopup(filteredSubjects, selectedEpoch.href);
+                            }
+                        }, 1000);
+                    } else {
+                        clearInterval(loadingInterval);
+                        log("AddExistingSubject: No epochs to scan");
+                        if (ADD_EXISTING_SUBJECT_POPUP_REF) {
+                            ADD_EXISTING_SUBJECT_POPUP_REF.close();
+                        }
+                        clearAddExistingSubjectState();
+                    }
+                });
+            })(epochInfo, allEpochs);
+
+            contentDiv.appendChild(btn);
+            epochIndex = epochIndex + 1;
+        }
+
+        popup = createPopup({
+            title: "Select Target Epoch for Add Existing Subject",
+            content: contentDiv,
+            width: "400px",
+            height: "auto",
+            maxHeight: "80%",
+            onClose: function() {
+                if (ADD_EXISTING_SUBJECT_INTENTIONAL_CLOSE) {
+                    ADD_EXISTING_SUBJECT_INTENTIONAL_CLOSE = false;
+                    return;
+                }
+                clearAddExistingSubjectState();
+            }
+        });
+    }
+
+    // Process epoch page when opened as a temp scanning page
+    async function processEpochShowPageForAddExistingScan() {
+        var scanParam = getQueryParam("addexistingscan");
+        var mode = null;
+        try {
+            mode = localStorage.getItem(STORAGE_ADD_EXISTING_SUBJECT_MODE);
+        } catch (e) {}
+
+        if (!(mode === "scanning" && scanParam === "1")) {
+            return;
+        }
+
+        var currentEpoch = null;
+        try {
+            currentEpoch = localStorage.getItem(STORAGE_ADD_EXISTING_SUBJECT_CURRENT_EPOCH);
+        } catch (e) {}
+
+        log("AddExistingSubject TempPage: Processing epoch " + String(currentEpoch));
+
+        // Wait for cohort list to load
+        var cohortAnchors = document.querySelectorAll('a[href^="/secure/administration/studies/cohort/show/"]');
+        var waitedCohorts = 0;
+        while (cohortAnchors.length === 0 && waitedCohorts < 5000) {
+            await sleep(300);
+            waitedCohorts = waitedCohorts + 300;
+            cohortAnchors = document.querySelectorAll('a[href^="/secure/administration/studies/cohort/show/"]');
+        }
+
+        if (cohortAnchors.length === 0) {
+            log("AddExistingSubject TempPage: No cohorts found in epoch " + String(currentEpoch));
+            // Continue to next item in queue
+            continueToNextScanItem();
+            return;
+        }
+
+        // Add cohorts to scan queue
+        var queue = getScanQueue();
+        var selectedEpochName = null;
+        try {
+            selectedEpochName = localStorage.getItem(STORAGE_ADD_EXISTING_SUBJECT_SELECTED_EPOCH);
+        } catch (e) {}
+        var isSelectedEpoch = currentEpoch === selectedEpochName;
+
+        var cohortIdx = 0;
+        while (cohortIdx < cohortAnchors.length) {
+            var cohortAnchor = cohortAnchors[cohortIdx];
+            var cohortName = (cohortAnchor.textContent + "").trim();
+            var cohortHref = cohortAnchor.getAttribute("href");
+            queue.unshift({
+                type: "cohort",
+                epochName: currentEpoch,
+                cohortName: cohortName,
+                cohortUrl: location.origin + cohortHref,
+                cohortHref: cohortHref,
+                isSelectedEpoch: isSelectedEpoch
+            });
+            cohortIdx = cohortIdx + 1;
+        }
+
+        log("AddExistingSubject TempPage: Added " + String(cohortAnchors.length) + " cohorts to queue");
+        setScanQueue(queue);
+
+        // Continue to next item (which will be the first cohort we just added)
+        continueToNextScanItem();
+    }
+
+    // Process cohort page when opened as a temp scanning page
+    async function processCohortShowPageForAddExistingScan() {
+        var scanParam = getQueryParam("addexistingscan");
+        var mode = null;
+        try {
+            mode = localStorage.getItem(STORAGE_ADD_EXISTING_SUBJECT_MODE);
+        } catch (e) {}
+
+        if (!(mode === "scanning" && scanParam === "1")) {
+            return;
+        }
+
+        var currentCohort = null;
+        var currentEpoch = null;
+        try {
+            currentCohort = localStorage.getItem(STORAGE_ADD_EXISTING_SUBJECT_CURRENT_COHORT);
+            currentEpoch = localStorage.getItem(STORAGE_ADD_EXISTING_SUBJECT_CURRENT_EPOCH);
+        } catch (e) {}
+
+        log("AddExistingSubject TempPage: Processing cohort " + String(currentCohort) + " in epoch " + String(currentEpoch));
+
+        // Wait for cohortAssignmentListBody to load
+        var tbody = await waitForSelector('tbody#cohortAssignmentListBody', 8000);
+        if (!tbody) {
+            log("AddExistingSubject TempPage: cohortAssignmentListBody not found");
+            continueToNextScanItem();
+            return;
+        }
+
+        // Wait for rows to appear (DataTables might load async)
+        await sleep(1500);
+
+        var rows = tbody.querySelectorAll('tr.cohortAssignmentRow');
+        log("AddExistingSubject TempPage: Found " + String(rows.length) + " assignment rows");
+
+        var subjects = [];
+        var rowIdx = 0;
+        while (rowIdx < rows.length) {
+            var row = rows[rowIdx];
+
+            // Extract subject number from 2nd td
+            var tds = row.querySelectorAll('td');
+            var subjectNumber = "";
+            var volunteerId = "";
+            var volunteerInfo = "";
+
+            if (tds.length >= 2) {
+                // 2nd td contains subject number
+                var subjectSpan = tds[1].querySelector('span.tooltips[data-original-title="Subject Number"]');
+                if (subjectSpan) {
+                    subjectNumber = (subjectSpan.textContent + "").trim();
+                }
+            }
+
+            if (tds.length >= 5) {
+                // 5th td contains volunteer info
+                var volunteerLink = tds[4].querySelector('a[href^="/secure/volunteers/manage/show/"]');
+                if (volunteerLink) {
+                    volunteerInfo = (volunteerLink.textContent + "").trim().replace(/\s+/g, " ");
+                    var volHref = volunteerLink.getAttribute("href");
+                    if (volHref) {
+                        var volMatch = volHref.match(/\/show\/(\d+)/);
+                        if (volMatch) {
+                            volunteerId = volMatch[1];
+                        }
+                    }
+                }
+            }
+
+            if (subjectNumber && subjectNumber.length > 0) {
+                subjects.push({
+                    subjectNumber: subjectNumber,
+                    volunteerInfo: volunteerInfo,
+                    volunteerId: volunteerId,
+                    epochName: currentEpoch,
+                    cohortName: currentCohort
+                });
+                log("AddExistingSubject TempPage: Collected " + subjectNumber + " (volunteerId: " + volunteerId + ")");
+            }
+
+            rowIdx = rowIdx + 1;
+        }
+
+        // Check if this is from the selected epoch using flag
+        var isSelectedEpochCohort = null;
+        try {
+            isSelectedEpochCohort = localStorage.getItem("addExisting.isSelectedEpochCohort");
+        } catch (e) {}
+
+        if (isSelectedEpochCohort === "1") {
+            // Store as selected epoch subjects (for filtering later)
+            var existingSelectedSubjs = getSelectedEpochSubjects();
+            var combined = existingSelectedSubjs.concat(subjects);
+            setSelectedEpochSubjects(combined);
+            log("AddExistingSubject TempPage: Added " + String(subjects.length) + " to selected epoch subjects (will be excluded from selection)");
+        } else {
+            // Append to collected data
+            appendCollectedSubjects(subjects);
+        }
+
+        // Continue to next item
+        continueToNextScanItem();
+    }
+
+    function continueToNextScanItem() {
+        var queue = getScanQueue();
+
+        if (queue.length === 0) {
+            log("AddExistingSubject TempPage: Scan queue empty, marking complete");
+            markScanComplete();
+            // Close this temp tab
+            window.close();
+            return;
+        }
+
+        var nextItem = queue.shift();
+        setScanQueue(queue);
+
+        log("AddExistingSubject TempPage: Processing next item: " + nextItem.type + " - " + (nextItem.cohortName || nextItem.epochName) + " (isSelectedEpoch=" + String(nextItem.isSelectedEpoch) + ")");
+
+        try {
+            if (nextItem.type === "epoch") {
+                localStorage.setItem(STORAGE_ADD_EXISTING_SUBJECT_CURRENT_EPOCH, nextItem.epochName);
+                localStorage.removeItem(STORAGE_ADD_EXISTING_SUBJECT_CURRENT_COHORT);
+                // Track if this is the selected epoch
+                if (nextItem.isSelectedEpoch) {
+                    localStorage.setItem("addExisting.isSelectedEpochCohort", "1");
+                } else {
+                    localStorage.removeItem("addExisting.isSelectedEpochCohort");
+                }
+            } else if (nextItem.type === "cohort") {
+                localStorage.setItem(STORAGE_ADD_EXISTING_SUBJECT_CURRENT_EPOCH, nextItem.epochName);
+                localStorage.setItem(STORAGE_ADD_EXISTING_SUBJECT_CURRENT_COHORT, nextItem.cohortName);
+                // Track if this cohort belongs to the selected epoch
+                if (nextItem.isSelectedEpoch) {
+                    localStorage.setItem("addExisting.isSelectedEpochCohort", "1");
+                } else {
+                    localStorage.removeItem("addExisting.isSelectedEpochCohort");
+                }
+            }
+        } catch (e) {}
+
+        // Navigate to the next URL
+        var nextUrl = "";
+        if (nextItem.type === "epoch") {
+            nextUrl = nextItem.epochUrl + "?addexistingscan=1";
+        } else if (nextItem.type === "cohort") {
+            nextUrl = nextItem.cohortUrl + "?addexistingscan=1";
+        }
+
+        location.href = nextUrl;
+    }
+
+async function processEpochShowPageForAddExistingSubject() {
+        var autoAddExisting = getQueryParam("autoaddexisting");
+        var mode = null;
+        try {
+            mode = localStorage.getItem(STORAGE_ADD_EXISTING_SUBJECT_MODE);
+        } catch (e) {}
+
+        if (!(mode === "addSubject" && autoAddExisting === "1")) {
+            return;
+        }
+
+        var selectedSubject = getAddExistingSubjectSelectedSubject();
+        if (!selectedSubject) {
+            log("AddExistingSubject: No selected subject found");
+            clearAddExistingSubjectState();
+            return;
+        }
+
+        log("AddExistingSubject: Processing epoch for subject " + selectedSubject.subjectNumber);
+
+        if (!ADD_EXISTING_SUBJECT_POPUP_REF || !document.body.contains(ADD_EXISTING_SUBJECT_POPUP_REF.element)) {
+            var runningContent = document.createElement("div");
+            runningContent.style.textAlign = "center";
+            runningContent.style.padding = "40px 20px";
+            runningContent.style.fontSize = "16px";
+            runningContent.style.color = "#fff";
+            runningContent.id = "addExistingRunningStatus";
+            runningContent.textContent = "Running.";
+
+            ADD_EXISTING_SUBJECT_POPUP_REF = createPopup({
+                title: "Add Existing Subject",
+                content: runningContent,
+                width: "450px",
+                height: "auto",
+                onClose: function() {
+                    log("AddExistingSubject: User closed popup, stopping and clearing state");
+                    clearAddExistingSubjectState();
+                }
+            });
+
+            var dots = 1;
+            var runningInterval = setInterval(function() {
+                var statusEl = document.getElementById("addExistingRunningStatus");
+                if (!statusEl) {
+                    clearInterval(runningInterval);
+                    return;
+                }
+                dots = dots + 1;
+                if (dots > 3) {
+                    dots = 1;
+                }
+                var text = "Running";
+                var d = 0;
+                while (d < dots) {
+                    text = text + ".";
+                    d = d + 1;
+                }
+                statusEl.textContent = text;
+            }, 500);
+        }
+
+        var cohortAnchors = document.querySelectorAll('a[href^="/secure/administration/studies/cohort/show/"]');
+        if (cohortAnchors.length === 0) {
+            log("AddExistingSubject: No cohorts found in epoch");
+            if (ADD_EXISTING_SUBJECT_POPUP_REF) {
+                ADD_EXISTING_SUBJECT_POPUP_REF.close();
+            }
+            ADD_EXISTING_SUBJECT_POPUP_REF = createPopup({
+                title: "Error",
+                content: "<div style='text-align:center;padding:20px;color:#f99;'>No Cohort Found in this epoch.</div>",
+                width: "300px",
+                height: "auto",
+                onClose: function() {
+                    clearAddExistingSubjectState();
+                }
+            });
+            return;
+        }
+
+        var firstCohortHref = cohortAnchors[0].getAttribute("href");
+        log("AddExistingSubject: Navigating to first cohort: " + firstCohortHref);
+        location.href = location.origin + firstCohortHref + "?autoaddexistingcohort=1";
+    }
+
+async function processCohortShowPageForAddExistingSubject() {
+        var autoAddExisting = getQueryParam("autoaddexistingcohort");
+        var mode = null;
+        try {
+            mode = localStorage.getItem(STORAGE_ADD_EXISTING_SUBJECT_MODE);
+        } catch (e) {}
+
+        if (!(mode === "addSubject" && autoAddExisting === "1")) {
+            return;
+        }
+
+        var selectedSubject = getAddExistingSubjectSelectedSubject();
+        if (!selectedSubject) {
+            log("AddExistingSubject: No selected subject found");
+            clearAddExistingSubjectState();
+            return;
+        }
+
+        log("AddExistingSubject: Processing cohort for subject " + selectedSubject.subjectNumber);
+
+        if (!ADD_EXISTING_SUBJECT_POPUP_REF || !document.body.contains(ADD_EXISTING_SUBJECT_POPUP_REF.element)) {
+            var runningContent = document.createElement("div");
+            runningContent.style.textAlign = "center";
+            runningContent.style.padding = "40px 20px";
+            runningContent.style.fontSize = "16px";
+            runningContent.style.color = "#fff";
+            runningContent.id = "addExistingRunningStatus";
+            runningContent.textContent = "Running.";
+
+            ADD_EXISTING_SUBJECT_POPUP_REF = createPopup({
+                title: "Add Existing Subject",
+                content: runningContent,
+                width: "450px",
+                height: "auto",
+                onClose: function() {
+                    log("AddExistingSubject: User closed popup, stopping and clearing state");
+                    clearAddExistingSubjectState();
+                }
+            });
+
+            var dots = 1;
+            var runningInterval = setInterval(function() {
+                var statusEl = document.getElementById("addExistingRunningStatus");
+                if (!statusEl) {
+                    clearInterval(runningInterval);
+                    return;
+                }
+                dots = dots + 1;
+                if (dots > 3) {
+                    dots = 1;
+                }
+                var text = "Running";
+                var d = 0;
+                while (d < dots) {
+                    text = text + ".";
+                    d = d + 1;
+                }
+                statusEl.textContent = text;
+            }, 500);
+        }
+
+        // Check if add step is done (set before page reload)
+        var addDone = isAddExistingSubjectAddDone();
+        var successAlert = hasSuccessAlert();
+        if (addDone || successAlert) {
+            log("AddExistingSubject: Add step complete (addDone=" + String(addDone) + ", successAlert=" + String(successAlert) + "), proceeding to activation");
+            await performAddExistingSubjectActivation(selectedSubject);
+            return;
+        }
+
+        var editDone = isAddExistingSubjectEditDone();
+        if (!editDone) {
+            log("AddExistingSubject: Edit not done, opening Edit modal");
+
+            var opened = await clickActionsDropdownIfNeeded();
+            if (!opened) {
+                log("AddExistingSubject: Actions dropdown not found");
+                return;
+            }
+
+            var editLink = document.querySelector('a[href^="/secure/administration/studies/cohort/update/"][data-toggle="modal"]');
+            if (!editLink) {
+                log("AddExistingSubject: Edit link not found");
+                return;
+            }
+
+            editLink.click();
+            log("AddExistingSubject: Edit link clicked");
+
+            var modal = await waitForSelector("#ajaxModal, .modal", 6000);
+            if (!modal) {
+                log("AddExistingSubject: Modal did not open");
+                return;
+            }
+
+            await sleep(1500);
+
+            log("AddExistingSubject: Applying checkbox settings for existing subject");
+            var ok6 = true;
+            ok6 = ok6 && setCheckboxStateById("subjectInitiation", false);
+            ok6 = ok6 && setCheckboxStateById("sourceVolunteerDatabase", false);
+            ok6 = ok6 && setCheckboxStateById("sourceAppointments", false);
+            ok6 = ok6 && setCheckboxStateById("sourceAppointmentsCohort", false);
+            ok6 = ok6 && setCheckboxStateById("sourceScreeningCohorts", true);
+            ok6 = ok6 && setCheckboxStateById("sourceLeadInCohorts", true);
+            ok6 = ok6 && setCheckboxStateById("sourceRandomizationCohorts", true);
+
+            var ok7 = true;
+            ok7 = ok7 && setCheckboxStateById("allowSubjectsActiveInCohorts", true);
+            ok7 = ok7 && setCheckboxStateById("allowSubjectsActiveInStudies", true);
+
+            var ok8 = true;
+            ok8 = ok8 && setCheckboxStateById("requireVolunteerRecruitment", false);
+            ok8 = ok8 && setCheckboxStateById("allowRecruitmentEligible", false);
+            ok8 = ok8 && setCheckboxStateById("allowRecruitmentIdentified", false);
+            ok8 = ok8 && setCheckboxStateById("allowRecruitmentIneligible", false);
+            ok8 = ok8 && setCheckboxStateById("allowRecruitmentRemoved", false);
+
+            var ok9 = true;
+            ok9 = ok9 && setCheckboxStateById("allowEligibilityEligible", true);
+            ok9 = ok9 && setCheckboxStateById("allowEligibilityPending", true);
+            ok9 = ok9 && setCheckboxStateById("allowEligibilityIneligible", true);
+            ok9 = ok9 && setCheckboxStateById("allowEligibilityUnspecified", true);
+
+            var ok10 = true;
+            ok10 = ok10 && setCheckboxStateById("allowStatusActive", true);
+            ok10 = ok10 && setCheckboxStateById("allowStatusComplete", false);
+            ok10 = ok10 && setCheckboxStateById("allowStatusTerminated", false);
+            ok10 = ok10 && setCheckboxStateById("allowStatusWithdrawn", false);
+
+            var ok11 = true;
+            ok11 = ok11 && setCheckboxStateById("requireInformedConsent", false);
+            ok11 = ok11 && setCheckboxStateById("requireOverVolunteeringCheck", false);
+
+            var reason = modal.querySelector('textarea#reasonForChange');
+            if (reason) {
+                reason.value = "test";
+                var evtR = new Event("input", { bubbles: true });
+                reason.dispatchEvent(evtR);
+            }
+
+            setAddExistingSubjectEditDone();
+
+            var saveBtn = await waitForSelector("#actionButton", 5000);
+            if (saveBtn) {
+                saveBtn.click();
+                log("AddExistingSubject: Edit modal Save clicked");
+                await sleep(2000);
+            }
+            return;
+        }
+
+        log("AddExistingSubject: Edit done, proceeding to Add");
+        await performAddExistingSubjectAdd(selectedSubject);
+    }
+
+    async function performAddExistingSubjectAdd(selectedSubject) {
+        var opened = await clickActionsDropdownIfNeeded();
+        if (!opened) {
+            log("AddExistingSubject: Actions dropdown not found for Add");
+            return;
+        }
+
+        var addLink = await waitForSelector('a#addCohortAssignmentButton[data-toggle="modal"]', 3000);
+        if (!addLink) {
+            addLink = document.querySelector('a[href^="/secure/study/cohortassign/manage/save/"][data-toggle="modal"]');
+        }
+        if (!addLink) {
+            log("AddExistingSubject: Add link not found");
+            return;
+        }
+
+        addLink.click();
+        log("AddExistingSubject: Add link clicked");
+
+        var modal = await waitForSelector("#ajaxModal, .modal", 5000);
+        if (!modal) {
+            log("AddExistingSubject: Add modal did not open");
+            return;
+        }
+
+        var planSel = await waitForSelector('select#activityPlan', 5000);
+        if (!planSel) {
+            log("AddExistingSubject: ActivityPlan select not found");
+            return;
+        }
+
+        var opts = planSel.querySelectorAll("option");
+        var chosen = null;
+        var j = 0;
+        while (j < opts.length) {
+            var op = opts[j];
+            var val = op.value + "";
+            if (val && val.length > 0) {
+                chosen = op;
+                break;
+            }
+            j = j + 1;
+        }
+        if (chosen) {
+            planSel.value = chosen.value;
+            var evt1 = new Event("change", { bubbles: true });
+            planSel.dispatchEvent(evt1);
+            log("AddExistingSubject: ActivityPlan chosen value=" + String(chosen.value));
+        }
+
+        await sleep(800);
+
+        // Handle Initial Reference Time datepicker (same as Add Cohort Subject)
+        log("AddExistingSubject: Checking for Initial Reference Time datepicker");
+        var initialSegmentRefDiv = modal.querySelector('div#initialSegmentReferenceDiv');
+        var hasInitialRef = !!initialSegmentRefDiv;
+        if (hasInitialRef) {
+            var style = window.getComputedStyle(initialSegmentRefDiv);
+            var isVisible = style.display !== "none" && style.visibility !== "hidden";
+            if (!isVisible) {
+                hasInitialRef = false;
+                log("AddExistingSubject: initialSegmentReferenceDiv exists but is hidden; skipping datepicker");
+            } else {
+                log("AddExistingSubject: initialSegmentReferenceDiv present and visible");
+            }
+        } else {
+            log("AddExistingSubject: initialSegmentReferenceDiv not present; skipping datepicker");
+        }
+
+        if (hasInitialRef) {
+            var picker = modal.querySelector('span#initialSegmentReferencePicker');
+            var addon = null;
+            if (picker) {
+                addon = picker.querySelector('span.input-group-addon');
+            }
+            var openedCal = false;
+            if (addon) {
+                addon.click();
+                log("AddExistingSubject: calendar addon clicked");
+                await sleep(400);
+                openedCal = true;
+            } else {
+                log("AddExistingSubject: calendar addon not found");
+            }
+
+            // Auto-select today
+            if (openedCal) {
+                var waitedD = 0;
+                var maxWaitD = 8000;
+                var todayCell = null;
+                while (waitedD < maxWaitD) {
+                    if (isPaused()) {
+                        log("AddExistingSubject: Paused; exiting during datepicker wait");
+                        return;
+                    }
+                    var daysPanel = document.querySelector('div.datepicker-days');
+                    if (daysPanel) {
+                        todayCell = daysPanel.querySelector('td.day.active.today');
+                        if (!todayCell) {
+                            todayCell = daysPanel.querySelector('td.day.today.active');
+                        }
+                        if (!todayCell) {
+                            todayCell = daysPanel.querySelector('td.day.today');
+                        }
+                        if (todayCell) {
+                            break;
+                        }
+                    }
+                    await sleep(300);
+                    waitedD = waitedD + 300;
+                }
+                if (todayCell) {
+                    todayCell.click();
+                    log("AddExistingSubject: today clicked");
+                    await sleep(300);
+                } else {
+                    log("AddExistingSubject: today cell not found in datepicker");
+                }
+            }
+
+            var dateInputFinal = modal.querySelector('input#initialSegmentReference');
+            var dateVal = dateInputFinal ? (dateInputFinal.value + "") : "";
+            log("AddExistingSubject: date input value='" + String(dateVal) + "'");
+        }
+
+        var s2container = modal.querySelector('#s2id_volunteer');
+        if (!s2container) {
+            s2container = modal.querySelector('.select2-container.form-control.select2');
+        }
+        if (!s2container) {
+            log("AddExistingSubject: Select2 container not found");
+            return;
+        }
+
+        var s2choice = s2container.querySelector('a.select2-choice');
+        if (s2choice) {
+            s2choice.click();
+            await sleep(200);
+        }
+
+        var s2drop = document.querySelector('#select2-drop.select2-drop-active');
+        if (!s2drop) {
+            s2drop = await waitForSelector('#select2-drop.select2-drop-active', 3000);
+        }
+
+        var s2input = null;
+        if (s2drop) {
+            s2input = s2drop.querySelector('input.select2-input');
+        }
+        if (!s2input) {
+            s2input = await waitForSelector('#select2-drop.select2-drop-active input.select2-input', 3000);
+        }
+        if (!s2input) {
+            log("AddExistingSubject: Select2 input not found");
+            return;
+        }
+
+        log("AddExistingSubject: Typing subject number: " + selectedSubject.subjectNumber);
+        s2input.value = selectedSubject.subjectNumber;
+        var inpEvt = new Event("input", { bubbles: true });
+        s2input.dispatchEvent(inpEvt);
+        var keyEvt = new KeyboardEvent("keyup", { bubbles: true });
+        s2input.dispatchEvent(keyEvt);
+
+        await sleep(1500);
+
+        var enterDown = new KeyboardEvent("keydown", { bubbles: true, key: "Enter", keyCode: 13 });
+        s2input.dispatchEvent(enterDown);
+        var enterUp = new KeyboardEvent("keyup", { bubbles: true, key: "Enter", keyCode: 13 });
+        s2input.dispatchEvent(enterUp);
+
+        await sleep(1000);
+
+        var saveBtn = await waitForSelector('button#actionButton.btn.green[type="button"]', 5000);
+        if (!saveBtn) {
+            saveBtn = document.querySelector('button#actionButton');
+        }
+        if (!saveBtn) {
+            log("AddExistingSubject: Save button not found");
+            return;
+        }
+
+        saveBtn.click();
+        log("AddExistingSubject: Save clicked");
+
+        await sleep(1000);
+
+        var errorAlert = document.querySelector('div.alert.alert-danger.alert-dismissable');
+        if (errorAlert) {
+            var errorText = (errorAlert.textContent + "").trim().toLowerCase();
+            if (errorText.indexOf("please correct the validation errors") !== -1) {
+                log("AddExistingSubject: Validation error detected");
+                
+                if (ADD_EXISTING_SUBJECT_POPUP_REF) {
+                    ADD_EXISTING_SUBJECT_POPUP_REF.close();
+                }
+                
+                clearAddExistingSubjectState();
+                createPopup({
+                    title: "Error",
+                    content: "<div style='text-align:center;padding:20px;color:#f99;'>Error encountered. Stopping program.</div>",
+                    width: "300px",
+                    height: "auto"
+                });
+                return;
+            }
+        }
+
+        var success = hasSuccessAlert();
+        if (success) {
+            log("AddExistingSubject: Save successful, setting add done flag and reloading");
+            setAddExistingSubjectAddDone();
+            await sleep(500);
+            location.reload();
+        }
+    }
+
+    async function performAddExistingSubjectActivation(selectedSubject) {
+        log("AddExistingSubject: Starting activation for " + selectedSubject.subjectNumber);
+
+        var listReady = await waitForListTable(15000);
+        if (!listReady) {
+            await sleep(800);
+        }
+
+        var targetRow = null;
+        var tbody = document.querySelector('tbody#cohortAssignmentListBody');
+        if (tbody) {
+            var rows = tbody.querySelectorAll('tr');
+            var rowIdx = 0;
+            while (rowIdx < rows.length) {
+                var row = rows[rowIdx];
+                var subjectSpan = row.querySelector('span.tooltips[data-original-title="Subject Number"]');
+                if (subjectSpan) {
+                    var subjectNum = (subjectSpan.textContent + "").trim();
+                    if (subjectNum === selectedSubject.subjectNumber) {
+                        targetRow = row;
+                        break;
+                    }
+                }
+                rowIdx = rowIdx + 1;
+            }
+        }
+
+        if (!targetRow) {
+            log("AddExistingSubject: Target row not found for subject " + selectedSubject.subjectNumber);
+            return;
+        }
+
+        log("AddExistingSubject: Found target row, activating plan");
+
+        var actionBtn = getRowActionButton(targetRow);
+        if (!actionBtn) {
+            log("AddExistingSubject: Row action button not found");
+            return;
+        }
+
+        actionBtn.click();
+        await sleep(300);
+
+        var planLink = getMenuLinkActivatePlan(targetRow);
+        if (!planLink) {
+            log("AddExistingSubject: Activate Plan link not found");
+            return;
+        }
+
+        planLink.click();
+        var ok1 = await clickBootboxOk(5000);
+        if (!ok1) {
+            await sleep(500);
+        }
+
+        await sleep(2000);
+
+        actionBtn = getRowActionButton(targetRow);
+        if (actionBtn) {
+            actionBtn.click();
+            await sleep(300);
+        }
+
+        var volunteerLink = getMenuLinkActivateVolunteer(targetRow);
+        if (volunteerLink) {
+            volunteerLink.click();
+            var ok2 = await clickBootboxOk(5000);
+            if (!ok2) {
+                await sleep(500);
+            }
+        }
+
+        log("AddExistingSubject: Activation complete");
+        
+        if (ADD_EXISTING_SUBJECT_POPUP_REF) {
+            ADD_EXISTING_SUBJECT_POPUP_REF.close();
+        }
+        
+        clearAddExistingSubjectState();
+
+        createPopup({
+            title: "Completed",
+            content: "<div style='text-align:center;padding:20px;color:#9f9;'>Successfully added and activated existing subject: " + selectedSubject.subjectNumber + "</div>",
+            width: "350px",
+            height: "auto"
+        });
+    }
+
+    function getMenuLinkActivateVolunteer(row) {
+        var menu = row.querySelector("ul.dropdown-menu");
+        if (!menu) {
+            var parent = row.closest("tr");
+            if (parent) {
+                menu = parent.querySelector("ul.dropdown-menu");
+            }
+        }
+        if (!menu) {
+            menu = document.querySelector("ul.dropdown-menu");
+        }
+        if (!menu) {
+            return null;
+        }
+        var links = menu.querySelectorAll("a");
+        var i = 0;
+        while (i < links.length) {
+            var txt = (links[i].textContent + "").trim().toLowerCase();
+            if (txt.indexOf("activate volunteer") !== -1 || txt.indexOf("activate subject") !== -1) {
+                return links[i];
+            }
+            i = i + 1;
+        }
+        return null;
+    }
+
+    //==========================
     // RUN STUDY UPDATES FEATURE
     //==========================
     // This section contains all functions related to study update automation.
@@ -4543,23 +6083,23 @@
     async function fetchAndLockActivityPlan(planUrl, planName) {
         try {
             log("Locking Activity Plan: " + planName);
-            
+
             var detailHtml = await fetchPage(planUrl);
             var detailDoc = parseHtml(detailHtml);
-            
+
             var editLink = detailDoc.querySelector('a[href^="/secure/crfdesign/activityplans/updatestate/"]');
             if (!editLink) {
                 log("Edit state link not found for: " + planName);
                 return { success: false, message: "Edit state link not found" };
             }
-            
+
             var updatePath = editLink.getAttribute("href");
             var updateUrl = location.origin + updatePath;
-            
+
             log("Fetching modal content from: " + updateUrl);
             var modalHtml = await fetchPage(updateUrl);
             var modalDoc = parseHtml(modalHtml);
-            
+
             log("Modal HTML length: " + String(modalHtml.length));
             var saveButton = modalDoc.querySelector('button#actionButton');
             if (saveButton) {
@@ -4567,16 +6107,16 @@
             } else {
                 log("Save button NOT found in modal");
             }
-            
+
             var formGroups = modalDoc.querySelectorAll('.form-group');
             if (!formGroups || formGroups.length < 2) {
                 log("Form groups not found for: " + planName);
                 return { success: false, message: "Form groups not found" };
             }
-            
+
             var secondFormGroup = formGroups[1];
             var formControlStatic = secondFormGroup.querySelector('p.form-control-static');
-            
+
             var hasReadyState = false;
             if (formControlStatic) {
                 var staticText = (formControlStatic.textContent + "").trim();
@@ -4586,21 +6126,21 @@
                     log("Activity Plan " + planName + " is in Ready state, will lock");
                 }
             }
-            
+
             if (!hasReadyState) {
                 log("Activity Plan " + planName + " is not in Ready state, skipping");
                 return { success: true, message: "Not in Ready state, skipped" };
             }
-            
+
             var formElement = modalDoc.querySelector('form');
             if (!formElement) {
                 log("Form not found for: " + planName);
                 return { success: false, message: "Form not found" };
             }
-            
+
             var allInputs = formElement.querySelectorAll('input, textarea, select');
             log("Found " + String(allInputs.length) + " form inputs");
-            
+
             var formData = "";
             var i = 0;
             while (i < allInputs.length) {
@@ -4609,9 +6149,9 @@
                 var type = input.getAttribute("type") || "";
                 var tagName = input.tagName.toLowerCase();
                 var value = "";
-                
+
                 log("Input " + String(i) + ": name=" + String(name) + ", type=" + String(type) + ", tag=" + tagName + ", value=" + String(input.value || input.getAttribute("value") || ""));
-                
+
                 if (name) {
                     if (type === "checkbox" || type === "radio") {
                         if (input.checked || input.hasAttribute("checked")) {
@@ -4631,7 +6171,7 @@
                     } else {
                         value = input.value || input.getAttribute("value") || "";
                     }
-                    
+
                     if (formData.length > 0) {
                         formData += "&";
                     }
@@ -4639,20 +6179,20 @@
                 }
                 i = i + 1;
             }
-            
+
             var formAction = formElement.getAttribute("action");
             var formMethod = formElement.getAttribute("method") || "POST";
             log("Form action (ignored): " + formAction);
             log("Form method: " + formMethod);
             log("Form data: " + formData);
             log("Submitting lock for: " + planName);
-            
+
             var submitUrl = updateUrl;
-            
+
             log("Submit URL: " + submitUrl);
             var resultHtml = await submitForm(submitUrl, formData);
             var resultDoc = parseHtml(resultHtml);
-            
+
             var errorAlert = resultDoc.querySelector('div.alert.alert-danger.alert-dismissable');
             if (errorAlert) {
                 var errorText = (errorAlert.textContent + "").trim();
@@ -4661,13 +6201,13 @@
                     return { success: true, message: "Validation error, skipped" };
                 }
             }
-            
+
             log("Waiting for page refresh after submission...");
             await sleep(1000);
-            
+
             var verifyHtml = await fetchPage(planUrl);
             var verifyDoc = parseHtml(verifyHtml);
-            
+
             var verifyAlert = verifyDoc.querySelector('div.alert.alert-success.alert-dismissable');
             if (verifyAlert) {
                 var verifyText = (verifyAlert.textContent + "").trim();
@@ -4676,10 +6216,10 @@
                     return { success: true, message: "Locked successfully" };
                 }
             }
-            
+
             log("Lock submitted but success not confirmed for: " + planName);
             return { success: true, message: "Submitted (unconfirmed)" };
-            
+
         } catch (error) {
             log("Error locking " + planName + ": " + String(error));
             return { success: false, message: String(error) };
@@ -4714,10 +6254,10 @@
             return;
         }
         clearRunFlag();
-        
+
         var mode = getRunMode();
         var showPopup = mode === "activity" || mode === "all";
-        
+
         var planData = [];
         var rows = document.querySelectorAll("table.table.table-striped.table-bordered.table-hover tbody tr");
         var i = 0;
@@ -4734,9 +6274,9 @@
             }
             i = i + 1;
         }
-        
+
         log("Found " + String(planData.length) + " activity plans to lock");
-        
+
         if (planData.length === 0) {
             log("No activity plans to lock");
             var mode2 = getRunMode();
@@ -4751,13 +6291,13 @@
             }
             return;
         }
-        
+
         var statusDiv = null;
         var progressDiv = null;
         var loadingAnimation = null;
         var countsDiv = null;
         var loadingInterval = null;
-        
+
         if (showPopup) {
             var popupContainer = document.createElement("div");
             popupContainer.style.display = "flex";
@@ -4841,39 +6381,39 @@
                 }
             }, 500);
         }
-        
+
         var successCount = 0;
         var failCount = 0;
         var j = 0;
         while (j < planData.length) {
             var plan = planData[j];
             log("Processing (" + String(j + 1) + "/" + String(planData.length) + "): " + plan.name);
-            
+
             if (showPopup && progressDiv) {
                 progressDiv.textContent = "Processing " + String(j + 1) + "/" + String(planData.length) + ": " + plan.name;
             }
-            
+
             var result = await fetchAndLockActivityPlan(plan.url, plan.name);
             if (result.success) {
                 successCount = successCount + 1;
             } else {
                 failCount = failCount + 1;
             }
-            
+
             if (showPopup && countsDiv) {
                 countsDiv.innerHTML = "<span style='color:#9f9'>Success: " + String(successCount) + "</span> | <span style='color:#f99'>Failed: " + String(failCount) + "</span>";
             }
-            
+
             await sleep(500);
             j = j + 1;
         }
-        
+
         if (showPopup && loadingInterval) {
             clearInterval(loadingInterval);
         }
-        
+
         log("Lock Activity Plans completed. Success=" + String(successCount) + " Failed=" + String(failCount));
-        
+
         if (showPopup && statusDiv) {
             statusDiv.textContent = "Completed";
             statusDiv.style.color = "#9f9";
@@ -4884,12 +6424,12 @@
         if (showPopup && progressDiv) {
             progressDiv.textContent = "Processed " + String(planData.length) + "/" + String(planData.length);
         }
-        
+
         try {
             localStorage.removeItem(STORAGE_LOCK_ACTIVITY_PLANS_POPUP);
             log("Lock Activity Plans: popup flag cleared");
         } catch (e) {}
-        
+
         var mode3 = getRunMode();
         if (mode3 === "all") {
             await sleep(2000);
@@ -5244,7 +6784,7 @@
 
     function SharedUtilityFunctions() {}
 
-    
+
     // Recreate popups on page load if they should be active
     function recreatePopupsIfNeeded() {
         try {
@@ -7062,6 +8602,18 @@
         runAddCohortBtn.style.transition = "background 0.2s";
         runAddCohortBtn.onmouseenter = function() { this.style.background = "#357abd"; };
         runAddCohortBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+        var runAddExistingSubjectBtn = document.createElement("button");
+        runAddExistingSubjectBtn.textContent = "Add Existing Subject";
+        runAddExistingSubjectBtn.style.background = "#e67e22";
+        runAddExistingSubjectBtn.style.color = "#fff";
+        runAddExistingSubjectBtn.style.border = "none";
+        runAddExistingSubjectBtn.style.borderRadius = "6px";
+        runAddExistingSubjectBtn.style.padding = "8px";
+        runAddExistingSubjectBtn.style.cursor = "pointer";
+        runAddExistingSubjectBtn.style.fontWeight = "500";
+        runAddExistingSubjectBtn.style.transition = "background 0.2s";
+        runAddExistingSubjectBtn.onmouseenter = function() { this.style.background = "#d35400"; };
+        runAddExistingSubjectBtn.onmouseleave = function() { this.style.background = "#e67e22"; };
         var runConsentBtn = document.createElement("button");
         runConsentBtn.textContent = "Run ICF Barcode";
         runConsentBtn.style.background = "#4a90e2";
@@ -7252,6 +8804,7 @@
         btnRow.appendChild(runLockSamplePathsBtn);
         btnRow.appendChild(runStudyBtn);
         btnRow.appendChild(runAddCohortBtn);
+        btnRow.appendChild(runAddExistingSubjectBtn);
         btnRow.appendChild(runConsentBtn);
         btnRow.appendChild(runAllBtn);
         btnRow.appendChild(runNonScrnBtn);
@@ -7492,6 +9045,17 @@
             log("Run Study Update clicked");
             location.href = STUDY_SHOW_URL + "?autoupdate=1";
         });
+        runAddExistingSubjectBtn.addEventListener("click", function () {
+            status.textContent = "Preparing Add Existing Subject...";
+            log("Add Existing Subject clicked");
+            try {
+                localStorage.setItem(STORAGE_ADD_EXISTING_SUBJECT_MODE, "selectEpoch");
+                localStorage.removeItem(STORAGE_ADD_EXISTING_SUBJECT_COLLECTED_DATA);
+                localStorage.removeItem(STORAGE_ADD_EXISTING_SUBJECT_SELECTED_SUBJECT);
+                localStorage.removeItem(STORAGE_ADD_EXISTING_SUBJECT_EDIT_DONE);
+            } catch (e) {}
+            location.href = STUDY_SHOW_URL + "?autoaddexistingsubject=1";
+        });
         runConsentBtn.addEventListener("click", function () {
             try {
                 localStorage.setItem(STORAGE_RUN_MODE, "consent");
@@ -7567,7 +9131,7 @@
 
             location.href = STUDY_SHOW_URL + "?autoconsent=1";
         });
-        
+
         runAllBtn.addEventListener("click", function () {
             try {
                 localStorage.setItem(STORAGE_KEY, "1");
@@ -8017,7 +9581,7 @@
             log("Paused; automation halted");
             return;
         }
-        
+
         var isSamplePathsPage = location.pathname === "/secure/samples/configure/paths";
         if (isSamplePathsPage) {
             processLockSamplePathsPage();
@@ -8051,6 +9615,7 @@
             processStudyShowPage();
             processStudyShowPageForNonScrn();
             processStudyShowPageForAddCohort();
+            processStudyShowPageForAddExistingSubject();
             return;
         }
         var onEditBasics = isStudyEditBasicsPage();
@@ -8061,6 +9626,17 @@
 
         var onEpoch = isEpochShowPage();
         if (onEpoch) {
+            // Check for Add Existing Subject scanning mode first
+            var addExistingScanParam = getQueryParam("addexistingscan");
+            var addExistingScanMode = null;
+            try {
+                addExistingScanMode = localStorage.getItem(STORAGE_ADD_EXISTING_SUBJECT_MODE);
+            } catch (e) {}
+            if (addExistingScanMode === "scanning" && addExistingScanParam === "1") {
+                processEpochShowPageForAddExistingScan();
+                return;
+            }
+
             var imode = getRunMode();
             if (imode === "epochImport") {
                 processEpochShowPageForImport();
@@ -8070,19 +9646,45 @@
                 processEpochShowPageForAddCohort();
                 return;
             }
+            var addExistingMode = null;
+            try {
+                addExistingMode = localStorage.getItem(STORAGE_ADD_EXISTING_SUBJECT_MODE);
+            } catch (e) {}
+            if (addExistingMode === "addSubject") {
+                processEpochShowPageForAddExistingSubject();
+                return;
+            }
             processEpochShowPage();
             return;
         }
 
         var onCohort = isCohortShowPage();
         if (onCohort) {
+            // Check for Add Existing Subject scanning mode first
+            var cohortScanParam = getQueryParam("addexistingscan");
+            var cohortScanMode = null;
+            try {
+                cohortScanMode = localStorage.getItem(STORAGE_ADD_EXISTING_SUBJECT_MODE);
+            } catch (e) {}
+            if (cohortScanMode === "scanning" && cohortScanParam === "1") {
+                processCohortShowPageForAddExistingScan();
+                return;
+            }
+
             var amode = getRunMode();
             var autoImport = getQueryParam("autocohortimport");
             var autoAdd = getQueryParam("autocohortadd");
+            var autoAddExisting = getQueryParam("autoaddexistingcohort");
+            var addExistingMode2 = null;
+            try {
+                addExistingMode2 = localStorage.getItem(STORAGE_ADD_EXISTING_SUBJECT_MODE);
+            } catch (e) {}
             if (amode === "epochImport" || autoImport === "1") {
                 processCohortShowPageImportNonScrn();
             } else if (amode === "epochAddCohort" || autoAdd === "1") {
                 processCohortShowPageAddCohort();
+            } else if (addExistingMode2 === "addSubject" && autoAddExisting === "1") {
+                processCohortShowPageForAddExistingSubject();
             } else {
                 processCohortShowPage();
             }

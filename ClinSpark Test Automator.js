@@ -109,11 +109,6 @@
     var BARCODE_BG_TAB = null;
     const RUNMODE_CLEAR_MAPPING = "clearMapping";
 
-    var STORAGE_FIND_FORM_PENDING = "activityPlanState.findForm.pending";
-    var STORAGE_FIND_FORM_KEYWORD = "activityPlanState.findForm.keyword";
-    var STORAGE_FIND_FORM_SUBJECT = "activityPlanState.findForm.subject";
-    var STORAGE_FIND_FORM_STATUS_VALUES = "activityPlanState.findForm.statusValues";
-
     // Run Parse Method
     var STORAGE_PARSE_METHOD_RUNNING = "activityPlanState.parseMethod.running";
     var STORAGE_PARSE_METHOD_ITEM_NAME = "activityPlanState.parseMethod.itemName";
@@ -785,18 +780,6 @@
             log("Panel hidden state set to " + String(flag));
         } catch (e) {
         }
-    }
-
-    function getPanelHidden() {
-        var raw = null;
-        try {
-            raw = localStorage.getItem(STORAGE_PANEL_HIDDEN);
-        } catch (e) {
-        }
-        if (raw === "1") {
-            return true;
-        }
-        return false;
     }
 
     function togglePanelHiddenViaHotkey() {
