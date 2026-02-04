@@ -2,8 +2,8 @@
 // ==UserScript==
 // @name        ClinSpark PI Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.1.
-// @description Retain only Barcode feature; production environment only
+// @version     1.1.0
+// @description Automator for ClinSpark PI
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20PI%20Automator.js
 // @downloadURL  https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20PI%20Automator.js
@@ -98,7 +98,7 @@
 
 
     const STORAGE_PANEL_HIDDEN = "activityPlanState.panel.hidden";
-    const PANEL_TOGGLE_KEY = "F2";
+    const PANEL_TOGGLE_KEY = "`";
     const RUNMODE_CLEAR_MAPPING = "clearMapping";
 
     const ELIGIBILITY_LIST_URL = "https://cenexel.clinspark.com/secure/crfdesign/studylibrary/eligibility/list";
@@ -214,29 +214,6 @@
                 GM.xmlHttpRequest({
                     method: "GET",
                     url: url,
-                    onload: function(response) {
-                        resolve(response.responseText);
-                    },
-                    onerror: function(error) {
-                        reject(error);
-                    }
-                });
-            } else {
-                reject(new Error("GM.xmlHttpRequest not available"));
-            }
-        });
-    }
-
-    function submitForm(url, formData) {
-        return new Promise(function(resolve, reject) {
-            if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") {
-                GM.xmlHttpRequest({
-                    method: "POST",
-                    url: url,
-                    headers: {
-                        "Content-Type": "application/x-www-form-urlencoded"
-                    },
-                    data: formData,
                     onload: function(response) {
                         resolve(response.responseText);
                     },
@@ -1215,6 +1192,14 @@
             });
         }
     }
+
+    //==========================
+    // FIND FORM FEATURE
+    //==========================
+    // This section contains all functions related to finding forms.
+    // This feature automates pull any subject identifier found on page,
+    // request user for form keyword, and then search for form based on the keyword.
+    //==========================
 
     function applyPanelHiddenState(panel) {
         if (!panel) {

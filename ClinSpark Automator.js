@@ -2,8 +2,8 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.5.4
-// @description Retain only Barcode feature; production environment only
+// @version     1.6.0
+// @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
 // @downloadURL  https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -118,6 +118,996 @@
     var PARSE_METHOD_COLLECTED_METHODS = [];
     var PARSE_METHOD_COLLECTED_FORMS = [];
 
+        // Cohort Eligibility Feature
+    var STORAGE_COHORT_ELIG_DATA = "activityPlanState.cohortElig.data";
+    var STORAGE_COHORT_ELIG_RUNNING = "activityPlanState.cohortElig.running";
+    var STORAGE_COHORT_ELIG_AUTO_TAB = "activityPlanState.cohortElig.autoTab";
+    var COHORT_ELIG_STUDY_SHOW_URL = "https://cenexel.clinspark.com/secure/administration/studies/show";
+    var COHORT_ELIG_SUBJECTS_LIST_URL = "https://cenexel.clinspark.com/secure/study/subjects/list";
+    var COHORT_ELIG_CANCELED = false;
+    var COHORT_ELIG_POPUP = null;
+    var COHORT_ELIG_POPUP_CONTENT = null;
+    var COHORT_ELIG_LOG_CONTAINER = null;
+
+    // Subject Eligibility Feature
+    var STORAGE_SUBJECT_ELIG_PENDING = "activityPlanState.subjectElig.pending";
+    var STORAGE_SUBJECT_ELIG_IDENTIFIER = "activityPlanState.subjectElig.identifier";
+    var STORAGE_SUBJECT_ELIG_AUTO_TAB = "activityPlanState.subjectElig.autoTab";
+    var SUBJECT_ELIG_SUBJECTS_LIST_URL = "https://cenexel.clinspark.com/secure/study/subjects/list";
+    var SUBJECT_ELIG_POPUP = null;
+
+        //==========================
+    // BACKGROUND HTTP REQUEST HELPERS
+    //==========================
+    // Helper functions for making background HTTP requests without opening tabs
+    //==========================
+
+    function fetchPage(url) {
+        return new Promise(function(resolve, reject) {
+            if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") {
+                GM.xmlHttpRequest({
+                    method: "GET",
+                    url: url,
+                    onload: function(response) {
+                        resolve(response.responseText);
+                    },
+                    onerror: function(error) {
+                        reject(error);
+                    }
+                });
+            } else {
+                reject(new Error("GM.xmlHttpRequest not available"));
+            }
+        });
+    }
+
+    function parseHtml(htmlString) {
+        var parser = new DOMParser();
+        return parser.parseFromString(htmlString, "text/html");
+    }
+
+    function containsNumber(str) {
+        return /\d/.test(str);
+    }
+
+    //==========================
+    // OPEN ELIGIBILITY FEATURE
+    //==========================
+
+    function cohortEligLog(msg) {
+        var ts = new Date().toISOString().substring(11, 19);
+        var line = "[" + ts + "] " + String(msg);
+        console.log("[OpenElig] " + line);
+        log("CohortElig: " + msg);
+        if (COHORT_ELIG_LOG_CONTAINER) {
+            var p = document.createElement("div");
+            p.style.fontSize = "12px";
+            p.style.color = "#aaa";
+            p.style.marginBottom = "4px";
+            p.textContent = line;
+            COHORT_ELIG_LOG_CONTAINER.appendChild(p);
+            COHORT_ELIG_LOG_CONTAINER.scrollTop = COHORT_ELIG_LOG_CONTAINER.scrollHeight;
+        }
+    }
+
+    function clearCohortEligData() {
+        COHORT_ELIG_CANCELED = true;
+        try { localStorage.removeItem(STORAGE_COHORT_ELIG_DATA); } catch (e) {}
+        try { localStorage.removeItem(STORAGE_COHORT_ELIG_RUNNING); } catch (e) {}
+        try { localStorage.removeItem(STORAGE_COHORT_ELIG_AUTO_TAB); } catch (e) {}
+        log("CohortElig: All Cohort Eligibility data cleared");
+        cohortEligLog("All Cohort Eligibility data cleared");
+    }
+
+    function createCohortEligSpinner() {
+        var spinner = document.createElement("div");
+        spinner.style.display = "inline-block";
+        spinner.style.width = "20px";
+        spinner.style.height = "20px";
+        spinner.style.border = "3px solid #333";
+        spinner.style.borderTop = "3px solid #4a90e2";
+        spinner.style.borderRadius = "50%";
+        spinner.style.animation = "openEligSpin 1s linear infinite";
+        if (!document.getElementById("openEligSpinStyle")) {
+            var style = document.createElement("style");
+            style.id = "openEligSpinStyle";
+            style.textContent = "@keyframes openEligSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }";
+            document.head.appendChild(style);
+        }
+        return spinner;
+    }
+
+    function cohortEligibilityFeature() {
+        log("CohortElig: Starting Cohort Eligibility feature");
+        cohortEligLog("Cohort Eligibility: starting");
+        COHORT_ELIG_CANCELED = false;
+
+        var container = document.createElement("div");
+        container.style.display = "flex";
+        container.style.flexDirection = "column";
+        container.style.gap = "12px";
+        container.style.minHeight = "300px";
+
+        var statusRow = document.createElement("div");
+        statusRow.style.display = "flex";
+        statusRow.style.alignItems = "center";
+        statusRow.style.justifyContent = "space-between";
+        statusRow.style.padding = "10px";
+        statusRow.style.background = "#1a1a1a";
+        statusRow.style.borderRadius = "6px";
+
+        var spinner = createCohortEligSpinner();
+        statusRow.appendChild(spinner);
+
+        var statusText = document.createElement("span");
+        statusText.textContent = "Loading epochs and cohorts...";
+        statusText.style.color = "#fff";
+        statusRow.appendChild(statusText);
+        container.appendChild(statusRow);
+
+        var listContainer = document.createElement("div");
+        listContainer.style.flex = "1";
+        listContainer.style.overflowY = "auto";
+        listContainer.style.maxHeight = "400px";
+        container.appendChild(listContainer);
+        COHORT_ELIG_POPUP_CONTENT = listContainer;
+
+        var logContainer = document.createElement("div");
+        logContainer.style.background = "#0a0a0a";
+        logContainer.style.border = "1px solid #333";
+        logContainer.style.borderRadius = "6px";
+        logContainer.style.padding = "8px";
+        logContainer.style.maxHeight = "150px";
+        logContainer.style.overflowY = "auto";
+        logContainer.style.fontSize = "11px";
+        container.appendChild(logContainer);
+        COHORT_ELIG_LOG_CONTAINER = logContainer;
+
+        var popup = createPopup({
+            title: "Cohort Eligibility",
+            content: container,
+            width: "600px",
+            height: "auto",
+            maxHeight: "80vh",
+            onClose: function() {
+                cohortEligLog("Popup closed by user - clearing all data");
+                clearCohortEligData();
+            }
+        });
+        COHORT_ELIG_POPUP = popup;
+
+        fetchEpochsAndCohorts(statusRow, statusText, spinner, listContainer);
+    }
+
+    async function fetchEpochsAndCohorts(statusRow, statusText, spinner, listContainer) {
+        cohortEligLog("Fetching study show page...");
+
+        try {
+            var html = await fetchPage(COHORT_ELIG_STUDY_SHOW_URL);
+            if (COHORT_ELIG_CANCELED) { cohortEligLog("Canceled"); return; }
+
+            var doc = parseHtml(html);
+            var epochTbody = doc.getElementById("epochTableBody");
+            if (!epochTbody) {
+                cohortEligLog("ERROR: Could not find epochTableBody");
+                statusText.textContent = "Error: Could not find epochs";
+                spinner.style.display = "none";
+                return;
+            }
+
+            var epochRows = epochTbody.querySelectorAll("tr[id^='ir_']");
+            cohortEligLog("Found " + epochRows.length + " epochs");
+
+            var epochs = [];
+            for (var i = 0; i < epochRows.length; i++) {
+                var row = epochRows[i];
+                var link = row.querySelector("a[href*='/epoch/show/']");
+                if (link) {
+                    var epochName = (link.textContent || "").trim();
+                    var epochHref = link.getAttribute("href") || "";
+                    epochs.push({ name: epochName, href: epochHref, cohorts: [] });
+                    cohortEligLog("Epoch: " + epochName);
+                }
+            }
+
+            statusText.textContent = "Fetching cohorts for " + epochs.length + " epochs...";
+
+            for (var ei = 0; ei < epochs.length; ei++) {
+                if (COHORT_ELIG_CANCELED) { cohortEligLog("Canceled"); return; }
+
+                var epoch = epochs[ei];
+                var epochUrl = "https://cenexel.clinspark.com" + epoch.href;
+                cohortEligLog("Fetching cohorts for: " + epoch.name);
+
+                try {
+                    var epochHtml = await fetchPage(epochUrl);
+                    var epochDoc = parseHtml(epochHtml);
+                    var cohortTbody = epochDoc.getElementById("cohortListBody");
+
+                    if (cohortTbody) {
+                        var cohortRows = cohortTbody.querySelectorAll("tr[id^='ir_']");
+                        for (var ci = 0; ci < cohortRows.length; ci++) {
+                            var cohortRow = cohortRows[ci];
+                            var cohortLink = cohortRow.querySelector("a[href*='/cohort/show/']");
+                            if (cohortLink) {
+                                var cohortName = (cohortLink.textContent || "").trim();
+                                var cohortHref = cohortLink.getAttribute("href") || "";
+                                epoch.cohorts.push({ name: cohortName, href: cohortHref });
+                                cohortEligLog("  Cohort: " + cohortName);
+                            }
+                        }
+                    }
+                } catch (err) {
+                    cohortEligLog("  Error: " + String(err));
+                }
+            }
+
+            spinner.style.display = "none";
+            statusText.textContent = "Select a cohort to open eligibility:";
+            renderEpochCohortList(listContainer, epochs);
+
+        } catch (err) {
+            cohortEligLog("ERROR: " + String(err));
+            statusText.textContent = "Error loading data";
+            spinner.style.display = "none";
+        }
+    }
+
+    function renderEpochCohortList(container, epochs) {
+        container.innerHTML = "";
+
+        for (var i = 0; i < epochs.length; i++) {
+            var epoch = epochs[i];
+            var epochDiv = document.createElement("div");
+            epochDiv.style.marginBottom = "12px";
+
+            var epochHeader = document.createElement("div");
+            epochHeader.style.fontWeight = "600";
+            epochHeader.style.fontSize = "14px";
+            epochHeader.style.color = "#4a90e2";
+            epochHeader.style.padding = "8px";
+            epochHeader.style.background = "#1a1a1a";
+            epochHeader.style.borderRadius = "4px";
+            epochHeader.style.marginBottom = "4px";
+            epochHeader.textContent = epoch.name;
+            epochDiv.appendChild(epochHeader);
+
+            if (epoch.cohorts.length === 0) {
+                var noCohorts = document.createElement("div");
+                noCohorts.style.color = "#666";
+                noCohorts.style.fontSize = "12px";
+                noCohorts.style.paddingLeft = "16px";
+                noCohorts.textContent = "No cohorts found";
+                epochDiv.appendChild(noCohorts);
+            } else {
+                for (var ci = 0; ci < epoch.cohorts.length; ci++) {
+                    var cohort = epoch.cohorts[ci];
+                    var cohortRow = document.createElement("div");
+                    cohortRow.style.display = "flex";
+                    cohortRow.style.alignItems = "center";
+                    cohortRow.style.justifyContent = "space-between";
+                    cohortRow.style.padding = "6px 8px 6px 24px";
+                    cohortRow.style.borderBottom = "1px solid #333";
+
+                    var cohortName = document.createElement("span");
+                    cohortName.style.color = "#ccc";
+                    cohortName.style.fontSize = "13px";
+                    cohortName.textContent = cohort.name;
+                    cohortRow.appendChild(cohortName);
+
+                    var confirmBtn = document.createElement("button");
+                    confirmBtn.textContent = "Confirm";
+                    confirmBtn.style.background = "#28a745";
+                    confirmBtn.style.color = "#fff";
+                    confirmBtn.style.border = "none";
+                    confirmBtn.style.borderRadius = "4px";
+                    confirmBtn.style.padding = "4px 12px";
+                    confirmBtn.style.cursor = "pointer";
+                    confirmBtn.style.fontSize = "12px";
+
+                    (function(cohortData, epochName, btn) {
+                        btn.addEventListener("click", function() {
+                            onCohortConfirm(cohortData, epochName);
+                        });
+                    })(cohort, epoch.name, confirmBtn);
+
+                    cohortRow.appendChild(confirmBtn);
+                    epochDiv.appendChild(cohortRow);
+                }
+            }
+            container.appendChild(epochDiv);
+        }
+    }
+
+    function onCohortConfirm(cohort, epochName) {
+        log("CohortElig: Confirmed cohort: " + cohort.name + " in " + epochName);
+
+        var stateData = {
+            phase: "collectInitials",
+            cohortName: cohort.name,
+            cohortHref: cohort.href,
+            epochName: epochName,
+            initials: []
+        };
+
+        try {
+            localStorage.setItem(STORAGE_COHORT_ELIG_RUNNING, "1");
+            localStorage.setItem(STORAGE_COHORT_ELIG_DATA, JSON.stringify(stateData));
+        } catch (e) {
+            log("CohortElig: Error saving state: " + String(e));
+        }
+
+        var cohortUrl = "https://cenexel.clinspark.com" + cohort.href;
+        log("CohortElig: Navigating to cohort page: " + cohortUrl);
+        location.href = cohortUrl;
+    }
+
+    function processCohortEligOnCohortPage() {
+        log("CohortElig: On cohort page, collecting assignments...");
+
+        var stateRaw = null;
+        try {
+            stateRaw = localStorage.getItem(STORAGE_COHORT_ELIG_DATA);
+        } catch (e) {}
+
+        if (!stateRaw) {
+            log("CohortElig: No state data found");
+            return;
+        }
+
+        var state = null;
+        try {
+            state = JSON.parse(stateRaw);
+        } catch (e) {
+            log("CohortElig: Error parsing state: " + String(e));
+            return;
+        }
+
+        var assignmentTbody = document.getElementById("cohortAssignmentListBody");
+        if (!assignmentTbody) {
+            log("CohortElig: cohortAssignmentListBody not found, waiting...");
+            setTimeout(processCohortEligOnCohortPage, 1000);
+            return;
+        }
+
+        var assignmentRows = assignmentTbody.querySelectorAll("tr.cohortAssignmentRow");
+        log("CohortElig: Found " + assignmentRows.length + " cohort assignments");
+
+        var initialsSet = [];
+        for (var i = 0; i < assignmentRows.length; i++) {
+            var row = assignmentRows[i];
+            var volunteerCell = row.querySelector("td a[href*='/volunteers/manage/show/']");
+            if (volunteerCell) {
+                var volunteerText = (volunteerCell.textContent || "").trim();
+                var parts = volunteerText.split(",");
+                if (parts.length > 0) {
+                    var initials = parts[0].trim();
+                    if (initials && initialsSet.indexOf(initials) === -1) {
+                        initialsSet.push(initials);
+                        log("CohortElig: Collected initials: " + initials);
+                    }
+                }
+            }
+        }
+
+        log("CohortElig: Total unique initials: " + initialsSet.length);
+
+        state.phase = "crossReference";
+        state.initials = initialsSet;
+
+        try {
+            localStorage.setItem(STORAGE_COHORT_ELIG_DATA, JSON.stringify(state));
+        } catch (e) {}
+
+        log("CohortElig: Navigating to subjects list...");
+        location.href = COHORT_ELIG_SUBJECTS_LIST_URL;
+    }
+
+    function processCohortEligOnSubjectsList() {
+        log("CohortElig: On subjects list, cross-referencing...");
+
+        var stateRaw = null;
+        try {
+            stateRaw = localStorage.getItem(STORAGE_COHORT_ELIG_DATA);
+        } catch (e) {}
+
+        if (!stateRaw) {
+            log("CohortElig: No state data found");
+            return;
+        }
+
+        var state = null;
+        try {
+            state = JSON.parse(stateRaw);
+        } catch (e) {
+            log("CohortElig: Error parsing state: " + String(e));
+            return;
+        }
+
+        var initialsSet = state.initials || [];
+        if (initialsSet.length === 0) {
+            log("CohortElig: No initials to search for");
+            showCohortEligResultPopup([], state.cohortName);
+            return;
+        }
+
+        var subjectTbody = document.getElementById("subjectTableBody");
+        if (!subjectTbody) {
+            log("CohortElig: subjectTableBody not found, waiting...");
+            setTimeout(processCohortEligOnSubjectsList, 1000);
+            return;
+        }
+
+        var subjectRows = subjectTbody.querySelectorAll("tr");
+        log("CohortElig: Found " + subjectRows.length + " subject rows");
+
+        var matchedSubjects = [];
+
+        for (var i = 0; i < subjectRows.length; i++) {
+            var row = subjectRows[i];
+            var tds = row.querySelectorAll("td");
+
+            if (tds.length >= 7) {
+                var secondTd = tds[1];
+                var volunteerLink = secondTd.querySelector("a[href*='/volunteers/manage/show/']");
+
+                if (volunteerLink) {
+                    var volunteerText = (volunteerLink.textContent || "").trim();
+
+                    for (var j = 0; j < initialsSet.length; j++) {
+                        var searchInitials = initialsSet[j];
+                        if (volunteerText.indexOf(searchInitials) !== -1) {
+                            log("CohortElig: MATCH found: " + searchInitials + " in " + volunteerText);
+
+                            var showLink = null;
+                            var href = "";
+                            
+                            // Search through all columns for the Show link
+                            for (var tdIdx = 0; tdIdx < tds.length; tdIdx++) {
+                                var td = tds[tdIdx];
+                                var link = td.querySelector("a[href*='/subjects/show/']");
+                                if (link) {
+                                    showLink = link;
+                                    href = link.getAttribute("href") || "";
+                                    log("CohortElig: Found Show link in column " + tdIdx + ": " + href);
+                                    break;
+                                }
+                            }
+
+                            if (showLink && href) {
+                                var fullUrl = href;
+                                if (href.indexOf("https://") !== 0) {
+                                    fullUrl = "https://cenexel.clinspark.com" + href;
+                                }
+                                matchedSubjects.push({ initials: searchInitials, url: fullUrl, volunteerText: volunteerText });
+                                log("CohortElig: Subject URL: " + fullUrl);
+                            } else {
+                                log("CohortElig: ERROR - Could not find Show link for " + searchInitials + " (row has " + tds.length + " columns)");
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        log("CohortElig: Total matched subjects: " + matchedSubjects.length);
+        showCohortEligResultPopup(matchedSubjects, state.cohortName);
+    }
+
+    function showCohortEligResultPopup(matchedSubjects, cohortName) {
+        var container = document.createElement("div");
+        container.style.display = "flex";
+        container.style.flexDirection = "column";
+        container.style.gap = "12px";
+
+        var headerDiv = document.createElement("div");
+        headerDiv.style.padding = "10px";
+        headerDiv.style.background = "#1a1a1a";
+        headerDiv.style.borderRadius = "6px";
+        headerDiv.style.color = "#4a90e2";
+        headerDiv.style.fontWeight = "600";
+        headerDiv.textContent = "Cohort: " + (cohortName || "Unknown");
+        container.appendChild(headerDiv);
+
+        if (matchedSubjects.length === 0) {
+            var noMatch = document.createElement("div");
+            noMatch.style.padding = "20px";
+            noMatch.style.color = "#f90";
+            noMatch.textContent = "No matching subjects found in the subjects list.";
+            container.appendChild(noMatch);
+        } else {
+            var statusDiv = document.createElement("div");
+            statusDiv.style.padding = "12px";
+            statusDiv.style.color = "#4a4";
+            statusDiv.textContent = "Found " + matchedSubjects.length + " matching subjects. Opening tabs...";
+            container.appendChild(statusDiv);
+
+            var listDiv = document.createElement("div");
+            listDiv.style.maxHeight = "300px";
+            listDiv.style.overflowY = "auto";
+            listDiv.style.fontSize = "12px";
+            listDiv.style.color = "#ccc";
+
+            for (var m = 0; m < matchedSubjects.length; m++) {
+                var subj = matchedSubjects[m];
+                var itemDiv = document.createElement("div");
+                itemDiv.style.padding = "6px 8px";
+                itemDiv.style.borderBottom = "1px solid #333";
+                itemDiv.textContent = (m + 1) + ". " + subj.initials + " - " + subj.volunteerText;
+                listDiv.appendChild(itemDiv);
+            }
+            container.appendChild(listDiv);
+        }
+
+        var popup = createPopup({
+            title: "Cohort Eligibility - Results",
+            content: container,
+            width: "500px",
+            height: "auto",
+            onClose: function() {
+                log("CohortElig: Results popup closed, clearing state");
+                clearCohortEligData();
+            }
+        });
+
+        if (matchedSubjects.length > 0) {
+            openCohortMatchedSubjectTabs(matchedSubjects, container);
+        } else {
+            clearCohortEligData();
+        }
+    }
+
+    async function openCohortMatchedSubjectTabs(matchedSubjects, container) {
+        log("CohortElig: Setting auto-tab flag for " + matchedSubjects.length + " subjects");
+        try {
+            localStorage.setItem(STORAGE_COHORT_ELIG_AUTO_TAB, "1");
+        } catch (e) {
+            log("CohortElig: Error setting auto-tab flag: " + String(e));
+        }
+
+        for (var k = 0; k < matchedSubjects.length; k++) {
+            var subject = matchedSubjects[k];
+            log("CohortElig: Opening tab for: " + subject.initials + " -> " + subject.url);
+
+            try {
+                if (typeof GM !== "undefined" && typeof GM.openInTab === "function") {
+                    var url = subject.url;
+                    if (url.indexOf("https://") !== 0) {
+                        url = "https://cenexel.clinspark.com" + url;
+                    }
+                    GM.openInTab(url, { active: false });
+                } else if (typeof GM_openInTab === "function") {
+                    var url = subject.url;
+                    if (url.indexOf("https://") !== 0) {
+                        url = "https://cenexel.clinspark.com" + url;
+                    }
+                    GM_openInTab(url, { active: false });
+                } else {
+                    var url = subject.url;
+                    if (url.indexOf("https://") !== 0) {
+                        url = "https://cenexel.clinspark.com" + url;
+                    }
+                    window.open(url, "_blank");
+                }
+            } catch (err) {
+                log("CohortElig: Error opening tab, using window.open: " + String(err));
+                var url = subject.url;
+                if (url.indexOf("https://") !== 0) {
+                    url = "https://cenexel.clinspark.com" + url;
+                }
+                window.open(url, "_blank");
+            }
+
+            await new Promise(function(resolve) { setTimeout(resolve, 300); });
+        }
+
+        log("CohortElig: Completed! Opened " + matchedSubjects.length + " tabs");
+
+        var completeDiv = document.createElement("div");
+        completeDiv.style.padding = "12px";
+        completeDiv.style.color = "#4a4";
+        completeDiv.style.fontWeight = "600";
+        completeDiv.style.marginTop = "10px";
+        completeDiv.textContent = "✓ Complete! " + matchedSubjects.length + " tabs opened.";
+        container.appendChild(completeDiv);
+
+        // Clear other data but keep auto-tab flag
+        try {
+            localStorage.removeItem(STORAGE_COHORT_ELIG_RUNNING);
+            localStorage.removeItem(STORAGE_COHORT_ELIG_DATA);
+        } catch (e) {}
+        log("CohortElig: Cohort Eligibility data cleared (auto-tab flag preserved for child tabs)");
+        
+        // Clear auto-tab flag after a delay to allow all tabs to load and navigate
+        setTimeout(function() {
+            try {
+                localStorage.removeItem(STORAGE_COHORT_ELIG_AUTO_TAB);
+                log("CohortElig: Auto-tab flag cleared after delay");
+            } catch (e) {}
+        }, 15000);
+    }
+
+    function isCohortEligRunning() {
+        var running = null;
+        try {
+            running = localStorage.getItem(STORAGE_COHORT_ELIG_RUNNING);
+        } catch (e) {}
+        return running === "1";
+    }
+
+    function getCohortEligPhase() {
+        var stateRaw = null;
+        try {
+            stateRaw = localStorage.getItem(STORAGE_COHORT_ELIG_DATA);
+        } catch (e) {}
+        if (!stateRaw) return null;
+        try {
+            var state = JSON.parse(stateRaw);
+            return state.phase;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function isCohortShowPage() {
+        return location.pathname.indexOf("/cohort/show/") !== -1;
+    }
+
+    function isSubjectsListPage() {
+        return location.pathname === "/secure/study/subjects/list";
+    }
+
+    function isSubjectEligPending() {
+        var pending = null;
+        try {
+            pending = localStorage.getItem(STORAGE_SUBJECT_ELIG_PENDING);
+        } catch (e) {}
+        return pending === "1";
+    }
+
+    //==========================
+    // SUBJECT ELIGIBILITY FEATURE IMPLEMENTATION
+    //==========================
+
+    function subjectEligibilityFeature() {
+        log("SubjectElig: Starting Subject Eligibility feature");
+        
+        var info = getSubjectIdentifierForAE();
+        var scannedId = info.raw || "";
+        
+        if (scannedId && !containsNumber(scannedId)) {
+            log("SubjectElig: Scanned identifier '" + scannedId + "' excluded (no number)");
+            scannedId = "";
+        }
+        
+        showSubjectEligInputPopup(scannedId, function(userInput) {
+            if (!userInput) {
+                log("SubjectElig: Canceled by user");
+                return;
+            }
+            
+            try {
+                localStorage.setItem(STORAGE_SUBJECT_ELIG_PENDING, "1");
+                localStorage.setItem(STORAGE_SUBJECT_ELIG_IDENTIFIER, userInput);
+                localStorage.setItem(STORAGE_SUBJECT_ELIG_AUTO_TAB, "1");
+            } catch (e) {
+                log("SubjectElig: Error saving state: " + String(e));
+            }
+            
+            showSubjectEligSpinnerPopup(userInput);
+            
+            log("SubjectElig: Navigating to subjects list with identifier: " + userInput);
+            setTimeout(function() {
+                location.href = SUBJECT_ELIG_SUBJECTS_LIST_URL;
+            }, 100);
+        });
+    }
+    
+    function showSubjectEligSpinnerPopup(identifier) {
+        log("SubjectElig: Showing spinner popup");
+        
+        var container = document.createElement("div");
+        container.style.display = "flex";
+        container.style.flexDirection = "column";
+        container.style.alignItems = "center";
+        container.style.gap = "16px";
+        container.style.padding = "20px";
+        
+        var spinner = document.createElement("div");
+        spinner.style.width = "40px";
+        spinner.style.height = "40px";
+        spinner.style.border = "4px solid #333";
+        spinner.style.borderTop = "4px solid #28a745";
+        spinner.style.borderRadius = "50%";
+        spinner.style.animation = "spin 1s linear infinite";
+        
+        var style = document.createElement("style");
+        style.textContent = "@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }";
+        document.head.appendChild(style);
+        
+        var statusText = document.createElement("div");
+        statusText.style.color = "#fff";
+        statusText.style.fontSize = "14px";
+        statusText.style.textAlign = "center";
+        statusText.textContent = "Searching for subject: " + identifier;
+        
+        container.appendChild(spinner);
+        container.appendChild(statusText);
+        
+        var popup = createPopup({
+            title: "Subject Eligibility - Processing",
+            content: container,
+            width: "350px",
+            height: "auto",
+            onClose: function() {
+                log("SubjectElig: Spinner popup closed by user, clearing data");
+                clearSubjectEligData();
+            }
+        });
+        
+        SUBJECT_ELIG_POPUP = popup;
+    }
+    
+    function clearSubjectEligData() {
+        try {
+            localStorage.removeItem(STORAGE_SUBJECT_ELIG_PENDING);
+            localStorage.removeItem(STORAGE_SUBJECT_ELIG_IDENTIFIER);
+            localStorage.removeItem(STORAGE_SUBJECT_ELIG_AUTO_TAB);
+        } catch (e) {}
+        log("SubjectElig: All Subject Eligibility data cleared");
+    }
+
+    function showSubjectEligInputPopup(prefill, onDone) {
+        log("SubjectElig: Showing input popup");
+        
+        var container = document.createElement("div");
+        container.style.display = "flex";
+        container.style.flexDirection = "column";
+        container.style.gap = "12px";
+        container.style.padding = "10px";
+        
+        var fieldRow = document.createElement("div");
+        fieldRow.style.display = "grid";
+        fieldRow.style.gridTemplateColumns = "140px 1fr";
+        fieldRow.style.alignItems = "center";
+        fieldRow.style.gap = "8px";
+        
+        var label = document.createElement("div");
+        label.textContent = "Subject Identifier";
+        label.style.fontWeight = "600";
+        label.style.color = "#fff";
+        
+        var input = document.createElement("input");
+        input.type = "text";
+        input.placeholder = "e.g., 101-001, S-101-001, L-101-001";
+        input.value = prefill || "";
+        input.style.width = "100%";
+        input.style.boxSizing = "border-box";
+        input.style.padding = "8px";
+        input.style.borderRadius = "6px";
+        input.style.border = "1px solid #444";
+        input.style.background = "#1a1a1a";
+        input.style.color = "#fff";
+        
+        fieldRow.appendChild(label);
+        fieldRow.appendChild(input);
+        container.appendChild(fieldRow);
+        
+        var btnRow = document.createElement("div");
+        btnRow.style.display = "inline-flex";
+        btnRow.style.justifyContent = "flex-end";
+        btnRow.style.gap = "8px";
+        btnRow.style.marginTop = "10px";
+        
+        var clearIdBtn = document.createElement("button");
+        clearIdBtn.textContent = "Clear ID";
+        clearIdBtn.style.background = "#6c757d";
+        clearIdBtn.style.color = "#fff";
+        clearIdBtn.style.border = "none";
+        clearIdBtn.style.borderRadius = "6px";
+        clearIdBtn.style.padding = "8px 16px";
+        clearIdBtn.style.cursor = "pointer";
+        
+        var cancelBtn = document.createElement("button");
+        cancelBtn.textContent = "Cancel";
+        cancelBtn.style.background = "#333";
+        cancelBtn.style.color = "#fff";
+        cancelBtn.style.border = "none";
+        cancelBtn.style.borderRadius = "6px";
+        cancelBtn.style.padding = "8px 16px";
+        cancelBtn.style.cursor = "pointer";
+        
+        var confirmBtn = document.createElement("button");
+        confirmBtn.textContent = "Confirm";
+        confirmBtn.style.background = "#28a745";
+        confirmBtn.style.color = "#fff";
+        confirmBtn.style.border = "none";
+        confirmBtn.style.borderRadius = "6px";
+        confirmBtn.style.padding = "8px 16px";
+        confirmBtn.style.cursor = "pointer";
+        
+        btnRow.appendChild(clearIdBtn);
+        btnRow.appendChild(cancelBtn);
+        btnRow.appendChild(confirmBtn);
+        container.appendChild(btnRow);
+        
+        var popup = createPopup({
+            title: "Subject Eligibility",
+            content: container,
+            width: "450px",
+            height: "auto"
+        });
+        
+        SUBJECT_ELIG_POPUP = popup;
+        
+        setTimeout(function() {
+            input.focus();
+            input.select();
+        }, 50);
+        
+        function doConfirm() {
+            var value = input.value.trim();
+            if (!value) {
+                log("SubjectElig: Empty input");
+                return;
+            }
+            
+            if (!containsNumber(value)) {
+                log("SubjectElig: Identifier must contain a number");
+                input.style.borderColor = "#f90";
+                return;
+            }
+            
+            if (popup && popup.close) {
+                popup.close();
+            }
+            
+            if (typeof onDone === "function") {
+                onDone(value);
+            }
+        }
+        
+        clearIdBtn.addEventListener("click", function() {
+            input.value = "";
+            input.style.borderColor = "#444";
+            input.focus();
+        });
+        
+        confirmBtn.addEventListener("click", doConfirm);
+        
+        cancelBtn.addEventListener("click", function() {
+            if (popup && popup.close) {
+                popup.close();
+            }
+            if (typeof onDone === "function") {
+                onDone(null);
+            }
+        });
+        
+        input.addEventListener("keydown", function(e) {
+            if (e.key === "Enter") {
+                doConfirm();
+                e.preventDefault();
+            } else if (e.key === "Escape") {
+                if (popup && popup.close) {
+                    popup.close();
+                }
+                if (typeof onDone === "function") {
+                    onDone(null);
+                }
+                e.preventDefault();
+            }
+        });
+    }
+
+    function processSubjectEligOnSubjectsList() {
+        log("SubjectElig: On subjects list, searching for identifier...");
+        
+        var identifier = null;
+        try {
+            identifier = localStorage.getItem(STORAGE_SUBJECT_ELIG_IDENTIFIER);
+        } catch (e) {}
+        
+        if (!identifier) {
+            log("SubjectElig: No identifier found in storage");
+            return;
+        }
+        
+        var subjectTbody = document.getElementById("subjectTableBody");
+        if (!subjectTbody) {
+            log("SubjectElig: subjectTableBody not found, waiting...");
+            setTimeout(processSubjectEligOnSubjectsList, 1000);
+            return;
+        }
+        
+        var subjectRows = subjectTbody.querySelectorAll("tr");
+        log("SubjectElig: Found " + subjectRows.length + " subject rows");
+        
+        // Split identifier by " / " to get individual identifiers
+        var identifierParts = identifier.split(" / ");
+        log("SubjectElig: Split identifier into " + identifierParts.length + " parts: " + JSON.stringify(identifierParts));
+        
+        var matchedUrl = null;
+        
+        for (var i = 0; i < subjectRows.length; i++) {
+            var row = subjectRows[i];
+            var tds = row.querySelectorAll("td");
+            
+            if (tds.length > 0) {
+                for (var tdIdx = 0; tdIdx < tds.length; tdIdx++) {
+                    var td = tds[tdIdx];
+                    var divs = td.querySelectorAll("div.vertSepNoBorder, div.vertSep");
+                    
+                    for (var divIdx = 0; divIdx < divs.length; divIdx++) {
+                        var div = divs[divIdx];
+                        var text = (div.textContent || "").trim();
+                        // Extract just the identifier value (after the label like "R:", "L:", "S:")
+                        var idValue = text.replace(/^[A-Z]:\s*/, "").trim();
+                        var normalizedIdValue = idValue.toUpperCase();
+                        
+                        // Check if any of the identifier parts match this value
+                        for (var partIdx = 0; partIdx < identifierParts.length; partIdx++) {
+                            var searchPart = identifierParts[partIdx].trim().toUpperCase();
+                            
+                            if (searchPart && normalizedIdValue === searchPart) {
+                                log("SubjectElig: MATCH found in row " + i + ", column " + tdIdx + ": '" + searchPart + "' matches '" + idValue + "'");
+                                
+                                for (var linkIdx = 0; linkIdx < tds.length; linkIdx++) {
+                                    var linkTd = tds[linkIdx];
+                                    var showLink = linkTd.querySelector("a[href*='/subjects/show/']");
+                                    if (showLink) {
+                                        var href = showLink.getAttribute("href") || "";
+                                        matchedUrl = href.indexOf("https://") === 0 ? href : "https://cenexel.clinspark.com" + href;
+                                        log("SubjectElig: Found show URL: " + matchedUrl);
+                                        break;
+                                    }
+                                }
+                                
+                                if (matchedUrl) break;
+                            }
+                        }
+                        
+                        if (matchedUrl) break;
+                    }
+                    
+                    if (matchedUrl) break;
+                }
+            }
+            
+            if (matchedUrl) break;
+        }
+        
+        if (matchedUrl) {
+            log("SubjectElig: Navigating to: " + matchedUrl);
+            try {
+                localStorage.removeItem(STORAGE_SUBJECT_ELIG_PENDING);
+                localStorage.removeItem(STORAGE_SUBJECT_ELIG_IDENTIFIER);
+            } catch (e) {}
+            location.href = matchedUrl;
+        } else {
+            log("SubjectElig: No match found for identifier: " + identifier);
+            try {
+                localStorage.removeItem(STORAGE_SUBJECT_ELIG_PENDING);
+                localStorage.removeItem(STORAGE_SUBJECT_ELIG_IDENTIFIER);
+                localStorage.removeItem(STORAGE_SUBJECT_ELIG_AUTO_TAB);
+            } catch (e) {}
+            
+            var noMatchDiv = document.createElement("div");
+            noMatchDiv.style.padding = "20px";
+            noMatchDiv.style.textAlign = "center";
+            noMatchDiv.style.color = "#f90";
+            noMatchDiv.textContent = "No subject found with identifier: " + identifier;
+            createPopup({
+                title: "Subject Eligibility - No Match",
+                content: noMatchDiv,
+                width: "400px",
+                height: "auto"
+            });
+        }
+    }
+
+
     //==========================
     // FIND FORM FEATURE
     //==========================
@@ -125,26 +1115,6 @@
     // This feature automates pull any subject identifier found on page,
     // request user for form keyword, and then search for form based on the keyword.
     //==========================
-
-    function setPanelHidden(flag) {
-        try {
-            localStorage.setItem(STORAGE_PANEL_HIDDEN, flag ? "1" : "0");
-            log("Panel hidden state set to " + String(flag));
-        } catch (e) {
-        }
-    }
-
-    function getPanelHidden() {
-        var raw = null;
-        try {
-            raw = localStorage.getItem(STORAGE_PANEL_HIDDEN);
-        } catch (e) {
-        }
-        if (raw === "1") {
-            return true;
-        }
-        return false;
-    }
 
     function applyPanelHiddenState(panel) {
         if (!panel) {
@@ -430,10 +1400,14 @@
                 log("Find Form: subject from AE fallback='" + String(s) + "'");
             }
         }
+        if (s && s.length > 0 && !/\d/.test(s)) {
+            log("Find Form: identifier '" + String(s) + "' excluded (no number)");
+            s = "";
+        }
         return s;
     }
 
-        function getSubjectIdentifierForAE() {
+    function getSubjectIdentifierForAE() {
         var normalized = "";
         var rawCandidate = "";
         var confident = false;
@@ -446,7 +1420,7 @@
                 t3 = el3.textContent + "";
             }
             var n3 = aeNormalize(t3);
-            if (n3.length > 0) {
+            if (n3.length > 0 && containsNumber(t3)) {
                 rawCandidate = t3;
                 normalized = n3;
             }
@@ -461,7 +1435,7 @@
                     tt = (li.textContent + "").trim();
                 }
                 var hasSlash = tt.indexOf("/") >= 0;
-                if (hasSlash) {
+                if (hasSlash && containsNumber(tt)) {
                     rawCandidate = tt;
                     normalized = aeNormalize(tt);
                     if (normalized.length > 0) {
@@ -477,7 +1451,7 @@
             if (cap) {
                 var ct = (cap.textContent + "").trim();
                 var nc = aeNormalize(ct);
-                if (nc.length > 0) {
+                if (nc.length > 0 && containsNumber(ct)) {
                     rawCandidate = ct;
                     normalized = nc;
                 }
@@ -1053,7 +2027,7 @@
         s = s.toUpperCase();
         return s;
     }
-
+    
     //==========================
     // FIND STUDY EVENTS FEATURE
     //==========================
@@ -2147,11 +3121,6 @@
         try {
             localStorage.removeItem("activityPlanState.lastVolunteerId");
             log("lastVolunteerId cleared");
-        } catch (e) {}
-    }
-    function clearBarcodeResult() {
-        try {
-            localStorage.removeItem(STORAGE_BARCODE_RESULT);
         } catch (e) {}
     }
     function clearAllRunState() {
@@ -3294,23 +4263,6 @@
         return true;
     }
 
-
-    function firstNonEmptyOptionIndex(selectEl) {
-        if (!selectEl) {
-            return -1;
-        }
-        var opts = selectEl.querySelectorAll("option");
-        var i = 0;
-        while (i < opts.length) {
-            var v = (opts[i].value + "").trim();
-            if (v.length > 0) {
-                return i;
-            }
-            i = i + 1;
-        }
-        return -1;
-    }
-
     async function trySelectCheckItemForCodeThroughAllPlansAndActivities(code) {
         var formExclusion = getFormExclusion();
         var formPriority = getFormPriority();
@@ -4095,956 +5047,6 @@
         return false;
     }
 
-    function applyPanelHiddenState(panel) {
-        if (!panel) {
-            log("applyPanelHiddenState: panel not found");
-            return;
-        }
-        var hidden = getPanelHidden();
-        if (hidden) {
-            panel.style.display = "none";
-            panel.style.pointerEvents = "none";
-            log("applyPanelHiddenState: applied hidden");
-        } else {
-            panel.style.display = "block";
-            panel.style.pointerEvents = "auto";
-            log("applyPanelHiddenState: applied visible");
-        }
-    }
-
-    function togglePanelHiddenViaHotkey() {
-        var panel = document.getElementById(PANEL_ID);
-        if (!panel) {
-            log("Hotkey toggle: panel element not found; nothing to toggle");
-            return;
-        }
-        var isHidden = getPanelHidden();
-        if (isHidden) {
-            panel.style.display = "block";
-            panel.style.pointerEvents = "auto";
-            setPanelHidden(false);
-            log("Hotkey toggle: panel unhidden");
-        } else {
-            panel.style.display = "none";
-            panel.style.pointerEvents = "none";
-            setPanelHidden(true);
-            log("Hotkey toggle: panel hidden");
-        }
-    }
-
-    function normalizeKeyForMatch(e) {
-        var k = "";
-        var c = "";
-        try {
-            k = e.key ? String(e.key) : "";
-        } catch (ex1) {
-            k = "";
-        }
-        try {
-            c = e.code ? String(e.code) : "";
-        } catch (ex2) {
-            c = "";
-        }
-        return { key: k, code: c, keyCode: typeof e.keyCode === "number" ? e.keyCode : null };
-    }
-
-    function keyMatchesToggle(e) {
-        var n = normalizeKeyForMatch(e);
-        var match = false;
-        if (n.key && n.key.toUpperCase() === PANEL_TOGGLE_KEY.toUpperCase()) {
-            match = true;
-        } else {
-            if (n.code && n.code.toUpperCase() === PANEL_TOGGLE_KEY.toUpperCase()) {
-                match = true;
-            } else {
-                if (typeof n.keyCode === "number") {
-                    if (PANEL_TOGGLE_KEY.toUpperCase() === "F2") {
-                        if (n.keyCode === 113) {
-                            match = true;
-                        }
-                    }
-                }
-            }
-        }
-        return match;
-    }
-
-    function bindPanelHotkeyOnce() {
-        if (window.__APS_HOTKEY_BOUND === true) {
-            log("Hotkey: already bound; skipping rebind");
-            return;
-        }
-        function handler(e) {
-            if (keyMatchesToggle(e)) {
-                log("Hotkey: toggle request received");
-                togglePanelHiddenViaHotkey();
-                e.preventDefault();
-                e.stopPropagation();
-            }
-        }
-        document.addEventListener("keydown", handler, true);
-        window.addEventListener("keydown", handler, true);
-        window.__APS_HOTKEY_BOUND = true;
-        log("Hotkey: bound for " + String(PANEL_TOGGLE_KEY));
-    }
-
-
-    function resetStudyEventsOnList() {
-        var cont = document.getElementById("s2id_studyEventIds");
-        if (cont) {
-            clearSelect2ChoicesByContainerId("s2id_studyEventIds");
-        }
-        var sel = document.getElementById("studyEventIds");
-        if (!sel) {
-            log("Find Form: studyEventIds select not found for reset");
-            return;
-        }
-        var ops = sel.querySelectorAll("option");
-        var cleared = 0;
-        if (ops && ops.length > 0) {
-            var i = 0;
-            while (i < ops.length) {
-                if (ops[i].selected) {
-                    ops[i].selected = false;
-                    cleared = cleared + 1;
-                }
-                i = i + 1;
-            }
-            var ev = new Event("change", { bubbles: true });
-            sel.dispatchEvent(ev);
-        }
-        log("Find Form: studyEventIds reset; cleared count=" + String(cleared));
-    }
-
-    function deselectAllOptionsBySelect(selectEl) {
-        if (!selectEl) {
-            return 0;
-        }
-        var ops = selectEl.querySelectorAll("option");
-        var count = 0;
-        if (ops && ops.length > 0) {
-            var i = 0;
-            while (i < ops.length) {
-                if (ops[i].selected) {
-                    ops[i].selected = false;
-                    count = count + 1;
-                }
-                i = i + 1;
-            }
-            var ev = new Event("change", { bubbles: true });
-            selectEl.dispatchEvent(ev);
-        }
-        log("Find Form: deselected all options count=" + String(count));
-        return count;
-    }
-
-    function formMatchContainsAllTokens(text, keyword) {
-        var nt = formNormalize(text || "");
-        var kw = formNormalize(keyword || "");
-        if (!kw || kw.length === 0) {
-            return false;
-        }
-        var tokens = kw.split(" ");
-        var all = true;
-        var i = 0;
-        while (i < tokens.length) {
-            var tok = tokens[i];
-            if (tok && tok.length > 0) {
-                if (nt.indexOf(tok) < 0) {
-                    all = false;
-                    break;
-                }
-            }
-            i = i + 1;
-        }
-        return all;
-    }
-
-    function resetStatusValuesOnList() {
-        var cont = document.getElementById("s2id_statusValues");
-        if (cont) {
-            clearSelect2ChoicesByContainerId("s2id_statusValues");
-        }
-        var sel = document.getElementById("statusValues");
-        if (!sel) {
-            log("Find Form: status select not found for reset");
-            return;
-        }
-        var ops = sel.querySelectorAll("option");
-        if (ops && ops.length > 0) {
-            var i = 0;
-            while (i < ops.length) {
-                ops[i].selected = false;
-                i = i + 1;
-            }
-            var ev = new Event("change", { bubbles: true });
-            sel.dispatchEvent(ev);
-        }
-        log("Find Form: status values reset");
-    }
-
-    function applyStatusValuesOnList(values) {
-        if (!Array.isArray(values)) {
-            log("Find Form: status values not array; skipping apply");
-            return;
-        }
-        var sel = document.getElementById("statusValues");
-        if (!sel) {
-            log("Find Form: status select not found for apply");
-            return;
-        }
-        var selectedCount = 0;
-        var j = 0;
-        while (j < values.length) {
-            var v = String(values[j]);
-            var op = sel.querySelector('option[value="' + v.replace(/"/g, '\\"') + '"]');
-            if (op) {
-                op.selected = true;
-                selectedCount = selectedCount + 1;
-            }
-            j = j + 1;
-        }
-        var ev = new Event("change", { bubbles: true });
-        sel.dispatchEvent(ev);
-        log("Find Form: status values applied count=" + String(selectedCount));
-    }
-
-    function showFormNoMatchPopup() {
-        log("Find Form: showing 'No form is found' popup");
-        var box = document.createElement("div");
-        box.style.textAlign = "center";
-        box.style.fontSize = "16px";
-        box.style.color = "#fff";
-        box.style.padding = "20px";
-        box.textContent = FORM_NO_MATCH_MESSAGE;
-        createPopup({ title: FORM_NO_MATCH_TITLE, content: box, width: "320px", height: "auto" });
-    }
-
-    function clearSelect2ChoicesByContainerId(containerId) {
-        var cont = document.getElementById(containerId);
-        if (!cont) {
-            log("Find Form: select2 container not found id='" + String(containerId) + "'");
-            return 0;
-        }
-        var removed = 0;
-        var tries = 0;
-        while (tries < 50) {
-            var closeBtn = cont.querySelector("ul.select2-choices li.select2-search-choice a.select2-search-choice-close");
-            if (!closeBtn) {
-                break;
-            }
-            try {
-                closeBtn.click();
-                removed = removed + 1;
-            } catch (e) {}
-            tries = tries + 1;
-        }
-        log("Find Form: cleared select2 choices id='" + String(containerId) + "' count=" + String(removed));
-        return removed;
-    }
-
-    function findSubjectIdentifierForFindForm() {
-        var s = "";
-        var cont = document.getElementById("s2id_subjectIds");
-        if (cont) {
-            var choiceDiv = cont.querySelector("ul.select2-choices li.select2-search-choice div");
-            if (choiceDiv) {
-                var t = (choiceDiv.textContent + "").trim();
-                if (t.length > 0) {
-                    s = t;
-                    log("Find Form: subject from select2 choice='" + String(s) + "'");
-                }
-            }
-        }
-        if (!s || s.length === 0) {
-            var bc = document.querySelector("ul.page-breadcrumb.breadcrumb > li:nth-child(3)");
-            if (bc) {
-                var bt = (bc.textContent + "").trim();
-                if (bt.length > 0) {
-                    var parts = bt.split("/");
-                    if (parts && parts.length > 0) {
-                        var p0 = (parts[0] + "").trim();
-                        if (p0.length > 0) {
-                            s = p0;
-                            log("Find Form: subject from breadcrumb='" + String(s) + "'");
-                        }
-                    }
-                }
-            }
-        }
-        if (!s || s.length === 0) {
-            var info = getSubjectIdentifierForAE();
-            if (info && info.raw && info.raw.length > 0) {
-                s = info.raw;
-                log("Find Form: subject from AE fallback='" + String(s) + "'");
-            }
-        }
-        return s;
-    }
-
-    function previewFormsByKeyword(keyword, done) {
-        log("Find Form: preview request started");
-        var url = FORM_LIST_URL;
-        try {
-            GM.xmlHttpRequest({
-                method: "GET",
-                url: url,
-                onload: function (resp) {
-                    var html = resp && resp.responseText ? resp.responseText + "" : "";
-                    var tmp = document.createElement("div");
-                    tmp.innerHTML = html;
-                    var formsSel = tmp.querySelector('select#formIds, select[name="formIds"]');
-                    var matched = 0;
-                    if (formsSel) {
-                        var fos = formsSel.querySelectorAll("option");
-                        if (fos && fos.length > 0) {
-                            var i = 0;
-                            while (i < fos.length) {
-                                var fop = fos[i];
-                                var ftxt = "";
-                                if (fop) {
-                                    ftxt = fop.textContent + "";
-                                }
-                                var hit = formMatchContainsAllTokens(ftxt, keyword);
-                                if (hit) {
-                                    matched = matched + 1;
-                                }
-                                i = i + 1;
-                            }
-                        }
-                    }
-                    log("Find Form: preview matched count=" + String(matched));
-                    if (typeof done === "function") {
-                        done(matched > 0);
-                    }
-                },
-                onerror: function () {
-                    log("Find Form: preview request error");
-                    if (typeof done === "function") {
-                        done(true);
-                    }
-                }
-            });
-        } catch (e) {
-            log("Find Form: preview exception " + String(e));
-            if (typeof done === "function") {
-                done(true);
-            }
-        }
-    }
-
-
-    function formNormalize(x) {
-        var s = x || "";
-        s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        s = s.replace(/\s+/g, " ");
-        s = s.trim();
-        s = s.toUpperCase();
-        return s;
-    }
-
-
-    function showFindFormPopup(prefillSubject, onDone) {
-        log("Find Form: showing popup");
-        var container = document.createElement("div");
-        container.style.display = "grid";
-        container.style.gridTemplateRows = "auto auto auto auto auto";
-        container.style.gap = "10px";
-
-        var row1 = document.createElement("div");
-        row1.style.display = "grid";
-        row1.style.gridTemplateColumns = "140px 1fr";
-        row1.style.alignItems = "center";
-        row1.style.gap = "8px";
-        var label1 = document.createElement("div");
-        label1.textContent = FORM_POPUP_KEYWORD_LABEL;
-        label1.style.fontWeight = "600";
-        var inputKeyword = document.createElement("input");
-        inputKeyword.type = "text";
-        inputKeyword.placeholder = "Required: any word";
-        inputKeyword.style.width = "100%";
-        inputKeyword.style.boxSizing = "border-box";
-        inputKeyword.style.padding = "8px";
-        inputKeyword.style.borderRadius = "6px";
-        inputKeyword.style.border = "1px solid #444";
-        inputKeyword.style.background = "#1a1a1a";
-        inputKeyword.style.color = "#fff";
-        row1.appendChild(label1);
-        row1.appendChild(inputKeyword);
-        container.appendChild(row1);
-
-        var row2 = document.createElement("div");
-        row2.style.display = "grid";
-        row2.style.gridTemplateColumns = "140px 1fr";
-        row2.style.alignItems = "center";
-        row2.style.gap = "8px";
-        var label2 = document.createElement("div");
-        label2.textContent = FORM_POPUP_SUBJECT_LABEL;
-        label2.style.fontWeight = "600";
-        var inputSubject = document.createElement("input");
-        inputSubject.type = "text";
-        inputSubject.placeholder = "Optional: subject id or label";
-        inputSubject.style.width = "100%";
-        inputSubject.style.boxSizing = "border-box";
-        inputSubject.style.padding = "8px";
-        inputSubject.style.borderRadius = "6px";
-        inputSubject.style.border = "1px solid #444";
-        inputSubject.style.background = "#1a1a1a";
-        inputSubject.style.color = "#fff";
-        row2.appendChild(label2);
-        row2.appendChild(inputSubject);
-        container.appendChild(row2);
-
-        var row3 = document.createElement("div");
-        row3.style.display = "grid";
-        row3.style.gridTemplateColumns = "140px 1fr";
-        row3.style.alignItems = "center";
-        row3.style.gap = "8px";
-        var labelIG = document.createElement("div");
-        labelIG.textContent = "Item Group Data";
-        labelIG.style.fontWeight = "600";
-        var igWrap = document.createElement("div");
-        igWrap.style.display = "inline-flex";
-        igWrap.style.gap = "12px";
-        var igC = document.createElement("label");
-        var igCBox = document.createElement("input");
-        igCBox.type = "checkbox";
-        igCBox.value = "Complete";
-        igC.appendChild(igCBox);
-        igC.appendChild(document.createTextNode(" Complete"));
-        var igI = document.createElement("label");
-        var igIBox = document.createElement("input");
-        igIBox.type = "checkbox";
-        igIBox.value = "Incomplete";
-        igI.appendChild(igIBox);
-        igI.appendChild(document.createTextNode(" Incomplete"));
-        var igN = document.createElement("label");
-        var igNBox = document.createElement("input");
-        igNBox.type = "checkbox";
-        igNBox.value = "Nonconformant";
-        igN.appendChild(igNBox);
-        igN.appendChild(document.createTextNode(" Nonconformant"));
-        igWrap.appendChild(igC);
-        igWrap.appendChild(igI);
-        igWrap.appendChild(igN);
-        row3.appendChild(labelIG);
-        row3.appendChild(igWrap);
-        container.appendChild(row3);
-
-        var row4 = document.createElement("div");
-        row4.style.display = "grid";
-        row4.style.gridTemplateColumns = "140px 1fr";
-        row4.style.alignItems = "center";
-        row4.style.gap = "8px";
-        var labelFD = document.createElement("div");
-        labelFD.textContent = "Form Data";
-        labelFD.style.fontWeight = "600";
-        var fdWrap = document.createElement("div");
-        fdWrap.style.display = "inline-flex";
-        fdWrap.style.gap = "12px";
-        var fdNC = document.createElement("label");
-        var fdNCBox = document.createElement("input");
-        fdNCBox.type = "checkbox";
-        fdNCBox.value = "formDataNotCanceled";
-        fdNC.appendChild(fdNCBox);
-        fdNC.appendChild(document.createTextNode(" Not Canceled"));
-        var fdTM = document.createElement("label");
-        var fdTMBox = document.createElement("input");
-        fdTMBox.type = "checkbox";
-        fdTMBox.value = "timedAndMissed";
-        fdTM.appendChild(fdTMBox);
-        fdTM.appendChild(document.createTextNode(" Time and Missed"));
-        fdWrap.appendChild(fdNC);
-        fdWrap.appendChild(fdTM);
-        row4.appendChild(labelFD);
-        row4.appendChild(fdWrap);
-        container.appendChild(row4);
-
-        try {
-            var prevRaw = localStorage.getItem(STORAGE_FIND_FORM_STATUS_VALUES);
-            if (prevRaw) {
-                var prevArr = JSON.parse(prevRaw);
-                if (Array.isArray(prevArr) && prevArr.length > 0) {
-                    var hasComplete = prevArr.indexOf("Complete") >= 0;
-                    var hasIncomplete = prevArr.indexOf("Incomplete") >= 0;
-                    var hasNonconf = prevArr.indexOf("Nonconformant") >= 0;
-                    var hasFormNotCanceled = prevArr.indexOf("formDataNotCanceled") >= 0;
-                    var hasTimedMissed = prevArr.indexOf("timedAndMissed") >= 0;
-                    igCBox.checked = !!hasComplete;
-                    igIBox.checked = !!hasIncomplete;
-                    igNBox.checked = !!hasNonconf;
-                    fdNCBox.checked = !!hasFormNotCanceled;
-                    fdTMBox.checked = !!hasTimedMissed;
-                    log("Find Form: restored checkbox prefs count=" + String(prevArr.length));
-                } else {
-                    log("Find Form: no prior checkbox prefs to restore");
-                }
-            } else {
-                log("Find Form: checkbox prefs not present in storage");
-            }
-        } catch (e) {
-            log("Find Form: error restoring checkbox prefs");
-        }
-
-        if (prefillSubject && prefillSubject.length > 0) {
-            inputSubject.value = prefillSubject;
-            var ev0 = new Event("input", { bubbles: true });
-            inputSubject.dispatchEvent(ev0);
-            log("Find Form: subject prefilled='" + String(prefillSubject) + "'");
-        }
-
-        var btnRow = document.createElement("div");
-        btnRow.style.display = "inline-flex";
-        btnRow.style.justifyContent = "flex-end";
-        btnRow.style.gap = "8px";
-        var clearIdBtn = document.createElement("button");
-        clearIdBtn.textContent = "Clear ID";
-        clearIdBtn.style.background = "#777";
-        clearIdBtn.style.color = "#fff";
-        clearIdBtn.style.border = "none";
-        clearIdBtn.style.borderRadius = "6px";
-        clearIdBtn.style.padding = "8px 12px";
-        clearIdBtn.style.cursor = "pointer";
-        var cancelBtn = document.createElement("button");
-        cancelBtn.textContent = FORM_POPUP_CANCEL_TEXT;
-        cancelBtn.style.background = "#333";
-        cancelBtn.style.color = "#fff";
-        cancelBtn.style.border = "none";
-        cancelBtn.style.borderRadius = "6px";
-        cancelBtn.style.padding = "8px 12px";
-        cancelBtn.style.cursor = "pointer";
-        var okBtn = document.createElement("button");
-        okBtn.textContent = FORM_POPUP_OK_TEXT;
-        okBtn.style.background = "#0b82ff";
-        okBtn.style.color = "#fff";
-        okBtn.style.border = "none";
-        okBtn.style.borderRadius = "6px";
-        okBtn.style.padding = "8px 12px";
-        okBtn.style.cursor = "pointer";
-        btnRow.appendChild(clearIdBtn);
-        btnRow.appendChild(cancelBtn);
-        btnRow.appendChild(okBtn);
-        container.appendChild(btnRow);
-
-        var popup = createPopup({ title: FORM_POPUP_TITLE, content: container, width: "520px", height: "auto" });
-
-        window.setTimeout(function () {
-            try {
-                inputKeyword.focus();
-                inputKeyword.select();
-                log("Find Form: keyword input focused");
-            } catch (e) {
-                log("Find Form: failed to focus keyword input");
-            }
-        }, 50);
-
-        function gatherStatusSelections() {
-            var out = [];
-            if (igCBox && igCBox.checked) {
-                out.push("Complete");
-            }
-            if (igIBox && igIBox.checked) {
-                out.push("Incomplete");
-            }
-            if (igNBox && igNBox.checked) {
-                out.push("Nonconformant");
-            }
-            if (fdNCBox && fdNCBox.checked) {
-                out.push("formDataNotCanceled");
-            }
-            if (fdTMBox && fdTMBox.checked) {
-                out.push("timedAndMissed");
-            }
-            return out;
-        }
-
-        function doContinue() {
-            var kw = inputKeyword.value + "";
-            var sbj = inputSubject.value + "";
-            var kwt = kw.trim();
-            var sbjt = sbj.trim();
-            if (!kwt || kwt.length === 0) {
-                log("Find Form: keyword required");
-                return;
-            }
-            var statuses = gatherStatusSelections();
-            try {
-                if (statuses && statuses.length > 0) {
-                    localStorage.setItem(STORAGE_FIND_FORM_STATUS_VALUES, JSON.stringify(statuses));
-                    log("Find Form: statuses saved count=" + String(statuses.length));
-                } else {
-                    localStorage.removeItem(STORAGE_FIND_FORM_STATUS_VALUES);
-                    log("Find Form: no statuses selected; cleared storage");
-                }
-            } catch (e) {}
-            log("Find Form: popup inputs keyword='" + String(kwt) + "' subject='" + String(sbjt) + "'");
-            if (popup && popup.close) {
-                popup.close();
-            }
-            if (typeof onDone === "function") {
-                onDone({ keyword: kwt, subject: sbjt });
-            }
-        }
-
-        function keyHandler(e) {
-            var code = e.key || e.code || "";
-            if (code === "Enter") {
-                log("Find Form: Enter pressed; continuing");
-                doContinue();
-                e.preventDefault();
-                e.stopPropagation();
-                return;
-            }
-            if (code === "Escape" || code === "Esc") {
-                log("Find Form: Esc pressed; closing");
-                if (popup && popup.close) {
-                    popup.close();
-                }
-                document.removeEventListener("keydown", keyHandler, true);
-                if (typeof onDone === "function") {
-                    onDone(null);
-                }
-                e.preventDefault();
-                e.stopPropagation();
-                return;
-            }
-        }
-
-        document.addEventListener("keydown", keyHandler, true);
-
-        clearIdBtn.addEventListener("click", function () {
-            inputSubject.value = "";
-            var ev = new Event("input", { bubbles: true });
-            inputSubject.dispatchEvent(ev);
-            log("Find Form: subject cleared by user");
-        });
-
-        cancelBtn.addEventListener("click", function () {
-            log("Find Form: popup canceled");
-            if (popup && popup.close) {
-                popup.close();
-            }
-            document.removeEventListener("keydown", keyHandler, true);
-            if (typeof onDone === "function") {
-                onDone(null);
-            }
-        });
-
-        okBtn.addEventListener("click", function () {
-            document.removeEventListener("keydown", keyHandler, true);
-            doContinue();
-        });
-    }
-
-    function openFindForm() {
-        log("Find Form: starting");
-        var prefill = findSubjectIdentifierForFindForm();
-        showFindFormPopup(prefill, function (userInput) {
-            if (userInput === null) {
-                log("Find Form: canceled by user; stopping");
-                return;
-            }
-            var kw = userInput.keyword || "";
-            var sbj = userInput.subject || "";
-            previewFormsByKeyword(kw, function (hasMatch) {
-                if (!hasMatch) {
-                    log("Find Form: preview found no matching forms; stopping");
-                    showFormNoMatchPopup();
-                    return;
-                }
-                localStorage.setItem(STORAGE_FIND_FORM_PENDING, "1");
-                localStorage.setItem(STORAGE_FIND_FORM_KEYWORD, String(kw));
-                localStorage.setItem(STORAGE_FIND_FORM_SUBJECT, String(sbj));
-                log("Find Form: state saved; redirecting same tab");
-                window.location.href = FORM_LIST_URL;
-            });
-        });
-    }
-
-    function processFindFormOnList() {
-        var pending = localStorage.getItem(STORAGE_FIND_FORM_PENDING);
-        if (!pending || pending !== "1") {
-            return;
-        }
-        var kw = localStorage.getItem(STORAGE_FIND_FORM_KEYWORD) || "";
-        var sbj = localStorage.getItem(STORAGE_FIND_FORM_SUBJECT) || "";
-        log("Find Form: post-reload processing started keyword='" + String(kw) + "' subject='" + String(sbj) + "'");
-        var t = 0;
-        var r = setInterval(function () {
-            t = t + 1;
-            if (t > 120) {
-                clearInterval(r);
-                log("Find Form: timeout waiting for controls");
-                localStorage.removeItem(STORAGE_FIND_FORM_PENDING);
-                return;
-            }
-            var d = document;
-            var formsSel = d.querySelector('select#formIds, select[name="formIds"]');
-            var subjSel = d.querySelector('select#subjectIds, select[name="subjectIds"]');
-            var formsBoxReady = document.getElementById("s2id_formIds");
-            var statusSel = d.getElementById("statusValues");
-            var statusBoxReady = d.getElementById("s2id_statusValues");
-            if (!formsSel || !formsBoxReady) {
-                log("Find Form: selects not ready at t=" + String(t));
-                return;
-            }
-
-            resetStudyEventsOnList();
-            resetStatusValuesOnList();
-
-            var rawStatuses = null;
-            try {
-                rawStatuses = localStorage.getItem(STORAGE_FIND_FORM_STATUS_VALUES);
-            } catch (e) {}
-            if (rawStatuses) {
-                try {
-                    var arr = JSON.parse(rawStatuses);
-                    if (Array.isArray(arr) && arr.length > 0) {
-                        applyStatusValuesOnList(arr);
-                    } else {
-                        log("Find Form: no statuses to apply");
-                    }
-                } catch (e2) {
-                    log("Find Form: status parse error");
-                }
-            } else {
-                log("Find Form: no stored statuses");
-            }
-
-            clearSelect2ChoicesByContainerId("s2id_formIds");
-            deselectAllOptionsBySelect(formsSel);
-
-            var selectedCount = 0;
-            var fos = formsSel.querySelectorAll("option");
-            if (fos && fos.length > 0) {
-                var i = 0;
-                while (i < fos.length) {
-                    var fop = fos[i];
-                    var ftxt = "";
-                    if (fop) {
-                        ftxt = fop.textContent + "";
-                    }
-                    var hit = formMatchContainsAllTokens(ftxt, kw);
-                    if (hit) {
-                        fop.selected = true;
-                        selectedCount = selectedCount + 1;
-                    }
-                    i = i + 1;
-                }
-                var evtForms = new Event("change", { bubbles: true });
-                formsSel.dispatchEvent(evtForms);
-                log("Find Form: selected forms count=" + String(selectedCount));
-            } else {
-                log("Find Form: forms options list empty");
-            }
-
-            if (selectedCount === 0) {
-                clearInterval(r);
-                log("Find Form: no forms selected; notifying user");
-                showFormNoMatchPopup();
-                localStorage.removeItem(STORAGE_FIND_FORM_PENDING);
-                localStorage.removeItem(STORAGE_FIND_FORM_KEYWORD);
-                localStorage.removeItem(STORAGE_FIND_FORM_SUBJECT);
-                return;
-            }
-
-            var subjNorm = aeNormalize(sbj || "");
-            if (subjNorm && subjNorm.length > 0 && subjSel) {
-                var os = subjSel.querySelectorAll("option");
-                var y = "";
-                if (os && os.length > 0) {
-                    var j = 0;
-                    while (j < os.length) {
-                        var op = os[j];
-                        var txt = "";
-                        var val = "";
-                        if (op) {
-                            txt = op.textContent + "";
-                            val = op.value + "";
-                        }
-                        var nt = aeNormalize(txt);
-                        var matchByTextExact = nt === subjNorm;
-                        var matchByTextContains = nt.indexOf(subjNorm) >= 0;
-                        var matchById = val === sbj;
-                        var matched = false;
-                        if (matchByTextExact) {
-                            matched = true;
-                        } else {
-                            if (matchByTextContains) {
-                                matched = true;
-                            } else {
-                                if (matchById) {
-                                    matched = true;
-                                }
-                            }
-                        }
-                        if (matched) {
-                            y = val;
-                            break;
-                        }
-                        j = j + 1;
-                    }
-                }
-                if (y && y.length > 0) {
-                    subjSel.value = y;
-                    var evtSubj = new Event("change", { bubbles: true });
-                    subjSel.dispatchEvent(evtSubj);
-                    log("Find Form: subject applied value='" + String(y) + "'");
-                } else {
-                    log("Find Form: no subject match applied");
-                }
-            } else {
-                log("Find Form: subject input empty or select not found");
-            }
-
-            var searchBtn = d.getElementById("dataSearchButton");
-            if (searchBtn) {
-                searchBtn.click();
-                log("Find Form: Search button clicked");
-            } else {
-                log("Find Form: Search button not found");
-            }
-
-            clearInterval(r);
-            localStorage.removeItem(STORAGE_FIND_FORM_PENDING);
-            localStorage.removeItem(STORAGE_FIND_FORM_KEYWORD);
-            localStorage.removeItem(STORAGE_FIND_FORM_SUBJECT);
-            log("Find Form: post-reload processing completed");
-        }, 200);
-    }
-
-
-    function continueFindForm(keyword, subjectInput) {
-        var url = FORM_LIST_URL;
-        log("Find Form: opening list url='" + String(url) + "'");
-        var w = window;
-        w.location.href = url;
-        var t = 0;
-        var r = setInterval(function () {
-            t = t + 1;
-            if (!w || w.closed) {
-                clearInterval(r);
-                log("Find Form: child window closed");
-                return;
-            }
-            if (t > 120) {
-                clearInterval(r);
-                log("Find Form: timeout waiting for child page");
-                return;
-            }
-            var d = w.document;
-            if (!d) {
-                log("Find Form: child document not ready at t=" + String(t));
-                return;
-            }
-            var subjNorm = aeNormalize(subjectInput || "");
-            var y = "";
-            if (subjNorm && subjNorm.length > 0) {
-                var os = d.querySelectorAll('#subjectIds option,select[name="subjectIds"] option');
-                if (os && os.length > 0) {
-                    var j = 0;
-                    while (j < os.length) {
-                        var op = os[j];
-                        var txt = "";
-                        var val = "";
-                        if (op) {
-                            txt = op.textContent + "";
-                            val = op.value + "";
-                        }
-                        var nt = aeNormalize(txt);
-                        var matchByTextExact = nt === subjNorm;
-                        var matchByTextContains = nt.indexOf(subjNorm) >= 0;
-                        var matchById = val === subjectInput;
-                        var matched = false;
-                        if (matchByTextExact) {
-                            matched = true;
-                        } else {
-                            if (matchByTextContains) {
-                                matched = true;
-                            } else {
-                                if (matchById) {
-                                    matched = true;
-                                }
-                            }
-                        }
-                        if (matched) {
-                            y = val;
-                            log("Find Form: subject matched optionIndex=" + String(j) + " text='" + String(txt) + "' value='" + String(val) + "'");
-                            break;
-                        }
-                        j = j + 1;
-                    }
-                } else {
-                    log("Find Form: subject options not found");
-                }
-            } else {
-                log("Find Form: no subject input provided; skipping subject selection");
-            }
-
-            var formsSel = d.querySelector('select#formIds, select[name="formIds"]');
-            var selectedCount = 0;
-            if (formsSel) {
-                var fos = formsSel.querySelectorAll("option");
-                if (fos && fos.length > 0) {
-                    var i = 0;
-                    while (i < fos.length) {
-                        var fop = fos[i];
-                        var ftxt = "";
-                        if (fop) {
-                            ftxt = fop.textContent + "";
-                        }
-                        var hit = formMatchContainsAllTokens(ftxt, keyword);
-                        if (hit) {
-                            fop.selected = true;
-                            selectedCount = selectedCount + 1;
-                        }
-                        i = i + 1;
-                    }
-                    var evtForms = new Event("change", { bubbles: true });
-                    formsSel.dispatchEvent(evtForms);
-                    log("Find Form: selected forms count=" + String(selectedCount));
-                } else {
-                    log("Find Form: forms options list empty");
-                }
-            } else {
-                log("Find Form: forms select not found");
-            }
-
-            if (selectedCount === 0) {
-                clearInterval(r);
-                log("Find Form: no forms selected; closing child and notifying user");
-                showFormNoMatchPopup();
-                try {
-                    w.close();
-                } catch (e) {}
-                return;
-            }
-
-            if (y && y.length > 0) {
-                var subjSel = d.querySelector('select#subjectIds, select[name="subjectIds"]');
-                if (subjSel) {
-                    subjSel.value = y;
-                    var evtSubj = new Event("change", { bubbles: true });
-                    subjSel.dispatchEvent(evtSubj);
-                    log("Find Form: subject applied value='" + String(y) + "'");
-                } else {
-                    log("Find Form: subject select not found");
-                }
-            }
-
-            var searchBtn = d.getElementById("dataSearchButton");
-            if (searchBtn) {
-                searchBtn.click();
-                log("Find Form: Search button clicked");
-            } else {
-                log("Find Form: Search button not found");
-            }
-
-            clearInterval(r);
-            log("Find Form: inputs populated and search initiated; leaving child page open");
-        }, 200);
-    }
-
     function showAeSubjectInputPopup(onDone) {
         log("Find AE: showing subject input popup");
         var container = document.createElement("div");
@@ -5164,99 +5166,6 @@
             doContinue();
         });
     }
-
-
-    function aeNormalize(x) {
-        var s = x || "";
-        s = s.replace(/\s+/g, "");
-        s = s.replace(/›|»|▶|►|→/g, "");
-        s = s.trim();
-        s = s.toUpperCase();
-        return s;
-    }
-
-    function getSubjectIdentifierForAE() {
-        var normalized = "";
-        var rawCandidate = "";
-        var confident = false;
-
-        var items = document.querySelectorAll(".page-breadcrumb.breadcrumb > li");
-        if (items && items.length >= 3) {
-            var el3 = items[2];
-            var t3 = "";
-            if (el3) {
-                t3 = el3.textContent + "";
-            }
-            var n3 = aeNormalize(t3);
-            if (n3.length > 0) {
-                rawCandidate = t3;
-                normalized = n3;
-            }
-        }
-
-        if ((!normalized || normalized.length === 0) && items) {
-            var c = 0;
-            while (c < items.length) {
-                var li = items[c];
-                var tt = "";
-                if (li) {
-                    tt = (li.textContent + "").trim();
-                }
-                var hasSlash = tt.indexOf("/") >= 0;
-                if (hasSlash) {
-                    rawCandidate = tt;
-                    normalized = aeNormalize(tt);
-                    if (normalized.length > 0) {
-                        break;
-                    }
-                }
-                c = c + 1;
-            }
-        }
-
-        if (!normalized || normalized.length === 0) {
-            var cap = document.querySelector("div.portlet-title div.caption");
-            if (cap) {
-                var ct = (cap.textContent + "").trim();
-                var nc = aeNormalize(ct);
-                if (nc.length > 0) {
-                    rawCandidate = ct;
-                    normalized = nc;
-                }
-            }
-        }
-
-        var sid = "";
-        var a = document.querySelector('span.tooltips[data-original-title="Subject"] a[data-target="#ajaxModal"][data-toggle="modal"]');
-        if (a) {
-            var href = a.getAttribute("href") + "";
-            var m = href.match(/\/show\/subject\/(\d+)\//);
-            if (m && m[1]) {
-                sid = m[1];
-            }
-        }
-
-        if (sid && sid.length > 0) {
-            confident = true;
-        } else {
-            if (normalized && normalized.length > 0) {
-                var looksNumeric = /^[0-9]+$/.test(rawCandidate.trim());
-                var hasIdPattern = /^S?[0-9]{3,}$/.test(rawCandidate.trim());
-                if (looksNumeric || hasIdPattern) {
-                    confident = true;
-                } else {
-                    confident = false;
-                }
-            } else {
-                confident = false;
-            }
-        }
-
-        log("Find AE: subject normalized='" + String(normalized) + "' subjectId='" + String(sid) + "' confident=" + String(confident) + " raw='" + String(rawCandidate) + "'");
-        return { normalizedIdentifier: normalized, subjectId: sid, confident: confident, raw: rawCandidate };
-    }
-
-
 
     function continueFindAdverseEvent(b, subjId) {
         var urls = buildAeListUrl();
@@ -6780,6 +6689,28 @@
         findStudyEventsBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         findStudyEventsBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
+        var openEligBtn = document.createElement("button");
+        openEligBtn.textContent = "Cohort Eligibility";
+        openEligBtn.style.background = "#4a90e2";
+        openEligBtn.style.color = "#fff";
+        openEligBtn.style.border = "none";
+        openEligBtn.style.borderRadius = "6px";
+        openEligBtn.style.padding = "8px";
+        openEligBtn.style.cursor = "pointer";
+        openEligBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
+        openEligBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+
+        var subjectEligBtn = document.createElement("button");
+        subjectEligBtn.textContent = "Subject Eligibility";
+        subjectEligBtn.style.background = "#4a90e2";
+        subjectEligBtn.style.color = "#fff";
+        subjectEligBtn.style.border = "none";
+        subjectEligBtn.style.borderRadius = "6px";
+        subjectEligBtn.style.padding = "8px";
+        subjectEligBtn.style.cursor = "pointer";
+        subjectEligBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
+        subjectEligBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+
         var parseMethodBtn = document.createElement("button");
         parseMethodBtn.textContent = "Item Method Forms";
         parseMethodBtn.style.background = "#4a90e2";
@@ -6902,6 +6833,15 @@
         findStudyEventsBtn.addEventListener("click", function () {
             openFindStudyEvents();
         });
+
+        openEligBtn.addEventListener("click", function () {
+            cohortEligibilityFeature();
+        });
+
+        subjectEligBtn.addEventListener("click", function () {
+            subjectEligibilityFeature();
+        });
+
         toggleLogsBtn.addEventListener("click", function () {
             var currentlyVisible = getLogVisible();
             var newVisible = !currentlyVisible;
@@ -7043,6 +6983,101 @@
             addButtonToPanel(label, handler);
         };
         bindPanelHotkeyOnce();
+
+        
+        // Restore Subject Eligibility spinner popup if pending
+        if (isSubjectEligPending()) {
+            var identifier = null;
+            try {
+                identifier = localStorage.getItem(STORAGE_SUBJECT_ELIG_IDENTIFIER);
+            } catch (e) {}
+            if (identifier) {
+                log("SubjectElig: Restoring spinner popup for identifier: " + identifier);
+                showSubjectEligSpinnerPopup(identifier);
+            }
+        }
+
+        // Cohort Eligibility auto-tab detection for subject show pages
+        var cohortAutoTabFlag = null;
+        try {
+            cohortAutoTabFlag = localStorage.getItem(STORAGE_COHORT_ELIG_AUTO_TAB);
+        } catch (e) {}
+        
+        // Subject Eligibility auto-tab detection for subject show pages
+        var subjectAutoTabFlag = null;
+        try {
+            subjectAutoTabFlag = localStorage.getItem(STORAGE_SUBJECT_ELIG_AUTO_TAB);
+        } catch (e) {}
+        
+        if ((cohortAutoTabFlag === "1" || subjectAutoTabFlag === "1") && location.pathname.indexOf("/subjects/show/") !== -1) {
+            var featureName = cohortAutoTabFlag === "1" ? "CohortElig" : "SubjectElig";
+            log(featureName + ": Auto-tab detected on subject show page, navigating to Eligibility tab");
+            
+            // Clear Subject Eligibility data after successful navigation
+            if (subjectAutoTabFlag === "1") {
+                setTimeout(function() {
+                    clearSubjectEligData();
+                    log("SubjectElig: Process complete, data cleared");
+                }, 4000);
+            }
+            
+            // Wait for eligibility tab link to be available with retry logic
+            var attemptCount = 0;
+            var maxAttempts = 20;
+            var attemptInterval = 300;
+            
+            function tryClickEligibilityTab() {
+                attemptCount++;
+                
+                var eligTabLink = document.getElementById("eligibilityTabLink");
+                if (eligTabLink) {
+                    log(featureName + ": Found eligibilityTabLink on attempt " + attemptCount + ", clicking...");
+                    eligTabLink.click();
+                    log(featureName + ": Eligibility tab clicked successfully");
+                    return;
+                }
+                
+                var tabLinks = document.querySelectorAll("a[href='#eligibilityTab']");
+                if (tabLinks && tabLinks.length > 0) {
+                    log(featureName + ": Found eligibility tab link via selector on attempt " + attemptCount + ", clicking...");
+                    tabLinks[0].click();
+                    log(featureName + ": Eligibility tab clicked via selector");
+                    return;
+                }
+                
+                if (attemptCount < maxAttempts) {
+                    log(featureName + ": Eligibility tab link not found, retrying... (attempt " + attemptCount + "/" + maxAttempts + ")");
+                    setTimeout(tryClickEligibilityTab, attemptInterval);
+                } else {
+                    log(featureName + ": Could not find eligibility tab link after " + maxAttempts + " attempts");
+                }
+            }
+            
+            setTimeout(tryClickEligibilityTab, 500);
+        }
+
+        // Subject Eligibility page detection
+        if (isSubjectEligPending() && isSubjectsListPage()) {
+            log("SubjectElig: Pending detected on subjects list page, processing...");
+            setTimeout(processSubjectEligOnSubjectsList, 2000);
+            return;
+        }
+
+        // Cohort Eligibility page detection
+        if (isCohortEligRunning()) {
+            var phase = getCohortEligPhase();
+            log("CohortElig: Running detected, phase=" + phase);
+            if (phase === "collectInitials" && isCohortShowPage()) {
+                log("CohortElig: On cohort page, will collect assignments");
+                setTimeout(processCohortEligOnCohortPage, 2000);
+                return;
+            } else if (phase === "crossReference" && isSubjectsListPage()) {
+                log("CohortElig: On subjects list, will cross-reference");
+                setTimeout(processCohortEligOnSubjectsList, 2000);
+                return;
+            }
+        }
+
         if (isPaused()) {
             log("Paused; automation halted");
             return;
