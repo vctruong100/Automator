@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark PI Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.1.0
+// @version     1.2.0
 // @description Automator for ClinSpark PI
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20PI%20Automator.js
@@ -6777,26 +6777,26 @@
         subjectEligBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         subjectEligBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
-        var clearLogsBtn = document.createElement("button");
-        clearLogsBtn.textContent = "Clear Logs";
-        clearLogsBtn.style.background = "#6c757d";
-        clearLogsBtn.style.color = "#fff";
-        clearLogsBtn.style.border = "none";
-        clearLogsBtn.style.borderRadius = "6px";
-        clearLogsBtn.style.padding = "8px";
-        clearLogsBtn.style.cursor = "pointer";
-        clearLogsBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
-        clearLogsBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
+        // var clearLogsBtn = document.createElement("button");
+        // clearLogsBtn.textContent = "Clear Logs";
+        // clearLogsBtn.style.background = "#6c757d";
+        // clearLogsBtn.style.color = "#fff";
+        // clearLogsBtn.style.border = "none";
+        // clearLogsBtn.style.borderRadius = "6px";
+        // clearLogsBtn.style.padding = "8px";
+        // clearLogsBtn.style.cursor = "pointer";
+        // clearLogsBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
+        // clearLogsBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
 
-        var toggleLogsBtn = document.createElement("button");
-        var logVisible = getLogVisible();
-        toggleLogsBtn.textContent = logVisible ? "Hide Logs" : "Show Logs";
-        toggleLogsBtn.style.background = "#6c757d";
-        toggleLogsBtn.style.color = "#fff";
-        toggleLogsBtn.style.border = "none";
-        toggleLogsBtn.style.borderRadius = "6px";
-        toggleLogsBtn.style.padding = "8px";
-        toggleLogsBtn.style.cursor = "pointer";
+        // var toggleLogsBtn = document.createElement("button");
+        // var logVisible = getLogVisible();
+        // toggleLogsBtn.textContent = logVisible ? "Hide Logs" : "Show Logs";
+        // toggleLogsBtn.style.background = "#6c757d";
+        // toggleLogsBtn.style.color = "#fff";
+        // toggleLogsBtn.style.border = "none";
+        // toggleLogsBtn.style.borderRadius = "6px";
+        // toggleLogsBtn.style.padding = "8px";
+        // toggleLogsBtn.style.cursor = "pointer";
 
         btnRow.appendChild(findAeBtn);
         btnRow.appendChild(findFormBtn);
@@ -6804,8 +6804,8 @@
         btnRow.appendChild(openEligBtn);
         btnRow.appendChild(subjectEligBtn);
         btnRow.appendChild(pauseBtn);
-        btnRow.appendChild(clearLogsBtn);
-        btnRow.appendChild(toggleLogsBtn);
+        // btnRow.appendChild(clearLogsBtn);
+        // btnRow.appendChild(toggleLogsBtn);
         bodyContainer.appendChild(btnRow);
 
         var status = document.createElement("div");
@@ -6825,47 +6825,47 @@
         status.textContent = "Ready";
 
         bodyContainer.appendChild(status);
-        var logBox = document.createElement("div");
-        logBox.id = LOG_ID;
-        logBox.style.marginTop = "8px";
-        logBox.style.height = "220px";
-        logBox.style.overflowY = "auto";
-        logBox.style.background = "#141414";
-        logBox.style.border = "1px solid #333";
-        logBox.style.borderRadius = "6px";
-        logBox.style.padding = "6px";
-        logBox.style.fontSize = "12px";
-        logBox.style.color = "#00000";
-        logBox.style.whiteSpace = "pre-wrap";
-        logBox.style.wordBreak = "break-word";
-        logBox.style.overflowWrap = "anywhere";
-        if (!logVisible) {
-            logBox.style.display = "none";
-        }
+        // var logBox = document.createElement("div");
+        // logBox.id = LOG_ID;
+        // logBox.style.marginTop = "8px";
+        // logBox.style.height = "220px";
+        // logBox.style.overflowY = "auto";
+        // logBox.style.background = "#141414";
+        // logBox.style.border = "1px solid #333";
+        // logBox.style.borderRadius = "6px";
+        // logBox.style.padding = "6px";
+        // logBox.style.fontSize = "12px";
+        // logBox.style.color = "#00000";
+        // logBox.style.whiteSpace = "pre-wrap";
+        // logBox.style.wordBreak = "break-word";
+        // logBox.style.overflowWrap = "anywhere";
+        // if (!logVisible) {
+        //     logBox.style.display = "none";
+        // }
         
-        clearLogsBtn.addEventListener("click", function () {
-            clearLogs();
-            status.textContent = "Logs cleared";
-        });
+        // clearLogsBtn.addEventListener("click", function () {
+        //     clearLogs();
+        //     status.textContent = "Logs cleared";
+        // });
 
-        toggleLogsBtn.addEventListener("click", function () {
-            var currentlyVisible = getLogVisible();
-            var newVisible = !currentlyVisible;
-            setLogVisible(newVisible);
-            if (newVisible) {
-                logBox.style.display = "block";
-                toggleLogsBtn.textContent = "Hide Logs";
-                log("Logs shown");
-            } else {
-                logBox.style.display = "none";
-                toggleLogsBtn.textContent = "Show Logs";
-                log("Logs hidden");
-            }
-        });
-        bodyContainer.appendChild(logBox);
+        // toggleLogsBtn.addEventListener("click", function () {
+        //     var currentlyVisible = getLogVisible();
+        //     var newVisible = !currentlyVisible;
+        //     setLogVisible(newVisible);
+        //     if (newVisible) {
+        //         logBox.style.display = "block";
+        //         toggleLogsBtn.textContent = "Hide Logs";
+        //         log("Logs shown");
+        //     } else {
+        //         logBox.style.display = "none";
+        //         toggleLogsBtn.textContent = "Show Logs";
+        //         log("Logs hidden");
+        //     }
+        // });
+        // bodyContainer.appendChild(logBox);
         
-        // Restore logs from localStorage
-        restoreLogsToBox(logBox);
+        // // Restore logs from localStorage
+        // restoreLogsToBox(logBox);
         
         pauseBtn.addEventListener("click", function () {
             var nowPaused = isPaused();
