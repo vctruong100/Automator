@@ -774,34 +774,6 @@
     // request user for form keyword, and then search for form based on the keyword.
     //==========================
 
-    function setPanelHidden(flag) {
-        try {
-            localStorage.setItem(STORAGE_PANEL_HIDDEN, flag ? "1" : "0");
-            log("Panel hidden state set to " + String(flag));
-        } catch (e) {
-        }
-    }
-
-    function togglePanelHiddenViaHotkey() {
-        var panel = document.getElementById(PANEL_ID);
-        if (!panel) {
-            log("Hotkey toggle: panel element not found; nothing to toggle");
-            return;
-        }
-        var isHidden = getPanelHidden();
-        if (isHidden) {
-            panel.style.display = "block";
-            panel.style.pointerEvents = "auto";
-            setPanelHidden(false);
-            log("Hotkey toggle: panel unhidden");
-        } else {
-            panel.style.display = "none";
-            panel.style.pointerEvents = "none";
-            setPanelHidden(true);
-            log("Hotkey toggle: panel hidden");
-        }
-    }
-
     function resetStudyEventsOnList() {
         var cont = document.getElementById("s2id_studyEventIds");
         if (cont) {
@@ -3097,19 +3069,6 @@
         log("ImportElig: waitForComparatorReady timeout");
         return null;
     }
-    function clearEligibilityWorkingState() {
-        try {
-            localStorage.removeItem(STORAGE_ELIG_IMPORTED);
-            log("ImportElig: cleared imported items");
-        } catch(e) {}
-
-        try {
-            localStorage.removeItem(STORAGE_ELIG_CHECKITEM_CACHE);
-            log("ImportElig: cleared checkItemCache");
-        } catch(e) {}
-
-        log("ImportElig: working state fully cleared");
-    }
 
     function getItemRefOptionsSignature() {
         var sel = document.querySelector("select#itemRef");
@@ -4291,22 +4250,7 @@
         return true;
     }
 
-    // Return index of first option with non-empty value.
-    function firstNonEmptyOptionIndex(selectEl) {
-        if (!selectEl) {
-            return -1;
-        }
-        var opts = selectEl.querySelectorAll("option");
-        var i = 0;
-        while (i < opts.length) {
-            var v = (opts[i].value + "").trim();
-            if (v.length > 0) {
-                return i;
-            }
-            i = i + 1;
-        }
-        return -1;
-    }
+
 
     async function trySelectCheckItemForCodeThroughAllPlansAndActivities(code) {
         var formExclusion = getFormExclusion();
@@ -10266,14 +10210,10 @@
         if (ok2) {
             try {
                 localStorage.setItem(STORAGE_EDIT_STUDY, "1");
-                log("Study edit flag set");
+                log("Study edit flag set - will lock eligibility first");
             } catch (e) {}
-            var editLink = await waitForSelector('a[href^="/secure/administration/manage/studies/update/"][href$="/basics"]', 5000);
-            if (!editLink) {
-                return;
-            }
-            editLink.click();
-            log("Study edit basics clicked");
+            log("Routing to Study Metadata for eligibility lock");
+            location.href = STUDY_METADATA_URL + "?autoeliglock=1";
             return;
         }
         var goEpoch = getContinueEpoch();
@@ -10358,13 +10298,6 @@
             if (cancelBtn) {
                 if (mode === "all") {
                     setContinueEpoch();
-                    try {
-                        localStorage.setItem(STORAGE_CHECK_ELIG_LOCK, "1");
-                    } catch (e3) {}
-                } else {
-                    try {
-                        localStorage.setItem(STORAGE_CHECK_ELIG_LOCK, "1");
-                    } catch (e4) {}
                 }
                 cancelBtn.click();
                 log("Study already ACTIVE; returning to show");
@@ -10391,13 +10324,6 @@
         }
         if (mode === "all") {
             setContinueEpoch();
-            try {
-                localStorage.setItem(STORAGE_CHECK_ELIG_LOCK, "1");
-            } catch (e5) {}
-        } else {
-            try {
-                localStorage.setItem(STORAGE_CHECK_ELIG_LOCK, "1");
-            } catch (e6) {}
         }
         saveBtn.click();
         log("Study basics saved");
@@ -10959,6 +10885,23 @@
     // Persist barcode subject id for cross-tab lookup.
     function BarcodeFunctions() {}
 
+        // Return index of first option with non-empty value.
+    function firstNonEmptyOptionIndex(selectEl) {
+        if (!selectEl) {
+            return -1;
+        }
+        var opts = selectEl.querySelectorAll("option");
+        var i = 0;
+        while (i < opts.length) {
+            var v = (opts[i].value + "").trim();
+            if (v.length > 0) {
+                return i;
+            }
+            i = i + 1;
+        }
+        return -1;
+    }
+    
     // Attempt to infer subject text/id from breadcrumb or tooltip elements.
     function getSubjectFromBreadcrumbOrTooltip() {
         var text = "";
@@ -11269,6 +11212,34 @@
 
     function SharedUtilityFunctions() {}
 
+
+    function setPanelHidden(flag) {
+        try {
+            localStorage.setItem(STORAGE_PANEL_HIDDEN, flag ? "1" : "0");
+            log("Panel hidden state set to " + String(flag));
+        } catch (e) {
+        }
+    }
+
+    function togglePanelHiddenViaHotkey() {
+        var panel = document.getElementById(PANEL_ID);
+        if (!panel) {
+            log("Hotkey toggle: panel element not found; nothing to toggle");
+            return;
+        }
+        var isHidden = getPanelHidden();
+        if (isHidden) {
+            panel.style.display = "block";
+            panel.style.pointerEvents = "auto";
+            setPanelHidden(false);
+            log("Hotkey toggle: panel unhidden");
+        } else {
+            panel.style.display = "none";
+            panel.style.pointerEvents = "none";
+            setPanelHidden(true);
+            log("Hotkey toggle: panel hidden");
+        }
+    }
 
     // Recreate popups on page load if they should be active
     function recreatePopupsIfNeeded() {
@@ -11612,14 +11583,15 @@
             }
         }
         if (hasLock) {
-            if (mode === "study") {
-                clearRunMode();
-                log("Eligibility already locked; ending Study Update");
+            log("Eligibility already locked; proceeding to update study status");
+            var editLink = document.querySelector('a[href^="/secure/administration/manage/studies/update/"][href$="/basics"]');
+            if (!editLink) {
+                log("Edit basics link not found; navigating to Study Show");
+                location.href = "/secure/administration/studies/show";
                 return;
             }
-            setContinueEpoch();
-            log("Eligibility locked; continuing ALL to Study Show");
-            location.href = "/secure/administration/studies/show";
+            editLink.click();
+            log("Routing to edit basics to update study status");
             return;
         }
         var href = target.getAttribute("href") + "";
@@ -11639,6 +11611,9 @@
         } else {
             url = url + "&autolock=1";
         }
+        try {
+            localStorage.setItem(STORAGE_CHECK_ELIG_LOCK, "1");
+        } catch (e7) {}
         log("Routing to Eligibility form for locking");
         location.href = url;
     }
@@ -12398,6 +12373,20 @@
     // shared across all automation features and provide the common user interface.
     //==========================
     function SharedPanelFunctions() {}
+
+    function clearEligibilityWorkingState() {
+    try {
+        localStorage.removeItem(STORAGE_ELIG_IMPORTED);
+        log("ImportElig: cleared imported items");
+    } catch(e) {}
+
+    try {
+        localStorage.removeItem(STORAGE_ELIG_CHECKITEM_CACHE);
+        log("ImportElig: cleared checkItemCache");
+    } catch(e) {}
+
+    log("ImportElig: working state fully cleared");
+}
 
     // Read stored position value (or return fallback).
     function getStoredPos(key, fallback) {
@@ -13558,7 +13547,6 @@
                 localStorage.setItem(STORAGE_KEY, "1");
                 localStorage.setItem(STORAGE_RUN_MODE, "all");
                 localStorage.setItem(STORAGE_CONTINUE_EPOCH, "1");
-                localStorage.setItem(STORAGE_CHECK_ELIG_LOCK, "1");
             } catch (e) {}
             status.textContent = "Starting ALL: Activity Plans…";
             log("Run ALL clicked");

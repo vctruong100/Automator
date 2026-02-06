@@ -556,6 +556,165 @@
         log("processLockSamplePathUpdatePage: not needed with background approach");
     }
 
+    
+    //==========================
+    // CLEAR SUBJECT ELIGIBILITY FEATURE
+    //==========================
+    // This section contains all functions related to clearing subject eligibility.
+    // This feature automates clearing all existing eligibility mapping in the table.
+    //==========================
+
+    function ClearEligibilityFunctions() {}
+
+    function startClearMapping() {
+        log("ClearMapping: startClearMapping invoked");
+
+        try {
+            localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_CLEAR_MAPPING);
+        } catch (e) {
+        }
+
+        var path = location.pathname;
+        if (path !== "/secure/crfdesign/studylibrary/eligibility/list") {
+            log("ClearMapping: not on eligibility list page; redirecting");
+            location.href = "https://cenexeltest.clinspark.com/secure/crfdesign/studylibrary/eligibility/list";
+            return;
+        }
+
+        executeClearMappingAutomation();
+    }
+
+    async function executeClearMappingAutomation() {
+        log("ClearMapping: executor started");
+
+        var path = location.pathname;
+        if (path !== "/secure/crfdesign/studylibrary/eligibility/list") {
+            log("ClearMapping: wrong page; redirecting");
+            try {
+                localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_CLEAR_MAPPING);
+            } catch (e) {
+            }
+            location.href = "https://cenexeltest.clinspark.com/secure/crfdesign/studylibrary/eligibility/list";
+            return;
+        }
+
+        var tbody = await waitForSelector("tbody#eligibilityRefTableBody", 15000);
+        if (!tbody) {
+            log("ClearMapping: table body missing; stopping");
+            clearRunMode();
+            return;
+        }
+
+        var rows = tbody.querySelectorAll("tr");
+        log("ClearMapping: rows found=" + String(rows.length));
+
+        if (rows.length === 0) {
+            log("ClearMapping: no rows remain; clearing run mode");
+            clearRunMode();
+            return;
+        }
+
+        await deleteFirstEligibilityRow();
+    }
+
+
+
+    async function deleteFirstEligibilityRow() {
+        log("ClearMapping: deleteFirstEligibilityRow started");
+
+        var tbody = await waitForSelector("tbody#eligibilityRefTableBody", 15000);
+        if (!tbody) {
+            log("ClearMapping: tbody missing in deleteFirstEligibilityRow");
+            clearRunMode();
+            return;
+        }
+
+        var rows = tbody.querySelectorAll("tr");
+        if (rows.length === 0) {
+            log("ClearMapping: no rows present during deleteFirstEligibilityRow");
+            clearRunMode();
+            return;
+        }
+
+        var tr = rows[0];
+        var tds = tr.querySelectorAll("td");
+        if (!tds) {
+            log("ClearMapping: row has no tds; stopping");
+            clearRunMode();
+            return;
+        }
+        if (tds.length < 9) {
+            log("ClearMapping: row has insufficient columns; stopping");
+            clearRunMode();
+            return;
+        }
+
+        var actionTd = tds[8];
+        var btn = actionTd.querySelector("button.dropdown-toggle");
+        if (!btn) {
+            log("ClearMapping: dropdown toggle not found");
+            clearRunMode();
+            return;
+        }
+
+        btn.click();
+        log("ClearMapping: action dropdown opened");
+        await sleep(400);
+
+        var items = document.querySelectorAll("ul.dropdown-menu li a");
+        var deleteLink = null;
+
+        var i = 0;
+        while (i < items.length) {
+            var a = items[i];
+            var txt = (a.textContent + "").trim().toLowerCase();
+            if (txt.indexOf("delete") >= 0) {
+                deleteLink = a;
+                break;
+            }
+            i = i + 1;
+        }
+
+        if (!deleteLink) {
+            log("ClearMapping: delete link not found");
+            clearRunMode();
+            return;
+        }
+
+        log("ClearMapping: clicking delete link");
+        deleteLink.click();
+        await sleep(600);
+
+        var okBtn = null;
+        var waited = 0;
+        var step = 150;
+        var maxWait = 4000;
+
+        while (waited < maxWait) {
+            okBtn = document.querySelector("button[data-bb-handler='confirm'].btn.btn-primary");
+            if (okBtn) {
+                break;
+            }
+            await sleep(step);
+            waited = waited + step;
+        }
+
+        if (!okBtn) {
+            log("ClearMapping: OK button not found in modal");
+            clearRunMode();
+            return;
+        }
+
+        log("ClearMapping: clicking OK button in modal");
+        okBtn.click();
+        await sleep(1500);
+
+        log("ClearMapping: delete confirmed; forcing page reload");
+        localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_CLEAR_MAPPING);
+        location.reload();
+    }
+
+
     //==========================
     // RUN IMPORT COHORT SUBJECT FEATURE
     //==========================
@@ -5785,14 +5944,10 @@ async function processCohortShowPageForAddExistingSubject() {
         if (ok2) {
             try {
                 localStorage.setItem(STORAGE_EDIT_STUDY, "1");
-                log("Study edit flag set");
+                log("Study edit flag set - will lock eligibility first");
             } catch (e) {}
-            var editLink = await waitForSelector('a[href^="/secure/administration/manage/studies/update/"][href$="/basics"]', 5000);
-            if (!editLink) {
-                return;
-            }
-            editLink.click();
-            log("Study edit basics clicked");
+            log("Routing to Study Metadata for eligibility lock");
+            location.href = STUDY_METADATA_URL + "?autoeliglock=1";
             return;
         }
         var goEpoch = getContinueEpoch();
@@ -5877,13 +6032,6 @@ async function processCohortShowPageForAddExistingSubject() {
             if (cancelBtn) {
                 if (mode === "all") {
                     setContinueEpoch();
-                    try {
-                        localStorage.setItem(STORAGE_CHECK_ELIG_LOCK, "1");
-                    } catch (e3) {}
-                } else {
-                    try {
-                        localStorage.setItem(STORAGE_CHECK_ELIG_LOCK, "1");
-                    } catch (e4) {}
                 }
                 cancelBtn.click();
                 log("Study already ACTIVE; returning to show");
@@ -5910,13 +6058,6 @@ async function processCohortShowPageForAddExistingSubject() {
         }
         if (mode === "all") {
             setContinueEpoch();
-            try {
-                localStorage.setItem(STORAGE_CHECK_ELIG_LOCK, "1");
-            } catch (e5) {}
-        } else {
-            try {
-                localStorage.setItem(STORAGE_CHECK_ELIG_LOCK, "1");
-            } catch (e6) {}
         }
         saveBtn.click();
         log("Study basics saved");
@@ -7161,14 +7302,15 @@ async function processCohortShowPageForAddExistingSubject() {
             }
         }
         if (hasLock) {
-            if (mode === "study") {
-                clearRunMode();
-                log("Eligibility already locked; ending Study Update");
+            log("Eligibility already locked; proceeding to update study status");
+            var editLink = document.querySelector('a[href^="/secure/administration/manage/studies/update/"][href$="/basics"]');
+            if (!editLink) {
+                log("Edit basics link not found; navigating to Study Show");
+                location.href = "/secure/administration/studies/show";
                 return;
             }
-            setContinueEpoch();
-            log("Eligibility locked; continuing ALL to Study Show");
-            location.href = "/secure/administration/studies/show";
+            editLink.click();
+            log("Routing to edit basics to update study status");
             return;
         }
         var href = target.getAttribute("href") + "";
@@ -7188,6 +7330,9 @@ async function processCohortShowPageForAddExistingSubject() {
         } else {
             url = url + "&autolock=1";
         }
+        try {
+            localStorage.setItem(STORAGE_CHECK_ELIG_LOCK, "1");
+        } catch (e7) {}
         log("Routing to Eligibility form for locking");
         location.href = url;
     }
@@ -9137,7 +9282,6 @@ async function processCohortShowPageForAddExistingSubject() {
                 localStorage.setItem(STORAGE_KEY, "1");
                 localStorage.setItem(STORAGE_RUN_MODE, "all");
                 localStorage.setItem(STORAGE_CONTINUE_EPOCH, "1");
-                localStorage.setItem(STORAGE_CHECK_ELIG_LOCK, "1");
             } catch (e) {}
             status.textContent = "Starting ALL: Activity Plans…";
             log("Run ALL clicked");

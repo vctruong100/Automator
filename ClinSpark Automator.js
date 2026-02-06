@@ -24,7 +24,7 @@
     var STORAGE_PANEL_TOP = "activityPlanState.panel.top";
     var STORAGE_PANEL_RIGHT = "activityPlanState.panel.right";
     var LIST_URL = "https://cenexel.clinspark.com/secure/crfdesign/activityplans/list";
-    var STUDY_SHOW_URL = "https://cenexel.clinspark.com/secure/administration/studies/show";
+    var STUDY_SHOW_URL = "https://cenexel.clinspark.com/secure/administration/studies/show";``
     var PANEL_ID = "activityPlanStatePanel";
     var LOG_ID = "activityPlanStateLog";
     var STORAGE_SELECTED_IDS = "activityPlanState.selectedVolunteerIds";

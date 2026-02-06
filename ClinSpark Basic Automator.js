@@ -60,6 +60,11 @@
     var STORAGE_LOG_VISIBLE = "activityPlanState.log.visible";
     var STORAGE_MANUAL_SELECT_INITIAL_REF_TIME = "activityPlanState.manualSelectInitialRefTime";
     var STORAGE_RUN_LOCK_SAMPLE_PATHS = "activityPlanState.runLockSamplePaths";
+    var STORAGE_SAMPLE_PATH_AUTO_CLOSE = "activityPlanState.samplePath.autoClose";
+    var STORAGE_LOCK_SAMPLE_PATHS_POPUP = "activityPlanState.lockSamplePaths.popup";
+    var LOCK_SAMPLE_PATHS_POPUP_REF = null;
+    var STORAGE_LOCK_ACTIVITY_PLANS_POPUP = "activityPlanState.lockActivityPlans.popup";
+    var LOCK_ACTIVITY_PLANS_POPUP_REF = null;
 
     const STORAGE_PANEL_HIDDEN = "activityPlanState.panel.hidden";
     const PANEL_TOGGLE_KEY = "F2";
@@ -68,6 +73,27 @@
     const RUNMODE_ELIG_IMPORT = "eligibilityImport";
     const STORAGE_ELIG_CHECKITEM_CACHE = "activityPlanState.eligibility.checkItemCache";
     const STORAGE_ELIG_IMPORT_PENDING_POPUP = "activityPlanState.eligibility.importPendingPopup";
+
+    // Run Find Study Event
+
+    var STORAGE_FIND_FORM_PENDING = "activityPlanState.findForm.pending";
+    var STORAGE_FIND_FORM_KEYWORD = "activityPlanState.findForm.keyword";
+    var STORAGE_FIND_FORM_SUBJECT = "activityPlanState.findForm.subject";
+    var STORAGE_FIND_FORM_STATUS_VALUES = "activityPlanState.findForm.statusValues";
+
+    var STORAGE_FIND_STUDY_EVENT_PENDING = "activityPlanState.findStudyEvent.pending";
+    var STORAGE_FIND_STUDY_EVENT_KEYWORD = "activityPlanState.findStudyEvent.keyword";
+    var STORAGE_FIND_STUDY_EVENT_SUBJECT = "activityPlanState.findStudyEvent.subject";
+    var STORAGE_FIND_STUDY_EVENT_STATUS_VALUES = "activityPlanState.findStudyEvent.statusValues";
+
+    var STUDY_EVENT_POPUP_TITLE = "Find Study Events";
+    var STUDY_EVENT_POPUP_KEYWORD_LABEL = "Study Event Keyword";
+    var STUDY_EVENT_POPUP_SUBJECT_LABEL = "Subject Identifier";
+    var STUDY_EVENT_POPUP_OK_TEXT = "Continue";
+    var STUDY_EVENT_POPUP_CANCEL_TEXT = "Cancel";
+
+    var STUDY_EVENT_NO_MATCH_TITLE = "Find Study Events";
+    var STUDY_EVENT_NO_MATCH_MESSAGE = "No study event is found.";
 
     // Run Find Form
     var FORM_LIST_URL = "https://cenexeltest.clinspark.com/secure/study/data/list";
@@ -82,17 +108,6 @@
 
     var BARCODE_BG_TAB = null;
     const RUNMODE_CLEAR_MAPPING = "clearMapping";
-
-    var STORAGE_FIND_FORM_PENDING = "activityPlanState.findForm.pending";
-    var STORAGE_FIND_FORM_KEYWORD = "activityPlanState.findForm.keyword";
-    var STORAGE_FIND_FORM_SUBJECT = "activityPlanState.findForm.subject";
-    var STORAGE_FIND_FORM_STATUS_VALUES = "activityPlanState.findForm.statusValues";
-
-    var FORM_LIST_URL = "https://cenexeltest.clinspark.com/secure/study/data/list";
-    var STORAGE_FIND_FORM_PENDING = "activityPlanState.findForm.pending";
-    var STORAGE_FIND_FORM_KEYWORD = "activityPlanState.findForm.keyword";
-    var STORAGE_FIND_FORM_SUBJECT = "activityPlanState.findForm.subject";
-    var STORAGE_FIND_FORM_STATUS_VALUES = "activityPlanState.findForm.statusValues";
 
     // Run Parse Method
     var STORAGE_PARSE_METHOD_RUNNING = "activityPlanState.parseMethod.running";
@@ -114,7 +129,9 @@
     var IMPORT_ELIG_POPUP_REF = null;
     var IMPORT_COHORT_POPUP_REF = null;
     var ADD_COHORT_POPUP_REF = null;
+    var ICF_BARCODE_POPUP_REF = null;
     const STORAGE_RUN_ALL_POPUP = "activityPlanState.runAllPopup";
+    const STORAGE_ICF_BARCODE_POPUP = "activityPlanState.icfBarcodePopup";
     const STORAGE_RUN_ALL_STATUS = "activityPlanState.runAllStatus";
     const STORAGE_CLEAR_MAPPING_POPUP = "activityPlanState.clearMappingPopup";
     const STORAGE_IMPORT_ELIG_POPUP = "activityPlanState.importEligPopup";
@@ -135,58 +152,8 @@
     var DEFAULT_FORM_EXCLUSION = "check";
     var DEFAULT_FORM_PRIORITY = "mh, bm, review, process, dm, rep, subs, med, elg_pi, vitals, ecg";
 
-    //==========================
-    // BACKGROUND HTTP REQUEST HELPERS
-    //==========================
-    // Helper functions for making background HTTP requests without opening tabs
-    //==========================
+    
 
-    function fetchPage(url) {
-        return new Promise(function(resolve, reject) {
-            if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") {
-                GM.xmlHttpRequest({
-                    method: "GET",
-                    url: url,
-                    onload: function(response) {
-                        resolve(response.responseText);
-                    },
-                    onerror: function(error) {
-                        reject(error);
-                    }
-                });
-            } else {
-                reject(new Error("GM.xmlHttpRequest not available"));
-            }
-        });
-    }
-
-    function submitForm(url, formData) {
-        return new Promise(function(resolve, reject) {
-            if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") {
-                GM.xmlHttpRequest({
-                    method: "POST",
-                    url: url,
-                    headers: {
-                        "Content-Type": "application/x-www-form-urlencoded"
-                    },
-                    data: formData,
-                    onload: function(response) {
-                        resolve(response.responseText);
-                    },
-                    onerror: function(error) {
-                        reject(error);
-                    }
-                });
-            } else {
-                reject(new Error("GM.xmlHttpRequest not available"));
-            }
-        });
-    }
-
-    function parseHtml(htmlString) {
-        var parser = new DOMParser();
-        return parser.parseFromString(htmlString, "text/html");
-    }
     //==========================
     // RUN BARCODE FEATURE
     //==========================
@@ -199,33 +166,29 @@
     // Persist barcode subject id for cross-tab lookup.
     function BarcodeFunctions() {}
 
-    // Fetch barcode completely in the background without opening a new tab.
+            // Fetch barcode completely in the background without opening a new tab.
     // Uses the subject ID directly if available, or uses a hidden iframe to search.
     async function fetchBarcodeInBackground(subjectText, subjectId) {
         log("Background Barcode: starting search subjectText='" + String(subjectText) + "' subjectId='" + String(subjectId) + "'");
 
-        // If we have a subject ID, the barcode is simply "S" + subjectId
         if (subjectId && subjectId.length > 0) {
             var result = "S" + String(subjectId);
             log("Background Barcode: using direct ID, result=" + result);
             return result;
         }
 
-        // If we only have subject text, we need to search through the barcode printing page
         if (!subjectText || subjectText.length === 0) {
             log("Background Barcode: no subjectText or subjectId provided");
             return null;
         }
 
-        // Use a hidden iframe to load the page and interact with it
-        // This allows JavaScript to execute and populate the dynamic dropdowns
         return await searchBarcodeViaIframe(subjectText);
     }
 
     // Search for barcode using a hidden iframe that can execute JavaScript
     async function searchBarcodeViaIframe(subjectText) {
         log("Background Barcode: using hidden iframe approach");
-        
+
         return new Promise(function(resolve) {
             var iframe = document.createElement("iframe");
             iframe.style.position = "fixed";
@@ -235,10 +198,10 @@
             iframe.style.height = "1px";
             iframe.style.visibility = "hidden";
             iframe.style.pointerEvents = "none";
-            
+
             var timeoutId = null;
             var resolved = false;
-            
+
             function cleanup() {
                 if (timeoutId) {
                     clearTimeout(timeoutId);
@@ -248,88 +211,102 @@
                     iframe.parentNode.removeChild(iframe);
                 }
             }
-            
+
             function finishWithResult(result) {
                 if (resolved) return;
                 resolved = true;
                 cleanup();
                 resolve(result);
             }
-            
+
             // Set a maximum timeout
             timeoutId = setTimeout(function() {
                 log("Background Barcode: iframe timeout reached");
                 finishWithResult(null);
             }, 30000);
-            
+
             iframe.onload = async function() {
                 try {
                     var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-                    
-                    // Wait a moment for page to initialize
-                    await sleep(500);
-                    
-                    var epochSel = iframeDoc.querySelector("select#epoch");
+
+                    // Wait for epoch select to appear and be populated (Edge needs more time than Chrome)
+                    var epochSel = null;
+                    var retryCount = 0;
+                    var maxRetries = 40;
+                    while (retryCount < maxRetries && !epochSel) {
+                        await sleep(300);
+                        epochSel = iframeDoc.querySelector("select#epoch");
+                        if (epochSel) {
+                            var opts = epochSel.querySelectorAll("option");
+                            if (opts.length === 0) {
+                                epochSel = null;
+                            } else {
+                                log("Background Barcode: iframe - epoch select ready with " + opts.length + " options (attempt " + (retryCount + 1) + ")");
+                            }
+                        } else {
+                        }
+                        retryCount++;
+                    }
+
                     if (!epochSel) {
-                        log("Background Barcode: iframe - epoch select not found");
                         finishWithResult(null);
                         return;
                     }
-                    
+
                     var epochOpts = epochSel.querySelectorAll("option");
                     log("Background Barcode: iframe - found " + String(epochOpts.length) + " epoch options");
-                    
+
                     // Iterate through epochs
                     for (var eIdx = 0; eIdx < epochOpts.length; eIdx++) {
                         if (resolved) return;
-                        
+
                         var epochVal = (epochOpts[eIdx].value + "").trim();
                         if (epochVal.length === 0) continue;
-                        
+
                         log("Background Barcode: iframe - selecting epoch value='" + epochVal + "'");
                         epochSel.value = epochVal;
                         var epochEvt = new Event("change", { bubbles: true });
                         epochSel.dispatchEvent(epochEvt);
-                        
-                        // Wait for cohorts to load
-                        await sleep(800);
-                        
+
+                        // Wait for cohorts to load (Edge needs more time)
+                        await sleep(1200);
+
                         var cohortSel = iframeDoc.querySelector("select#cohort");
                         if (!cohortSel) {
                             log("Background Barcode: iframe - cohort select not found");
                             continue;
                         }
-                        
+
                         var cohortOpts = cohortSel.querySelectorAll("option");
                         log("Background Barcode: iframe - found " + String(cohortOpts.length) + " cohort options");
-                        
+
                         for (var cIdx = 0; cIdx < cohortOpts.length; cIdx++) {
                             if (resolved) return;
-                            
+
                             var cohortVal = (cohortOpts[cIdx].value + "").trim();
                             if (cohortVal.length === 0) continue;
-                            
+
                             log("Background Barcode: iframe - selecting cohort value='" + cohortVal + "'");
                             cohortSel.value = cohortVal;
                             var cohortEvt = new Event("change", { bubbles: true });
                             cohortSel.dispatchEvent(cohortEvt);
-                            
-                            // Wait for subjects to load
-                            await sleep(800);
-                            
+
+                            // Wait for subjects to load (Edge needs more time)
+                            await sleep(1200);
+
                             var subjectsSel = iframeDoc.querySelector("select#subjects");
                             if (!subjectsSel) {
                                 log("Background Barcode: iframe - subjects select not found");
                                 continue;
                             }
-                            
+
                             var subjectOpts = subjectsSel.querySelectorAll("option");
                             log("Background Barcode: iframe - found " + String(subjectOpts.length) + " subject options");
-                            
+
                             for (var sIdx = 0; sIdx < subjectOpts.length; sIdx++) {
                                 var sVal = (subjectOpts[sIdx].value + "").trim();
                                 var sTxt = (subjectOpts[sIdx].textContent + "").trim();
-                                
+
                                 if (sVal.length > 0) {
                                     var textMatch = normalizeSubjectString(sTxt) === normalizeSubjectString(subjectText);
                                     if (textMatch) {
@@ -342,21 +319,21 @@
                             }
                         }
                     }
-                    
+
                     log("Background Barcode: iframe - subject not found after searching all epochs/cohorts");
                     finishWithResult(null);
-                    
+
                 } catch (e) {
                     log("Background Barcode: iframe error - " + String(e));
                     finishWithResult(null);
                 }
             };
-            
+
             iframe.onerror = function() {
                 log("Background Barcode: iframe failed to load");
                 finishWithResult(null);
             };
-            
+
             document.body.appendChild(iframe);
             iframe.src = location.origin + "/secure/barcodeprinting/subjects";
         });
@@ -456,6 +433,23 @@
             log("APS_RunBarcode: elapsed " + String(s) + " s");
         } catch (e3) {}
         BARCODE_START_TS = 0;
+    }
+    
+    // Return index of first option with non-empty value.
+    function firstNonEmptyOptionIndex(selectEl) {
+        if (!selectEl) {
+            return -1;
+        }
+        var opts = selectEl.querySelectorAll("option");
+        var i = 0;
+        while (i < opts.length) {
+            var v = (opts[i].value + "").trim();
+            if (v.length > 0) {
+                return i;
+            }
+            i = i + 1;
+        }
+        return -1;
     }
 
     // Attempt to infer subject text/id from breadcrumb or tooltip elements.
@@ -557,22 +551,7 @@
         }
         return String(raw);
     }
-    // Return index of first option with non-empty value.
-    function firstNonEmptyOptionIndex(selectEl) {
-        if (!selectEl) {
-            return -1;
-        }
-        var opts = selectEl.querySelectorAll("option");
-        var i = 0;
-        while (i < opts.length) {
-            var v = (opts[i].value + "").trim();
-            if (v.length > 0) {
-                return i;
-            }
-            i = i + 1;
-        }
-        return -1;
-    }
+
     // Normalize subject text by trimming and collapsing whitespace.
     function normalizeSubjectString(t) {
         if (typeof t !== "string") {
@@ -773,7 +752,6 @@
     }
 
 
-
     //==========================
     // SHARED UTILITY FUNCTIONS
     //==========================
@@ -785,23 +763,609 @@
 
     function SharedUtilityFunctions() {}
 
+
+    // Recreate popups on page load if they should be active
+    function recreatePopupsIfNeeded() {
+        try {
+            var runMode = getRunMode();
+
+            // Recreate Run All popup (also for consent phase which is part of Run All flow)
+            if (runMode === "all" || runMode === "consent") {
+                var runAllPopupActive = localStorage.getItem(STORAGE_RUN_ALL_POPUP);
+                if (runAllPopupActive === "1" && (!RUN_ALL_POPUP_REF || !document.body.contains(RUN_ALL_POPUP_REF.element))) {
+                    var popupContainer = document.createElement("div");
+                    popupContainer.style.display = "flex";
+                    popupContainer.style.flexDirection = "column";
+                    popupContainer.style.gap = "16px";
+                    popupContainer.style.padding = "8px";
+
+                    // Restore status from localStorage
+                    var savedStatus = "Running Lock Activity Plans";
+                    try {
+                        var storedStatus = localStorage.getItem(STORAGE_RUN_ALL_STATUS);
+                        if (storedStatus && storedStatus.length > 0) {
+                            savedStatus = storedStatus;
+                        }
+                    } catch (e) {}
+
+                    var statusDiv = document.createElement("div");
+                    statusDiv.id = "runAllStatus";
+                    statusDiv.style.textAlign = "center";
+                    statusDiv.style.fontSize = "18px";
+                    statusDiv.style.color = "#fff";
+                    statusDiv.style.fontWeight = "500";
+                    statusDiv.textContent = savedStatus;
+
+                    var loadingAnimation = document.createElement("div");
+                    loadingAnimation.id = "runAllLoading";
+                    loadingAnimation.style.textAlign = "center";
+                    loadingAnimation.style.fontSize = "14px";
+                    loadingAnimation.style.color = "#9df";
+                    loadingAnimation.textContent = "Running.";
+
+                    popupContainer.appendChild(statusDiv);
+                    popupContainer.appendChild(loadingAnimation);
+
+                    RUN_ALL_POPUP_REF = createPopup({
+                        title: "Run Button (1-5) Progress",
+                        content: popupContainer,
+                        width: "400px",
+                        height: "auto",
+                        onClose: function() {
+                            log("Run All: cancelled by user (close button)");
+                            clearAllRunState();
+                            clearCohortGuard();
+                            try {
+                                localStorage.removeItem(STORAGE_RUN_MODE);
+                                localStorage.removeItem(STORAGE_KEY);
+                                localStorage.removeItem(STORAGE_CONTINUE_EPOCH);
+                                localStorage.removeItem(STORAGE_RUN_ALL_POPUP);
+                                localStorage.removeItem(STORAGE_RUN_ALL_STATUS);
+                            } catch (e) {}
+                            RUN_ALL_POPUP_REF = null;
+                        }
+                    });
+
+                    var dots = 1;
+                    var loadingInterval = setInterval(function() {
+                        if (!RUN_ALL_POPUP_REF || !document.body.contains(RUN_ALL_POPUP_REF.element)) {
+                            clearInterval(loadingInterval);
+                            return;
+                        }
+                        dots = dots + 1;
+                        if (dots > 3) {
+                            dots = 1;
+                        }
+                        var text = "Running";
+                        var i = 0;
+                        while (i < dots) {
+                            text = text + ".";
+                            i = i + 1;
+                        }
+                        if (loadingAnimation) {
+                            loadingAnimation.textContent = text;
+                        }
+                    }, 500);
+                }
+            }
+
+            // Recreate Clear Mapping popup
+            if (runMode === RUNMODE_CLEAR_MAPPING) {
+                var clearMappingPopupActive = localStorage.getItem(STORAGE_CLEAR_MAPPING_POPUP);
+                if (clearMappingPopupActive === "1" && (!CLEAR_MAPPING_POPUP_REF || !document.body.contains(CLEAR_MAPPING_POPUP_REF.element))) {
+                    var popupContainer = document.createElement("div");
+                    popupContainer.style.display = "flex";
+                    popupContainer.style.flexDirection = "column";
+                    popupContainer.style.gap = "16px";
+                    popupContainer.style.padding = "8px";
+
+                    var statusDiv = document.createElement("div");
+                    statusDiv.style.textAlign = "center";
+                    statusDiv.style.fontSize = "18px";
+                    statusDiv.style.color = "#fff";
+                    statusDiv.style.fontWeight = "500";
+                    statusDiv.textContent = "Running Clear Mapping";
+
+                    var loadingAnimation = document.createElement("div");
+                    loadingAnimation.id = "clearMappingLoading";
+                    loadingAnimation.style.textAlign = "center";
+                    loadingAnimation.style.fontSize = "14px";
+                    loadingAnimation.style.color = "#9df";
+                    loadingAnimation.textContent = "Running.";
+
+                    popupContainer.appendChild(statusDiv);
+                    popupContainer.appendChild(loadingAnimation);
+
+                    CLEAR_MAPPING_POPUP_REF = createPopup({
+                        title: "Clear Mapping",
+                        content: popupContainer,
+                        width: "350px",
+                        height: "auto",
+                        onClose: function() {
+                            log("ClearMapping: cancelled by user (close button)");
+                            try {
+                                localStorage.removeItem(STORAGE_RUN_MODE);
+                                localStorage.removeItem(STORAGE_CLEAR_MAPPING_POPUP);
+                            } catch (e) {}
+                            CLEAR_MAPPING_POPUP_REF = null;
+                        }
+                    });
+
+                    var dots = 1;
+                    var loadingInterval = setInterval(function() {
+                        if (!CLEAR_MAPPING_POPUP_REF || !document.body.contains(CLEAR_MAPPING_POPUP_REF.element)) {
+                            clearInterval(loadingInterval);
+                            return;
+                        }
+                        dots = dots + 1;
+                        if (dots > 3) {
+                            dots = 1;
+                        }
+                        var text = "Running";
+                        var i = 0;
+                        while (i < dots) {
+                            text = text + ".";
+                            i = i + 1;
+                        }
+                        if (loadingAnimation) {
+                            loadingAnimation.textContent = text;
+                        }
+                    }, 500);
+                }
+            }
+
+            // Recreate Import Cohort Subject popup
+            if (runMode === "nonscrn" || runMode === "epochImport") {
+                var importCohortPopupActive = localStorage.getItem(STORAGE_IMPORT_COHORT_POPUP);
+                if (importCohortPopupActive === "1" && (!IMPORT_COHORT_POPUP_REF || !document.body.contains(IMPORT_COHORT_POPUP_REF.element))) {
+                    var popupContainer = document.createElement("div");
+                    popupContainer.style.display = "flex";
+                    popupContainer.style.flexDirection = "column";
+                    popupContainer.style.gap = "16px";
+                    popupContainer.style.padding = "8px";
+
+                    var statusDiv = document.createElement("div");
+                    statusDiv.id = "importCohortStatus";
+                    statusDiv.style.textAlign = "center";
+                    statusDiv.style.fontSize = "18px";
+                    statusDiv.style.color = "#fff";
+                    statusDiv.style.fontWeight = "500";
+                    statusDiv.textContent = "Running Import Cohort Subject";
+
+                    var loadingAnimation = document.createElement("div");
+                    loadingAnimation.id = "importCohortLoading";
+                    loadingAnimation.style.textAlign = "center";
+                    loadingAnimation.style.fontSize = "14px";
+                    loadingAnimation.style.color = "#9df";
+                    loadingAnimation.textContent = "Running.";
+
+                    popupContainer.appendChild(statusDiv);
+                    popupContainer.appendChild(loadingAnimation);
+
+                    IMPORT_COHORT_POPUP_REF = createPopup({
+                        title: "Import Cohort Subject",
+                        content: popupContainer,
+                        width: "400px",
+                        height: "auto",
+                        onClose: function() {
+                            log("Import Cohort: cancelled by user (close button)");
+                            clearAllRunState();
+                            clearCohortGuard();
+                            try {
+                                localStorage.removeItem(STORAGE_RUN_MODE);
+                                localStorage.removeItem(STORAGE_IMPORT_COHORT_POPUP);
+                            } catch (e) {}
+                            IMPORT_COHORT_POPUP_REF = null;
+                        }
+                    });
+
+                    var dots = 1;
+                    var loadingInterval = setInterval(function() {
+                        if (!IMPORT_COHORT_POPUP_REF || !document.body.contains(IMPORT_COHORT_POPUP_REF.element)) {
+                            clearInterval(loadingInterval);
+                            return;
+                        }
+                        dots = dots + 1;
+                        if (dots > 3) {
+                            dots = 1;
+                        }
+                        var text = "Running";
+                        var i = 0;
+                        while (i < dots) {
+                            text = text + ".";
+                            i = i + 1;
+                        }
+                        if (loadingAnimation) {
+                            loadingAnimation.textContent = text;
+                        }
+                    }, 500);
+                }
+            }
+
+            // Recreate Add Cohort Subjects popup
+            if (runMode === "epochAddCohort") {
+                var addCohortPopupActive = localStorage.getItem(STORAGE_ADD_COHORT_POPUP);
+                if (addCohortPopupActive === "1" && (!ADD_COHORT_POPUP_REF || !document.body.contains(ADD_COHORT_POPUP_REF.element))) {
+                    var popupContainer = document.createElement("div");
+                    popupContainer.style.display = "flex";
+                    popupContainer.style.flexDirection = "column";
+                    popupContainer.style.gap = "16px";
+                    popupContainer.style.padding = "8px";
+
+                    var statusDiv = document.createElement("div");
+                    statusDiv.id = "addCohortStatus";
+                    statusDiv.style.textAlign = "center";
+                    statusDiv.style.fontSize = "18px";
+                    statusDiv.style.color = "#fff";
+                    statusDiv.style.fontWeight = "500";
+                    statusDiv.textContent = "Running Add Cohort Subjects";
+
+                    var loadingAnimation = document.createElement("div");
+                    loadingAnimation.id = "addCohortLoading";
+                    loadingAnimation.style.textAlign = "center";
+                    loadingAnimation.style.fontSize = "14px";
+                    loadingAnimation.style.color = "#9df";
+                    loadingAnimation.textContent = "Running.";
+
+                    popupContainer.appendChild(statusDiv);
+                    popupContainer.appendChild(loadingAnimation);
+
+                    ADD_COHORT_POPUP_REF = createPopup({
+                        title: "Add Cohort Subjects",
+                        content: popupContainer,
+                        width: "400px",
+                        height: "auto",
+                        onClose: function() {
+                            log("Add Cohort: cancelled by user (close button)");
+                            clearAllRunState();
+                            clearCohortGuard();
+                            try {
+                                localStorage.removeItem(STORAGE_RUN_MODE);
+                                localStorage.removeItem(STORAGE_ADD_COHORT_POPUP);
+                            } catch (e) {}
+                            ADD_COHORT_POPUP_REF = null;
+                        }
+                    });
+
+                    var dots = 1;
+                    var loadingInterval = setInterval(function() {
+                        if (!ADD_COHORT_POPUP_REF || !document.body.contains(ADD_COHORT_POPUP_REF.element)) {
+                            clearInterval(loadingInterval);
+                            return;
+                        }
+                        dots = dots + 1;
+                        if (dots > 3) {
+                            dots = 1;
+                        }
+                        var text = "Running";
+                        var i = 0;
+                        while (i < dots) {
+                            text = text + ".";
+                            i = i + 1;
+                        }
+                        if (loadingAnimation) {
+                            loadingAnimation.textContent = text;
+                        }
+                    }, 500);
+                }
+            }
+
+        } catch (e) {
+            log("Error recreating popups: " + e);
+        }
+    }
+
+    // Clear all Collect All related data
     function clearCollectAllData() {
         COLLECT_ALL_CANCELLED = false;
         COLLECT_ALL_POPUP_REF = null;
         log("CollectAll: data cleared");
     }
-        function clearEligibilityWorkingState() {
-        try {
-            localStorage.removeItem(STORAGE_ELIG_IMPORTED);
-            log("ImportElig: cleared imported items");
-        } catch(e) {}
 
+    // Find and navigate to eligibility locking form when required.
+    async function processStudyMetadataPageForEligibilityLock() {
+        if (isPaused()) {
+            log("Paused; skipping study metadata processing");
+            return;
+        }
+        var auto = getQueryParam("autoeliglock");
+        var mode = getRunMode();
+        var go = auto === "1" || mode === "study" || mode === "all";
+        if (!go) {
+            return;
+        }
+        var anchors = document.querySelectorAll('td.smdValue a[href^="/secure/crfdesign/studylibrary/show/form/"]');
+        var target = null;
+        var i = 0;
+        while (i < anchors.length) {
+            var a = anchors[i];
+            var txt = (a.textContent + "").trim().toLowerCase();
+            var hasElig = txt.indexOf("subject eligibility") !== -1;
+            if (hasElig) {
+                target = a;
+                break;
+            }
+            i = i + 1;
+        }
+        if (!target) {
+            if (mode === "study") {
+                clearRunMode();
+                log("Eligibility link not found; ending Study Update");
+                return;
+            }
+            log("Eligibility link not found; continuing ALL to Study Show");
+            location.href = "/secure/administration/studies/show";
+            return;
+        }
+        var td = target.closest('td.smdValue');
+        var hasLock = false;
+        if (td) {
+            var ico = td.querySelector('i.fa.fa-lock.tooltips');
+            if (ico) {
+                hasLock = true;
+            }
+        }
+        if (hasLock) {
+            log("Eligibility already locked; proceeding to update study status");
+            var editLink = document.querySelector('a[href^="/secure/administration/manage/studies/update/"][href$="/basics"]');
+            if (!editLink) {
+                log("Edit basics link not found; navigating to Study Show");
+                location.href = "/secure/administration/studies/show";
+                return;
+            }
+            editLink.click();
+            log("Routing to edit basics to update study status");
+            return;
+        }
+        var href = target.getAttribute("href") + "";
+        if (href.length === 0) {
+            if (mode === "study") {
+                clearRunMode();
+                log("Eligibility href missing; ending Study Update");
+                return;
+            }
+            log("Eligibility href missing; continuing ALL to Study Show");
+            location.href = "/secure/administration/studies/show";
+            return;
+        }
+        var url = location.origin + href;
+        if (href.indexOf("?") === -1) {
+            url = url + "?autolock=1";
+        } else {
+            url = url + "&autolock=1";
+        }
         try {
-            localStorage.removeItem(STORAGE_ELIG_CHECKITEM_CACHE);
-            log("ImportElig: cleared checkItemCache");
-        } catch(e) {}
+            localStorage.setItem(STORAGE_CHECK_ELIG_LOCK, "1");
+        } catch (e7) {}
+        log("Routing to Eligibility form for locking");
+        location.href = url;
+    }
 
-        log("ImportElig: working state fully cleared");
+    // Normalize (lowercase, remove punctuation/spaces) a text string used for label matching.
+    function normalizeText(t) {
+        if (typeof t !== "string") {
+            return "";
+        }
+        var s = t.toLowerCase();
+        s = s.replace(/\s+/g, "");
+        s = s.replace(/[\-\_\(\)\[\]]/g, "");
+        return s;
+    }
+
+    // Heuristic to determine if a label denotes a screening/Screening epoch/cohort.
+    function isScreeningLabel(t) {
+        var s = normalizeText(t);
+        var hasScreen = s.indexOf("screen") !== -1;
+        var hasScrn = s.indexOf("scrn") !== -1;
+        if (hasScreen) {
+            return true;
+        }
+        if (hasScrn) {
+            return true;
+        }
+        return false;
+    }
+
+    // Wait until an element disappears or becomes hidden.
+    async function waitUntilHidden(selector, timeoutMs) {
+        var start = Date.now();
+        while (Date.now() - start < timeoutMs) {
+            var el = document.querySelector(selector);
+            if (!el) {
+                return true;
+            }
+            var style = window.getComputedStyle(el);
+            var hidden = style.display === "none" || style.visibility === "hidden" || style.opacity === "0";
+            if (hidden) {
+                return true;
+            }
+            await sleep(150);
+        }
+        return false;
+    }
+
+    // Wait for and click a Bootbox confirmation OK button.
+    async function clickBootboxOk(timeoutMs) {
+        var okBtn = await waitForSelector('button[data-bb-handler="confirm"].btn.btn-primary', timeoutMs);
+        if (!okBtn) {
+            okBtn = await waitForSelector('button.btn.btn-primary[data-bb-handler="confirm"]', 2000);
+        }
+        if (!okBtn) {
+            log("Bootbox OK not found");
+            return false;
+        }
+        okBtn.click();
+        log("Bootbox OK clicked");
+        return true;
+    }
+
+    // Click the modal action/save button and wait for the modal to hide.
+    async function clickSaveInModal() {
+        var modal = await waitForSelector("#ajaxModal, .modal", 5000);
+        if (!modal) {
+            log("Modal not found for save");
+            return false;
+        }
+        var btn = await waitForSelector("#actionButton", 5000);
+        if (!btn) {
+            log("ActionButton not found");
+            return false;
+        }
+        btn.click();
+        log("ActionButton clicked");
+        var ok = await waitUntilHidden("#ajaxModal, .modal", 10000);
+        if (!ok) {
+            await sleep(1500);
+        }
+        return true;
+    }
+
+    // Extract current plan id from path.
+    function getCurrentPlanId() {
+        var path = location.pathname;
+        var m = path.match(/\/show\/(\d+)\//);
+        if (m && m[1]) {
+            return m[1];
+        }
+        m = path.match(/\/show\/(\d+)$/);
+        if (m && m[1]) {
+            return m[1];
+        }
+        return null;
+    }
+
+    // Detect a success alert indicating cohort assignment saved.
+    function hasSuccessAlert() {
+        var el = document.querySelector('div.alert.alert-success.alert-dismissable');
+        if (!el) {
+            return false;
+        }
+        var t = el.textContent + "";
+        var s = t.trim().toLowerCase();
+        var match = s.indexOf("cohort assignment has been saved") !== -1;
+        if (match) {
+            return true;
+        }
+        return false;
+    }
+
+    // Read a query parameter value from the URL.
+    function getQueryParam(name) {
+        var qs = location.search + "";
+        var params = new URLSearchParams(qs);
+        var val = params.get(name);
+        if (val) {
+            return val;
+        }
+        return null;
+    }
+
+    // Click an 'Actions' dropdown if present to reveal action links.
+    async function clickActionsDropdownIfNeeded() {
+        var dropdowns = document.querySelectorAll("button.dropdown-toggle, a.dropdown-toggle");
+        var i = 0;
+        while (i < dropdowns.length) {
+            var el = dropdowns[i];
+            var text = (el.textContent + "").trim().toLowerCase();
+            var match = text.indexOf("actions") !== -1 || text.indexOf("action") !== -1;
+            if (match) {
+                el.click();
+                await sleep(200);
+                log("Actions dropdown opened");
+                return true;
+            }
+            i = i + 1;
+        }
+        log("Actions dropdown not found");
+        return false;
+    }
+
+    // Locate and click the edit-state link for activity plans, opening its modal.
+    async function findAndOpenEditStateModal() {
+        var link = document.querySelector('a[href^="/secure/crfdesign/activityplans/updatestate/"]');
+        if (!link) {
+            var opened = await clickActionsDropdownIfNeeded();
+            if (opened) {
+                link = document.querySelector('a[href^="/secure/crfdesign/activityplans/updatestate/"]');
+            }
+        }
+        if (!link) {
+            log("Edit state link not found");
+            return false;
+        }
+        link.click();
+        log("Edit state link clicked");
+        return true;
+    }
+
+    // Read pending autostate ids list.
+    function getPendingIds() {
+        var raw = null;
+        try {
+            raw = localStorage.getItem(STORAGE_PENDING);
+        } catch (e) {}
+        if (!raw) {
+            return [];
+        }
+        var ids = [];
+        try {
+            ids = JSON.parse(raw);
+        } catch (e2) {}
+        if (Array.isArray(ids)) {
+            return ids;
+        }
+        return [];
+    }
+
+    // Remove one id from pending ids list.
+    function removePendingId(id) {
+        var ids = getPendingIds();
+        var out = [];
+        var i = 0;
+        while (i < ids.length) {
+            var v = ids[i];
+            if (String(v) !== String(id)) {
+                out.push(v);
+            }
+            i = i + 1;
+        }
+        setPendingIds(out);
+        log("Removed pending id=" + String(id));
+    }
+
+    // Store pending autostate ids list.
+    function setPendingIds(ids) {
+        var payload = JSON.stringify(ids);
+        try {
+            localStorage.setItem(STORAGE_PENDING, payload);
+            log("Pending IDs=" + String(ids.length));
+        } catch (e) {}
+    }
+
+    // If autostate param present, open and save edit state modal and close tab.
+    // NOTE: This function is now stubbed out because Lock Activity Plans uses background HTTP requests.
+    async function processShowPageIfAuto() {
+        log("processShowPageIfAuto: not needed with background approach");
+    }
+
+    // Read current run mode from storage.
+    function getRunMode() {
+        var raw = null;
+        try {
+            raw = localStorage.getItem(STORAGE_RUN_MODE);
+        } catch (e) {}
+        if (!raw) {
+            return "";
+        }
+        return String(raw);
+    }
+
+    // Set run mode in storage.
+    function setRunMode(s) {
+        try {
+            localStorage.setItem(STORAGE_RUN_MODE, String(s));
+            log("RunMode=" + String(s));
+        } catch (e) {}
     }
 
     // Open a URL in a tab using GM API if available, otherwise window.open.
@@ -816,6 +1380,75 @@
         }
         window.open(url, "_blank");
         return null;
+    }
+
+    // Reliably close the current tab with fallback UI if window.close() fails.
+    function closeTabWithFallback(message) {
+        var msg = message || "Task completed. You may close this tab.";
+        log("closeTabWithFallback: attempting to close tab");
+
+        // Try to close the window
+        try {
+            window.close();
+        } catch (e) {
+            log("closeTabWithFallback: window.close() failed: " + String(e));
+        }
+
+        // Check if window is still open after a short delay
+        setTimeout(function() {
+            // If we're still here, the window didn't close - show fallback UI
+            if (!window.closed) {
+                log("closeTabWithFallback: window still open, showing fallback UI");
+                showCloseTabFallbackUI(msg);
+            }
+        }, 500);
+
+        // Additional close attempts
+        setTimeout(function() {
+            try { window.close(); } catch (e) {}
+        }, 1000);
+        setTimeout(function() {
+            try { window.close(); } catch (e) {}
+        }, 2000);
+    }
+
+    // Show a fallback UI when window.close() fails
+    function showCloseTabFallbackUI(message) {
+        // Check if fallback UI already exists
+        if (document.getElementById("closeTabFallbackUI")) {
+            return;
+        }
+
+        var overlay = document.createElement("div");
+        overlay.id = "closeTabFallbackUI";
+        overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:999999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;";
+
+        var msgDiv = document.createElement("div");
+        msgDiv.style.cssText = "color:#fff;font-size:24px;font-weight:600;text-align:center;padding:20px;";
+        msgDiv.textContent = message;
+
+        var subMsg = document.createElement("div");
+        subMsg.style.cssText = "color:#9df;font-size:16px;text-align:center;";
+        subMsg.textContent = "Click the button below or press Ctrl+W to close this tab.";
+
+        var closeBtn = document.createElement("button");
+        closeBtn.textContent = "Close This Tab";
+        closeBtn.style.cssText = "background:#28a745;color:#fff;border:none;border-radius:8px;padding:15px 40px;font-size:18px;font-weight:600;cursor:pointer;";
+        closeBtn.addEventListener("click", function() {
+            try { window.close(); } catch (e) {}
+            // If still here, try focus trick
+            setTimeout(function() {
+                try {
+                    window.open("", "_self");
+                    window.close();
+                } catch (e2) {}
+            }, 100);
+        });
+
+        overlay.appendChild(msgDiv);
+        overlay.appendChild(subMsg);
+        overlay.appendChild(closeBtn);
+        document.body.appendChild(overlay);
     }
 
     // Promise-based sleep helper.
@@ -1024,8 +1657,52 @@
     // Clear run mode.
     function clearRunMode() {
         try {
+            var runMode = getRunMode();
             localStorage.removeItem(STORAGE_RUN_MODE);
             log("RunMode cleared");
+            // Clear popup flags
+            if (runMode === "all") {
+                localStorage.removeItem(STORAGE_RUN_ALL_POPUP);
+                localStorage.removeItem(STORAGE_RUN_ALL_STATUS);
+                if (RUN_ALL_POPUP_REF && RUN_ALL_POPUP_REF.close) {
+                    try {
+                        RUN_ALL_POPUP_REF.close();
+                    } catch (e2) {}
+                }
+                RUN_ALL_POPUP_REF = null;
+            } else if (runMode === RUNMODE_CLEAR_MAPPING) {
+                localStorage.removeItem(STORAGE_CLEAR_MAPPING_POPUP);
+                if (CLEAR_MAPPING_POPUP_REF && CLEAR_MAPPING_POPUP_REF.close) {
+                    try {
+                        CLEAR_MAPPING_POPUP_REF.close();
+                    } catch (e3) {}
+                }
+                CLEAR_MAPPING_POPUP_REF = null;
+            } else if (runMode === RUNMODE_ELIG_IMPORT) {
+                localStorage.removeItem(STORAGE_IMPORT_ELIG_POPUP);
+                if (IMPORT_ELIG_POPUP_REF && IMPORT_ELIG_POPUP_REF.close) {
+                    try {
+                        IMPORT_ELIG_POPUP_REF.close();
+                    } catch (e4) {}
+                }
+                IMPORT_ELIG_POPUP_REF = null;
+            } else if (runMode === "nonscrn" || runMode === "epochImport") {
+                localStorage.removeItem(STORAGE_IMPORT_COHORT_POPUP);
+                if (IMPORT_COHORT_POPUP_REF && IMPORT_COHORT_POPUP_REF.close) {
+                    try {
+                        IMPORT_COHORT_POPUP_REF.close();
+                    } catch (e5) {}
+                }
+                IMPORT_COHORT_POPUP_REF = null;
+            } else if (runMode === "epochAddCohort") {
+                localStorage.removeItem(STORAGE_ADD_COHORT_POPUP);
+                if (ADD_COHORT_POPUP_REF && ADD_COHORT_POPUP_REF.close) {
+                    try {
+                        ADD_COHORT_POPUP_REF.close();
+                    } catch (e6) {}
+                }
+                ADD_COHORT_POPUP_REF = null;
+            }
         } catch (e) {}
     }
 
@@ -1079,6 +1756,7 @@
     }
     // Clear all run state from storage.
     function clearAllRunState() {
+        var runMode = getRunMode();
         clearRunMode();
         clearContinueEpoch();
         clearCohortGuard();
@@ -1092,6 +1770,15 @@
             localStorage.removeItem(STORAGE_CHECK_ELIG_LOCK);
             localStorage.removeItem("activityPlanState.cohortAdd.editDoneMap");
             log("Cleared cohortAdd.editDoneMap");
+            // Also clear popup flags
+            if (runMode === "all") {
+                localStorage.removeItem(STORAGE_RUN_ALL_POPUP);
+                localStorage.removeItem(STORAGE_RUN_ALL_STATUS);
+            } else if (runMode === RUNMODE_CLEAR_MAPPING) {
+                localStorage.removeItem(STORAGE_CLEAR_MAPPING_POPUP);
+            } else if (runMode === RUNMODE_ELIG_IMPORT) {
+                localStorage.removeItem(STORAGE_IMPORT_ELIG_POPUP);
+            }
         } catch (e) {}
     }
 
@@ -1115,6 +1802,114 @@
         } catch (e) {}
     }
 
+
+    // Detect activity plans list page.
+    function isListPage() {
+        var path = location.pathname;
+        var expected = "/secure/crfdesign/activityplans/list";
+        if (path === expected) {
+            return true;
+        }
+        return false;
+    }
+
+    // Detect activity plan show page.
+    function isShowPage() {
+        var path = location.pathname;
+        var ok = path.indexOf("/secure/crfdesign/activityplans/show/") !== -1;
+        if (ok) {
+            return true;
+        }
+        return false;
+    }
+
+    // Detect study show page.
+    function isStudyShowPage() {
+        var path = location.pathname;
+        var expected = "/secure/administration/studies/show";
+        if (path === expected) {
+            return true;
+        }
+        return false;
+    }
+
+    // Detect study edit basics page.
+    function isStudyEditBasicsPage() {
+        var path = location.pathname;
+        var ok = path.indexOf("/secure/administration/manage/studies/update/") !== -1;
+        if (!ok) {
+            return false;
+        }
+        var end = path.endsWith("/basics");
+        if (end) {
+            return true;
+        }
+        return false;
+    }
+
+    // Detect epoch show page.
+    function isEpochShowPage() {
+        var path = location.pathname;
+        var ok = path.indexOf("/secure/administration/studies/epoch/show/") !== -1;
+        if (ok) {
+            return true;
+        }
+        return false;
+    }
+
+    // Detect cohort show page.
+    function isCohortShowPage() {
+        var path = location.pathname;
+        var ok = path.indexOf("/secure/administration/studies/cohort/show/") !== -1;
+        if (ok) {
+            return true;
+        }
+        return false;
+    }
+
+    // Detect subjects list page.
+    function isSubjectsListPage() {
+        var path = location.pathname;
+        var expected = "/secure/study/subjects/list";
+        if (path === expected) {
+            return true;
+        }
+        return false;
+    }
+
+    // Detect subject show page.
+    function isSubjectShowPage() {
+        var path = location.pathname;
+        var ok = path.indexOf("/secure/study/subjects/show/") !== -1;
+        if (ok) {
+            return true;
+        }
+        return false;
+    }
+
+    // Detect if current path is the Study Metadata page.
+    function isStudyMetadataPage() {
+        var path = location.pathname;
+        var expected = "/secure/crfdesign/studylibrary/show/studymetadata";
+        if (path === expected) {
+            return true;
+        }
+        return false;
+    }
+
+    function clearEligibilityWorkingState() {
+        try {
+            localStorage.removeItem(STORAGE_ELIG_IMPORTED);
+            log("ImportElig: cleared imported items");
+        } catch(e) {}
+
+        try {
+            localStorage.removeItem(STORAGE_ELIG_CHECKITEM_CACHE);
+            log("ImportElig: cleared checkItemCache");
+        } catch(e) {}
+
+        log("ImportElig: working state fully cleared");
+    }
     //==========================
     // SHARED GUI AND PANEL FUNCTIONS
     //==========================
@@ -1214,7 +2009,6 @@
         btnRowRef.appendChild(btn);
     }
 
-
     // Create a draggable, closeable popup styled like the panel
     function createPopup(options) {
         options = options || {};
@@ -1301,18 +2095,24 @@
             if (onClose) {
                 try { onClose(); } catch (e2) { log("Popup onClose error: " + e2); }
             }
+            document.removeEventListener("keydown", escapeHandler);
             popup.remove();
         });
 
         headerBar.appendChild(closeBtn);
         popup.appendChild(headerBar);
 
-        document.addEventListener("keydown", function(e) {
-            if (e.key === "Escape") {
+        var escapeHandler = function(e) {
+            if (e.key === "Escape" && document.body.contains(popup)) {
                 try { clearAllRunState(); } catch(e2){}
+                if (onClose) {
+                    try { onClose(); } catch (e3) { log("Popup onClose error (Escape): " + e3); }
+                }
                 if (popup && popup.remove) popup.remove();
+                document.removeEventListener("keydown", escapeHandler);
             }
-        });
+        };
+        document.addEventListener("keydown", escapeHandler);
 
         var bodyContainer = document.createElement("div");
         bodyContainer.style.flex = "1";
@@ -1429,6 +2229,7 @@
                 }
                 document.removeEventListener("mousemove", mouseMoveHandler);
                 document.removeEventListener("mouseup", mouseUpHandler);
+                document.removeEventListener("keydown", escapeHandler);
                 popup.remove();
             },
             setContent: function(newContent) {
@@ -1524,14 +2325,6 @@
         return handle;
     }
 
-    function setPanelHidden(flag) {
-        try {
-            localStorage.setItem(STORAGE_PANEL_HIDDEN, flag ? "1" : "0");
-            log("Panel hidden state set to " + String(flag));
-        } catch (e) {
-        }
-    }
-
     function getPanelHidden() {
         var raw = null;
         try {
@@ -1558,26 +2351,6 @@
             panel.style.display = "block";
             panel.style.pointerEvents = "auto";
             log("applyPanelHiddenState: applied visible");
-        }
-    }
-
-    function togglePanelHiddenViaHotkey() {
-        var panel = document.getElementById(PANEL_ID);
-        if (!panel) {
-            log("Hotkey toggle: panel element not found; nothing to toggle");
-            return;
-        }
-        var isHidden = getPanelHidden();
-        if (isHidden) {
-            panel.style.display = "block";
-            panel.style.pointerEvents = "auto";
-            setPanelHidden(false);
-            log("Hotkey toggle: panel unhidden");
-        } else {
-            panel.style.display = "none";
-            panel.style.pointerEvents = "none";
-            setPanelHidden(true);
-            log("Hotkey toggle: panel hidden");
         }
     }
 
@@ -1637,14 +2410,33 @@
         log("Hotkey: bound for " + String(PANEL_TOGGLE_KEY));
     }
 
+    function togglePanelHiddenViaHotkey() {
+        var panel = document.getElementById(PANEL_ID);
+        if (!panel) {
+            log("Hotkey toggle: panel element not found; nothing to toggle");
+            return;
+        }
+        var isHidden = getPanelHidden();
+        if (isHidden) {
+            panel.style.display = "block";
+            panel.style.pointerEvents = "auto";
+            setPanelHidden(false);
+            log("Hotkey toggle: panel unhidden");
+        } else {
+            panel.style.display = "none";
+            panel.style.pointerEvents = "none";
+            setPanelHidden(true);
+            log("Hotkey toggle: panel hidden");
+        }
+    }
 
-    //==========================
-    // MAKE PANEL FUNCTIONS
-    //==========================
-    // This section contains functions used to create and manage the panel UI.
-    // These functions are used to create the panel UI and manage its state.
-    //==========================
-
+    function setPanelHidden(flag) {
+        try {
+            localStorage.setItem(STORAGE_PANEL_HIDDEN, flag ? "1" : "0");
+            log("Panel hidden state set to " + String(flag));
+        } catch (e) {
+        }
+    }
 
     //==========================
     // MAKE PANEL FUNCTIONS
@@ -1732,6 +2524,7 @@
         btnRow.style.gridTemplateColumns = "1fr 1fr";
         btnRow.style.gap = "8px";
         btnRowRef = btnRow;
+
         var runBarcodeBtn = document.createElement("button");
         runBarcodeBtn.textContent = "Run Barcode";
         runBarcodeBtn.style.background = "#5b43c7";
@@ -1744,6 +2537,7 @@
         runBarcodeBtn.style.transition = "background 0.2s";
         runBarcodeBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
         runBarcodeBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
+
         var pauseBtn = document.createElement("button");
         pauseBtn.textContent = isPaused() ? "Resume" : "Pause";
         pauseBtn.style.background = "#6c757d";
@@ -1788,7 +2582,7 @@
         btnRow.appendChild(pauseBtn);
         btnRow.appendChild(clearLogsBtn);
         btnRow.appendChild(toggleLogsBtn);
-        
+
         bodyContainer.appendChild(btnRow);
         var status = document.createElement("div");
         status.style.marginTop = "10px";
@@ -1837,6 +2631,7 @@
         panel.appendChild(bodyContainer);
         var resizeHandle = setupResizeHandle(panel, bodyContainer);
         panel.appendChild(resizeHandle);
+
         pauseBtn.addEventListener("click", function () {
             var nowPaused = isPaused();
             if (nowPaused) {
@@ -1888,6 +2683,7 @@
             }
             updatePanelCollapsedState(panel, bodyContainer, resizeHandle, collapseBtn, headerBar);
         });
+        
         closeBtn.addEventListener("click", function () {
             panel.remove();
         });
@@ -2008,14 +2804,34 @@
             addButtonToPanel(label, handler);
         };
         bindPanelHotkeyOnce();
+
+        // Recreate popups if needed
+        recreatePopupsIfNeeded();
+
         if (isPaused()) {
             log("Paused; automation halted");
             return;
         }
+
         var onBarcodeSubjects = isBarcodeSubjectsPage();
         if (onBarcodeSubjects) {
             processBarcodeSubjectsPage();
             return;
+        }
+
+        // Check for manual navigation away from Import Eligibility process
+        var pendingPopup = null;
+        try {
+            pendingPopup = localStorage.getItem(STORAGE_ELIG_IMPORT_PENDING_POPUP);
+        } catch (e) {
+            pendingPopup = null;
+        }
+
+        var runModeRaw = null;
+        try {
+            runModeRaw = localStorage.getItem(STORAGE_RUN_MODE);
+        } catch (e) {
+            runModeRaw = null;
         }
     }
 
