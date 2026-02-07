@@ -2829,79 +2829,38 @@
 
                             dz.appendChild(evItem);
                         }
-                    }
-                }
-
-                renderAttachedEvents(dropzone, seg.value);
-
-                // Handle dragover
-                dropzone.addEventListener("dragover", function(e) {
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = "move";
-                    this.style.background = "#2a2a4a";
-                });
-
-                dropzone.addEventListener("dragleave", function(e) {
-                    this.style.background = "#1a1a1a";
-                });
-
-                // Handle drop
-                dropzone.addEventListener("drop", (function(segVal) {
-                    return function(e) {
-                        e.preventDefault();
-                        this.style.background = "#1a1a1a";
-                        try {
-                            var data = JSON.parse(e.dataTransfer.getData("text/plain"));
-                            if (data && data.value && data.text) {
-                                // Remove from old segment if exists
-                                if (data.fromSegment && segmentEventMap[data.fromSegment]) {
-                                    segmentEventMap[data.fromSegment] = segmentEventMap[data.fromSegment].filter(function(x) {
-                                        return x.value !== data.value;
-                                    });
-                                }
-                                // Check for duplicate in this segment
-                                var existing = (segmentEventMap[segVal] || []).find(function(x) { return x.value === data.value; });
-                                if (!existing) {
-                                    if (!segmentEventMap[segVal]) segmentEventMap[segVal] = [];
-                                    segmentEventMap[segVal].push({ value: data.value, text: data.text });
-                                }
-                                renderSegments(segmentSearch.value);
-                            }
-                        } catch (err) {
-                            log("SA Builder: drop error " + err);
-                        }
-                    };
-                })(seg.value));
-
-                segItem.appendChild(dropzone);
-                segmentColumn.appendChild(segItem);
-            }
         }
+    } catch (e) {}
+    
+    await sleep(300);
+    log("SA Builder: selected value " + value + " in " + selectId);
+    return true;
+}
 
-        // Populate study events (draggable)
-        function renderStudyEvents(filter) {
-            eventColumn.innerHTML = "";
-            var filterLower = (filter || "").toLowerCase();
-            for (var i = 0; i < studyEvents.length; i++) {
-                var ev = studyEvents[i];
-                if (filterLower && ev.text.toLowerCase().indexOf(filterLower) === -1) continue;
+// Create the selection GUI popup
+function createSABuilderSelectionGUI(segments, studyEvents, forms) {
+    var container = document.createElement("div");
+    container.style.display = "flex";
+    container.style.flexDirection = "column";
+    container.style.gap = "16px";
+    container.style.height = "100%";
+    container.style.minHeight = "500px";
 
-                var evItem = document.createElement("div");
-                evItem.style.cssText = "padding:8px;margin-bottom:4px;border:1px solid #444;border-radius:4px;background:#222;cursor:grab;";
-                evItem.textContent = ev.text;
-                evItem.draggable = true;
-                evItem.dataset.eventValue = ev.value;
-                evItem.dataset.eventText = ev.text;
+    // Search bars row
+    var searchRow = document.createElement("div");
+    searchRow.style.display = "grid";
+    searchRow.style.gridTemplateColumns = "1fr 1fr 1fr 200px";
+    searchRow.style.gap = "8px";
 
-                evItem.addEventListener("dragstart", function(e) {
-                    e.dataTransfer.setData("text/plain", JSON.stringify({ value: this.dataset.eventValue, text: this.dataset.eventText }));
-                    e.dataTransfer.effectAllowed = "copy";
-                    this.style.opacity = "0.5";
-                });
+    var segmentSearch = document.createElement("input");
+    segmentSearch.type = "text";
+    segmentSearch.placeholder = "Search Segments...";
+    segmentSearch.style.cssText = "padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;";
 
-                evItem.addEventListener("dragend", function(e) {
-                    this.style.opacity = "1";
-                });
+    var eventSearch = document.createElement("input");
+    eventSearch.type = "text";
+    eventSearch.placeholder = "Search Study Events...";
+    eventSearch.style.cssText = "padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;";
 
                 eventColumn.appendChild(evItem);
             }
