@@ -152,7 +152,7 @@
     var DEFAULT_FORM_EXCLUSION = "check";
     var DEFAULT_FORM_PRIORITY = "mh, bm, review, process, dm, rep, subs, med, elg_pi, vitals, ecg";
 
-    
+
 
     //==========================
     // RUN BARCODE FEATURE
@@ -434,7 +434,7 @@
         } catch (e3) {}
         BARCODE_START_TS = 0;
     }
-    
+
     // Return index of first option with non-empty value.
     function firstNonEmptyOptionIndex(selectEl) {
         if (!selectEl) {
@@ -2615,7 +2615,7 @@
     // Collect all dropdown data from the Add SA modal
     async function collectModalDropdownData() {
         log("SA Builder: collecting dropdown data from modal");
-        
+
         // Collect segments
         await openSelect2Dropdown("s2id_segment");
         await sleep(300);
@@ -2651,21 +2651,21 @@
             log("SA Builder: select element " + selectId + " not found");
             return false;
         }
-        
+
         // Set the value directly
         select.value = value;
-        
+
         // Trigger change event
         var evt = new Event("change", { bubbles: true });
         select.dispatchEvent(evt);
-        
+
         // Also try to update Select2
         try {
             if (window.jQuery && window.jQuery.fn.select2) {
                 window.jQuery("#" + selectId).trigger("change");
             }
         } catch (e) {}
-        
+
         await sleep(300);
         log("SA Builder: selected value " + value + " in " + selectId);
         return true;
@@ -2829,38 +2829,79 @@
 
                             dz.appendChild(evItem);
                         }
+                    }
+                }
+
+                renderAttachedEvents(dropzone, seg.value);
+
+                // Handle dragover
+                dropzone.addEventListener("dragover", function(e) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                    this.style.background = "#2a2a4a";
+                });
+
+                dropzone.addEventListener("dragleave", function(e) {
+                    this.style.background = "#1a1a1a";
+                });
+
+                // Handle drop
+                dropzone.addEventListener("drop", (function(segVal) {
+                    return function(e) {
+                        e.preventDefault();
+                        this.style.background = "#1a1a1a";
+                        try {
+                            var data = JSON.parse(e.dataTransfer.getData("text/plain"));
+                            if (data && data.value && data.text) {
+                                // Remove from old segment if exists
+                                if (data.fromSegment && segmentEventMap[data.fromSegment]) {
+                                    segmentEventMap[data.fromSegment] = segmentEventMap[data.fromSegment].filter(function(x) {
+                                        return x.value !== data.value;
+                                    });
+                                }
+                                // Check for duplicate in this segment
+                                var existing = (segmentEventMap[segVal] || []).find(function(x) { return x.value === data.value; });
+                                if (!existing) {
+                                    if (!segmentEventMap[segVal]) segmentEventMap[segVal] = [];
+                                    segmentEventMap[segVal].push({ value: data.value, text: data.text });
+                                }
+                                renderSegments(segmentSearch.value);
+                            }
+                        } catch (err) {
+                            log("SA Builder: drop error " + err);
+                        }
+                    };
+                })(seg.value));
+
+                segItem.appendChild(dropzone);
+                segmentColumn.appendChild(segItem);
+            }
         }
-    } catch (e) {}
-    
-    await sleep(300);
-    log("SA Builder: selected value " + value + " in " + selectId);
-    return true;
-}
 
-// Create the selection GUI popup
-function createSABuilderSelectionGUI(segments, studyEvents, forms) {
-    var container = document.createElement("div");
-    container.style.display = "flex";
-    container.style.flexDirection = "column";
-    container.style.gap = "16px";
-    container.style.height = "100%";
-    container.style.minHeight = "500px";
+        // Populate study events (draggable)
+        function renderStudyEvents(filter) {
+            eventColumn.innerHTML = "";
+            var filterLower = (filter || "").toLowerCase();
+            for (var i = 0; i < studyEvents.length; i++) {
+                var ev = studyEvents[i];
+                if (filterLower && ev.text.toLowerCase().indexOf(filterLower) === -1) continue;
 
-    // Search bars row
-    var searchRow = document.createElement("div");
-    searchRow.style.display = "grid";
-    searchRow.style.gridTemplateColumns = "1fr 1fr 1fr 200px";
-    searchRow.style.gap = "8px";
+                var evItem = document.createElement("div");
+                evItem.style.cssText = "padding:8px;margin-bottom:4px;border:1px solid #444;border-radius:4px;background:#222;cursor:grab;";
+                evItem.textContent = ev.text;
+                evItem.draggable = true;
+                evItem.dataset.eventValue = ev.value;
+                evItem.dataset.eventText = ev.text;
 
-    var segmentSearch = document.createElement("input");
-    segmentSearch.type = "text";
-    segmentSearch.placeholder = "Search Segments...";
-    segmentSearch.style.cssText = "padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;";
+                evItem.addEventListener("dragstart", function(e) {
+                    e.dataTransfer.setData("text/plain", JSON.stringify({ value: this.dataset.eventValue, text: this.dataset.eventText }));
+                    e.dataTransfer.effectAllowed = "copy";
+                    this.style.opacity = "0.5";
+                });
 
-    var eventSearch = document.createElement("input");
-    eventSearch.type = "text";
-    eventSearch.placeholder = "Search Study Events...";
-    eventSearch.style.cssText = "padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;";
+                evItem.addEventListener("dragend", function(e) {
+                    this.style.opacity = "1";
+                });
 
                 eventColumn.appendChild(evItem);
             }
@@ -3033,7 +3074,7 @@ function createSABuilderSelectionGUI(segments, studyEvents, forms) {
                 for (var k = 0; k < forms.length; k++) {
                     var frm = forms[k];
                     var key = normalizeSAText(seg.text) + " - " + normalizeSAText(ev.text) + " - " + normalizeSAText(frm.text);
-                    
+
                     // Check for duplicates
                     var isDuplicate = existingItems.some(function(existing) {
                         return normalizeSAText(existing) === key;
@@ -3083,7 +3124,7 @@ function createSABuilderSelectionGUI(segments, studyEvents, forms) {
                 var item = mappedItems[i];
                 var row = document.createElement("div");
                 row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:6px 8px;margin-bottom:4px;border-radius:4px;font-size:12px;";
-                
+
                 if (item.status === "Complete") {
                     row.style.background = "#1a3a1a";
                 } else if (item.status === "Duplicate (Removed)") {
@@ -3183,7 +3224,7 @@ function createSABuilderSelectionGUI(segments, studyEvents, forms) {
 
         // Create mapped items
         var mappedItems = createMappedItemList(userSelection, existingItems);
-        
+
         // Log mapped items
         log("SA Builder: Mapped items list:");
         for (var i = 0; i < mappedItems.length; i++) {
@@ -3223,7 +3264,7 @@ function createSABuilderSelectionGUI(segments, studyEvents, forms) {
             }
 
             var item = mappedItems[idx];
-            
+
             // Skip duplicates
             if (item.status === "Duplicate (Removed)") {
                 log("SA Builder: skipping duplicate - " + item.key);
@@ -3749,7 +3790,7 @@ function createSABuilderSelectionGUI(segments, studyEvents, forms) {
             }
             updatePanelCollapsedState(panel, bodyContainer, resizeHandle, collapseBtn, headerBar);
         });
-        
+
         closeBtn.addEventListener("click", function () {
             panel.remove();
         });
