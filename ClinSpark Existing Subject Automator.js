@@ -2254,6 +2254,11 @@
                 } else if (newContent && newContent.nodeType === 1) {
                     bodyContainer.appendChild(newContent);
                 }
+            },
+            setTitle: function(newTitle) {
+                if (titleEl) {
+                    titleEl.textContent = newTitle;
+                }
             }
         };
     }
@@ -3266,6 +3271,30 @@
                 volunteerDisplay = formatVolunteerDisplay(volunteerInfo);
             }
 
+            var isActive = true;
+            var innerTable = row.querySelector("table.clinSparkInnerTable");
+            if (innerTable) {
+                var tds = innerTable.querySelectorAll("td");
+                for (var tdIdx = 0; tdIdx < tds.length; tdIdx++) {
+                    var tdText = (tds[tdIdx].textContent || "").trim();
+                    if (tdText === "Active?:") {
+                        var nextTd = tds[tdIdx + 1];
+                        if (nextTd) {
+                            var activeValue = (nextTd.textContent || "").trim();
+                            if (activeValue !== "Yes") {
+                                isActive = false;
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+
+            if (!isActive) {
+                log("AES: skipping inactive subject: " + subjectNumber);
+                continue;
+            }
+
             if (subjectNumber && volunteerId) {
                 assignments.push({
                     assignmentId: assignmentId,
@@ -3562,16 +3591,22 @@
         detailsDiv.innerHTML = "Subject <strong>" + subjectNumber + "</strong> has been added to epoch <strong>" + epochName + "</strong> and activated.";
         popupContent.appendChild(detailsDiv);
 
-        ADD_EXISTING_SUBJECT_POPUP_REF = createPopup({
-            title: "Add Existing Subject - Complete",
-            content: popupContent,
-            width: "400px",
-            height: "auto",
-            onClose: function() {
-                clearAddExistingSubjectData();
-                clearRunMode();
-            }
-        });
+        // Transition existing popup instead of creating new one
+        if (ADD_EXISTING_SUBJECT_POPUP_REF && ADD_EXISTING_SUBJECT_POPUP_REF.element && document.body.contains(ADD_EXISTING_SUBJECT_POPUP_REF.element)) {
+            ADD_EXISTING_SUBJECT_POPUP_REF.setTitle("Add Existing Subject - Complete");
+            ADD_EXISTING_SUBJECT_POPUP_REF.setContent(popupContent);
+        } else {
+            ADD_EXISTING_SUBJECT_POPUP_REF = createPopup({
+                title: "Add Existing Subject - Complete",
+                content: popupContent,
+                width: "400px",
+                height: "auto",
+                onClose: function() {
+                    clearAddExistingSubjectData();
+                    clearRunMode();
+                }
+            });
+        }
     }
 
     async function processAESOnPageLoad() {
@@ -3817,132 +3852,113 @@
         var subjectNumber = localStorage.getItem(STORAGE_AES_SELECTED_SUBJECT) || "";
         log("AES: searching for subject number: " + subjectNumber);
 
-        // Click the select2 choice link to open the dropdown
-        var select2Container = document.getElementById("s2id_volunteer");
-        if (!select2Container) {
-            showAESError("Could not find volunteer search container.");
+        var s2container = modal.querySelector('#s2id_volunteer');
+        if (!s2container) {
+            s2container = modal.querySelector('.select2-container.form-control.select2');
+        }
+        if (!s2container) {
+            log("AES: Select2 container not found");
+            showAESError("Could not find volunteer select2 container.");
             return;
         }
 
-        var select2Choice = select2Container.querySelector("a.select2-choice");
-        if (select2Choice) {
-            select2Choice.click();
+        var s2choice = s2container.querySelector('a.select2-choice');
+        if (s2choice) {
+            s2choice.click();
             log("AES: clicked select2 choice to open dropdown");
-        } else {
-            select2Container.click();
-            log("AES: clicked select2 container");
+            await sleep(150);
         }
 
-        await sleep(800);
-
-        // Find the search input in the active dropdown
-        var searchInput = document.querySelector(".select2-drop-active input.select2-input");
-        if (!searchInput) {
-            // Try alternative selector for the search input
-            searchInput = document.querySelector("input.select2-input.select2-focused");
+        var focusser = s2container.querySelector('input.select2-focusser');
+        if (focusser) {
+            focusser.focus();
+            var kd = new KeyboardEvent("keydown", { bubbles: true, key: "ArrowDown", keyCode: 40 });
+            focusser.dispatchEvent(kd);
+            focusser.click();
+            await sleep(150);
         }
-        if (!searchInput) {
-            // Try by partial ID match
-            var allInputs = document.querySelectorAll("input.select2-input");
-            for (var inp = 0; inp < allInputs.length; inp++) {
-                var inputId = allInputs[inp].id || "";
-                if (inputId.indexOf("s2id_autogen") !== -1 && inputId.indexOf("_search") !== -1) {
-                    searchInput = allInputs[inp];
-                    break;
-                }
+
+        var s2drop = document.querySelector('#select2-drop.select2-drop-active');
+        if (!s2drop) {
+            s2drop = s2container.querySelector('.select2-drop');
+        }
+        if (!s2drop) {
+            s2choice = s2container.querySelector('a.select2-choice');
+            if (s2choice) {
+                s2choice.click();
+            }
+            s2drop = await waitForSelector('#select2-drop.select2-drop-active', 2000);
+            if (!s2drop) {
+                s2drop = s2container.querySelector('.select2-drop');
             }
         }
+        if (!s2drop) {
+            log("AES: Select2 drop not found");
+            showAESError("Could not open volunteer dropdown.");
+            return;
+        }
 
-        if (!searchInput) {
-            log("AES: could not find select2 search input, trying direct input");
+        var s2input = s2drop.querySelector('input.select2-input');
+        if (!s2input) {
+            s2input = await waitForSelector('#select2-drop.select2-drop-active input.select2-input', 2000);
+        }
+        if (!s2input) {
+            s2input = s2container.querySelector('input.select2-input');
+        }
+        if (!s2input) {
+            log("AES: Select2 input not found");
             showAESError("Could not find volunteer search input.");
             return;
         }
 
-        log("AES: found search input: " + (searchInput.id || "no-id"));
+        log("AES: found search input: " + (s2input.id || "no-id"));
 
-        // Focus the input
-        searchInput.focus();
-        await sleep(200);
+        s2input.value = subjectNumber;
+        var inpEvt = new Event("input", { bubbles: true });
+        s2input.dispatchEvent(inpEvt);
+        var keyEvt = new KeyboardEvent("keyup", { bubbles: true, key: subjectNumber, keyCode: subjectNumber.charCodeAt(0) });
+        s2input.dispatchEvent(keyEvt);
+        log("AES: typed subject number: " + subjectNumber);
 
-        // Set the value directly
-        searchInput.value = subjectNumber;
-        log("AES: set search input value to: " + subjectNumber);
-
-        // Try jQuery trigger first (Select2 is a jQuery plugin)
-        if (typeof jQuery !== "undefined" && jQuery(searchInput).length) {
-            log("AES: using jQuery to trigger events");
-            jQuery(searchInput).trigger("input");
-            jQuery(searchInput).trigger("keyup");
-            // Also try triggering change
-            jQuery(searchInput).trigger("change");
-        } else if (typeof $ !== "undefined" && $(searchInput).length) {
-            log("AES: using $ to trigger events");
-            $(searchInput).trigger("input");
-            $(searchInput).trigger("keyup");
-            $(searchInput).trigger("change");
-        } else {
-            // Fallback to native events
-            log("AES: jQuery not found, using native events");
-            var inputEvt = new Event("input", { bubbles: true });
-            searchInput.dispatchEvent(inputEvt);
-            var keyupEvt = new KeyboardEvent("keyup", { bubbles: true, keyCode: 13 });
-            searchInput.dispatchEvent(keyupEvt);
-        }
-
-        log("AES: triggered search events for: " + subjectNumber);
-
-        // Wait for AJAX search results (increased wait time)
-        await sleep(4000);
-
-        // Look for results in the active dropdown
-        var resultsContainer = document.querySelector(".select2-drop-active .select2-results");
-        if (!resultsContainer) {
-            resultsContainer = document.querySelector(".select2-results");
-        }
-
-        var resultsList = resultsContainer ? resultsContainer.querySelectorAll("li.select2-result") : [];
-        log("AES: found " + resultsList.length + " results");
-
-        var found = false;
-        for (var r = 0; r < resultsList.length; r++) {
-            var resultEl = resultsList[r];
-            var resultText = (resultEl.textContent || "").trim();
-            log("AES: result " + r + ": " + resultText.substring(0, 50));
+        var selectionConfirmed = false;
+        var confirmWait = 0;
+        var confirmMax = 12000;
+        while (confirmWait < confirmMax) {
+            var enterDown = new KeyboardEvent("keydown", { bubbles: true, key: "Enter", keyCode: 13 });
+            s2input.dispatchEvent(enterDown);
+            var enterUp = new KeyboardEvent("keyup", { bubbles: true, key: "Enter", keyCode: 13 });
+            s2input.dispatchEvent(enterUp);
+            await sleep(400);
             
-            // Check if result contains subject number and is selectable
-            if (resultText.indexOf(subjectNumber) !== -1 && !resultEl.classList.contains("select2-disabled")) {
-                resultEl.click();
-                found = true;
-                log("AES: selected subject from dropdown");
+            var containerClass = s2container.getAttribute("class") + "";
+            var hasAllow = containerClass.indexOf("select2-allowclear") !== -1;
+            var notOpen = containerClass.indexOf("select2-dropdown-open") === -1;
+            var chosenEl = null;
+            chosenEl = s2container.querySelector('.select2-chosen');
+            if (!chosenEl) {
+                chosenEl = s2container.querySelector('[id^="select2-chosen-"]');
+            }
+            var chosenText = "";
+            if (chosenEl) {
+                chosenText = (chosenEl.textContent + "").trim();
+            }
+            var notSearch = chosenText.trim().toLowerCase() !== "search";
+            
+            if (hasAllow && notOpen && notSearch) {
+                selectionConfirmed = true;
+                log("AES: selection confirmed; chosenText=" + chosenText);
                 break;
             }
+            confirmWait = confirmWait + 400;
         }
 
-        if (!found) {
-            // Try clicking using mousedown/mouseup events (some Select2 versions need this)
-            for (var r2 = 0; r2 < resultsList.length; r2++) {
-                var resultEl2 = resultsList[r2];
-                var resultText2 = (resultEl2.textContent || "").trim();
-                if (resultText2.indexOf(subjectNumber) !== -1 && !resultEl2.classList.contains("select2-disabled")) {
-                    var mousedownEvt = new MouseEvent("mousedown", { bubbles: true });
-                    resultEl2.dispatchEvent(mousedownEvt);
-                    var mouseupEvt = new MouseEvent("mouseup", { bubbles: true });
-                    resultEl2.dispatchEvent(mouseupEvt);
-                    found = true;
-                    log("AES: selected subject via mousedown/mouseup");
-                    break;
-                }
-            }
-        }
-
-        if (!found) {
-            showAESError("Could not find subject " + subjectNumber + " in volunteer search. Found " + resultsList.length + " results.");
+        if (!selectionConfirmed) {
+            log("AES: selection not confirmed after " + confirmMax + "ms");
+            showAESError("Could not confirm volunteer selection for subject " + subjectNumber);
             return;
         }
 
-        await sleep(500);
-        updateAESProgressStatus("Saving assignment...");
+        log("AES: volunteer selected successfully");
         setAESStep("afterAddSubject");
 
         var saveBtn = document.getElementById("actionButton");
