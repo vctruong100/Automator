@@ -3988,7 +3988,7 @@
             return;
         }
 
-        showAESProgressPopup("Locating new assignment...");
+        updateAESProgressStatus("Locating new assignment...");
 
         var volunteerId = localStorage.getItem(STORAGE_AES_SELECTED_VOLUNTEER_ID) || "";
         var subjectNumber = localStorage.getItem(STORAGE_AES_SELECTED_SUBJECT) || "";
@@ -4007,11 +4007,20 @@
             var row = rows[i];
             var volunteerAnchor = row.querySelector("a[href*='/secure/volunteers/manage/show/" + volunteerId + "']");
             if (volunteerAnchor) {
-                targetRow = row;
-                var rowId = row.id || "";
-                var match = rowId.match(/ca_(\d+)/);
-                if (match) assignmentId = match[1];
-                break;
+                // Also verify this is the correct subject number
+                var subjectAnchor = row.querySelector("a[href*='/secure/study/subjects/show/']");
+                if (subjectAnchor) {
+                    var subjectText = (subjectAnchor.textContent || "").trim();
+                    // Check if subject number matches (could be "111-1005" or "1003 / 111-1005")
+                    if (subjectText.indexOf(subjectNumber) !== -1) {
+                        targetRow = row;
+                        var rowId = row.id || "";
+                        var match = rowId.match(/ca_(\d+)/);
+                        if (match) assignmentId = match[1];
+                        log("AES: found matching assignment - volunteerId=" + volunteerId + ", subjectNumber=" + subjectNumber + ", assignmentId=" + assignmentId);
+                        break;
+                    }
+                }
             }
         }
 
@@ -4030,7 +4039,7 @@
         log("AES: processing activate plan");
         var assignmentId = localStorage.getItem(STORAGE_AES_ASSIGNMENT_ID) || "";
         
-        showAESProgressPopup("Activating plan...");
+        updateAESProgressStatus("Activating plan...");
 
         var activatePlanLink = document.getElementById("cohortAssignmentActivatePlanLink_" + assignmentId);
         
@@ -4063,7 +4072,17 @@
             activatePlanLink.click();
             log("AES: clicked Activate Plan");
             
-            await sleep(3000);
+            // Wait for and click OK button in confirmation modal
+            await sleep(500);
+            var okBtn = await waitForSelector('button[data-bb-handler="confirm"].btn.btn-primary', 3000);
+            if (okBtn) {
+                okBtn.click();
+                log("AES: clicked OK on Activate Plan confirmation");
+                await sleep(1000);
+            } else {
+                log("AES: OK button not found after Activate Plan");
+            }
+            
             await processActivateVolunteer();
         } else {
             log("AES: Activate Plan link not found, may already be activated");
@@ -4119,7 +4138,17 @@
             activateVolunteerLink.click();
             log("AES: clicked Activate Volunteer");
             
-            await sleep(2000);
+            // Wait for and click OK button in confirmation modal
+            await sleep(500);
+            var okBtn = await waitForSelector('button[data-bb-handler="confirm"].btn.btn-primary', 3000);
+            if (okBtn) {
+                okBtn.click();
+                log("AES: clicked OK on Activate Volunteer confirmation");
+                await sleep(1000);
+            } else {
+                log("AES: OK button not found after Activate Volunteer");
+            }
+            
             showAESComplete();
         } else {
             log("AES: Activate Volunteer link not found after waiting");
