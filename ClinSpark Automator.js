@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.6.3
+// @version     1.7.0
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -1376,6 +1376,7 @@
             var guiContent = createSABuilderSelectionGUI(dropdownData.segments, dropdownData.studyEvents, dropdownData.forms);
             SA_BUILDER_POPUP_REF = createPopup({
                 title: "Scheduled Activities Builder - Select Items",
+                description: "Choose segments, study events, and forms to add scheduled activities",
                 content: guiContent,
                 width: "95%",
                 maxWidth: "1400px",
@@ -1527,6 +1528,7 @@
 
         var popup = createPopup({
             title: "Cohort Eligibility",
+            description: "Check eligibility criteria for multiple subjects at once",
             content: container,
             width: "600px",
             height: "auto",
@@ -2196,6 +2198,7 @@
         
         var popup = createPopup({
             title: "Subject Eligibility",
+            description: "Check eligibility criteria for individual subjects",
             content: container,
             width: "450px",
             height: "auto"
@@ -2994,7 +2997,7 @@
         btnRow.appendChild(okBtn);
         container.appendChild(btnRow);
 
-        var popup = createPopup({ title: FORM_POPUP_TITLE, content: container, width: "520px", height: "auto" });
+        var popup = createPopup({ title: FORM_POPUP_TITLE, description: "Auto-navigate to Form data page based on keywords and status", content: container, width: "520px", height: "auto" });
 
         window.setTimeout(function () {
             try {
@@ -3564,7 +3567,7 @@
         btnRow.appendChild(okBtn);
         container.appendChild(btnRow);
 
-        var popup = createPopup({ title: STUDY_EVENT_POPUP_TITLE, content: container, width: "520px", height: "auto" });
+        var popup = createPopup({ title: STUDY_EVENT_POPUP_TITLE, description: "Auto-navigate to Study Events data page based on keywords", content: container, width: "520px", height: "auto" });
 
         window.setTimeout(function () {
             try {
@@ -3918,7 +3921,7 @@
         okBtn.style.cssText = "background:#0b82ff;color:#fff;border:none;border-radius:6px;padding:10px 30px;cursor:pointer;font-weight:600";
         okRow.appendChild(okBtn);
         container.appendChild(okRow);
-        var popup = createPopup({ title: "Parse Method", content: container, width: "480px", height: "auto", onClose: function() { stopParseMethodAutomation(); } });
+        var popup = createPopup({ title: "Parse Method", description: "Extract and parse method data from forms", content: container, width: "480px", height: "auto", onClose: function() { stopParseMethodAutomation(); } });
         setTimeout(function() { try { inputEl.focus(); } catch (e) {} }, 50);
 
         function doConfirm() {
@@ -4775,6 +4778,7 @@
 
         var popup = createPopup({
             title: "Import I/E",
+            description: "Add I/E to Eligibility Mapping",
             content: container,
             width: "450px",
             height: "auto",
@@ -6362,7 +6366,7 @@
         btnRow.appendChild(okBtn);
         container.appendChild(btnRow);
 
-        var popup = createPopup({ title: AE_POPUP_TITLE, content: container, width: "380px", height: "auto" });
+        var popup = createPopup({ title: AE_POPUP_TITLE, description: "Auto-navigate to AE data page for subject", content: container, width: "380px", height: "auto" });
 
         window.setTimeout(function () {
             try {
@@ -6840,6 +6844,7 @@
 
         var popup = createPopup({
             title: "Locating Barcode",
+            description: "Find and pull barcode in background…",
             content: loadingText,
             width: "300px",
             height: "auto"
@@ -7591,6 +7596,7 @@
     function createPopup(options) {
         options = options || {};
         var title = options.title || "Popup";
+        var description = options.description || "";
         var content = options.content || "";
         var width = options.width || "400px";
         var height = options.height || "auto";
@@ -7638,11 +7644,28 @@
         headerBar.style.cursor = "move";
         headerBar.style.userSelect = "none";
 
+        var titleContainer = document.createElement("div");
+        titleContainer.style.display = "flex";
+        titleContainer.style.flexDirection = "column";
+        titleContainer.style.justifyContent = "center";
+
         var titleEl = document.createElement("div");
         titleEl.textContent = title;
         titleEl.style.fontWeight = "600";
         titleEl.style.textAlign = "left";
-        headerBar.appendChild(titleEl);
+        titleContainer.appendChild(titleEl);
+
+        if (description) {
+            var descEl = document.createElement("div");
+            descEl.textContent = description;
+            descEl.style.fontSize = "12px";
+            descEl.style.color = "#aaa";
+            descEl.style.textAlign = "left";
+            descEl.style.marginTop = "2px";
+            titleContainer.appendChild(descEl);
+        }
+
+        headerBar.appendChild(titleContainer);
 
         var closeBtn = document.createElement("button");
         closeBtn.textContent = "✕";
@@ -7981,8 +8004,6 @@
         saBuilderBtn.style.borderRadius = "6px";
         saBuilderBtn.style.padding = "8px";
         saBuilderBtn.style.cursor = "pointer";
-        saBuilderBtn.style.fontWeight = "500";
-        saBuilderBtn.style.transition = "background 0.2s";
         saBuilderBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         saBuilderBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
