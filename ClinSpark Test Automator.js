@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.1.2
+// @version 3.1.3
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -2084,6 +2084,24 @@
         timeColumn.appendChild(createTimeInput("Minutes", "saBuilderMinutes", 59));
         timeColumn.appendChild(createTimeInput("Seconds", "saBuilderSeconds", 59));
 
+        // Hidden checkbox row
+        var hiddenRow = document.createElement("div");
+        hiddenRow.style.cssText = "display:flex;align-items:center;gap:8px;padding-top:12px;margin-top:12px;border-top:1px solid #444;";
+
+        var hiddenCheckbox = document.createElement("input");
+        hiddenCheckbox.type = "checkbox";
+        hiddenCheckbox.id = "saBuilderHidden";
+        hiddenCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;accent-color:#007bff;";
+
+        var hiddenLabel = document.createElement("label");
+        hiddenLabel.textContent = "Hidden?";
+        hiddenLabel.setAttribute("for", "saBuilderHidden");
+        hiddenLabel.style.cssText = "font-size:13px;font-weight:600;cursor:pointer;";
+
+        hiddenRow.appendChild(hiddenCheckbox);
+        hiddenRow.appendChild(hiddenLabel);
+        timeColumn.appendChild(hiddenRow);
+
         // Initial render
         renderSegments("");
         renderStudyEvents("");
@@ -2190,12 +2208,14 @@
             };
 
             log("SA Builder: Time offset - Days: " + timeOffset.days + ", Hours: " + timeOffset.hours + ", Minutes: " + timeOffset.minutes + ", Seconds: " + timeOffset.seconds);
+            
+            var hiddenChecked = document.getElementById("saBuilderHidden").checked;
 
-            // Store selection
             var userSelection = {
                 segments: selectedSegments,
                 forms: selectedForms,
-                timeOffset: timeOffset
+                timeOffset: timeOffset,
+                hidden: hiddenChecked
             };
 
             try {
@@ -2414,7 +2434,7 @@
         var progressContent = createSABuilderProgressPopup(mappedItems);
         SA_BUILDER_PROGRESS_POPUP_REF = createPopup({
             title: SA_BUILDER_POPUP_TITLE,
-            description: "Choose segments, study events, and forms to add scheduled activities",
+            description: "Choose segments, study events, and forms to add scheduled activities. Note: Form selected will be added for each study event.",
             content: progressContent.element,
             width: "600px",
             height: "auto",
@@ -2517,6 +2537,19 @@
                 if (SA_BUILDER_CANCELLED) {
                     log("SA Builder: cancelled after form selection");
                     break;
+                }
+
+                // Check Hidden checkbox if user selected it
+                if (userSelection.hidden) {
+                    var hiddenCheckboxEl = document.querySelector("#uniform-hidden span input#hidden.checkbox");
+                    if (!hiddenCheckboxEl) {
+                        hiddenCheckboxEl = document.getElementById("hidden");
+                    }
+                    if (hiddenCheckboxEl && !hiddenCheckboxEl.checked) {
+                        hiddenCheckboxEl.click();
+                        log("SA Builder: Hidden checkbox checked");
+                        await sleep(200);
+                    }
                 }
 
                 // Clear pre/post window fields

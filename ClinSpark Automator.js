@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.7.1
+// @version     1.7.2
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -719,6 +719,24 @@
             timeColumn.appendChild(createTimeInput("Minutes", "saBuilderMinutes", 59));
             timeColumn.appendChild(createTimeInput("Seconds", "saBuilderSeconds", 59));
     
+            // Hidden checkbox row
+            var hiddenRow = document.createElement("div");
+            hiddenRow.style.cssText = "display:flex;align-items:center;gap:8px;padding-top:12px;margin-top:12px;border-top:1px solid #444;";
+
+            var hiddenCheckbox = document.createElement("input");
+            hiddenCheckbox.type = "checkbox";
+            hiddenCheckbox.id = "saBuilderHidden";
+            hiddenCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;accent-color:#007bff;";
+
+            var hiddenLabel = document.createElement("label");
+            hiddenLabel.textContent = "Hidden?";
+            hiddenLabel.setAttribute("for", "saBuilderHidden");
+            hiddenLabel.style.cssText = "font-size:13px;font-weight:600;cursor:pointer;";
+
+            hiddenRow.appendChild(hiddenCheckbox);
+            hiddenRow.appendChild(hiddenLabel);
+            timeColumn.appendChild(hiddenRow);
+
             // Initial render
             renderSegments("");
             renderStudyEvents("");
@@ -825,12 +843,14 @@
                 };
     
                 log("SA Builder: Time offset - Days: " + timeOffset.days + ", Hours: " + timeOffset.hours + ", Minutes: " + timeOffset.minutes + ", Seconds: " + timeOffset.seconds);
-    
-                // Store selection
+                    
+                var hiddenChecked = document.getElementById("saBuilderHidden").checked;
+
                 var userSelection = {
                     segments: selectedSegments,
                     forms: selectedForms,
-                    timeOffset: timeOffset
+                    timeOffset: timeOffset,
+                    hidden: hiddenChecked
                 };
     
                 try {
@@ -1146,11 +1166,24 @@
                     log("SA Builder: selecting form " + item.formText + " (value: " + item.formValue + ")");
                     await selectSelect2Value("form", item.formValue);
                     await sleep(500);
-    
+
                     // Check cancellation
                     if (SA_BUILDER_CANCELLED) {
                         log("SA Builder: cancelled after form selection");
                         break;
+                    }
+
+                    // Check Hidden checkbox if user selected it
+                    if (userSelection.hidden) {
+                        var hiddenCheckboxEl = document.querySelector("#uniform-hidden span input#hidden.checkbox");
+                        if (!hiddenCheckboxEl) {
+                            hiddenCheckboxEl = document.getElementById("hidden");
+                        }
+                        if (hiddenCheckboxEl && !hiddenCheckboxEl.checked) {
+                            hiddenCheckboxEl.click();
+                            log("SA Builder: Hidden checkbox checked");
+                            await sleep(200);
+                        }
                     }
     
                     // Clear pre/post window fields
