@@ -154,6 +154,2602 @@
 
 
     //==========================
+    // ADD EXISTING SUBJECT FEATURE
+    //==========================
+    // This section contains all functions for adding an existing subject from other epochs.
+    //==========================
+    // Add Existing Subject Feature
+
+    var RUNMODE_ADD_EXISTING_SUBJECT = "addExistingSubject";
+    var STORAGE_AES_POPUP = "activityPlanState.aes.popup";
+    var STORAGE_AES_SELECTED_EPOCH = "activityPlanState.aes.selectedEpoch";
+    var STORAGE_AES_SELECTED_EPOCH_NAME = "activityPlanState.aes.selectedEpochName";
+    var STORAGE_AES_COLLECTED_DATA = "activityPlanState.aes.collectedData";
+    var STORAGE_AES_SELECTED_SUBJECT = "activityPlanState.aes.selectedSubject";
+    var STORAGE_AES_SELECTED_VOLUNTEER_ID = "activityPlanState.aes.selectedVolunteerId";
+    var STORAGE_AES_STEP = "activityPlanState.aes.step";
+    var STORAGE_AES_COHORT_ID = "activityPlanState.aes.cohortId";
+    var STORAGE_AES_COHORT_EDIT_DONE = "activityPlanState.aes.cohortEditDone";
+    var STORAGE_AES_ASSIGNMENT_ID = "activityPlanState.aes.assignmentId";
+    var STORAGE_AES_PROGRESS = "activityPlanState.aes.progress";
+    var ADD_EXISTING_SUBJECT_POPUP_REF = null;
+
+    function clearAddExistingSubjectData() {
+        try {
+            localStorage.removeItem(STORAGE_AES_POPUP);
+            localStorage.removeItem(STORAGE_AES_SELECTED_EPOCH);
+            localStorage.removeItem(STORAGE_AES_SELECTED_EPOCH_NAME);
+            localStorage.removeItem(STORAGE_AES_COLLECTED_DATA);
+            localStorage.removeItem(STORAGE_AES_SELECTED_SUBJECT);
+            localStorage.removeItem(STORAGE_AES_SELECTED_VOLUNTEER_ID);
+            localStorage.removeItem(STORAGE_AES_STEP);
+            localStorage.removeItem(STORAGE_AES_COHORT_ID);
+            localStorage.removeItem(STORAGE_AES_COHORT_EDIT_DONE);
+            localStorage.removeItem(STORAGE_AES_ASSIGNMENT_ID);
+            localStorage.removeItem(STORAGE_AES_PROGRESS);
+        } catch (e) {}
+        ADD_EXISTING_SUBJECT_POPUP_REF = null;
+        log("AES: data cleared");
+    }
+
+    function getAESStep() {
+        try {
+            return localStorage.getItem(STORAGE_AES_STEP) || "";
+        } catch (e) { return ""; }
+    }
+
+    function setAESStep(step) {
+        try {
+            localStorage.setItem(STORAGE_AES_STEP, step);
+            log("AES: step=" + step);
+        } catch (e) {}
+    }
+
+    function getAESProgress() {
+        try {
+            var raw = localStorage.getItem(STORAGE_AES_PROGRESS);
+            if (raw) return JSON.parse(raw);
+        } catch (e) {}
+        return { current: 0, total: 0, message: "" };
+    }
+
+    function setAESProgress(current, total, message) {
+        try {
+            localStorage.setItem(STORAGE_AES_PROGRESS, JSON.stringify({ current: current, total: total, message: message }));
+        } catch (e) {}
+    }
+
+    function setCheckboxStateById(id, state) {
+        log("setCheckboxStateById: id=" + String(id) + " targetState=" + String(!!state));
+        var el = document.getElementById(id);
+        if (!el) {
+            log("setCheckboxStateById: element not found id=" + String(id));
+            return false;
+        }
+        var before = !!el.checked;
+        log("setCheckboxStateById: currentState=" + String(before));
+        el.checked = !!state;
+        var evt = new Event("change", { bubbles: true });
+        el.dispatchEvent(evt);
+        var wrap = el.closest("div.checker");
+        var span = null;
+        if (wrap) {
+            span = wrap.querySelector("span");
+            if (span) {
+                if (state) {
+                    span.classList.add("checked");
+                } else {
+                    span.classList.remove("checked");
+                }
+            }
+        }
+        var after = !!el.checked;
+        log("setCheckboxStateById: afterState=" + String(after));
+        return true;
+    }
+
+    function isScreeningEpoch(name) {
+        if (!name) return false;
+        var lower = name.toLowerCase();
+        return lower.indexOf("screen") !== -1;
+    }
+
+    function extractVolunteerIdFromHref(href) {
+        if (!href) return null;
+        var m = href.match(/\/secure\/volunteers\/manage\/show\/(\d+)/);
+        if (m && m[1]) return m[1];
+        return null;
+    }
+
+    function parseVolunteerInfo(text) {
+        if (!text) return { initials: "", age: "", gender: "", id: "" };
+        var cleaned = text.replace(/\s+/g, " ").trim();
+        var parts = cleaned.split(/[,\s]+/).filter(function(p) { return p.length > 0; });
+        var initials = parts[0] || "";
+        var age = parts[1] || "";
+        var gender = parts[2] || "";
+        var idMatch = cleaned.match(/\(ID:\s*(\d+)\)/i);
+        var id = idMatch ? idMatch[1] : "";
+        return { initials: initials, age: age, gender: gender, id: id };
+    }
+
+    function formatVolunteerDisplay(info) {
+        return info.initials + " - " + info.age + " - " + info.gender + " - " + info.id;
+    }
+
+    async function waitForSelectorWithRetry(selector, timeoutMs, retries) {
+        for (var i = 0; i < retries; i++) {
+            var el = await waitForSelector(selector, timeoutMs);
+            if (el) return el;
+            log("AES: retry " + (i + 1) + "/" + retries + " for " + selector);
+            await sleep(500);
+        }
+        return null;
+    }
+
+    async function startAddExistingSubject() {
+        log("AES: starting Add Existing Subject");
+        var studiesUrl = "https://cenexeltest.clinspark.com/secure/administration/studies/show";
+        
+        if (location.href.indexOf(studiesUrl) === -1) {
+            log("AES: navigating to studies page");
+            setRunMode(RUNMODE_ADD_EXISTING_SUBJECT);
+            setAESStep("selectEpoch");
+            localStorage.setItem(STORAGE_AES_POPUP, "1");
+            location.href = studiesUrl;
+            return;
+        }
+        
+        await showEpochSelectionPopup();
+    }
+
+    async function showEpochSelectionPopup() {
+        log("AES: showing epoch selection popup");
+        
+        var epochTableBody = await waitForSelectorWithRetry("#epochTableBody", 5000, 3);
+        if (!epochTableBody) {
+            log("AES: epochTableBody not found");
+            showAESError("Could not find epoch list. Please try again.");
+            return;
+        }
+
+        var rows = epochTableBody.querySelectorAll("tr");
+        var epochs = [];
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var anchor = row.querySelector("td a[href*='/secure/administration/studies/epoch/show/']");
+            if (anchor) {
+                var name = (anchor.textContent || "").trim();
+                var href = anchor.getAttribute("href") || "";
+                var idMatch = href.match(/\/show\/(\d+)/);
+                var epochId = idMatch ? idMatch[1] : "";
+                if (!isScreeningEpoch(name)) {
+                    epochs.push({ id: epochId, name: name, href: href });
+                }
+            }
+        }
+
+        if (epochs.length === 0) {
+            showAESError("No non-screening epochs found.");
+            return;
+        }
+
+        var popupContent = document.createElement("div");
+        popupContent.style.display = "flex";
+        popupContent.style.flexDirection = "column";
+        popupContent.style.gap = "12px";
+        popupContent.style.padding = "8px";
+        popupContent.style.maxHeight = "400px";
+        popupContent.style.overflowY = "auto";
+
+        var titleDiv = document.createElement("div");
+        titleDiv.style.fontSize = "16px";
+        titleDiv.style.fontWeight = "600";
+        titleDiv.style.marginBottom = "8px";
+        titleDiv.textContent = "Select Target Epoch";
+        popupContent.appendChild(titleDiv);
+
+        var descDiv = document.createElement("div");
+        descDiv.style.fontSize = "13px";
+        descDiv.style.color = "#aaa";
+        descDiv.style.marginBottom = "12px";
+        descDiv.textContent = "Choose the epoch where you want to add the existing subject. Screening epochs are excluded.";
+        popupContent.appendChild(descDiv);
+
+        for (var j = 0; j < epochs.length; j++) {
+            (function(epoch) {
+                var itemDiv = document.createElement("div");
+                itemDiv.style.display = "flex";
+                itemDiv.style.justifyContent = "space-between";
+                itemDiv.style.alignItems = "center";
+                itemDiv.style.padding = "10px 12px";
+                itemDiv.style.background = "#1a1a1a";
+                itemDiv.style.borderRadius = "6px";
+                itemDiv.style.border = "1px solid #333";
+
+                var nameSpan = document.createElement("span");
+                nameSpan.textContent = epoch.name;
+                nameSpan.style.fontWeight = "500";
+
+                var confirmBtn = document.createElement("button");
+                confirmBtn.textContent = "Confirm";
+                confirmBtn.style.background = "#2e7d32";
+                confirmBtn.style.color = "#fff";
+                confirmBtn.style.border = "none";
+                confirmBtn.style.borderRadius = "4px";
+                confirmBtn.style.padding = "6px 12px";
+                confirmBtn.style.cursor = "pointer";
+                confirmBtn.style.fontWeight = "500";
+                confirmBtn.addEventListener("click", async function() {
+                    log("AES: epoch selected - " + epoch.name + " (id=" + epoch.id + ")");
+                    localStorage.setItem(STORAGE_AES_SELECTED_EPOCH, epoch.id);
+                    localStorage.setItem(STORAGE_AES_SELECTED_EPOCH_NAME, epoch.name);
+                    // Remove popup without triggering onClose cleanup
+                    if (ADD_EXISTING_SUBJECT_POPUP_REF && ADD_EXISTING_SUBJECT_POPUP_REF.element) {
+                        ADD_EXISTING_SUBJECT_POPUP_REF.element.remove();
+                        ADD_EXISTING_SUBJECT_POPUP_REF = null;
+                    }
+                    await collectAllSubjectsFromEpochs();
+                });
+
+                itemDiv.appendChild(nameSpan);
+                itemDiv.appendChild(confirmBtn);
+                popupContent.appendChild(itemDiv);
+            })(epochs[j]);
+        }
+
+        ADD_EXISTING_SUBJECT_POPUP_REF = createPopup({
+            title: "Add Existing Subject",
+            content: popupContent,
+            width: "450px",
+            height: "auto",
+            maxHeight: "500px",
+            onClose: function() {
+                log("AES: cancelled by user");
+                clearAddExistingSubjectData();
+                clearRunMode();
+            }
+        });
+    }
+
+    async function collectAllSubjectsFromEpochs() {
+        log("AES: collecting subjects from all epochs");
+        
+        var popupContent = document.createElement("div");
+        popupContent.style.display = "flex";
+        popupContent.style.flexDirection = "column";
+        popupContent.style.gap = "16px";
+        popupContent.style.padding = "8px";
+        popupContent.style.textAlign = "center";
+
+        var statusDiv = document.createElement("div");
+        statusDiv.id = "aesCollectStatus";
+        statusDiv.style.fontSize = "16px";
+        statusDiv.style.fontWeight = "500";
+        statusDiv.textContent = "Collecting subjects from all epochs...";
+        popupContent.appendChild(statusDiv);
+
+        var progressDiv = document.createElement("div");
+        progressDiv.id = "aesCollectProgress";
+        progressDiv.style.fontSize = "14px";
+        progressDiv.style.color = "#9df";
+        progressDiv.textContent = "Initializing...";
+        popupContent.appendChild(progressDiv);
+
+        var loadingDiv = document.createElement("div");
+        loadingDiv.id = "aesLoading";
+        loadingDiv.style.fontSize = "14px";
+        loadingDiv.style.color = "#9df";
+        loadingDiv.textContent = "Running.";
+        popupContent.appendChild(loadingDiv);
+
+        ADD_EXISTING_SUBJECT_POPUP_REF = createPopup({
+            title: "Add Existing Subject - Collecting Data",
+            content: popupContent,
+            width: "450px",
+            height: "auto",
+            onClose: function() {
+                log("AES: cancelled during collection");
+                clearAddExistingSubjectData();
+                clearRunMode();
+            }
+        });
+
+        var dots = 1;
+        var loadingInterval = setInterval(function() {
+            if (!ADD_EXISTING_SUBJECT_POPUP_REF || !document.body.contains(ADD_EXISTING_SUBJECT_POPUP_REF.element)) {
+                clearInterval(loadingInterval);
+                return;
+            }
+            dots = (dots % 3) + 1;
+            var text = "Running";
+            for (var d = 0; d < dots; d++) text += ".";
+            var loadEl = document.getElementById("aesLoading");
+            if (loadEl) loadEl.textContent = text;
+        }, 500);
+
+        setRunMode(RUNMODE_ADD_EXISTING_SUBJECT);
+        localStorage.setItem(STORAGE_AES_POPUP, "1");
+        setAESStep("collecting");
+
+        var epochTableBody = document.getElementById("epochTableBody");
+        if (!epochTableBody) {
+            clearInterval(loadingInterval);
+            showAESError("Could not find epoch list.");
+            return;
+        }
+
+        var rows = epochTableBody.querySelectorAll("tr");
+        var allEpochs = [];
+        for (var i = 0; i < rows.length; i++) {
+            var anchor = rows[i].querySelector("td a[href*='/secure/administration/studies/epoch/show/']");
+            if (anchor) {
+                var name = (anchor.textContent || "").trim();
+                var href = anchor.getAttribute("href") || "";
+                var idMatch = href.match(/\/show\/(\d+)/);
+                var epochId = idMatch ? idMatch[1] : "";
+                allEpochs.push({ id: epochId, name: name, href: href });
+            }
+        }
+
+        var collectedData = {};
+        var selectedEpochId = localStorage.getItem(STORAGE_AES_SELECTED_EPOCH) || "";
+        var selectedEpochVolunteerIds = {};
+
+        for (var eIdx = 0; eIdx < allEpochs.length; eIdx++) {
+            var epoch = allEpochs[eIdx];
+            var progEl = document.getElementById("aesCollectProgress");
+            if (progEl) {
+                progEl.textContent = "Processing epoch " + (eIdx + 1) + "/" + allEpochs.length + ": " + epoch.name;
+            }
+            setAESProgress(eIdx + 1, allEpochs.length, "Processing epoch: " + epoch.name);
+
+            var epochData = await collectSubjectsFromEpoch(epoch);
+            collectedData[epoch.id] = {
+                name: epoch.name,
+                cohorts: epochData
+            };
+
+            if (epoch.id === selectedEpochId) {
+                for (var cohortId in epochData) {
+                    var assignments = epochData[cohortId].assignments || [];
+                    for (var aIdx = 0; aIdx < assignments.length; aIdx++) {
+                        if (assignments[aIdx].volunteerId) {
+                            selectedEpochVolunteerIds[assignments[aIdx].volunteerId] = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        clearInterval(loadingInterval);
+        localStorage.setItem(STORAGE_AES_COLLECTED_DATA, JSON.stringify(collectedData));
+        log("AES: collection complete, showing subject selection");
+
+        await showSubjectSelectionPopup(collectedData, selectedEpochVolunteerIds);
+    }
+
+    async function collectSubjectsFromEpoch(epoch) {
+        log("AES: collecting from epoch: " + epoch.name);
+        var epochData = {};
+
+        var epochUrl = location.origin + epoch.href;
+        var epochDoc = await fetchPageContent(epochUrl);
+        if (!epochDoc) {
+            log("AES: could not fetch epoch page: " + epoch.name);
+            return epochData;
+        }
+
+        var cohortListBody = epochDoc.getElementById("cohortListBody");
+        if (!cohortListBody) {
+            log("AES: no cohortListBody in epoch: " + epoch.name);
+            return epochData;
+        }
+
+        var cohortRows = cohortListBody.querySelectorAll("tr");
+        for (var cIdx = 0; cIdx < cohortRows.length; cIdx++) {
+            var cohortAnchor = cohortRows[cIdx].querySelector("td a[href*='/secure/administration/studies/cohort/show/']");
+            if (!cohortAnchor) continue;
+
+            var cohortName = (cohortAnchor.textContent || "").trim();
+            var cohortHref = cohortAnchor.getAttribute("href") || "";
+            var cohortIdMatch = cohortHref.match(/\/show\/(\d+)/);
+            var cohortId = cohortIdMatch ? cohortIdMatch[1] : "";
+
+            var assignments = await collectAssignmentsFromCohort(cohortHref, cohortName);
+            epochData[cohortId] = {
+                name: cohortName,
+                href: cohortHref,
+                assignments: assignments
+            };
+        }
+
+        return epochData;
+    }
+
+    async function collectAssignmentsFromCohort(cohortHref, cohortName) {
+        log("AES: collecting assignments from cohort: " + cohortName);
+        var assignments = [];
+
+        var cohortUrl = location.origin + cohortHref;
+        var cohortDoc = await fetchPageContent(cohortUrl);
+        if (!cohortDoc) {
+            log("AES: could not fetch cohort page: " + cohortName);
+            return assignments;
+        }
+
+        var assignmentListBody = cohortDoc.getElementById("cohortAssignmentListBody");
+        if (!assignmentListBody) {
+            log("AES: no cohortAssignmentListBody in cohort: " + cohortName);
+            return assignments;
+        }
+
+        var rows = assignmentListBody.querySelectorAll("tr.cohortAssignmentRow");
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var rowId = row.id || "";
+            var assignmentIdMatch = rowId.match(/ca_(\d+)/);
+            var assignmentId = assignmentIdMatch ? assignmentIdMatch[1] : "";
+
+            var subjectSpan = row.querySelector("span.tooltips[data-original-title='Subject Number']");
+            var subjectNumber = subjectSpan ? (subjectSpan.textContent || "").trim() : "";
+
+            var volunteerAnchor = row.querySelector("a[href*='/secure/volunteers/manage/show/']");
+            var volunteerId = "";
+            var volunteerDisplay = "";
+            if (volunteerAnchor) {
+                volunteerId = extractVolunteerIdFromHref(volunteerAnchor.getAttribute("href"));
+                var volunteerText = (volunteerAnchor.textContent || "").trim();
+                var volunteerInfo = parseVolunteerInfo(volunteerText);
+                volunteerDisplay = formatVolunteerDisplay(volunteerInfo);
+            }
+
+            var isActive = true;
+            var innerTable = row.querySelector("table.clinSparkInnerTable");
+            if (innerTable) {
+                var tds = innerTable.querySelectorAll("td");
+                for (var tdIdx = 0; tdIdx < tds.length; tdIdx++) {
+                    var tdText = (tds[tdIdx].textContent || "").trim();
+                    if (tdText === "Active?:") {
+                        var nextTd = tds[tdIdx + 1];
+                        if (nextTd) {
+                            var activeValue = (nextTd.textContent || "").trim();
+                            if (activeValue !== "Yes") {
+                                isActive = false;
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+
+            if (!isActive) {
+                log("AES: skipping inactive subject: " + subjectNumber);
+                continue;
+            }
+
+            if (subjectNumber && volunteerId) {
+                assignments.push({
+                    assignmentId: assignmentId,
+                    subjectNumber: subjectNumber,
+                    volunteerId: volunteerId,
+                    volunteerDisplay: volunteerDisplay
+                });
+            }
+        }
+
+        log("AES: found " + assignments.length + " assignments in cohort: " + cohortName);
+        return assignments;
+    }
+
+    async function fetchPageContent(url) {
+        return new Promise(function(resolve) {
+            var iframe = document.createElement("iframe");
+            iframe.style.position = "fixed";
+            iframe.style.top = "-9999px";
+            iframe.style.left = "-9999px";
+            iframe.style.width = "1px";
+            iframe.style.height = "1px";
+            iframe.style.visibility = "hidden";
+
+            var timeout = setTimeout(function() {
+                if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+                resolve(null);
+            }, 15000);
+
+            iframe.onload = function() {
+                clearTimeout(timeout);
+                try {
+                    var doc = iframe.contentDocument || iframe.contentWindow.document;
+                    setTimeout(function() {
+                        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+                        resolve(doc);
+                    }, 500);
+                } catch (e) {
+                    if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+                    resolve(null);
+                }
+            };
+
+            iframe.src = url;
+            document.body.appendChild(iframe);
+        });
+    }
+
+    async function showSubjectSelectionPopup(collectedData, excludeVolunteerIds) {
+        log("AES: showing subject selection popup");
+        
+        var selectedEpochId = localStorage.getItem(STORAGE_AES_SELECTED_EPOCH) || "";
+        var selectedEpochName = localStorage.getItem(STORAGE_AES_SELECTED_EPOCH_NAME) || "";
+
+        var subjectList = [];
+        var seenVolunteerIds = {};
+
+        for (var epochId in collectedData) {
+            if (epochId === selectedEpochId) continue;
+            var epochInfo = collectedData[epochId];
+            for (var cohortId in epochInfo.cohorts) {
+                var cohortInfo = epochInfo.cohorts[cohortId];
+                var assignments = cohortInfo.assignments || [];
+                for (var i = 0; i < assignments.length; i++) {
+                    var assignment = assignments[i];
+                    if (excludeVolunteerIds[assignment.volunteerId]) continue;
+                    if (seenVolunteerIds[assignment.volunteerId]) continue;
+                    seenVolunteerIds[assignment.volunteerId] = true;
+                    subjectList.push({
+                        subjectNumber: assignment.subjectNumber,
+                        volunteerId: assignment.volunteerId,
+                        volunteerDisplay: assignment.volunteerDisplay,
+                        epochName: epochInfo.name,
+                        cohortName: cohortInfo.name
+                    });
+                }
+            }
+        }
+
+        if (subjectList.length === 0) {
+            showAESError("No eligible subjects found in other epochs.");
+            return;
+        }
+
+        var popupContent = document.createElement("div");
+        popupContent.style.display = "flex";
+        popupContent.style.flexDirection = "column";
+        popupContent.style.gap = "12px";
+        popupContent.style.padding = "8px";
+        popupContent.style.maxHeight = "450px";
+        popupContent.style.overflowY = "auto";
+
+        var titleDiv = document.createElement("div");
+        titleDiv.style.fontSize = "16px";
+        titleDiv.style.fontWeight = "600";
+        titleDiv.style.marginBottom = "8px";
+        titleDiv.textContent = "Select Subject to Add";
+        popupContent.appendChild(titleDiv);
+
+        var descDiv = document.createElement("div");
+        descDiv.style.fontSize = "13px";
+        descDiv.style.color = "#aaa";
+        descDiv.style.marginBottom = "12px";
+        descDiv.innerHTML = "Adding to epoch: <strong>" + selectedEpochName + "</strong><br>Found " + subjectList.length + " eligible subjects.";
+        popupContent.appendChild(descDiv);
+
+        for (var j = 0; j < subjectList.length; j++) {
+            (function(subject) {
+                var itemDiv = document.createElement("div");
+                itemDiv.style.display = "flex";
+                itemDiv.style.flexDirection = "column";
+                itemDiv.style.padding = "10px 12px";
+                itemDiv.style.background = "#1a1a1a";
+                itemDiv.style.borderRadius = "6px";
+                itemDiv.style.border = "1px solid #333";
+                itemDiv.style.gap = "6px";
+
+                var topRow = document.createElement("div");
+                topRow.style.display = "flex";
+                topRow.style.justifyContent = "space-between";
+                topRow.style.alignItems = "center";
+
+                var subjectSpan = document.createElement("span");
+                subjectSpan.textContent = subject.subjectNumber;
+                subjectSpan.style.fontWeight = "600";
+                subjectSpan.style.fontSize = "15px";
+
+                var selectBtn = document.createElement("button");
+                selectBtn.textContent = "Select";
+                selectBtn.style.background = "#1976d2";
+                selectBtn.style.color = "#fff";
+                selectBtn.style.border = "none";
+                selectBtn.style.borderRadius = "4px";
+                selectBtn.style.padding = "6px 12px";
+                selectBtn.style.cursor = "pointer";
+                selectBtn.style.fontWeight = "500";
+                selectBtn.addEventListener("click", async function() {
+                    log("AES: subject selected - " + subject.subjectNumber + " (volunteerId=" + subject.volunteerId + ")");
+                    localStorage.setItem(STORAGE_AES_SELECTED_SUBJECT, subject.subjectNumber);
+                    localStorage.setItem(STORAGE_AES_SELECTED_VOLUNTEER_ID, subject.volunteerId);
+                    // Remove popup without triggering onClose cleanup
+                    if (ADD_EXISTING_SUBJECT_POPUP_REF && ADD_EXISTING_SUBJECT_POPUP_REF.element) {
+                        ADD_EXISTING_SUBJECT_POPUP_REF.element.remove();
+                        ADD_EXISTING_SUBJECT_POPUP_REF = null;
+                    }
+                    await startCohortAdditionProcess();
+                });
+
+                topRow.appendChild(subjectSpan);
+                topRow.appendChild(selectBtn);
+
+                var locationSpan = document.createElement("span");
+                locationSpan.textContent = subject.epochName + " → " + subject.cohortName;
+                locationSpan.style.fontSize = "12px";
+                locationSpan.style.color = "#888";
+
+                var volunteerSpan = document.createElement("span");
+                volunteerSpan.textContent = subject.volunteerDisplay;
+                volunteerSpan.style.fontSize = "11px";
+                volunteerSpan.style.color = "#666";
+
+                itemDiv.appendChild(topRow);
+                itemDiv.appendChild(locationSpan);
+                itemDiv.appendChild(volunteerSpan);
+                popupContent.appendChild(itemDiv);
+            })(subjectList[j]);
+        }
+
+        ADD_EXISTING_SUBJECT_POPUP_REF = createPopup({
+            title: "Add Existing Subject - Select Subject",
+            content: popupContent,
+            width: "500px",
+            height: "auto",
+            maxHeight: "550px",
+            onClose: function() {
+                log("AES: cancelled during subject selection");
+                clearAddExistingSubjectData();
+                clearRunMode();
+            }
+        });
+    }
+
+    async function startCohortAdditionProcess() {
+        log("AES: starting cohort addition process");
+        setAESStep("navigateToEpoch");
+        
+        var selectedEpochId = localStorage.getItem(STORAGE_AES_SELECTED_EPOCH) || "";
+        var epochUrl = "/secure/administration/studies/epoch/show/" + selectedEpochId;
+        
+        showAESProgressPopup("Navigating to target epoch...");
+        location.href = epochUrl;
+    }
+
+    function showAESProgressPopup(message) {
+        var popupContent = document.createElement("div");
+        popupContent.style.display = "flex";
+        popupContent.style.flexDirection = "column";
+        popupContent.style.gap = "16px";
+        popupContent.style.padding = "8px";
+        popupContent.style.textAlign = "center";
+
+        var statusDiv = document.createElement("div");
+        statusDiv.id = "aesProgressStatus";
+        statusDiv.style.fontSize = "16px";
+        statusDiv.style.fontWeight = "500";
+        statusDiv.textContent = message;
+        popupContent.appendChild(statusDiv);
+
+        var loadingDiv = document.createElement("div");
+        loadingDiv.id = "aesProgressLoading";
+        loadingDiv.style.fontSize = "14px";
+        loadingDiv.style.color = "#9df";
+        loadingDiv.textContent = "Running.";
+        popupContent.appendChild(loadingDiv);
+
+        ADD_EXISTING_SUBJECT_POPUP_REF = createPopup({
+            title: "Add Existing Subject",
+            content: popupContent,
+            width: "400px",
+            height: "auto",
+            onClose: function() {
+                log("AES: cancelled during progress");
+                clearAddExistingSubjectData();
+                clearRunMode();
+            }
+        });
+
+        var dots = 1;
+        setInterval(function() {
+            if (!ADD_EXISTING_SUBJECT_POPUP_REF || !document.body.contains(ADD_EXISTING_SUBJECT_POPUP_REF.element)) return;
+            dots = (dots % 3) + 1;
+            var text = "Running";
+            for (var d = 0; d < dots; d++) text += ".";
+            var loadEl = document.getElementById("aesProgressLoading");
+            if (loadEl) loadEl.textContent = text;
+        }, 500);
+    }
+
+    function updateAESProgressStatus(message) {
+        var statusEl = document.getElementById("aesProgressStatus");
+        if (statusEl) statusEl.textContent = message;
+    }
+
+    function showAESError(message) {
+        log("AES Error: " + message);
+        var popupContent = document.createElement("div");
+        popupContent.style.display = "flex";
+        popupContent.style.flexDirection = "column";
+        popupContent.style.gap = "16px";
+        popupContent.style.padding = "8px";
+        popupContent.style.textAlign = "center";
+
+        var errorDiv = document.createElement("div");
+        errorDiv.style.fontSize = "16px";
+        errorDiv.style.color = "#f44336";
+        errorDiv.style.fontWeight = "500";
+        errorDiv.textContent = message;
+        popupContent.appendChild(errorDiv);
+
+        ADD_EXISTING_SUBJECT_POPUP_REF = createPopup({
+            title: "Add Existing Subject - Error",
+            content: popupContent,
+            width: "400px",
+            height: "auto",
+            onClose: function() {
+                clearAddExistingSubjectData();
+                clearRunMode();
+            }
+        });
+    }
+
+    function showAESComplete() {
+        log("AES: process complete");
+        var popupContent = document.createElement("div");
+        popupContent.style.display = "flex";
+        popupContent.style.flexDirection = "column";
+        popupContent.style.gap = "16px";
+        popupContent.style.padding = "8px";
+        popupContent.style.textAlign = "center";
+
+        var successDiv = document.createElement("div");
+        successDiv.style.fontSize = "18px";
+        successDiv.style.color = "#4caf50";
+        successDiv.style.fontWeight = "600";
+        successDiv.textContent = "✓ Subject Added Successfully!";
+        popupContent.appendChild(successDiv);
+
+        var subjectNumber = localStorage.getItem(STORAGE_AES_SELECTED_SUBJECT) || "";
+        var epochName = localStorage.getItem(STORAGE_AES_SELECTED_EPOCH_NAME) || "";
+        
+        var detailsDiv = document.createElement("div");
+        detailsDiv.style.fontSize = "14px";
+        detailsDiv.style.color = "#aaa";
+        detailsDiv.innerHTML = "Subject <strong>" + subjectNumber + "</strong> has been added to epoch <strong>" + epochName + "</strong> and activated.";
+        popupContent.appendChild(detailsDiv);
+
+        // Transition existing popup instead of creating new one
+        if (ADD_EXISTING_SUBJECT_POPUP_REF && ADD_EXISTING_SUBJECT_POPUP_REF.element && document.body.contains(ADD_EXISTING_SUBJECT_POPUP_REF.element)) {
+            ADD_EXISTING_SUBJECT_POPUP_REF.setTitle("Add Existing Subject - Complete");
+            ADD_EXISTING_SUBJECT_POPUP_REF.setContent(popupContent);
+        } else {
+            ADD_EXISTING_SUBJECT_POPUP_REF = createPopup({
+                title: "Add Existing Subject - Complete",
+                content: popupContent,
+                width: "400px",
+                height: "auto",
+                onClose: function() {
+                    clearAddExistingSubjectData();
+                    clearRunMode();
+                }
+            });
+        }
+    }
+
+    async function processAESOnPageLoad() {
+        var runMode = getRunMode();
+        if (runMode !== RUNMODE_ADD_EXISTING_SUBJECT) return;
+        
+        var step = getAESStep();
+        log("AES: processing on page load, step=" + step);
+
+        if (step === "selectEpoch") {
+            await showEpochSelectionPopup();
+            return;
+        }
+
+        if (step === "collecting") {
+            showAESProgressPopup("Data collection was interrupted. Please restart.");
+            return;
+        }
+
+        if (step === "navigateToEpoch") {
+            await processEpochPage();
+            return;
+        }
+
+        if (step === "cohortPage") {
+            await processCohortPage();
+            return;
+        }
+
+        if (step === "afterCohortEdit") {
+            await processAfterCohortEdit();
+            return;
+        }
+
+        if (step === "afterAddSubject") {
+            await processAfterAddSubject();
+            return;
+        }
+
+        if (step === "activatePlan") {
+            await processActivatePlan();
+            return;
+        }
+
+        if (step === "activateVolunteer") {
+            await processActivateVolunteer();
+            return;
+        }
+    }
+
+    async function processEpochPage() {
+        log("AES: processing epoch page");
+        showAESProgressPopup("Navigating to first cohort...");
+
+        var cohortListBody = await waitForSelectorWithRetry("#cohortListBody", 5000, 3);
+        if (!cohortListBody) {
+            showAESError("Could not find cohort list in epoch.");
+            return;
+        }
+
+        var firstCohortAnchor = cohortListBody.querySelector("td a[href*='/secure/administration/studies/cohort/show/']");
+        if (!firstCohortAnchor) {
+            showAESError("No cohort found in the selected epoch.");
+            return;
+        }
+
+        var cohortHref = firstCohortAnchor.getAttribute("href") || "";
+        var cohortIdMatch = cohortHref.match(/\/show\/(\d+)/);
+        var cohortId = cohortIdMatch ? cohortIdMatch[1] : "";
+        localStorage.setItem(STORAGE_AES_COHORT_ID, cohortId);
+        setAESStep("cohortPage");
+
+        location.href = cohortHref;
+    }
+
+    async function processCohortPage() {
+        log("AES: processing cohort page");
+        var cohortEditDone = localStorage.getItem(STORAGE_AES_COHORT_EDIT_DONE);
+        
+        if (cohortEditDone !== "1") {
+            showAESProgressPopup("Configuring cohort settings...");
+            await editCohortSettings();
+        } else {
+            await addSubjectToCohort();
+        }
+    }
+
+    async function editCohortSettings() {
+        log("AES: editing cohort settings");
+        updateAESProgressStatus("Opening cohort edit modal...");
+
+        var actionsBtn = await waitForSelector("button.dropdown-toggle[data-toggle='dropdown']", 5000);
+        if (!actionsBtn) {
+            var allBtns = document.querySelectorAll("button.dropdown-toggle");
+            for (var i = 0; i < allBtns.length; i++) {
+                if ((allBtns[i].textContent || "").toLowerCase().indexOf("actions") !== -1) {
+                    actionsBtn = allBtns[i];
+                    break;
+                }
+            }
+        }
+
+        if (!actionsBtn) {
+            showAESError("Could not find Actions button.");
+            return;
+        }
+
+        actionsBtn.click();
+        await sleep(500);
+
+        var editLink = document.querySelector("a[href*='/secure/administration/manage/studies/cohort/update/'][data-toggle='modal']");
+        if (!editLink) {
+            showAESError("Could not find Edit link in Actions menu.");
+            return;
+        }
+
+        editLink.click();
+        
+        var modal = await waitForSelectorWithRetry("#ajaxModal", 10000, 3);
+        if (!modal) {
+            showAESError("Edit modal did not open.");
+            return;
+        }
+
+        await sleep(1500);
+        updateAESProgressStatus("Configuring checkboxes...");
+
+        setCheckboxStateById("subjectInitiation", false);
+        setCheckboxStateById("sourceVolunteerDatabase", false);
+        setCheckboxStateById("sourceAppointments", false);
+        setCheckboxStateById("sourceAppointmentsCohort", false);
+        setCheckboxStateById("sourceScreeningCohorts", true);
+        setCheckboxStateById("sourceLeadInCohorts", true);
+        setCheckboxStateById("sourceRandomizationCohorts", true);
+        setCheckboxStateById("allowSubjectsActiveInCohorts", true);
+        setCheckboxStateById("allowSubjectsActiveInStudies", true);
+        setCheckboxStateById("requireVolunteerRecruitment", false);
+        setCheckboxStateById("allowRecruitmentEligible", false);
+        setCheckboxStateById("allowRecruitmentIdentified", false);
+        setCheckboxStateById("allowRecruitmentIneligible", false);
+        setCheckboxStateById("allowRecruitmentRemoved", false);
+        setCheckboxStateById("allowEligibilityEligible", true);
+        setCheckboxStateById("allowEligibilityPending", true);
+        setCheckboxStateById("allowEligibilityIneligible", true);
+        setCheckboxStateById("allowEligibilityUnspecified", true);
+        setCheckboxStateById("allowStatusActive", true);
+        setCheckboxStateById("allowStatusComplete", false);
+        setCheckboxStateById("allowStatusTerminated", false);
+        setCheckboxStateById("allowStatusWithdrawn", false);
+        setCheckboxStateById("requireInformedConsent", false);
+        setCheckboxStateById("requireOverVolunteeringCheck", false);
+
+        var reason = document.querySelector("textarea#reasonForChange");
+        if (reason) {
+            reason.value = "test";
+            var evt = new Event("input", { bubbles: true });
+            reason.dispatchEvent(evt);
+        }
+
+        await sleep(500);
+        updateAESProgressStatus("Saving cohort settings...");
+
+        var saveBtn = document.getElementById("actionButton");
+        if (!saveBtn) {
+            showAESError("Could not find Save button in modal.");
+            return;
+        }
+
+        localStorage.setItem(STORAGE_AES_COHORT_EDIT_DONE, "1");
+        setAESStep("afterCohortEdit");
+        saveBtn.click();
+    }
+
+    async function processAfterCohortEdit() {
+        log("AES: processing after cohort edit");
+        await sleep(2000);
+        await addSubjectToCohort();
+    }
+
+    async function addSubjectToCohort() {
+        log("AES: adding subject to cohort");
+        showAESProgressPopup("Opening Add Subject modal...");
+
+        var assignmentsActionBtn = document.getElementById("assignmentsActionMenu");
+        if (!assignmentsActionBtn) {
+            showAESError("Could not find assignments Action button.");
+            return;
+        }
+
+        assignmentsActionBtn.click();
+        await sleep(500);
+
+        var addLink = document.getElementById("addCohortAssignmentButton");
+        if (!addLink) {
+            addLink = document.querySelector("a[id='addCohortAssignmentButton']");
+        }
+        if (!addLink) {
+            showAESError("Could not find Add button.");
+            return;
+        }
+
+        addLink.click();
+
+        var modal = await waitForSelectorWithRetry("#ajaxModal", 10000, 3);
+        if (!modal) {
+            showAESError("Add Subject modal did not open.");
+            return;
+        }
+
+        await sleep(1500);
+        updateAESProgressStatus("Selecting activity plan...");
+
+        var activityPlanSelect = document.getElementById("activityPlan");
+        if (activityPlanSelect) {
+            var options = activityPlanSelect.querySelectorAll("option");
+            for (var i = 0; i < options.length; i++) {
+                var val = (options[i].value || "").trim();
+                if (val.length > 0) {
+                    activityPlanSelect.value = val;
+                    var evt = new Event("change", { bubbles: true });
+                    activityPlanSelect.dispatchEvent(evt);
+                    log("AES: selected activity plan index " + i);
+                    break;
+                }
+            }
+        }
+
+        await sleep(1000);
+
+        var initialRefInput = document.getElementById("initialSegmentReference");
+        if (initialRefInput && initialRefInput.offsetParent !== null) {
+            var now = new Date();
+            var formatted = formatDateForClinSpark(now);
+            initialRefInput.value = formatted;
+            var evt2 = new Event("change", { bubbles: true });
+            initialRefInput.dispatchEvent(evt2);
+            log("AES: set initial reference time to " + formatted);
+        }
+
+        await sleep(500);
+        updateAESProgressStatus("Searching for subject...");
+
+        var subjectNumber = localStorage.getItem(STORAGE_AES_SELECTED_SUBJECT) || "";
+        log("AES: searching for subject number: " + subjectNumber);
+
+        var s2container = modal.querySelector('#s2id_volunteer');
+        if (!s2container) {
+            s2container = modal.querySelector('.select2-container.form-control.select2');
+        }
+        if (!s2container) {
+            log("AES: Select2 container not found");
+            showAESError("Could not find volunteer select2 container.");
+            return;
+        }
+
+        var s2choice = s2container.querySelector('a.select2-choice');
+        if (s2choice) {
+            s2choice.click();
+            log("AES: clicked select2 choice to open dropdown");
+            await sleep(150);
+        }
+
+        var focusser = s2container.querySelector('input.select2-focusser');
+        if (focusser) {
+            focusser.focus();
+            var kd = new KeyboardEvent("keydown", { bubbles: true, key: "ArrowDown", keyCode: 40 });
+            focusser.dispatchEvent(kd);
+            focusser.click();
+            await sleep(150);
+        }
+
+        var s2drop = document.querySelector('#select2-drop.select2-drop-active');
+        if (!s2drop) {
+            s2drop = s2container.querySelector('.select2-drop');
+        }
+        if (!s2drop) {
+            s2choice = s2container.querySelector('a.select2-choice');
+            if (s2choice) {
+                s2choice.click();
+            }
+            s2drop = await waitForSelector('#select2-drop.select2-drop-active', 2000);
+            if (!s2drop) {
+                s2drop = s2container.querySelector('.select2-drop');
+            }
+        }
+        if (!s2drop) {
+            log("AES: Select2 drop not found");
+            showAESError("Could not open volunteer dropdown.");
+            return;
+        }
+
+        var s2input = s2drop.querySelector('input.select2-input');
+        if (!s2input) {
+            s2input = await waitForSelector('#select2-drop.select2-drop-active input.select2-input', 2000);
+        }
+        if (!s2input) {
+            s2input = s2container.querySelector('input.select2-input');
+        }
+        if (!s2input) {
+            log("AES: Select2 input not found");
+            showAESError("Could not find volunteer search input.");
+            return;
+        }
+
+        log("AES: found search input: " + (s2input.id || "no-id"));
+
+        s2input.value = subjectNumber;
+        var inpEvt = new Event("input", { bubbles: true });
+        s2input.dispatchEvent(inpEvt);
+        var keyEvt = new KeyboardEvent("keyup", { bubbles: true, key: subjectNumber, keyCode: subjectNumber.charCodeAt(0) });
+        s2input.dispatchEvent(keyEvt);
+        log("AES: typed subject number: " + subjectNumber);
+
+        var selectionConfirmed = false;
+        var confirmWait = 0;
+        var confirmMax = 12000;
+        while (confirmWait < confirmMax) {
+            var enterDown = new KeyboardEvent("keydown", { bubbles: true, key: "Enter", keyCode: 13 });
+            s2input.dispatchEvent(enterDown);
+            var enterUp = new KeyboardEvent("keyup", { bubbles: true, key: "Enter", keyCode: 13 });
+            s2input.dispatchEvent(enterUp);
+            await sleep(400);
+            
+            var containerClass = s2container.getAttribute("class") + "";
+            var hasAllow = containerClass.indexOf("select2-allowclear") !== -1;
+            var notOpen = containerClass.indexOf("select2-dropdown-open") === -1;
+            var chosenEl = null;
+            chosenEl = s2container.querySelector('.select2-chosen');
+            if (!chosenEl) {
+                chosenEl = s2container.querySelector('[id^="select2-chosen-"]');
+            }
+            var chosenText = "";
+            if (chosenEl) {
+                chosenText = (chosenEl.textContent + "").trim();
+            }
+            var notSearch = chosenText.trim().toLowerCase() !== "search";
+            
+            if (hasAllow && notOpen && notSearch) {
+                selectionConfirmed = true;
+                log("AES: selection confirmed; chosenText=" + chosenText);
+                break;
+            }
+            confirmWait = confirmWait + 400;
+        }
+
+        if (!selectionConfirmed) {
+            log("AES: selection not confirmed after " + confirmMax + "ms");
+            showAESError("Could not confirm volunteer selection for subject " + subjectNumber);
+            return;
+        }
+
+        log("AES: volunteer selected successfully");
+        setAESStep("afterAddSubject");
+
+        var saveBtn = document.getElementById("actionButton");
+        if (saveBtn) {
+            saveBtn.click();
+        }
+    }
+
+    function formatDateForClinSpark(date) {
+        var months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        var day = String(date.getDate()).padStart(2, "0");
+        var month = months[date.getMonth()];
+        var year = date.getFullYear();
+        var hours = String(date.getHours()).padStart(2, "0");
+        var mins = String(date.getMinutes()).padStart(2, "0");
+        var secs = String(date.getSeconds()).padStart(2, "0");
+        return day + month + year + " " + hours + ":" + mins + ":" + secs + " PST";
+    }
+
+    async function processAfterAddSubject() {
+        log("AES: processing after add subject");
+        await sleep(2000);
+
+        var alertDanger = document.querySelector("div.alert.alert-danger");
+        if (alertDanger) {
+            showAESError("Error encountered. Stopping program.");
+            return;
+        }
+
+        updateAESProgressStatus("Locating new assignment...");
+
+        var volunteerId = localStorage.getItem(STORAGE_AES_SELECTED_VOLUNTEER_ID) || "";
+        var subjectNumber = localStorage.getItem(STORAGE_AES_SELECTED_SUBJECT) || "";
+
+        var assignmentListBody = await waitForSelectorWithRetry("#cohortAssignmentListBody", 5000, 3);
+        if (!assignmentListBody) {
+            showAESError("Could not find assignment list after save.");
+            return;
+        }
+
+        var rows = assignmentListBody.querySelectorAll("tr.cohortAssignmentRow");
+        var targetRow = null;
+        var assignmentId = "";
+
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var volunteerAnchor = row.querySelector("a[href*='/secure/volunteers/manage/show/" + volunteerId + "']");
+            if (volunteerAnchor) {
+                // Also verify this is the correct subject number
+                var subjectAnchor = row.querySelector("a[href*='/secure/study/subjects/show/']");
+                if (subjectAnchor) {
+                    var subjectText = (subjectAnchor.textContent || "").trim();
+                    // Check if subject number matches (could be "111-1005" or "1003 / 111-1005")
+                    if (subjectText.indexOf(subjectNumber) !== -1) {
+                        targetRow = row;
+                        var rowId = row.id || "";
+                        var match = rowId.match(/ca_(\d+)/);
+                        if (match) assignmentId = match[1];
+                        log("AES: found matching assignment - volunteerId=" + volunteerId + ", subjectNumber=" + subjectNumber + ", assignmentId=" + assignmentId);
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!targetRow || !assignmentId) {
+            showAESError("Could not find the newly added assignment.");
+            return;
+        }
+
+        localStorage.setItem(STORAGE_AES_ASSIGNMENT_ID, assignmentId);
+        log("AES: found assignment id=" + assignmentId);
+
+        await processActivatePlan();
+    }
+
+    async function processActivatePlan() {
+        log("AES: processing activate plan");
+        var assignmentId = localStorage.getItem(STORAGE_AES_ASSIGNMENT_ID) || "";
+        
+        updateAESProgressStatus("Activating plan...");
+
+        var activatePlanLink = document.getElementById("cohortAssignmentActivatePlanLink_" + assignmentId);
+        
+        if (!activatePlanLink) {
+            activatePlanLink = document.querySelector("a[onclick*='activatePlan(" + assignmentId + ")']");
+        }
+
+        if (!activatePlanLink) {
+            var row = document.getElementById("ca_" + assignmentId);
+            if (row) {
+                var actionBtn = row.querySelector("button.dropdown-toggle");
+                if (actionBtn) {
+                    actionBtn.click();
+                    await sleep(500);
+                    activatePlanLink = document.querySelector("a[onclick*='activatePlan(" + assignmentId + ")']");
+                }
+            }
+        }
+
+        if (activatePlanLink) {
+            var isDisabled = activatePlanLink.closest("li.disabled") !== null;
+            if (isDisabled) {
+                log("AES: Activate Plan is disabled, treating as already activated");
+                setAESStep("activateVolunteer");
+                await processActivateVolunteer();
+                return;
+            }
+            
+            setAESStep("activateVolunteer");
+            activatePlanLink.click();
+            log("AES: clicked Activate Plan");
+            
+            // Wait for and click OK button in confirmation modal
+            await sleep(500);
+            var okBtn = await waitForSelector('button[data-bb-handler="confirm"].btn.btn-primary', 3000);
+            if (okBtn) {
+                okBtn.click();
+                log("AES: clicked OK on Activate Plan confirmation");
+                await sleep(1000);
+            } else {
+                log("AES: OK button not found after Activate Plan");
+            }
+            
+            await processActivateVolunteer();
+        } else {
+            log("AES: Activate Plan link not found, may already be activated");
+            setAESStep("activateVolunteer");
+            await processActivateVolunteer();
+        }
+    }
+
+    async function processActivateVolunteer() {
+        log("AES: processing activate volunteer");
+        var assignmentId = localStorage.getItem(STORAGE_AES_ASSIGNMENT_ID) || "";
+        
+        updateAESProgressStatus("Activating volunteer...");
+
+        var maxWait = 30000;
+        var waited = 0;
+        var activateVolunteerLink = null;
+
+        while (waited < maxWait) {
+            activateVolunteerLink = document.getElementById("cohortAssignmentActivateSubjectLink_" + assignmentId);
+            if (!activateVolunteerLink) {
+                activateVolunteerLink = document.querySelector("a[onclick*='activateVolunteer(" + assignmentId + ")']");
+            }
+
+            if (activateVolunteerLink) {
+                var isDisabled = activateVolunteerLink.closest("li.disabled") !== null;
+                if (!isDisabled) {
+                    break;
+                }
+            }
+
+            await sleep(1000);
+            waited += 1000;
+            
+            var row = document.getElementById("ca_" + assignmentId);
+            if (row) {
+                var actionBtn = row.querySelector("button.dropdown-toggle");
+                if (actionBtn) {
+                    actionBtn.click();
+                    await sleep(300);
+                }
+            }
+        }
+
+        if (activateVolunteerLink) {
+            var isDisabled = activateVolunteerLink.closest("li.disabled") !== null;
+            if (isDisabled) {
+                log("AES: Both Activate Plan and Activate Volunteer are disabled - treating as complete");
+                showAESComplete();
+                return;
+            }
+            
+            activateVolunteerLink.click();
+            log("AES: clicked Activate Volunteer");
+            
+            // Wait for and click OK button in confirmation modal
+            await sleep(500);
+            var okBtn = await waitForSelector('button[data-bb-handler="confirm"].btn.btn-primary', 3000);
+            if (okBtn) {
+                okBtn.click();
+                log("AES: clicked OK on Activate Volunteer confirmation");
+                await sleep(1000);
+            } else {
+                log("AES: OK button not found after Activate Volunteer");
+            }
+            
+            showAESComplete();
+        } else {
+            log("AES: Activate Volunteer link not found after waiting");
+            showAESComplete();
+        }
+    }
+
+    //==========================
+    // SCHEDULED ACTIVITIES BUILDER FEATURE
+    //==========================
+    // This section contains all functions related to the Scheduled Activities Builder.
+    // This feature automates adding scheduled activities by allowing users to select
+    // segments, study events, and forms, then automatically populating and submitting them.
+    //==========================
+
+    var STORAGE_SA_BUILDER_EXISTING = "activityPlanState.saBuilder.existing";
+    var STORAGE_SA_BUILDER_SEGMENTS = "activityPlanState.saBuilder.segments";
+    var STORAGE_SA_BUILDER_STUDY_EVENTS = "activityPlanState.saBuilder.studyEvents";
+    var STORAGE_SA_BUILDER_FORMS = "activityPlanState.saBuilder.forms";
+    var STORAGE_SA_BUILDER_USER_SELECTION = "activityPlanState.saBuilder.userSelection";
+    var STORAGE_SA_BUILDER_MAPPED_ITEMS = "activityPlanState.saBuilder.mappedItems";
+    var STORAGE_SA_BUILDER_CURRENT_INDEX = "activityPlanState.saBuilder.currentIndex";
+    var STORAGE_SA_BUILDER_RUNNING = "activityPlanState.saBuilder.running";
+    var STORAGE_SA_BUILDER_TIME_OFFSET = "activityPlanState.saBuilder.timeOffset";
+    var STORAGE_SA_BUILDER_SEGMENT_CHECKBOXES = "activityPlanState.saBuilder.segmentCheckboxes";
+    var SA_BUILDER_POPUP_REF = null;
+    var SA_BUILDER_PROGRESS_POPUP_REF = null;
+    var SA_BUILDER_CANCELLED = false;
+    var SA_BUILDER_PAUSE = false;
+    var SA_BUILDER_TARGET_URL = "https://cenexeltest.clinspark.com/secure/crfdesign/activityplans/show/";
+
+    function SABuilderFunctions() {}
+
+    // Normalize text for comparison: trim, collapse whitespace
+    function normalizeSAText(t) {
+        if (typeof t !== "string") return "";
+        return t.trim().replace(/\s+/g, " ");
+    }
+
+    // Clear all SA Builder storage
+    function clearSABuilderStorage() {
+        try {
+            localStorage.removeItem(STORAGE_SA_BUILDER_EXISTING);
+            localStorage.removeItem(STORAGE_SA_BUILDER_SEGMENTS);
+            localStorage.removeItem(STORAGE_SA_BUILDER_STUDY_EVENTS);
+            localStorage.removeItem(STORAGE_SA_BUILDER_FORMS);
+            localStorage.removeItem(STORAGE_SA_BUILDER_USER_SELECTION);
+            localStorage.removeItem(STORAGE_SA_BUILDER_MAPPED_ITEMS);
+            localStorage.removeItem(STORAGE_SA_BUILDER_CURRENT_INDEX);
+            localStorage.removeItem(STORAGE_SA_BUILDER_RUNNING);
+            localStorage.removeItem(STORAGE_SA_BUILDER_TIME_OFFSET);
+            localStorage.removeItem(STORAGE_SA_BUILDER_SEGMENT_CHECKBOXES);
+        } catch (e) {}
+        log("SA Builder: storage cleared");
+    }
+
+    // Check if user is on the correct page
+    function isOnSABuilderPage() {
+        var currentUrl = location.href;
+        return currentUrl.indexOf(SA_BUILDER_TARGET_URL) !== -1;
+    }
+
+    // Scan existing table and collect items
+    function scanExistingSATable() {
+        var existing = [];
+        var tbody = document.getElementById("saTableBody");
+        if (!tbody) {
+            log("SA Builder: saTableBody not found");
+            return existing;
+        }
+        var rows = tbody.querySelectorAll("tr");
+        log("SA Builder: found " + rows.length + " rows in saTableBody");
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var cells = row.querySelectorAll("td");
+            if (cells.length >= 4) {
+                var segment = normalizeSAText(cells[1].textContent);
+                var studyEvent = normalizeSAText(cells[2].textContent);
+                var form = normalizeSAText(cells[3].textContent);
+                if (segment && studyEvent && form) {
+                    var key = segment + " - " + studyEvent + " - " + form;
+                    existing.push(key);
+                }
+            }
+        }
+        log("SA Builder: collected " + existing.length + " existing items");
+        return existing;
+    }
+
+    // Check if Add button is disabled
+    function isAddSaButtonDisabled() {
+        var btn = document.getElementById("addSaButton");
+        if (!btn) {
+            log("SA Builder: addSaButton not found");
+            return true;
+        }
+        return btn.hasAttribute("disabled");
+    }
+
+    // Click the Add button
+    function clickAddSaButton() {
+        var btn = document.getElementById("addSaButton");
+        if (!btn) {
+            log("SA Builder: addSaButton not found for click");
+            return false;
+        }
+        btn.click();
+        log("SA Builder: Add button clicked");
+        return true;
+    }
+
+    // Wait for modal to appear and be ready
+    async function waitForSAModal(timeoutMs) {
+        var start = Date.now();
+        var maxTime = timeoutMs || 10000;
+        while (Date.now() - start < maxTime) {
+            var modal = document.getElementById("ajaxModal");
+            if (modal && modal.classList.contains("in")) {
+                var modalBody = modal.querySelector("#modalbody, .modal-body");
+                if (modalBody) {
+                    await sleep(500);
+                    return modal;
+                }
+            }
+            await sleep(300);
+        }
+        return null;
+    }
+
+    // Wait for modal to close
+    async function waitForSAModalClose(timeoutMs) {
+        var start = Date.now();
+        var maxTime = timeoutMs || 10000;
+        while (Date.now() - start < maxTime) {
+            var modal = document.getElementById("ajaxModal");
+            if (!modal || !modal.classList.contains("in")) {
+                return true;
+            }
+            await sleep(300);
+        }
+        return false;
+    }
+
+    // Click Select2 field to open dropdown and force options to load
+    async function openSelect2Dropdown(containerId) {
+        var container = document.getElementById(containerId);
+        if (!container) return false;
+        var choice = container.querySelector(".select2-choice");
+        if (choice) {
+            choice.click();
+            await sleep(300);
+            return true;
+        }
+        return false;
+    }
+
+    // Close Select2 dropdown
+    async function closeSelect2Dropdown() {
+        var active = document.querySelector(".select2-drop-active");
+        if (active) {
+            var body = document.body;
+            body.click();
+            await sleep(200);
+        }
+    }
+
+    // Collect options from a select element
+    function collectSelectOptions(selectId) {
+        var select = document.getElementById(selectId);
+        if (!select) return [];
+        var options = [];
+        var opts = select.querySelectorAll("option");
+        for (var i = 0; i < opts.length; i++) {
+            var opt = opts[i];
+            var val = (opt.value || "").trim();
+            var txt = normalizeSAText(opt.textContent);
+            if (val && txt) {
+                options.push({ value: val, text: txt });
+            }
+        }
+        return options;
+    }
+
+    // Collect all dropdown data from the Add SA modal
+    async function collectModalDropdownData() {
+        log("SA Builder: collecting dropdown data from modal");
+
+        // Collect segments
+        await openSelect2Dropdown("s2id_segment");
+        await sleep(300);
+        await closeSelect2Dropdown();
+        var segments = collectSelectOptions("segment");
+        log("SA Builder: collected " + segments.length + " segments");
+
+        // Collect study events
+        await openSelect2Dropdown("s2id_studyEvent");
+        await sleep(300);
+        await closeSelect2Dropdown();
+        var studyEvents = collectSelectOptions("studyEvent");
+        log("SA Builder: collected " + studyEvents.length + " study events");
+
+        // Collect forms
+        await openSelect2Dropdown("s2id_form");
+        await sleep(300);
+        await closeSelect2Dropdown();
+        var forms = collectSelectOptions("form");
+        log("SA Builder: collected " + forms.length + " forms");
+
+        return {
+            segments: segments,
+            studyEvents: studyEvents,
+            forms: forms
+        };
+    }
+
+    async function selectSelect2Value(selectId, value) {
+        if (SA_BUILDER_CANCELLED) {
+            log("SA Builder: cancelled during selectSelect2Value");
+            return false;
+        }
+
+        var select = document.getElementById(selectId);
+        if (!select) {
+            log("SA Builder: select element " + selectId + " not found");
+            return false;
+        }
+
+        // Set the value directly
+        select.value = value;
+
+        // Trigger change event
+        var evt = new Event("change", { bubbles: true });
+        select.dispatchEvent(evt);
+
+        // Also try to update Select2
+        try {
+            if (window.jQuery && window.jQuery.fn.select2) {
+                window.jQuery("#" + selectId).trigger("change");
+            }
+        } catch (e) {}
+
+        await sleep(300);
+        
+        if (SA_BUILDER_CANCELLED) {
+            log("SA Builder: cancelled after selectSelect2Value sleep");
+            return false;
+        }
+        
+        log("SA Builder: selected value " + value + " in " + selectId);
+        return true;
+    }
+
+    // Create the selection GUI popup
+    function createSABuilderSelectionGUI(segments, studyEvents, forms) {
+        var container = document.createElement("div");
+        container.style.display = "flex";
+        container.style.flexDirection = "column";
+        container.style.gap = "16px";
+        container.style.height = "100%";
+        container.style.minHeight = "500px";
+
+        // Search bars row
+        var searchRow = document.createElement("div");
+        searchRow.style.display = "grid";
+        searchRow.style.gridTemplateColumns = "1fr 1fr 1fr 200px";
+        searchRow.style.gap = "8px";
+
+        var segmentSearch = document.createElement("input");
+        segmentSearch.type = "text";
+        segmentSearch.placeholder = "Search Segments...";
+        segmentSearch.style.cssText = "padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;";
+
+        var eventSearch = document.createElement("input");
+        eventSearch.type = "text";
+        eventSearch.placeholder = "Search Study Events...";
+        eventSearch.style.cssText = "padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;";
+
+        var formSearch = document.createElement("input");
+        formSearch.type = "text";
+        formSearch.placeholder = "Search Forms...";
+        formSearch.style.cssText = "padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;";
+
+        var timeLabel = document.createElement("div");
+        timeLabel.textContent = "Time Relative to Segment";
+        timeLabel.style.cssText = "padding:8px;font-weight:600;text-align:center;";
+
+        searchRow.appendChild(segmentSearch);
+        searchRow.appendChild(eventSearch);
+        searchRow.appendChild(formSearch);
+        searchRow.appendChild(timeLabel);
+        container.appendChild(searchRow);
+
+        // Main content row
+        var contentRow = document.createElement("div");
+        contentRow.style.display = "grid";
+        contentRow.style.gridTemplateColumns = "1fr 1fr 1fr 200px";
+        contentRow.style.gap = "8px";
+        contentRow.style.flex = "1";
+        contentRow.style.overflow = "hidden";
+
+        // Segments column (with checkboxes and dropzones)
+        var segmentColumnWrapper = document.createElement("div");
+        segmentColumnWrapper.style.cssText = "display:flex;flex-direction:column;border:1px solid #333;border-radius:4px;background:#1a1a1a;height:100%;overflow:hidden;";
+        
+        // Select All header for segments
+        var segmentHeader = document.createElement("div");
+        segmentHeader.style.cssText = "display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid #333;background:#222;";
+        
+        var selectAllCheckbox = document.createElement("input");
+        selectAllCheckbox.type = "checkbox";
+        selectAllCheckbox.id = "saBuilderSelectAllSegments";
+        selectAllCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;";
+        
+        var selectAllLabel = document.createElement("span");
+        selectAllLabel.textContent = "Select All";
+        selectAllLabel.style.cssText = "font-weight:600;font-size:13px;";
+        
+        segmentHeader.appendChild(selectAllCheckbox);
+        segmentHeader.appendChild(selectAllLabel);
+        
+        var segmentColumn = document.createElement("div");
+        segmentColumn.style.cssText = "overflow-y:auto;padding:8px;flex:1;";
+        segmentColumn.id = "saBuilderSegments";
+        
+        segmentColumnWrapper.appendChild(segmentHeader);
+        segmentColumnWrapper.appendChild(segmentColumn);
+
+        // Study Events column (draggable items)
+        var eventColumn = document.createElement("div");
+        eventColumn.style.cssText = "overflow-y:auto;border:1px solid #333;border-radius:4px;padding:8px;background:#1a1a1a;";
+        eventColumn.id = "saBuilderEvents";
+
+        // Forms column (checkboxes)
+        var formColumn = document.createElement("div");
+        formColumn.style.cssText = "overflow-y:auto;border:1px solid #333;border-radius:4px;padding:8px;background:#1a1a1a;";
+        formColumn.id = "saBuilderForms";
+
+        // Time inputs column
+        var timeColumn = document.createElement("div");
+        timeColumn.style.cssText = "display:flex;flex-direction:column;gap:12px;padding:8px;border:1px solid #333;border-radius:4px;background:#1a1a1a;";
+        timeColumn.id = "saBuilderTime";
+
+        // Track segment-event assignments
+        var segmentEventMap = {};
+        
+        // Track segment checkbox states separately to prevent resets
+        var segmentCheckboxStates = {};
+        
+        // Load saved checkbox states
+        try {
+            var savedStates = localStorage.getItem(STORAGE_SA_BUILDER_SEGMENT_CHECKBOXES);
+            if (savedStates) {
+                segmentCheckboxStates = JSON.parse(savedStates);
+            }
+        } catch (e) {}
+
+        // Populate segments
+        function renderSegments(filter) {
+            segmentColumn.innerHTML = "";
+            var filterLower = (filter || "").toLowerCase();
+            for (var i = 0; i < segments.length; i++) {
+                var seg = segments[i];
+                if (filterLower && seg.text.toLowerCase().indexOf(filterLower) === -1) continue;
+
+                var segItem = document.createElement("div");
+                segItem.style.cssText = "margin-bottom:8px;padding:8px;border:1px solid #444;border-radius:4px;background:#222;";
+                segItem.dataset.segmentValue = seg.value;
+                segItem.dataset.segmentText = seg.text;
+
+                var checkRow = document.createElement("div");
+                checkRow.style.cssText = "display:flex;align-items:center;gap:8px;";
+
+                var checkbox = document.createElement("input");
+                checkbox.type = "checkbox";
+                checkbox.dataset.segmentValue = seg.value;
+                checkbox.style.cssText = "width:18px;height:18px;cursor:pointer;";
+                
+                // Restore checkbox state from saved states
+                if (segmentCheckboxStates[seg.value]) {
+                    checkbox.checked = true;
+                }
+                
+                // Save checkbox state when changed
+                checkbox.addEventListener("change", function() {
+                    segmentCheckboxStates[this.dataset.segmentValue] = this.checked;
+                    try {
+                        localStorage.setItem(STORAGE_SA_BUILDER_SEGMENT_CHECKBOXES, JSON.stringify(segmentCheckboxStates));
+                    } catch (e) {}
+                    updateSelectAllCheckbox();
+                });
+
+                var label = document.createElement("span");
+                label.textContent = seg.text;
+                label.style.cssText = "font-weight:500;";
+
+                checkRow.appendChild(checkbox);
+                checkRow.appendChild(label);
+                segItem.appendChild(checkRow);
+
+                // Dropzone for study events
+                var dropzone = document.createElement("div");
+                dropzone.style.cssText = "min-height:30px;margin-top:8px;padding:4px;border:1px dashed #555;border-radius:4px;background:#1a1a1a;";
+                dropzone.dataset.segmentValue = seg.value;
+                dropzone.className = "sa-segment-dropzone";
+
+                // Initialize the map
+                if (!segmentEventMap[seg.value]) {
+                    segmentEventMap[seg.value] = [];
+                }
+
+                // Render existing attached events
+                function renderAttachedEvents(dz, segVal) {
+                    dz.innerHTML = "";
+                    var events = segmentEventMap[segVal] || [];
+                    if (events.length === 0) {
+                        var placeholder = document.createElement("div");
+                        placeholder.textContent = "Drop study events here";
+                        placeholder.style.cssText = "color:#666;font-size:12px;text-align:center;padding:8px;";
+                        dz.appendChild(placeholder);
+                    } else {
+                        for (var j = 0; j < events.length; j++) {
+                            var ev = events[j];
+                            var evItem = document.createElement("div");
+                            evItem.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:4px 8px;margin:2px 0;background:#333;border-radius:3px;font-size:12px;";
+                            evItem.dataset.eventValue = ev.value;
+                            evItem.dataset.eventText = ev.text;
+                            evItem.draggable = true;
+
+                            var evLabel = document.createElement("span");
+                            evLabel.textContent = ev.text;
+                            evLabel.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+
+                            var removeBtn = document.createElement("button");
+                            removeBtn.textContent = "×";
+                            removeBtn.style.cssText = "background:transparent;border:none;color:#f66;cursor:pointer;font-size:16px;padding:0 4px;";
+                            removeBtn.addEventListener("click", (function(segV, evV) {
+                                return function(e) {
+                                    e.stopPropagation();
+                                    var arr = segmentEventMap[segV] || [];
+                                    segmentEventMap[segV] = arr.filter(function(x) { return x.value !== evV; });
+                                    renderSegments(segmentSearch.value);
+                                };
+                            })(segVal, ev.value));
+
+                            evItem.appendChild(evLabel);
+                            evItem.appendChild(removeBtn);
+
+                            // Make attached events re-draggable
+                            evItem.addEventListener("dragstart", (function(evData, segV) {
+                                return function(e) {
+                                    e.dataTransfer.setData("text/plain", JSON.stringify({ value: evData.value, text: evData.text, fromSegment: segV }));
+                                    e.dataTransfer.effectAllowed = "move";
+                                };
+                            })(ev, segVal));
+
+                            dz.appendChild(evItem);
+                        }
+                    }
+                }
+
+                renderAttachedEvents(dropzone, seg.value);
+
+                // Handle dragover
+                dropzone.addEventListener("dragover", function(e) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "copy";
+                    this.style.background = "#2a2a4a";
+                });
+
+                dropzone.addEventListener("dragleave", function(e) {
+                    this.style.background = "#1a1a1a";
+                });
+
+                // Handle drop
+                dropzone.addEventListener("drop", (function(segVal) {
+                    return function(e) {
+                        e.preventDefault();
+                        this.style.background = "#1a1a1a";
+                        try {
+                            var data = JSON.parse(e.dataTransfer.getData("text/plain"));
+                            if (data && data.value && data.text) {
+                                // Remove from old segment if exists
+                                if (data.fromSegment && segmentEventMap[data.fromSegment]) {
+                                    segmentEventMap[data.fromSegment] = segmentEventMap[data.fromSegment].filter(function(x) {
+                                        return x.value !== data.value;
+                                    });
+                                }
+                                // Check for duplicate in this segment
+                                var existing = (segmentEventMap[segVal] || []).find(function(x) { return x.value === data.value; });
+                                if (!existing) {
+                                    if (!segmentEventMap[segVal]) segmentEventMap[segVal] = [];
+                                    segmentEventMap[segVal].push({ value: data.value, text: data.text });
+                                }
+                                renderSegments(segmentSearch.value);
+                            }
+                        } catch (err) {
+                            log("SA Builder: drop error " + err);
+                        }
+                    };
+                })(seg.value));
+
+                segItem.appendChild(dropzone);
+                segmentColumn.appendChild(segItem);
+            }
+        }
+
+        // Populate study events (draggable)
+        function renderStudyEvents(filter) {
+            eventColumn.innerHTML = "";
+            var filterLower = (filter || "").toLowerCase();
+            for (var i = 0; i < studyEvents.length; i++) {
+                var ev = studyEvents[i];
+                if (filterLower && ev.text.toLowerCase().indexOf(filterLower) === -1) continue;
+
+                var evItem = document.createElement("div");
+                evItem.style.cssText = "padding:8px;margin-bottom:4px;border:1px solid #444;border-radius:4px;background:#222;cursor:grab;";
+                evItem.textContent = ev.text;
+                evItem.draggable = true;
+                evItem.dataset.eventValue = ev.value;
+                evItem.dataset.eventText = ev.text;
+
+                evItem.addEventListener("dragstart", function(e) {
+                    e.dataTransfer.setData("text/plain", JSON.stringify({ value: this.dataset.eventValue, text: this.dataset.eventText }));
+                    e.dataTransfer.effectAllowed = "copy";
+                    this.style.opacity = "0.5";
+                });
+
+                evItem.addEventListener("dragend", function(e) {
+                    this.style.opacity = "1";
+                });
+
+                eventColumn.appendChild(evItem);
+            }
+        }
+
+        // Populate forms (checkboxes)
+        function renderForms(filter) {
+            formColumn.innerHTML = "";
+            var filterLower = (filter || "").toLowerCase();
+            for (var i = 0; i < forms.length; i++) {
+                var frm = forms[i];
+                if (filterLower && frm.text.toLowerCase().indexOf(filterLower) === -1) continue;
+
+                var frmItem = document.createElement("div");
+                frmItem.style.cssText = "display:flex;align-items:flex-start;gap:8px;padding:6px;margin-bottom:4px;border:1px solid #444;border-radius:4px;background:#222;";
+
+                var checkbox = document.createElement("input");
+                checkbox.type = "checkbox";
+                checkbox.dataset.formValue = frm.value;
+                checkbox.dataset.formText = frm.text;
+                checkbox.style.cssText = "width:18px;height:18px;cursor:pointer;flex-shrink:0;margin-top:2px;accent-color:#007bff;";
+
+                var label = document.createElement("span");
+                label.textContent = frm.text;
+                label.style.cssText = "font-size:13px;word-break:break-word;";
+
+                frmItem.appendChild(checkbox);
+                frmItem.appendChild(label);
+                formColumn.appendChild(frmItem);
+            }
+        }
+
+        // Create time inputs
+        function createTimeInput(labelText, id, max) {
+            var row = document.createElement("div");
+            row.style.cssText = "display:flex;flex-direction:column;gap:4px;";
+
+            var lbl = document.createElement("label");
+            lbl.textContent = labelText;
+            lbl.style.cssText = "font-size:12px;color:#aaa;";
+
+            var input = document.createElement("input");
+            input.type = "number";
+            input.id = id;
+            input.min = "0";
+            input.max = String(max);
+            input.value = "0";
+            input.style.cssText = "padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;width:100%;";
+
+            row.appendChild(lbl);
+            row.appendChild(input);
+            return row;
+        }
+
+        timeColumn.appendChild(createTimeInput("Days", "saBuilderDays", 200));
+        timeColumn.appendChild(createTimeInput("Hours", "saBuilderHours", 23));
+        timeColumn.appendChild(createTimeInput("Minutes", "saBuilderMinutes", 59));
+        timeColumn.appendChild(createTimeInput("Seconds", "saBuilderSeconds", 59));
+
+        // Initial render
+        renderSegments("");
+        renderStudyEvents("");
+        renderForms("");
+
+        // Restore saved time offset values
+        try {
+            var savedTimeOffset = localStorage.getItem(STORAGE_SA_BUILDER_TIME_OFFSET);
+            if (savedTimeOffset) {
+                var timeData = JSON.parse(savedTimeOffset);
+                if (timeData.days !== undefined) document.getElementById("saBuilderDays").value = timeData.days;
+                if (timeData.hours !== undefined) document.getElementById("saBuilderHours").value = timeData.hours;
+                if (timeData.minutes !== undefined) document.getElementById("saBuilderMinutes").value = timeData.minutes;
+                if (timeData.seconds !== undefined) document.getElementById("saBuilderSeconds").value = timeData.seconds;
+            }
+        } catch (e) {}
+
+        // Select All checkbox handler
+        function updateSelectAllCheckbox() {
+            var allChecked = true;
+            for (var i = 0; i < segments.length; i++) {
+                if (!segmentCheckboxStates[segments[i].value]) {
+                    allChecked = false;
+                    break;
+                }
+            }
+            selectAllCheckbox.checked = allChecked;
+        }
+
+        selectAllCheckbox.addEventListener("change", function() {
+            var isChecked = this.checked;
+            for (var i = 0; i < segments.length; i++) {
+                segmentCheckboxStates[segments[i].value] = isChecked;
+            }
+            try {
+                localStorage.setItem(STORAGE_SA_BUILDER_SEGMENT_CHECKBOXES, JSON.stringify(segmentCheckboxStates));
+            } catch (e) {}
+            renderSegments(segmentSearch.value);
+        });
+
+        // Initialize Select All checkbox state
+        updateSelectAllCheckbox();
+
+        // Search handlers
+        segmentSearch.addEventListener("input", function() { renderSegments(this.value); });
+        eventSearch.addEventListener("input", function() { renderStudyEvents(this.value); });
+        formSearch.addEventListener("input", function() { renderForms(this.value); });
+
+        contentRow.appendChild(segmentColumnWrapper);
+        contentRow.appendChild(eventColumn);
+        contentRow.appendChild(formColumn);
+        contentRow.appendChild(timeColumn);
+        container.appendChild(contentRow);
+
+        // Confirm button row
+        var buttonRow = document.createElement("div");
+        buttonRow.style.cssText = "display:flex;justify-content:flex-end;gap:12px;padding-top:12px;border-top:1px solid #333;";
+
+        var confirmBtn = document.createElement("button");
+        confirmBtn.textContent = "Confirm";
+        confirmBtn.style.cssText = "padding:10px 24px;border-radius:6px;border:none;background:#28a745;color:#fff;font-weight:600;cursor:pointer;";
+        confirmBtn.addEventListener("mouseenter", function() { this.style.background = "#218838"; });
+        confirmBtn.addEventListener("mouseleave", function() { this.style.background = "#28a745"; });
+
+        confirmBtn.addEventListener("click", function() {
+            // Collect selected segments and their events
+            var selectedSegments = [];
+            var segmentCheckboxes = segmentColumn.querySelectorAll("input[type='checkbox']:checked");
+            for (var i = 0; i < segmentCheckboxes.length; i++) {
+                var cb = segmentCheckboxes[i];
+                var segVal = cb.dataset.segmentValue;
+                var segText = cb.closest("[data-segment-text]");
+                var segName = segText ? segText.dataset.segmentText : "";
+                var events = segmentEventMap[segVal] || [];
+                if (events.length > 0) {
+                    selectedSegments.push({ value: segVal, text: segName, events: events });
+                }
+            }
+
+            // Collect selected forms
+            var selectedForms = [];
+            var formCheckboxes = formColumn.querySelectorAll("input[type='checkbox']:checked");
+            for (var j = 0; j < formCheckboxes.length; j++) {
+                var fcb = formCheckboxes[j];
+                selectedForms.push({ value: fcb.dataset.formValue, text: fcb.dataset.formText });
+            }
+
+            // Validate
+            if (selectedSegments.length === 0) {
+                alert("Please check at least one segment that has study events attached.");
+                return;
+            }
+            if (selectedForms.length === 0) {
+                alert("Please select at least one form.");
+                return;
+            }
+
+            // Get time offset
+            var timeOffset = {
+                days: parseInt(document.getElementById("saBuilderDays").value) || 0,
+                hours: parseInt(document.getElementById("saBuilderHours").value) || 0,
+                minutes: parseInt(document.getElementById("saBuilderMinutes").value) || 0,
+                seconds: parseInt(document.getElementById("saBuilderSeconds").value) || 0
+            };
+
+            log("SA Builder: Time offset - Days: " + timeOffset.days + ", Hours: " + timeOffset.hours + ", Minutes: " + timeOffset.minutes + ", Seconds: " + timeOffset.seconds);
+
+            // Store selection
+            var userSelection = {
+                segments: selectedSegments,
+                forms: selectedForms,
+                timeOffset: timeOffset
+            };
+
+            try {
+                localStorage.setItem(STORAGE_SA_BUILDER_USER_SELECTION, JSON.stringify(userSelection));
+                localStorage.setItem(STORAGE_SA_BUILDER_TIME_OFFSET, JSON.stringify(timeOffset));
+            } catch (e) {}
+
+            // Close selection popup and start adding
+            if (SA_BUILDER_POPUP_REF) {
+                SA_BUILDER_POPUP_REF.close();
+                SA_BUILDER_POPUP_REF = null;
+            }
+            if (SA_BUILDER_CANCELLED) {
+                log("SA Builder: cancelled");
+                return;
+            }
+            // Start the adding process
+            startSABuilderAddProcess(userSelection);
+        });
+
+        buttonRow.appendChild(confirmBtn);
+        container.appendChild(buttonRow);
+
+        return container;
+    }
+
+    // Create mapped item list from user selection
+    function createMappedItemList(userSelection, existingItems) {
+        var mappedItems = [];
+        var segments = userSelection.segments || [];
+        var forms = userSelection.forms || [];
+
+        log("SA Builder: creating mapped items from " + segments.length + " segments and " + forms.length + " forms");
+
+        for (var i = 0; i < segments.length; i++) {
+            var seg = segments[i];
+            var events = seg.events || [];
+            for (var j = 0; j < events.length; j++) {
+                var ev = events[j];
+                for (var k = 0; k < forms.length; k++) {
+                    var frm = forms[k];
+                    var key = normalizeSAText(seg.text) + " - " + normalizeSAText(ev.text) + " - " + normalizeSAText(frm.text);
+
+                    // Check for duplicates
+                    var isDuplicate = existingItems.some(function(existing) {
+                        return normalizeSAText(existing) === key;
+                    });
+
+                    mappedItems.push({
+                        segmentValue: seg.value,
+                        segmentText: seg.text,
+                        eventValue: ev.value,
+                        eventText: ev.text,
+                        formValue: frm.value,
+                        formText: frm.text,
+                        key: key,
+                        status: isDuplicate ? "Duplicate (Removed)" : "Incomplete"
+                    });
+                }
+            }
+        }
+
+        log("SA Builder: created " + mappedItems.length + " mapped items");
+        return mappedItems;
+    }
+
+    // Create progress popup
+    function createSABuilderProgressPopup(mappedItems) {
+        var container = document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;gap:12px;max-height:500px;";
+
+        var statusDiv = document.createElement("div");
+        statusDiv.id = "saBuilderProgressStatus";
+        statusDiv.style.cssText = "text-align:center;font-size:16px;font-weight:600;padding:8px;";
+        statusDiv.textContent = "Processing...";
+
+        var loadingDiv = document.createElement("div");
+        loadingDiv.id = "saBuilderProgressLoading";
+        loadingDiv.style.cssText = "text-align:center;font-size:14px;color:#9df;";
+        loadingDiv.textContent = "Running.";
+
+        var listContainer = document.createElement("div");
+        listContainer.id = "saBuilderProgressList";
+        listContainer.style.cssText = "flex:1;overflow-y:auto;border:1px solid #333;border-radius:4px;padding:8px;background:#1a1a1a;max-height:350px;";
+
+        // Render items
+        function renderItems() {
+            listContainer.innerHTML = "";
+            for (var i = 0; i < mappedItems.length; i++) {
+                var item = mappedItems[i];
+                var row = document.createElement("div");
+                row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:6px 8px;margin-bottom:4px;border-radius:4px;font-size:12px;";
+
+                if (item.status === "Complete") {
+                    row.style.background = "#1a3a1a";
+                } else if (item.status === "Duplicate (Removed)") {
+                    row.style.background = "#3a3a1a";
+                } else {
+                    row.style.background = "#222";
+                }
+
+                var keySpan = document.createElement("span");
+                keySpan.textContent = item.key;
+                keySpan.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:8px;";
+
+                var statusSpan = document.createElement("span");
+                statusSpan.textContent = item.status;
+                statusSpan.style.cssText = "font-weight:500;flex-shrink:0;";
+                if (item.status === "Complete") {
+                    statusSpan.style.color = "#4f4";
+                } else if (item.status === "Duplicate (Removed)") {
+                    statusSpan.style.color = "#ff4";
+                } else {
+                    statusSpan.style.color = "#aaa";
+                }
+
+                row.appendChild(keySpan);
+                row.appendChild(statusSpan);
+                listContainer.appendChild(row);
+            }
+        }
+
+        renderItems();
+
+        var buttonRow = document.createElement("div");
+        buttonRow.style.cssText = "display:flex;justify-content:center;padding-top:12px;";
+
+        var stopBtn = document.createElement("button");
+        stopBtn.textContent = "Close";
+        stopBtn.style.cssText = "padding:10px 24px;border-radius:6px;border:none;background:#dc3545;color:#fff;font-weight:600;cursor:pointer;";
+        stopBtn.addEventListener("click", function() {
+            SA_BUILDER_CANCELLED = true;
+            log("SA Builder: stopped by user");
+            clearSABuilderStorage();
+            if (SA_BUILDER_PROGRESS_POPUP_REF && SA_BUILDER_PROGRESS_POPUP_REF.close) {
+                try {
+                    SA_BUILDER_PROGRESS_POPUP_REF.close();
+                } catch (e) {
+                    log("SA Builder: error closing popup - " + String(e));
+                }
+                SA_BUILDER_PROGRESS_POPUP_REF = null;
+            }
+        });
+        if (SA_BUILDER_CANCELLED) {
+            log("SA_BUILDER_CANCELLED: " + SA_BUILDER_CANCELLED);
+            log("SA Builder: cancelled");
+            return;
+        }
+        buttonRow.appendChild(stopBtn);
+
+        container.appendChild(statusDiv);
+        container.appendChild(loadingDiv);
+        container.appendChild(listContainer);
+        container.appendChild(buttonRow);
+
+        // Animate loading
+        var dots = 1;
+        var loadingInterval = setInterval(function() {
+            if (!SA_BUILDER_PROGRESS_POPUP_REF || SA_BUILDER_CANCELLED) {
+                clearInterval(loadingInterval);
+                return;
+            }
+            dots = (dots % 3) + 1;
+            var text = "Running";
+            for (var i = 0; i < dots; i++) text += ".";
+            loadingDiv.textContent = text;
+        }, 500);
+
+        return {
+            element: container,
+            updateStatus: function(text) {
+                statusDiv.textContent = text;
+            },
+            updateItem: function(index, status) {
+                if (mappedItems[index]) {
+                    mappedItems[index].status = status;
+                    renderItems();
+                }
+            },
+            setComplete: function() {
+                clearInterval(loadingInterval);
+                loadingDiv.textContent = "Done!";
+                loadingDiv.style.color = "#4f4";
+                stopBtn.textContent = "Close";
+                stopBtn.style.background = "#28a745";
+            }
+        };
+    }
+
+    // Start the adding process
+    async function startSABuilderAddProcess(userSelection) {
+        // Get existing items from storage
+        var existingItems = [];
+        try {
+            var raw = localStorage.getItem(STORAGE_SA_BUILDER_EXISTING);
+            if (raw) existingItems = JSON.parse(raw);
+        } catch (e) {}
+
+        // Create mapped items
+        var mappedItems = createMappedItemList(userSelection, existingItems);
+
+        // Log mapped items
+        log("SA Builder: Mapped items list:");
+        for (var i = 0; i < mappedItems.length; i++) {
+            log("  " + (i + 1) + ". " + mappedItems[i].key + " [" + mappedItems[i].status + "]");
+        }
+
+        // Store for persistence
+        try {
+            localStorage.setItem(STORAGE_SA_BUILDER_MAPPED_ITEMS, JSON.stringify(mappedItems));
+            localStorage.setItem(STORAGE_SA_BUILDER_RUNNING, "1");
+            localStorage.setItem(STORAGE_SA_BUILDER_CURRENT_INDEX, "0");
+        } catch (e) {}
+
+        // Create progress popup
+        var progressContent = createSABuilderProgressPopup(mappedItems);
+        SA_BUILDER_PROGRESS_POPUP_REF = createPopup({
+            title: "Adding Scheduled Activities",
+            content: progressContent.element,
+            width: "600px",
+            height: "auto",
+            maxHeight: "80%",
+            onClose: function() {
+                SA_BUILDER_CANCELLED = true;
+                log("SA Builder: cancelled by user (X button)");
+                clearSABuilderStorage();
+                SA_BUILDER_PROGRESS_POPUP_REF = null;
+            }
+        });
+        log("SA_BUILDER_CANCELLED: " + SA_BUILDER_CANCELLED);
+        if (SA_BUILDER_CANCELLED) {
+            log("SA Builder: cancelled");
+            return;
+        }
+        // Process items
+        var timeOffset = userSelection.timeOffset || { days: 0, hours: 0, minutes: 0, seconds: 0 };
+        log("SA Builder: Using time offset - Days: " + timeOffset.days + ", Hours: " + timeOffset.hours + ", Minutes: " + timeOffset.minutes + ", Seconds: " + timeOffset.seconds);
+
+        for (var idx = 0; idx < mappedItems.length; idx++) {
+            if (SA_BUILDER_CANCELLED) {
+                log("SA Builder: cancelled");
+                break;
+            }
+
+            var item = mappedItems[idx];
+
+            // Skip duplicates
+            if (item.status === "Duplicate (Removed)") {
+                log("SA Builder: skipping duplicate - " + item.key);
+                continue;
+            }
+
+            progressContent.updateStatus("Adding item " + (idx + 1) + " of " + mappedItems.length);
+            log("SA Builder: adding item " + (idx + 1) + " - " + item.key);
+
+            try {
+                // Check cancellation before starting
+                if (SA_BUILDER_CANCELLED) {
+                    log("SA Builder: cancelled before Add button");
+                    break;
+                }
+
+                // Click Add button
+                if (!clickAddSaButton()) {
+                    log("SA Builder: failed to click Add button");
+                    break;
+                }
+
+                // Wait for modal
+                var modal = await waitForSAModal(10000);
+                if (!modal) {
+                    log("SA Builder: modal did not appear");
+                    break;
+                }
+
+                // Check cancellation after modal appears
+                if (SA_BUILDER_CANCELLED) {
+                    log("SA Builder: cancelled after modal appeared");
+                    break;
+                }
+
+                await sleep(1000);
+
+                // Check cancellation before selections
+                if (SA_BUILDER_CANCELLED) {
+                    log("SA Builder: cancelled before selections");
+                    break;
+                }
+                log("SA_BUILDER_CANCELLED: " + SA_BUILDER_CANCELLED);
+                // Select segment
+                log("SA Builder: selecting segment " + item.segmentText + " (value: " + item.segmentValue + ")");
+                await selectSelect2Value("segment", item.segmentValue);
+                await sleep(500);
+
+                // Check cancellation
+                if (SA_BUILDER_CANCELLED) {
+                    log("SA Builder: cancelled after segment selection");
+                    break;
+                }
+
+                // Select study event
+                log("SA Builder: selecting study event " + item.eventText + " (value: " + item.eventValue + ")");
+                await selectSelect2Value("studyEvent", item.eventValue);
+                await sleep(500);
+
+                // Check cancellation
+                if (SA_BUILDER_CANCELLED) {
+                    log("SA Builder: cancelled after study event selection");
+                    break;
+                }
+
+                // Select form
+                log("SA Builder: selecting form " + item.formText + " (value: " + item.formValue + ")");
+                await selectSelect2Value("form", item.formValue);
+                await sleep(500);
+
+                // Check cancellation
+                if (SA_BUILDER_CANCELLED) {
+                    log("SA Builder: cancelled after form selection");
+                    break;
+                }
+
+                // Clear pre/post window fields
+                var preWindow = document.getElementById("preWindow");
+                var postWindow = document.getElementById("postWindow");
+                if (preWindow) {
+                    preWindow.value = "";
+                    preWindow.dispatchEvent(new Event("input", { bubbles: true }));
+                }
+                if (postWindow) {
+                    postWindow.value = "";
+                    postWindow.dispatchEvent(new Event("input", { bubbles: true }));
+                }
+
+                // Set time offset values
+                var daysInput = document.querySelector("input[name='offset.days']");
+                var hoursInput = document.querySelector("input[name='offset.hours']");
+                var minutesInput = document.querySelector("input[name='offset.minutes']");
+                var secondsInput = document.querySelector("input[name='offset.seconds']");
+
+                if (daysInput) {
+                    daysInput.value = String(timeOffset.days);
+                    daysInput.dispatchEvent(new Event("input", { bubbles: true }));
+                }
+                if (hoursInput) {
+                    hoursInput.value = String(timeOffset.hours);
+                    hoursInput.dispatchEvent(new Event("input", { bubbles: true }));
+                }
+                if (minutesInput) {
+                    minutesInput.value = String(timeOffset.minutes);
+                    minutesInput.dispatchEvent(new Event("input", { bubbles: true }));
+                }
+                if (secondsInput) {
+                    secondsInput.value = String(timeOffset.seconds);
+                    secondsInput.dispatchEvent(new Event("input", { bubbles: true }));
+                }
+
+                await sleep(300);
+
+                // Check cancellation before saving
+                if (SA_BUILDER_CANCELLED) {
+                    log("SA Builder: cancelled before Save button");
+                    break;
+                }
+
+                // Click Save
+                var saveBtn = document.getElementById("actionButton");
+                if (saveBtn) {
+                    saveBtn.click();
+                    log("SA Builder: Save button clicked");
+                } else {
+                    log("SA Builder: Save button not found");
+                    break;
+                }
+
+                // Wait for modal to close
+                var closed = await waitForSAModalClose(10000);
+                if (!closed) {
+                    log("SA Builder: modal did not close");
+                    break;
+                }
+
+                // Check cancellation after save completes
+                if (SA_BUILDER_CANCELLED) {
+                    log("SA Builder: cancelled after save completed");
+                    break;
+                }
+
+                // Update status
+                mappedItems[idx].status = "Complete";
+                progressContent.updateItem(idx, "Complete");
+                log("SA Builder: item completed - " + item.key);
+
+                // Wait for table refresh
+                await sleep(2000);
+
+                // Check cancellation after table refresh wait
+                if (SA_BUILDER_CANCELLED) {
+                    log("SA Builder: cancelled after table refresh wait");
+                    break;
+                }
+
+            } catch (err) {
+                log("SA Builder: error adding item - " + String(err));
+                break;
+            }
+        }
+
+        // Complete
+        if (!SA_BUILDER_CANCELLED) {
+            progressContent.updateStatus("Completed!");
+            progressContent.setComplete();
+            log("SA Builder: all items processed");
+        }
+
+        if (SA_BUILDER_CANCELLED) {
+            log("SA Builder: cancelled");
+            return;
+        }
+        // Clear running state
+        try {
+            localStorage.removeItem(STORAGE_SA_BUILDER_RUNNING);
+            localStorage.removeItem(STORAGE_SA_BUILDER_CURRENT_INDEX);
+        } catch (e) {}
+    }
+
+    // Main entry point for SA Builder
+    async function runSABuilder() {
+        // Check if on correct page
+        if (!isOnSABuilderPage()) {
+            var errorPopup = createPopup({
+                title: "Scheduled Activities Builder",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;font-size:16px;margin-bottom:16px;">⚠️ Wrong Page</p><p>You must be on the Activity Plans Show page to use this feature.</p><p style="margin-top:12px;font-size:12px;color:#888;">Required URL: ' + SA_BUILDER_TARGET_URL + '</p></div>',
+                width: "450px",
+                height: "auto"
+            });
+            log("SA Builder: wrong page - " + location.href);
+            return;
+        }
+
+        // Show loading popup
+        var loadingContent = document.createElement("div");
+        loadingContent.style.cssText = "text-align:center;padding:30px;";
+        loadingContent.innerHTML = '<div style="font-size:16px;margin-bottom:16px;">Collecting data...</div><div id="saBuilderLoadingDots" style="color:#9df;">Loading.</div>';
+
+        var loadingPopup = createPopup({
+            title: "Scheduled Activities Builder",
+            content: loadingContent,
+            width: "350px",
+            height: "auto",
+        });
+
+        // Animate loading
+        var dots = 1;
+        var loadingInterval = setInterval(function() {
+            var el = document.getElementById("saBuilderLoadingDots");
+            if (!el || SA_BUILDER_CANCELLED) {
+                clearInterval(loadingInterval);
+                return;
+            }
+            dots = (dots % 3) + 1;
+            var text = "Loading";
+            for (var i = 0; i < dots; i++) text += ".";
+            el.textContent = text;
+        }, 500);
+
+        // Scan existing table
+        var existingItems = scanExistingSATable();
+        try {
+            localStorage.setItem(STORAGE_SA_BUILDER_EXISTING, JSON.stringify(existingItems));
+        } catch (e) {}
+
+        // Check if Add button is disabled
+        if (isAddSaButtonDisabled()) {
+            clearInterval(loadingInterval);
+            loadingPopup.close();
+            createPopup({
+                title: "Scheduled Activities Builder",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;font-size:16px;margin-bottom:16px;">⚠️ Add Button Disabled</p><p>The Add button is currently disabled. This activity plan may no longer be in design mode.</p></div>',
+                width: "400px",
+                height: "auto"
+            });
+            log("SA Builder: Add button is disabled");
+            return;
+        }
+
+        // Click Add button to open modal
+        if (!clickAddSaButton()) {
+            clearInterval(loadingInterval);
+            loadingPopup.close();
+            createPopup({
+                title: "Scheduled Activities Builder",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;">Failed to find or click the Add button.</p></div>',
+                width: "350px",
+                height: "auto"
+            });
+            return;
+        }
+
+        // Wait for modal
+        var modal = await waitForSAModal(10000);
+        if (!modal) {
+            clearInterval(loadingInterval);
+            loadingPopup.close();
+            createPopup({
+                title: "Scheduled Activities Builder",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;">Modal did not appear within timeout.</p></div>',
+                width: "350px",
+                height: "auto"
+            });
+            return;
+        }
+
+        // Collect dropdown data
+        var dropdownData = await collectModalDropdownData();
+
+        // Store for persistence
+        try {
+            localStorage.setItem(STORAGE_SA_BUILDER_SEGMENTS, JSON.stringify(dropdownData.segments));
+            localStorage.setItem(STORAGE_SA_BUILDER_STUDY_EVENTS, JSON.stringify(dropdownData.studyEvents));
+            localStorage.setItem(STORAGE_SA_BUILDER_FORMS, JSON.stringify(dropdownData.forms));
+        } catch (e) {}
+
+        // Close the modal
+        var closeBtn = modal.querySelector(".close, [data-dismiss='modal']");
+        if (closeBtn) {
+            closeBtn.click();
+        } else {
+            var escEvent = new KeyboardEvent("keydown", { key: "Escape", bubbles: true });
+            document.dispatchEvent(escEvent);
+        }
+        await sleep(500);
+
+        clearInterval(loadingInterval);
+        loadingPopup.close();
+
+        if (SA_BUILDER_CANCELLED) {
+            log("SA Builder: cancelled during data collection");
+            return;
+        }
+
+        // Show selection GUI
+        var guiContent = createSABuilderSelectionGUI(dropdownData.segments, dropdownData.studyEvents, dropdownData.forms);
+        SA_BUILDER_POPUP_REF = createPopup({
+            title: "Scheduled Activities Builder - Select Items",
+            content: guiContent,
+            width: "95%",
+            maxWidth: "1400px",
+            height: "80%",
+            maxHeight: "800px",
+            onClose: function() {
+                // Only clear storage if user explicitly cancelled, not on auto-close
+                if (SA_BUILDER_CANCELLED) {
+                    clearSABuilderStorage();
+                    log("SA Builder: cancelled after table refresh wait");
+                }
+                SA_BUILDER_POPUP_REF = null;
+            }
+        });
+        if (SA_BUILDER_CANCELLED) {
+            log("SA Builder: cancelled after table refresh wait");
+            return;
+        }
+        log("SA Builder: selection GUI displayed");
+    }
+
+    //==========================
     // FIND STUDY EVENTS FEATURE
     //==========================
     // This section contains all functions related to finding study events.
@@ -773,6 +3369,34 @@
     // This feature automates pull any subject identifier found on page,
     // request user for form keyword, and then search for form based on the keyword.
     //==========================
+
+    function setPanelHidden(flag) {
+        try {
+            localStorage.setItem(STORAGE_PANEL_HIDDEN, flag ? "1" : "0");
+            log("Panel hidden state set to " + String(flag));
+        } catch (e) {
+        }
+    }
+
+    function togglePanelHiddenViaHotkey() {
+        var panel = document.getElementById(PANEL_ID);
+        if (!panel) {
+            log("Hotkey toggle: panel element not found; nothing to toggle");
+            return;
+        }
+        var isHidden = getPanelHidden();
+        if (isHidden) {
+            panel.style.display = "block";
+            panel.style.pointerEvents = "auto";
+            setPanelHidden(false);
+            log("Hotkey toggle: panel unhidden");
+        } else {
+            panel.style.display = "none";
+            panel.style.pointerEvents = "none";
+            setPanelHidden(true);
+            log("Hotkey toggle: panel hidden");
+        }
+    }
 
     function resetStudyEventsOnList() {
         var cont = document.getElementById("s2id_studyEventIds");
@@ -2125,6 +4749,274 @@
     }
 
 
+    // Fetch barcode completely in the background without opening a new tab.
+    // Uses the subject ID directly if available, or uses a hidden iframe to search.
+    async function fetchBarcodeInBackground(subjectText, subjectId) {
+        log("Background Barcode: starting search subjectText='" + String(subjectText) + "' subjectId='" + String(subjectId) + "'");
+
+        if (subjectId && subjectId.length > 0) {
+            var result = "S" + String(subjectId);
+            log("Background Barcode: using direct ID, result=" + result);
+            return result;
+        }
+
+        if (!subjectText || subjectText.length === 0) {
+            log("Background Barcode: no subjectText or subjectId provided");
+            return null;
+        }
+
+        return await searchBarcodeViaIframe(subjectText);
+    }
+
+    // Search for barcode using a hidden iframe that can execute JavaScript
+    async function searchBarcodeViaIframe(subjectText) {
+        log("Background Barcode: using hidden iframe approach");
+
+        return new Promise(function(resolve) {
+            var iframe = document.createElement("iframe");
+            iframe.style.position = "fixed";
+            iframe.style.top = "-9999px";
+            iframe.style.left = "-9999px";
+            iframe.style.width = "1px";
+            iframe.style.height = "1px";
+            iframe.style.visibility = "hidden";
+            iframe.style.pointerEvents = "none";
+
+            var timeoutId = null;
+            var resolved = false;
+
+            function cleanup() {
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                    timeoutId = null;
+                }
+                if (iframe && iframe.parentNode) {
+                    iframe.parentNode.removeChild(iframe);
+                }
+            }
+
+            function finishWithResult(result) {
+                if (resolved) return;
+                resolved = true;
+                cleanup();
+                resolve(result);
+            }
+
+            // Set a maximum timeout
+            timeoutId = setTimeout(function() {
+                log("Background Barcode: iframe timeout reached");
+                finishWithResult(null);
+            }, 30000);
+
+            iframe.onload = async function() {
+                try {
+                    var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+
+                    // Wait for epoch select to appear and be populated (Edge needs more time than Chrome)
+                    var epochSel = null;
+                    var retryCount = 0;
+                    var maxRetries = 40;
+                    while (retryCount < maxRetries && !epochSel) {
+                        await sleep(300);
+                        epochSel = iframeDoc.querySelector("select#epoch");
+                        if (epochSel) {
+                            var opts = epochSel.querySelectorAll("option");
+                            if (opts.length === 0) {
+                                epochSel = null;
+                            } else {
+                                log("Background Barcode: iframe - epoch select ready with " + opts.length + " options (attempt " + (retryCount + 1) + ")");
+                            }
+                        } else {
+                        }
+                        retryCount++;
+                    }
+
+                    if (!epochSel) {
+                        finishWithResult(null);
+                        return;
+                    }
+
+                    var epochOpts = epochSel.querySelectorAll("option");
+                    log("Background Barcode: iframe - found " + String(epochOpts.length) + " epoch options");
+
+                    // Iterate through epochs
+                    for (var eIdx = 0; eIdx < epochOpts.length; eIdx++) {
+                        if (resolved) return;
+
+                        var epochVal = (epochOpts[eIdx].value + "").trim();
+                        if (epochVal.length === 0) continue;
+
+                        log("Background Barcode: iframe - selecting epoch value='" + epochVal + "'");
+                        epochSel.value = epochVal;
+                        var epochEvt = new Event("change", { bubbles: true });
+                        epochSel.dispatchEvent(epochEvt);
+
+                        // Wait for cohorts to load (Edge needs more time)
+                        await sleep(1200);
+
+                        var cohortSel = iframeDoc.querySelector("select#cohort");
+                        if (!cohortSel) {
+                            log("Background Barcode: iframe - cohort select not found");
+                            continue;
+                        }
+
+                        var cohortOpts = cohortSel.querySelectorAll("option");
+                        log("Background Barcode: iframe - found " + String(cohortOpts.length) + " cohort options");
+
+                        for (var cIdx = 0; cIdx < cohortOpts.length; cIdx++) {
+                            if (resolved) return;
+
+                            var cohortVal = (cohortOpts[cIdx].value + "").trim();
+                            if (cohortVal.length === 0) continue;
+
+                            log("Background Barcode: iframe - selecting cohort value='" + cohortVal + "'");
+                            cohortSel.value = cohortVal;
+                            var cohortEvt = new Event("change", { bubbles: true });
+                            cohortSel.dispatchEvent(cohortEvt);
+
+                            // Wait for subjects to load (Edge needs more time)
+                            await sleep(1200);
+
+                            var subjectsSel = iframeDoc.querySelector("select#subjects");
+                            if (!subjectsSel) {
+                                log("Background Barcode: iframe - subjects select not found");
+                                continue;
+                            }
+
+                            var subjectOpts = subjectsSel.querySelectorAll("option");
+                            log("Background Barcode: iframe - found " + String(subjectOpts.length) + " subject options");
+
+                            for (var sIdx = 0; sIdx < subjectOpts.length; sIdx++) {
+                                var sVal = (subjectOpts[sIdx].value + "").trim();
+                                var sTxt = (subjectOpts[sIdx].textContent + "").trim();
+
+                                if (sVal.length > 0) {
+                                    var textMatch = normalizeSubjectString(sTxt) === normalizeSubjectString(subjectText);
+                                    if (textMatch) {
+                                        var result = "S" + String(sVal);
+                                        log("Background Barcode: iframe - found match! text='" + sTxt + "' value='" + sVal + "' result=" + result);
+                                        finishWithResult(result);
+                                        return;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    log("Background Barcode: iframe - subject not found after searching all epochs/cohorts");
+                    finishWithResult(null);
+
+                } catch (e) {
+                    log("Background Barcode: iframe error - " + String(e));
+                    finishWithResult(null);
+                }
+            };
+
+            iframe.onerror = function() {
+                log("Background Barcode: iframe failed to load");
+                finishWithResult(null);
+            };
+
+            document.body.appendChild(iframe);
+            iframe.src = location.origin + "/secure/barcodeprinting/subjects";
+        });
+    }
+
+    // Run Barcode feature once from the current page context.
+    // Runs completely in the background without opening a new tab.
+    async function APS_RunBarcode() {
+        BARCODE_START_TS = Date.now();
+
+        var info = getSubjectFromBreadcrumbOrTooltip();
+        var hasText = !!(info.subjectText && info.subjectText.length > 0);
+        var hasId = !!(info.subjectId && info.subjectId.length > 0);
+
+        if (!hasText && !hasId) {
+            log("Run Barcode: subject breadcrumb or tooltip not found (APS_RunBarcode)");
+            return;
+        }
+
+        log("APS_RunBarcode: Fetching barcode in background…");
+
+        var loadingText = document.createElement("div");
+        loadingText.style.textAlign = "center";
+        loadingText.style.fontSize = "16px";
+        loadingText.style.color = "#fff";
+        loadingText.style.padding = "20px";
+        loadingText.textContent = "Locating barcode.";
+
+        var popup = createPopup({
+            title: "Locating Barcode",
+            content: loadingText,
+            width: "300px",
+            height: "auto"
+        });
+
+        var dots = 1;
+        var loadingInterval = setInterval(function () {
+            dots = dots + 1;
+            if (dots > 3) {
+                dots = 1;
+            }
+            var text = "Locating barcode";
+            var i = 0;
+            while (i < dots) {
+                text = text + ".";
+                i = i + 1;
+            }
+            loadingText.textContent = text;
+        }, 500);
+
+        // Fetch barcode in background using the new function
+        var r = await fetchBarcodeInBackground(info.subjectText, info.subjectId);
+
+        try {
+            clearInterval(loadingInterval);
+        } catch (e1) {}
+        try {
+            if (popup && popup.close) {
+                popup.close();
+            }
+        } catch (e2) {}
+
+        if (r && r.length > 0) {
+            log("APS_RunBarcode: got result '" + r + "'; attempting to populate input");
+
+            var inputBox = document.querySelector("input.bootbox-input.bootbox-input-text.form-control");
+            if (!inputBox) {
+                inputBox = await openBarcodeDataEntryModalIfNeeded(6000);
+            }
+
+            if (inputBox) {
+                inputBox.value = r;
+                var evt = new Event("input", { bubbles: true });
+                inputBox.dispatchEvent(evt);
+                log("APS_RunBarcode: populated barcode value in modal");
+
+                var okBtn = document.querySelector("button[data-bb-handler=\"confirm\"].btn.btn-primary");
+                if (!okBtn) {
+                    okBtn = document.querySelector("button.btn.btn-primary[data-bb-handler=\"confirm\"]");
+                }
+                if (okBtn) {
+                    okBtn.click();
+                    log("APS_RunBarcode: confirmed barcode modal");
+                } else {
+                    log("APS_RunBarcode: OK button not found after populating input");
+                }
+            } else {
+                log("APS_RunBarcode: unable to find or open barcode input modal");
+            }
+        } else {
+            log("APS_RunBarcode: no barcode result found");
+        }
+
+        try {
+            var secs = (Date.now() - BARCODE_START_TS) / 1000;
+            var s = secs.toFixed(2);
+            log("APS_RunBarcode: elapsed " + String(s) + " s");
+        } catch (e3) {}
+        BARCODE_START_TS = 0;
+    }
 
 
     // Main "Collect All" feature that combines Run Barcode (if needed) + Run Form (IR) for each first row repeatedly.
@@ -2800,6 +5692,19 @@
         }
         log("ImportElig: waitForComparatorReady timeout");
         return null;
+    }
+    function clearEligibilityWorkingState() {
+        try {
+            localStorage.removeItem(STORAGE_ELIG_IMPORTED);
+            log("ImportElig: cleared imported items");
+        } catch(e) {}
+
+        try {
+            localStorage.removeItem(STORAGE_ELIG_CHECKITEM_CACHE);
+            log("ImportElig: cleared checkItemCache");
+        } catch(e) {}
+
+        log("ImportElig: working state fully cleared");
     }
 
     function getItemRefOptionsSignature() {
@@ -3982,7 +6887,22 @@
         return true;
     }
 
-
+    // Return index of first option with non-empty value.
+    function firstNonEmptyOptionIndex(selectEl) {
+        if (!selectEl) {
+            return -1;
+        }
+        var opts = selectEl.querySelectorAll("option");
+        var i = 0;
+        while (i < opts.length) {
+            var v = (opts[i].value + "").trim();
+            if (v.length > 0) {
+                return i;
+            }
+            i = i + 1;
+        }
+        return -1;
+    }
 
     async function trySelectCheckItemForCodeThroughAllPlansAndActivities(code) {
         var formExclusion = getFormExclusion();
@@ -9942,10 +12862,14 @@
         if (ok2) {
             try {
                 localStorage.setItem(STORAGE_EDIT_STUDY, "1");
-                log("Study edit flag set - will lock eligibility first");
+                log("Study edit flag set");
             } catch (e) {}
-            log("Routing to Study Metadata for eligibility lock");
-            location.href = STUDY_METADATA_URL + "?autoeliglock=1";
+            var editLink = await waitForSelector('a[href^="/secure/administration/manage/studies/update/"][href$="/basics"]', 5000);
+            if (!editLink) {
+                return;
+            }
+            editLink.click();
+            log("Study edit basics clicked");
             return;
         }
         var goEpoch = getContinueEpoch();
@@ -10030,6 +12954,13 @@
             if (cancelBtn) {
                 if (mode === "all") {
                     setContinueEpoch();
+                    try {
+                        localStorage.setItem(STORAGE_CHECK_ELIG_LOCK, "1");
+                    } catch (e3) {}
+                } else {
+                    try {
+                        localStorage.setItem(STORAGE_CHECK_ELIG_LOCK, "1");
+                    } catch (e4) {}
                 }
                 cancelBtn.click();
                 log("Study already ACTIVE; returning to show");
@@ -10056,6 +12987,13 @@
         }
         if (mode === "all") {
             setContinueEpoch();
+            try {
+                localStorage.setItem(STORAGE_CHECK_ELIG_LOCK, "1");
+            } catch (e5) {}
+        } else {
+            try {
+                localStorage.setItem(STORAGE_CHECK_ELIG_LOCK, "1");
+            } catch (e6) {}
         }
         saveBtn.click();
         log("Study basics saved");
@@ -10617,292 +13555,6 @@
     // Persist barcode subject id for cross-tab lookup.
     function BarcodeFunctions() {}
 
-        // Fetch barcode completely in the background without opening a new tab.
-    // Uses the subject ID directly if available, or uses a hidden iframe to search.
-    async function fetchBarcodeInBackground(subjectText, subjectId) {
-        log("Background Barcode: starting search subjectText='" + String(subjectText) + "' subjectId='" + String(subjectId) + "'");
-
-        if (subjectId && subjectId.length > 0) {
-            var result = "S" + String(subjectId);
-            log("Background Barcode: using direct ID, result=" + result);
-            return result;
-        }
-
-        if (!subjectText || subjectText.length === 0) {
-            log("Background Barcode: no subjectText or subjectId provided");
-            return null;
-        }
-
-        return await searchBarcodeViaIframe(subjectText);
-    }
-
-    // Search for barcode using a hidden iframe that can execute JavaScript
-    async function searchBarcodeViaIframe(subjectText) {
-        log("Background Barcode: using hidden iframe approach");
-
-        return new Promise(function(resolve) {
-            var iframe = document.createElement("iframe");
-            iframe.style.position = "fixed";
-            iframe.style.top = "-9999px";
-            iframe.style.left = "-9999px";
-            iframe.style.width = "1px";
-            iframe.style.height = "1px";
-            iframe.style.visibility = "hidden";
-            iframe.style.pointerEvents = "none";
-
-            var timeoutId = null;
-            var resolved = false;
-
-            function cleanup() {
-                if (timeoutId) {
-                    clearTimeout(timeoutId);
-                    timeoutId = null;
-                }
-                if (iframe && iframe.parentNode) {
-                    iframe.parentNode.removeChild(iframe);
-                }
-            }
-
-            function finishWithResult(result) {
-                if (resolved) return;
-                resolved = true;
-                cleanup();
-                resolve(result);
-            }
-
-            // Set a maximum timeout
-            timeoutId = setTimeout(function() {
-                log("Background Barcode: iframe timeout reached");
-                finishWithResult(null);
-            }, 30000);
-
-            iframe.onload = async function() {
-                try {
-                    var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-
-                    // Wait for epoch select to appear and be populated (Edge needs more time than Chrome)
-                    var epochSel = null;
-                    var retryCount = 0;
-                    var maxRetries = 40;
-                    while (retryCount < maxRetries && !epochSel) {
-                        await sleep(300);
-                        epochSel = iframeDoc.querySelector("select#epoch");
-                        if (epochSel) {
-                            var opts = epochSel.querySelectorAll("option");
-                            if (opts.length === 0) {
-                                epochSel = null;
-                            } else {
-                                log("Background Barcode: iframe - epoch select ready with " + opts.length + " options (attempt " + (retryCount + 1) + ")");
-                            }
-                        } else {
-                        }
-                        retryCount++;
-                    }
-
-                    if (!epochSel) {
-                        finishWithResult(null);
-                        return;
-                    }
-
-                    var epochOpts = epochSel.querySelectorAll("option");
-                    log("Background Barcode: iframe - found " + String(epochOpts.length) + " epoch options");
-
-                    // Iterate through epochs
-                    for (var eIdx = 0; eIdx < epochOpts.length; eIdx++) {
-                        if (resolved) return;
-
-                        var epochVal = (epochOpts[eIdx].value + "").trim();
-                        if (epochVal.length === 0) continue;
-
-                        log("Background Barcode: iframe - selecting epoch value='" + epochVal + "'");
-                        epochSel.value = epochVal;
-                        var epochEvt = new Event("change", { bubbles: true });
-                        epochSel.dispatchEvent(epochEvt);
-
-                        // Wait for cohorts to load (Edge needs more time)
-                        await sleep(1200);
-
-                        var cohortSel = iframeDoc.querySelector("select#cohort");
-                        if (!cohortSel) {
-                            log("Background Barcode: iframe - cohort select not found");
-                            continue;
-                        }
-
-                        var cohortOpts = cohortSel.querySelectorAll("option");
-                        log("Background Barcode: iframe - found " + String(cohortOpts.length) + " cohort options");
-
-                        for (var cIdx = 0; cIdx < cohortOpts.length; cIdx++) {
-                            if (resolved) return;
-
-                            var cohortVal = (cohortOpts[cIdx].value + "").trim();
-                            if (cohortVal.length === 0) continue;
-
-                            log("Background Barcode: iframe - selecting cohort value='" + cohortVal + "'");
-                            cohortSel.value = cohortVal;
-                            var cohortEvt = new Event("change", { bubbles: true });
-                            cohortSel.dispatchEvent(cohortEvt);
-
-                            // Wait for subjects to load (Edge needs more time)
-                            await sleep(1200);
-
-                            var subjectsSel = iframeDoc.querySelector("select#subjects");
-                            if (!subjectsSel) {
-                                log("Background Barcode: iframe - subjects select not found");
-                                continue;
-                            }
-
-                            var subjectOpts = subjectsSel.querySelectorAll("option");
-                            log("Background Barcode: iframe - found " + String(subjectOpts.length) + " subject options");
-
-                            for (var sIdx = 0; sIdx < subjectOpts.length; sIdx++) {
-                                var sVal = (subjectOpts[sIdx].value + "").trim();
-                                var sTxt = (subjectOpts[sIdx].textContent + "").trim();
-
-                                if (sVal.length > 0) {
-                                    var textMatch = normalizeSubjectString(sTxt) === normalizeSubjectString(subjectText);
-                                    if (textMatch) {
-                                        var result = "S" + String(sVal);
-                                        log("Background Barcode: iframe - found match! text='" + sTxt + "' value='" + sVal + "' result=" + result);
-                                        finishWithResult(result);
-                                        return;
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    log("Background Barcode: iframe - subject not found after searching all epochs/cohorts");
-                    finishWithResult(null);
-
-                } catch (e) {
-                    log("Background Barcode: iframe error - " + String(e));
-                    finishWithResult(null);
-                }
-            };
-
-            iframe.onerror = function() {
-                log("Background Barcode: iframe failed to load");
-                finishWithResult(null);
-            };
-
-            document.body.appendChild(iframe);
-            iframe.src = location.origin + "/secure/barcodeprinting/subjects";
-        });
-    }
-
-    // Run Barcode feature once from the current page context.
-    // Runs completely in the background without opening a new tab.
-    async function APS_RunBarcode() {
-        BARCODE_START_TS = Date.now();
-
-        var info = getSubjectFromBreadcrumbOrTooltip();
-        var hasText = !!(info.subjectText && info.subjectText.length > 0);
-        var hasId = !!(info.subjectId && info.subjectId.length > 0);
-
-        if (!hasText && !hasId) {
-            log("Run Barcode: subject breadcrumb or tooltip not found (APS_RunBarcode)");
-            return;
-        }
-
-        log("APS_RunBarcode: Fetching barcode in background…");
-
-        var loadingText = document.createElement("div");
-        loadingText.style.textAlign = "center";
-        loadingText.style.fontSize = "16px";
-        loadingText.style.color = "#fff";
-        loadingText.style.padding = "20px";
-        loadingText.textContent = "Locating barcode.";
-
-        var popup = createPopup({
-            title: "Locating Barcode",
-            content: loadingText,
-            width: "300px",
-            height: "auto"
-        });
-
-        var dots = 1;
-        var loadingInterval = setInterval(function () {
-            dots = dots + 1;
-            if (dots > 3) {
-                dots = 1;
-            }
-            var text = "Locating barcode";
-            var i = 0;
-            while (i < dots) {
-                text = text + ".";
-                i = i + 1;
-            }
-            loadingText.textContent = text;
-        }, 500);
-
-        // Fetch barcode in background using the new function
-        var r = await fetchBarcodeInBackground(info.subjectText, info.subjectId);
-
-        try {
-            clearInterval(loadingInterval);
-        } catch (e1) {}
-        try {
-            if (popup && popup.close) {
-                popup.close();
-            }
-        } catch (e2) {}
-
-        if (r && r.length > 0) {
-            log("APS_RunBarcode: got result '" + r + "'; attempting to populate input");
-
-            var inputBox = document.querySelector("input.bootbox-input.bootbox-input-text.form-control");
-            if (!inputBox) {
-                inputBox = await openBarcodeDataEntryModalIfNeeded(6000);
-            }
-
-            if (inputBox) {
-                inputBox.value = r;
-                var evt = new Event("input", { bubbles: true });
-                inputBox.dispatchEvent(evt);
-                log("APS_RunBarcode: populated barcode value in modal");
-
-                var okBtn = document.querySelector("button[data-bb-handler=\"confirm\"].btn.btn-primary");
-                if (!okBtn) {
-                    okBtn = document.querySelector("button.btn.btn-primary[data-bb-handler=\"confirm\"]");
-                }
-                if (okBtn) {
-                    okBtn.click();
-                    log("APS_RunBarcode: confirmed barcode modal");
-                } else {
-                    log("APS_RunBarcode: OK button not found after populating input");
-                }
-            } else {
-                log("APS_RunBarcode: unable to find or open barcode input modal");
-            }
-        } else {
-            log("APS_RunBarcode: no barcode result found");
-        }
-
-        try {
-            var secs = (Date.now() - BARCODE_START_TS) / 1000;
-            var s = secs.toFixed(2);
-            log("APS_RunBarcode: elapsed " + String(s) + " s");
-        } catch (e3) {}
-        BARCODE_START_TS = 0;
-    }
-
-    // Return index of first option with non-empty value.
-    function firstNonEmptyOptionIndex(selectEl) {
-        if (!selectEl) {
-            return -1;
-        }
-        var opts = selectEl.querySelectorAll("option");
-        var i = 0;
-        while (i < opts.length) {
-            var v = (opts[i].value + "").trim();
-            if (v.length > 0) {
-                return i;
-            }
-            i = i + 1;
-        }
-        return -1;
-    }
-
     // Attempt to infer subject text/id from breadcrumb or tooltip elements.
     function getSubjectFromBreadcrumbOrTooltip() {
         var text = "";
@@ -11213,34 +13865,6 @@
 
     function SharedUtilityFunctions() {}
 
-
-    function setPanelHidden(flag) {
-        try {
-            localStorage.setItem(STORAGE_PANEL_HIDDEN, flag ? "1" : "0");
-            log("Panel hidden state set to " + String(flag));
-        } catch (e) {
-        }
-    }
-
-    function togglePanelHiddenViaHotkey() {
-        var panel = document.getElementById(PANEL_ID);
-        if (!panel) {
-            log("Hotkey toggle: panel element not found; nothing to toggle");
-            return;
-        }
-        var isHidden = getPanelHidden();
-        if (isHidden) {
-            panel.style.display = "block";
-            panel.style.pointerEvents = "auto";
-            setPanelHidden(false);
-            log("Hotkey toggle: panel unhidden");
-        } else {
-            panel.style.display = "none";
-            panel.style.pointerEvents = "none";
-            setPanelHidden(true);
-            log("Hotkey toggle: panel hidden");
-        }
-    }
 
     // Recreate popups on page load if they should be active
     function recreatePopupsIfNeeded() {
@@ -11584,15 +14208,14 @@
             }
         }
         if (hasLock) {
-            log("Eligibility already locked; proceeding to update study status");
-            var editLink = document.querySelector('a[href^="/secure/administration/manage/studies/update/"][href$="/basics"]');
-            if (!editLink) {
-                log("Edit basics link not found; navigating to Study Show");
-                location.href = "/secure/administration/studies/show";
+            if (mode === "study") {
+                clearRunMode();
+                log("Eligibility already locked; ending Study Update");
                 return;
             }
-            editLink.click();
-            log("Routing to edit basics to update study status");
+            setContinueEpoch();
+            log("Eligibility locked; continuing ALL to Study Show");
+            location.href = "/secure/administration/studies/show";
             return;
         }
         var href = target.getAttribute("href") + "";
@@ -11612,9 +14235,6 @@
         } else {
             url = url + "&autolock=1";
         }
-        try {
-            localStorage.setItem(STORAGE_CHECK_ELIG_LOCK, "1");
-        } catch (e7) {}
         log("Routing to Eligibility form for locking");
         location.href = url;
     }
@@ -12375,20 +14995,6 @@
     //==========================
     function SharedPanelFunctions() {}
 
-    function clearEligibilityWorkingState() {
-    try {
-        localStorage.removeItem(STORAGE_ELIG_IMPORTED);
-        log("ImportElig: cleared imported items");
-    } catch(e) {}
-
-    try {
-        localStorage.removeItem(STORAGE_ELIG_CHECKITEM_CACHE);
-        log("ImportElig: cleared checkItemCache");
-    } catch(e) {}
-
-    log("ImportElig: working state fully cleared");
-}
-
     // Read stored position value (or return fallback).
     function getStoredPos(key, fallback) {
         var raw = null;
@@ -13042,6 +15648,33 @@
         runNonScrnBtn.style.transition = "background 0.2s";
         runNonScrnBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
         runNonScrnBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
+
+        var addExistingSubjectBtn = document.createElement("button");
+        addExistingSubjectBtn.textContent = "Add Existing Subject";
+        addExistingSubjectBtn.style.background = "#5b43c7";
+        addExistingSubjectBtn.style.color = "#fff";
+        addExistingSubjectBtn.style.border = "none";
+        addExistingSubjectBtn.style.borderRadius = "6px";
+        addExistingSubjectBtn.style.padding = "8px";
+        addExistingSubjectBtn.style.cursor = "pointer";
+        addExistingSubjectBtn.style.fontWeight = "500";
+        addExistingSubjectBtn.style.transition = "background 0.2s";
+        addExistingSubjectBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
+        addExistingSubjectBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
+
+        var saBuilderBtn = document.createElement("button");
+        saBuilderBtn.textContent = "SA Builder";
+        saBuilderBtn.style.background = "#5b43c7";
+        saBuilderBtn.style.color = "#fff";
+        saBuilderBtn.style.border = "none";
+        saBuilderBtn.style.borderRadius = "6px";
+        saBuilderBtn.style.padding = "8px";
+        saBuilderBtn.style.cursor = "pointer";
+        saBuilderBtn.style.fontWeight = "500";
+        saBuilderBtn.style.transition = "background 0.2s";
+        saBuilderBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
+        saBuilderBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
+
         var runBarcodeBtn = document.createElement("button");
         runBarcodeBtn.textContent = "Run Barcode";
         runBarcodeBtn.style.background = "#5b43c7";
@@ -13222,6 +15855,8 @@
         btnRow.appendChild(runAllBtn);
         btnRow.appendChild(runNonScrnBtn);
         btnRow.appendChild(runBarcodeBtn);
+        btnRow.appendChild(addExistingSubjectBtn);
+        btnRow.appendChild(saBuilderBtn);
         btnRow.appendChild(runFormOORBtn);
         btnRow.appendChild(runFormOORABtn);
         btnRow.appendChild(runFormIRBtn);
@@ -13348,6 +15983,10 @@
             }, 500);
 
             location.href = STUDY_SHOW_URL + "?autononscrn=1";
+        });
+        addExistingSubjectBtn.addEventListener("click", async function () {
+            log("Add Existing Subject: button clicked");
+            await startAddExistingSubject();
         });
         runAddCohortBtn.addEventListener("click", function () {
             status.textContent = "Preparing Add Cohort Subjects...";
@@ -13548,6 +16187,7 @@
                 localStorage.setItem(STORAGE_KEY, "1");
                 localStorage.setItem(STORAGE_RUN_MODE, "all");
                 localStorage.setItem(STORAGE_CONTINUE_EPOCH, "1");
+                localStorage.setItem(STORAGE_CHECK_ELIG_LOCK, "1");
             } catch (e) {}
             status.textContent = "Starting ALL: Activity Plans…";
             log("Run ALL clicked");
@@ -13631,6 +16271,7 @@
                 setPaused(false);
                 pauseBtn.textContent = "Pause";
                 status.textContent = "Resumed";
+                SA_BUILDER_PAUSE = false;
                 log("Resumed");
             } else {
                 setPaused(true);
@@ -13639,8 +16280,22 @@
                 log("Paused");
                 clearAllRunState();
                 COLLECT_ALL_CANCELLED = true;
+                SA_BUILDER_PAUSE = true;
+                SA_BUILDER_CANCELLED = true;
                 clearCollectAllData();
                 clearEligibilityWorkingState();
+                if (SA_BUILDER_PROGRESS_POPUP_REF) {
+                    try {
+                        SA_BUILDER_PROGRESS_POPUP_REF.close();
+                        SA_BUILDER_PROGRESS_POPUP_REF = null;
+                    } catch (e) {}
+                }
+                if (SA_BUILDER_POPUP_REF) {
+                    try {
+                        SA_BUILDER_POPUP_REF.close();
+                        SA_BUILDER_POPUP_REF = null;
+                    } catch (e) {}
+                }
             }
         });
 
@@ -13704,6 +16359,16 @@
         });
         parseMethodBtn.addEventListener("click", function () {
             openParseMethod();
+        });
+        saBuilderBtn.addEventListener("click", async function () {
+            SA_BUILDER_CANCELLED = false;
+            log("SA Builder: button clicked");
+            if (SA_BUILDER_PAUSE) {
+                log("SA Builder: Paused");
+                return;
+            }
+            log("SA Builder: starting");
+            await runSABuilder();
         });
         findFormBtn.addEventListener("click", function () {
             openFindForm();
@@ -13929,6 +16594,18 @@
             return;
         }
 
+        // Check for Add Existing Subject mode first
+        var runModeRaw = null;
+        try {
+            runModeRaw = localStorage.getItem(STORAGE_RUN_MODE);
+        } catch (e) {
+            runModeRaw = null;
+        }
+        if (runModeRaw === RUNMODE_ADD_EXISTING_SUBJECT) {
+            processAESOnPageLoad();
+            return;
+        }
+
         if (location.pathname === "/secure/study/data/list") {
             var parseMethodCompleted = null;
             try { parseMethodCompleted = localStorage.getItem(STORAGE_PARSE_METHOD_COMPLETED); } catch (e) {}
@@ -14039,13 +16716,14 @@
             pendingPopup = null;
         }
 
-        var runModeRaw = null;
-        try {
-            runModeRaw = localStorage.getItem(STORAGE_RUN_MODE);
-        } catch (e) {
-            runModeRaw = null;
+        // Re-use runModeRaw from earlier check or get it again if needed
+        if (!runModeRaw) {
+            try {
+                runModeRaw = localStorage.getItem(STORAGE_RUN_MODE);
+            } catch (e) {
+                runModeRaw = null;
+            }
         }
-
         if (pendingPopup === "1" && runModeRaw !== RUNMODE_ELIG_IMPORT && !isEligibilityListPage()) {
             log("ImportElig: pending popup detected but user navigated away before confirming; clearing state");
             try {
@@ -14259,6 +16937,7 @@
         if (location.pathname === "/secure/study/data/list") {
             processFindFormOnList();
         }
+
     }
 
     if (document.readyState === "loading") {
