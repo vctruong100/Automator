@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.7.0
+// @version     1.7.1
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -7997,7 +7997,7 @@
         subjectEligBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
         var saBuilderBtn = document.createElement("button");
-        saBuilderBtn.textContent = "SA Builder";
+        saBuilderBtn.textContent = "Scheduled Activities Builder";
         saBuilderBtn.style.background = "#4a90e2";
         saBuilderBtn.style.color = "#fff";
         saBuilderBtn.style.border = "none";
