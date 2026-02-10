@@ -24,7 +24,7 @@
     var STORAGE_PANEL_TOP = "activityPlanState.panel.top";
     var STORAGE_PANEL_RIGHT = "activityPlanState.panel.right";
     var LIST_URL = "https://cenexel.clinspark.com/secure/crfdesign/activityplans/list";
-    var STUDY_SHOW_URL = "https://cenexel.clinspark.com/secure/administration/studies/show";``
+    var STUDY_SHOW_URL = "https://cenexel.clinspark.com/secure/administration/studies/show";
     var PANEL_ID = "activityPlanStatePanel";
     var LOG_ID = "activityPlanStateLog";
     var STORAGE_SELECTED_IDS = "activityPlanState.selectedVolunteerIds";
@@ -159,7 +159,7 @@
         var SA_BUILDER_PROGRESS_POPUP_REF = null;
         var SA_BUILDER_CANCELLED = false;
         var SA_BUILDER_PAUSE = false;
-        var SA_BUILDER_TARGET_URL = "https://cenexeltest.clinspark.com/secure/crfdesign/activityplans/show/";
+        var SA_BUILDER_TARGET_URL = "https://cenexel.clinspark.com/secure/crfdesign/activityplans/show/";
     
         function SABuilderFunctions() {}
     
