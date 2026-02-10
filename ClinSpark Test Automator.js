@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.1.1
+// @version 3.1.2
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -15725,7 +15725,7 @@
         addExistingSubjectBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
 
         var saBuilderBtn = document.createElement("button");
-        saBuilderBtn.textContent = "SA Builder";
+        saBuilderBtn.textContent = "Scheduled Activities Builder";
         saBuilderBtn.style.background = "#5b43c7";
         saBuilderBtn.style.color = "#fff";
         saBuilderBtn.style.border = "none";
