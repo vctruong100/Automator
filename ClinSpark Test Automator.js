@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.1.3
+// @version 3.1.4
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -1500,6 +1500,7 @@
         }
     }
 
+
     //==========================
     // SCHEDULED ACTIVITIES BUILDER FEATURE
     //==========================
@@ -1508,8 +1509,6 @@
     // segments, study events, and forms, then automatically populating and submitting them.
     //==========================
 
-    var SA_BUILDER_POPUP_TITLE = "Scheduled Activities Builder";
-    var SA_BUILDER_POPUP_DESCRIPTION = "Auto-navigate to Scheduled Activities Builder data page based on keywords and status";
     var STORAGE_SA_BUILDER_EXISTING = "activityPlanState.saBuilder.existing";
     var STORAGE_SA_BUILDER_SEGMENTS = "activityPlanState.saBuilder.segments";
     var STORAGE_SA_BUILDER_STUDY_EVENTS = "activityPlanState.saBuilder.studyEvents";
@@ -1824,8 +1823,54 @@
 
         // Study Events column (draggable items)
         var eventColumn = document.createElement("div");
-        eventColumn.style.cssText = "overflow-y:auto;border:1px solid #333;border-radius:4px;padding:8px;background:#1a1a1a;";
+        eventColumn.style.cssText = "overflow-y:auto;border:1px solid #444;border-radius:6px;padding:10px;background:#1e1e1e;box-shadow:inset 0 1px 3px rgba(0,0,0,0.3);";
         eventColumn.id = "saBuilderEvents";
+
+        // Make Study Events column a drop zone for restoring events
+        eventColumn.addEventListener("dragover", function(e) {
+            e.preventDefault();
+            this.style.background = "#252525";
+            this.style.border = "2px dashed #007bff";
+            this.style.transition = "all 0.2s ease";
+        });
+
+        eventColumn.addEventListener("dragleave", function(e) {
+            e.preventDefault();
+            this.style.background = "#1e1e1e";
+            this.style.border = "1px solid #444";
+            this.style.transition = "all 0.2s ease";
+        });
+
+        eventColumn.addEventListener("drop", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            this.style.background = "#1e1e1e";
+            this.style.border = "1px solid #444";
+            this.style.transition = "all 0.2s ease";
+            
+            var eventData = e.dataTransfer.getData("text/plain");
+            if (eventData) {
+                var data = JSON.parse(eventData);
+                if (data.fromSegment) {
+                    // Remove from segment
+                    if (data.segmentValue && segmentEventMap[data.segmentValue]) {
+                        var events = segmentEventMap[data.segmentValue];
+                        var index = events.findIndex(function(ev) {
+                            return ev.value === data.value;
+                        });
+                        if (index > -1) {
+                            events.splice(index, 1);
+                            segmentEventMap[data.segmentValue] = events;
+                            // Refresh the segment
+                            renderSegments(segmentSearch.value);
+                        }
+                    }
+                    // Restore to column
+                    restoreEventToStudyEventsColumn(data);
+                    log("SA Builder: Event '" + data.text + "' moved back to Study Events column");
+                }
+            }
+        });
 
         // Forms column (checkboxes)
         var formColumn = document.createElement("div");
@@ -1834,7 +1879,7 @@
 
         // Time inputs column
         var timeColumn = document.createElement("div");
-        timeColumn.style.cssText = "display:flex;flex-direction:column;gap:12px;padding:8px;border:1px solid #333;border-radius:4px;background:#1a1a1a;";
+        timeColumn.style.cssText = "display:flex;flex-direction:column;gap:12px;padding:8px;border:1px solid #333;border-radius:4px;background:#1a1a1a;height:100%;overflow-y:auto;overflow-x:hidden;";
         timeColumn.id = "saBuilderTime";
 
         // Track segment-event assignments
@@ -1923,24 +1968,83 @@
                             evItem.dataset.eventText = ev.text;
                             evItem.draggable = true;
 
-                            var evLabel = document.createElement("span");
-                            evLabel.textContent = ev.text;
-                            evLabel.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+                            var attachedItem = document.createElement("div");
+                            attachedItem.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:8px 10px;margin-bottom:4px;border:1px solid #666;border-radius:5px;background:#3a3a3a;color:#fff;font-size:13px;font-weight:500;cursor:move;transition:all 0.2s ease;box-shadow:0 1px 3px rgba(0,0,0,0.2);";
+                            attachedItem.draggable = true;
+                            attachedItem.dataset.eventValue = ev.value;
+                            attachedItem.dataset.eventText = ev.text;
+
+                            var eventLabel = document.createElement("span");
+                            eventLabel.textContent = ev.text;
+                            eventLabel.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+
+                            // Make attached events draggable back to Study Events column
+                            attachedItem.addEventListener("dragstart", function(e) {
+                                e.dataTransfer.setData("text/plain", JSON.stringify({ 
+                                    value: this.dataset.eventValue, 
+                                    text: this.dataset.eventText,
+                                    fromSegment: true,
+                                    segmentValue: segVal
+                                }));
+                                e.dataTransfer.effectAllowed = "move";
+                                this.style.opacity = "0.7";
+                                this.style.transform = "scale(0.95)";
+                                this.style.boxShadow = "0 4px 8px rgba(0,0,0,0.3)";
+                            });
+
+                            attachedItem.addEventListener("dragend", function(e) {
+                                this.style.opacity = "1";
+                                this.style.transform = "scale(1)";
+                                this.style.boxShadow = "0 1px 3px rgba(0,0,0,0.2)";
+                            });
+
+                            attachedItem.addEventListener("mouseenter", function() {
+                                this.style.background = "#4a4a4a";
+                                this.style.border = "1px solid #777";
+                                this.style.transform = "translateY(-1px)";
+                                this.style.boxShadow = "0 2px 5px rgba(0,0,0,0.3)";
+                            });
+
+                            attachedItem.addEventListener("mouseleave", function() {
+                                this.style.background = "#3a3a3a";
+                                this.style.border = "1px solid #666";
+                                this.style.transform = "translateY(0)";
+                                this.style.boxShadow = "0 1px 3px rgba(0,0,0,0.2)";
+                            });
 
                             var removeBtn = document.createElement("button");
                             removeBtn.textContent = "×";
-                            removeBtn.style.cssText = "background:transparent;border:none;color:#f66;cursor:pointer;font-size:16px;padding:0 4px;";
-                            removeBtn.addEventListener("click", (function(segV, evV) {
-                                return function(e) {
-                                    e.stopPropagation();
-                                    var arr = segmentEventMap[segV] || [];
-                                    segmentEventMap[segV] = arr.filter(function(x) { return x.value !== evV; });
-                                    renderSegments(segmentSearch.value);
-                                };
-                            })(segVal, ev.value));
+                            removeBtn.style.cssText = "background:transparent;border:none;color:#ff6b6b;cursor:pointer;font-size:18px;font-weight:bold;padding:0;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:all 0.2s ease;flex-shrink:0;margin-left:8px;";
 
-                            evItem.appendChild(evLabel);
-                            evItem.appendChild(removeBtn);
+                            removeBtn.addEventListener("mouseenter", function() {
+                                this.style.background = "rgba(255,107,107,0.2)";
+                                this.style.color = "#ff5252";
+                                this.style.transform = "scale(1.1)";
+                            });
+
+                            removeBtn.addEventListener("mouseleave", function() {
+                                this.style.background = "transparent";
+                                this.style.color = "#ff6b6b";
+                                this.style.transform = "scale(1)";
+                            });
+
+                            removeBtn.addEventListener("click", function(e) {
+                                e.stopPropagation();
+                                var index = events.indexOf(ev);
+                                if (index > -1) {
+                                    events.splice(index, 1);
+                                    segmentEventMap[segVal] = events;
+                                    renderAttachedEvents(dz, segVal);
+                                    log("SA Builder: Event '" + ev.text + "' removed from segment");
+                                    
+                                    // Restore event to Study Events column
+                                    restoreEventToStudyEventsColumn({ value: ev.value, text: ev.text });
+                                }
+                            });
+
+                            attachedItem.appendChild(eventLabel);
+                            attachedItem.appendChild(removeBtn);
+                            dz.appendChild(attachedItem);
 
                             // Make attached events re-draggable
                             evItem.addEventListener("dragstart", (function(evData, segV) {
@@ -1987,6 +2091,8 @@
                                 if (!existing) {
                                     if (!segmentEventMap[segVal]) segmentEventMap[segVal] = [];
                                     segmentEventMap[segVal].push({ value: data.value, text: data.text });
+                                    
+                                    removeEventFromStudyEventsColumn(data.value);
                                 }
                                 renderSegments(segmentSearch.value);
                             }
@@ -2010,24 +2116,135 @@
                 if (filterLower && ev.text.toLowerCase().indexOf(filterLower) === -1) continue;
 
                 var evItem = document.createElement("div");
-                evItem.style.cssText = "padding:8px;margin-bottom:4px;border:1px solid #444;border-radius:4px;background:#222;cursor:grab;";
+                evItem.style.cssText = "padding:10px 12px;margin-bottom:6px;border:1px solid #555;border-radius:6px;background:#2a2a2a;cursor:grab;color:#fff;font-size:14px;font-weight:500;transition:all 0.2s ease;box-shadow:0 2px 4px rgba(0,0,0,0.2);";
                 evItem.textContent = ev.text;
                 evItem.draggable = true;
                 evItem.dataset.eventValue = ev.value;
                 evItem.dataset.eventText = ev.text;
 
+                evItem.addEventListener("mouseenter", function() {
+                    this.style.background = "#333";
+                    this.style.border = "1px solid #666";
+                    this.style.transform = "translateY(-1px)";
+                    this.style.boxShadow = "0 4px 8px rgba(0,0,0,0.3)";
+                });
+
+                evItem.addEventListener("mouseleave", function() {
+                    this.style.background = "#2a2a2a";
+                    this.style.border = "1px solid #555";
+                    this.style.transform = "translateY(0)";
+                    this.style.boxShadow = "0 2px 4px rgba(0,0,0,0.2)";
+                });
+
                 evItem.addEventListener("dragstart", function(e) {
-                    e.dataTransfer.setData("text/plain", JSON.stringify({ value: this.dataset.eventValue, text: this.dataset.eventText }));
+                    e.dataTransfer.setData("text/plain", JSON.stringify({ 
+                        value: this.dataset.eventValue, 
+                        text: this.dataset.eventText 
+                    }));
                     e.dataTransfer.effectAllowed = "copy";
-                    this.style.opacity = "0.5";
+                    this.style.opacity = "0.6";
+                    this.style.transform = "scale(0.95)";
+                    this.style.boxShadow = "0 6px 12px rgba(0,0,0,0.4)";
                 });
 
                 evItem.addEventListener("dragend", function(e) {
                     this.style.opacity = "1";
+                    this.style.transform = "scale(1)";
+                    this.style.boxShadow = "0 2px 4px rgba(0,0,0,0.2)";
                 });
 
                 eventColumn.appendChild(evItem);
+                sortStudyEventsColumn();
             }
+        }
+
+        // Remove event from Study Events column
+        function removeEventFromStudyEventsColumn(eventValue) {
+            var eventItems = eventColumn.querySelectorAll("[data-event-value]");
+            for (var i = 0; i < eventItems.length; i++) {
+                var item = eventItems[i];
+                if (item.dataset.eventValue === eventValue) {
+                    item.remove();
+                    log("SA Builder: Event removed from Study Events column");
+                    break;
+                }
+            }
+        }
+        // Restore event to Study Events column
+        function restoreEventToStudyEventsColumn(eventData) {
+            // Check if event already exists in column
+            var existingItems = eventColumn.querySelectorAll("[data-event-value]");
+            for (var i = 0; i < existingItems.length; i++) {
+                if (existingItems[i].dataset.eventValue === eventData.value) {
+                    log("SA Builder: Event already exists in Study Events column");
+                    return;
+                }
+            }
+            
+            // Create the event item
+            var evItem = document.createElement("div");
+            evItem.textContent = eventData.text;
+            evItem.style.cssText = "padding:10px 12px;margin-bottom:6px;border:1px solid #555;border-radius:6px;background:#2a2a2a;cursor:grab;color:#fff;font-size:14px;font-weight:500;transition:all 0.2s ease;box-shadow:0 2px 4px rgba(0,0,0,0.2);animation:slideIn 0.3s ease;";
+            evItem.draggable = true;
+            evItem.dataset.eventValue = eventData.value;
+            evItem.dataset.eventText = eventData.text;
+
+            evItem.addEventListener("mouseenter", function() {
+                this.style.background = "#333";
+                this.style.border = "1px solid #666";
+                this.style.transform = "translateY(-1px)";
+                this.style.boxShadow = "0 4px 8px rgba(0,0,0,0.3)";
+            });
+
+            evItem.addEventListener("mouseleave", function() {
+                this.style.background = "#2a2a2a";
+                this.style.border = "1px solid #555";
+                this.style.transform = "translateY(0)";
+                this.style.boxShadow = "0 2px 4px rgba(0,0,0,0.2)";
+            });
+
+            evItem.addEventListener("dragstart", function(e) {
+                e.dataTransfer.setData("text/plain", JSON.stringify({ 
+                    value: this.dataset.eventValue, 
+                    text: this.dataset.eventText 
+                }));
+                e.dataTransfer.effectAllowed = "copy";
+                this.style.opacity = "0.6";
+                this.style.transform = "scale(0.95)";
+                this.style.boxShadow = "0 6px 12px rgba(0,0,0,0.4)";
+            });
+
+            evItem.addEventListener("dragend", function(e) {
+                this.style.opacity = "1";
+                this.style.transform = "scale(1)";
+                this.style.boxShadow = "0 2px 4px rgba(0,0,0,0.2)";
+            });
+
+            // Add the event to the column and sort
+            eventColumn.appendChild(evItem);
+            sortStudyEventsColumn();
+            log("SA Builder: Event '" + eventData.text + "' restored to Study Events column");
+        }
+
+        // Sort the Study Events column alphabetically
+        function sortStudyEventsColumn() {
+            var allItems = eventColumn.querySelectorAll("[data-event-value]");
+            var itemsArray = Array.prototype.slice.call(allItems);
+            
+            // Sort by text content (case-insensitive)
+            itemsArray.sort(function(a, b) {
+                var textA = (a.dataset.eventText || a.textContent || "").toLowerCase();
+                var textB = (b.dataset.eventText || b.textContent || "").toLowerCase();
+                return textA.localeCompare(textB);
+            });
+            
+            // Clear and re-append in sorted order
+            eventColumn.innerHTML = "";
+            itemsArray.forEach(function(item) {
+                eventColumn.appendChild(item);
+            });
+            
+            log("SA Builder: Study Events column sorted alphabetically");
         }
 
         // Populate forms (checkboxes)
@@ -2079,11 +2296,6 @@
             return row;
         }
 
-        timeColumn.appendChild(createTimeInput("Days", "saBuilderDays", 200));
-        timeColumn.appendChild(createTimeInput("Hours", "saBuilderHours", 23));
-        timeColumn.appendChild(createTimeInput("Minutes", "saBuilderMinutes", 59));
-        timeColumn.appendChild(createTimeInput("Seconds", "saBuilderSeconds", 59));
-
         // Hidden checkbox row
         var hiddenRow = document.createElement("div");
         hiddenRow.style.cssText = "display:flex;align-items:center;gap:8px;padding-top:12px;margin-top:12px;border-top:1px solid #444;";
@@ -2101,6 +2313,133 @@
         hiddenRow.appendChild(hiddenCheckbox);
         hiddenRow.appendChild(hiddenLabel);
         timeColumn.appendChild(hiddenRow);
+
+        // Mandatory checkbox row
+        var mandatoryRow = document.createElement("div");
+        mandatoryRow.style.cssText = "display:flex;align-items:center;gap:8px;margin-top:8px;";
+
+        var mandatoryCheckbox = document.createElement("input");
+        mandatoryCheckbox.type = "checkbox";
+        mandatoryCheckbox.id = "saBuilderMandatory";
+        mandatoryCheckbox.checked = true;
+        mandatoryCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;accent-color:#007bff;";
+
+        var mandatoryLabel = document.createElement("label");
+        mandatoryLabel.textContent = "Mandatory";
+        mandatoryLabel.setAttribute("for", "saBuilderMandatory");
+        mandatoryLabel.style.cssText = "font-size:13px;font-weight:600;cursor:pointer;";
+
+        mandatoryRow.appendChild(mandatoryCheckbox);
+        mandatoryRow.appendChild(mandatoryLabel);
+        timeColumn.appendChild(mandatoryRow);
+
+        // Enforce Data Collection Order checkbox row
+        var enforceRow = document.createElement("div");
+        enforceRow.style.cssText = "display:flex;align-items:center;gap:8px;margin-top:8px;";
+
+        var enforceCheckbox = document.createElement("input");
+        enforceCheckbox.type = "checkbox";
+        enforceCheckbox.id = "saBuilderEnforce";
+        enforceCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;accent-color:#007bff;";
+
+        var enforceLabel = document.createElement("label");
+        enforceLabel.textContent = "Enforce Data Collection Order";
+        enforceLabel.setAttribute("for", "saBuilderEnforce");
+        enforceLabel.style.cssText = "font-size:13px;font-weight:600;cursor:pointer;";
+
+        enforceRow.appendChild(enforceCheckbox);
+        enforceRow.appendChild(enforceLabel);
+        timeColumn.appendChild(enforceRow);
+
+        // Pre-Window input row
+        var preWindowRow = document.createElement("div");
+        preWindowRow.style.cssText = "display:flex;flex-direction:column;gap:4px;margin-top:8px;";
+
+        var preWindowLabel = document.createElement("label");
+        preWindowLabel.textContent = "Pre-Window";
+        preWindowLabel.style.cssText = "font-size:12px;color:#aaa;";
+
+        var preWindowInput = document.createElement("input");
+        preWindowInput.type = "text";
+        preWindowInput.id = "saBuilderPreWindow";
+        preWindowInput.placeholder = "";
+        preWindowInput.style.cssText = "padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;width:100%;";
+
+        preWindowRow.appendChild(preWindowLabel);
+        preWindowRow.appendChild(preWindowInput);
+        timeColumn.appendChild(preWindowRow);
+
+        // Post-Window input row
+        var postWindowRow = document.createElement("div");
+        postWindowRow.style.cssText = "display:flex;flex-direction:column;gap:4px;margin-top:8px;";
+
+        var postWindowLabel = document.createElement("label");
+        postWindowLabel.textContent = "Post-Window";
+        postWindowLabel.style.cssText = "font-size:12px;color:#aaa;";
+
+        var postWindowInput = document.createElement("input");
+        postWindowInput.type = "text";
+        postWindowInput.id = "saBuilderPostWindow";
+        postWindowInput.placeholder = "";
+        postWindowInput.style.cssText = "padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;width:100%;";
+
+        postWindowRow.appendChild(postWindowLabel);
+        postWindowRow.appendChild(postWindowInput);
+        timeColumn.appendChild(postWindowRow);
+
+        // Reference Activity checkbox row
+        var refActivityRow = document.createElement("div");
+        refActivityRow.style.cssText = "display:flex;align-items:center;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid #444;";
+
+        var refActivityCheckbox = document.createElement("input");
+        refActivityCheckbox.type = "checkbox";
+        refActivityCheckbox.id = "saBuilderRefActivity";
+        refActivityCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;accent-color:#007bff;";
+
+        var refActivityLabel = document.createElement("label");
+        refActivityLabel.textContent = "Reference Activity";
+        refActivityLabel.setAttribute("for", "saBuilderRefActivity");
+        refActivityLabel.style.cssText = "font-size:13px;font-weight:600;cursor:pointer;";
+
+        refActivityRow.appendChild(refActivityCheckbox);
+        refActivityRow.appendChild(refActivityLabel);
+        timeColumn.appendChild(refActivityRow);
+
+        // Reference Activity disables time inputs
+        refActivityCheckbox.addEventListener("change", function() {
+            var isChecked = this.checked;
+            var daysEl = document.getElementById("saBuilderDays");
+            var hoursEl = document.getElementById("saBuilderHours");
+            var minutesEl = document.getElementById("saBuilderMinutes");
+            var secondsEl = document.getElementById("saBuilderSeconds");
+            if (daysEl) {
+                daysEl.disabled = isChecked;
+                daysEl.style.opacity = isChecked ? "0.5" : "1";
+            }
+            if (hoursEl) {
+                hoursEl.disabled = isChecked;
+                hoursEl.style.opacity = isChecked ? "0.5" : "1";
+            }
+            if (minutesEl) {
+                minutesEl.disabled = isChecked;
+                minutesEl.style.opacity = isChecked ? "0.5" : "1";
+            }
+            if (secondsEl) {
+                secondsEl.disabled = isChecked;
+                secondsEl.style.opacity = isChecked ? "0.5" : "1";
+            }
+        });
+
+        // Time inputs section (moved below other inputs)
+        var timeInputsSection = document.createElement("div");
+        timeInputsSection.style.cssText = "padding-top:12px;margin-top:12px;border-top:1px solid #444;";
+
+        timeInputsSection.appendChild(createTimeInput("Days", "saBuilderDays", 200));
+        timeInputsSection.appendChild(createTimeInput("Hours", "saBuilderHours", 23));
+        timeInputsSection.appendChild(createTimeInput("Minutes", "saBuilderMinutes", 59));
+        timeInputsSection.appendChild(createTimeInput("Seconds", "saBuilderSeconds", 59));
+
+        timeColumn.appendChild(timeInputsSection);
 
         // Initial render
         renderSegments("");
@@ -2208,16 +2547,30 @@
             };
 
             log("SA Builder: Time offset - Days: " + timeOffset.days + ", Hours: " + timeOffset.hours + ", Minutes: " + timeOffset.minutes + ", Seconds: " + timeOffset.seconds);
-            
+
             var hiddenChecked = document.getElementById("saBuilderHidden").checked;
+            var mandatoryChecked = document.getElementById("saBuilderMandatory").checked;
+            var enforceChecked = document.getElementById("saBuilderEnforce").checked;
+            var preWindowValue = document.getElementById("saBuilderPreWindow").value.trim();
+            var postWindowValue = document.getElementById("saBuilderPostWindow").value.trim();
+            var refActivityChecked = document.getElementById("saBuilderRefActivity").checked;
+
+            // If Reference Activity is checked, void the time offset
+            if (refActivityChecked) {
+                timeOffset = { days: 0, hours: 0, minutes: 0, seconds: 0 };
+            }
 
             var userSelection = {
                 segments: selectedSegments,
                 forms: selectedForms,
                 timeOffset: timeOffset,
-                hidden: hiddenChecked
+                hidden: hiddenChecked,
+                mandatory: mandatoryChecked,
+                enforce: enforceChecked,
+                preWindow: preWindowValue,
+                postWindow: postWindowValue,
+                refActivity: refActivityChecked
             };
-
             try {
                 localStorage.setItem(STORAGE_SA_BUILDER_USER_SELECTION, JSON.stringify(userSelection));
                 localStorage.setItem(STORAGE_SA_BUILDER_TIME_OFFSET, JSON.stringify(timeOffset));
@@ -2433,8 +2786,7 @@
         // Create progress popup
         var progressContent = createSABuilderProgressPopup(mappedItems);
         SA_BUILDER_PROGRESS_POPUP_REF = createPopup({
-            title: SA_BUILDER_POPUP_TITLE,
-            description: "Choose segments, study events, and forms to add scheduled activities. Note: Form selected will be added for each study event.",
+            title: "Adding Scheduled Activities",
             content: progressContent.element,
             width: "600px",
             height: "auto",
@@ -2538,7 +2890,6 @@
                     log("SA Builder: cancelled after form selection");
                     break;
                 }
-
                 // Check Hidden checkbox if user selected it
                 if (userSelection.hidden) {
                     var hiddenCheckboxEl = document.querySelector("#uniform-hidden span input#hidden.checkbox");
@@ -2552,39 +2903,81 @@
                     }
                 }
 
-                // Clear pre/post window fields
+                // Handle Mandatory checkbox (default is checked, uncheck if user unchecked it)
+                if (!userSelection.mandatory) {
+                    var mandatoryEl = document.querySelector("#uniform-mandatory span input#mandatory.checkbox");
+                    if (!mandatoryEl) {
+                        mandatoryEl = document.getElementById("mandatory");
+                    }
+                    if (mandatoryEl && mandatoryEl.checked) {
+                        mandatoryEl.click();
+                        log("SA Builder: Mandatory checkbox unchecked");
+                        await sleep(200);
+                    }
+                }
+
+                // Handle Enforce Data Collection Order checkbox (default is unchecked, check if user checked it)
+                if (userSelection.enforce) {
+                    var enforceEl = document.querySelector("#uniform-enforceDataCollectionOrder span input#enforceDataCollectionOrder.checkbox");
+                    if (!enforceEl) {
+                        enforceEl = document.getElementById("enforceDataCollectionOrder");
+                    }
+                    if (enforceEl && !enforceEl.checked) {
+                        enforceEl.click();
+                        log("SA Builder: Enforce Data Collection Order checkbox checked");
+                        await sleep(200);
+                    }
+                }
+
+                // Handle Pre-Window and Post-Window fields
                 var preWindow = document.getElementById("preWindow");
                 var postWindow = document.getElementById("postWindow");
                 if (preWindow) {
-                    preWindow.value = "";
+                    preWindow.value = userSelection.preWindow || "";
                     preWindow.dispatchEvent(new Event("input", { bubbles: true }));
+                    log("SA Builder: Pre-Window set to '" + (userSelection.preWindow || "") + "'");
                 }
                 if (postWindow) {
-                    postWindow.value = "";
+                    postWindow.value = userSelection.postWindow || "";
                     postWindow.dispatchEvent(new Event("input", { bubbles: true }));
+                    log("SA Builder: Post-Window set to '" + (userSelection.postWindow || "") + "'");
                 }
 
-                // Set time offset values
-                var daysInput = document.querySelector("input[name='offset.days']");
-                var hoursInput = document.querySelector("input[name='offset.hours']");
-                var minutesInput = document.querySelector("input[name='offset.minutes']");
-                var secondsInput = document.querySelector("input[name='offset.seconds']");
+                // Handle Reference Activity checkbox
+                if (userSelection.refActivity) {
+                    var refActivityEl = document.getElementById("referenceActivity");
+                    if (refActivityEl && !refActivityEl.checked) {
+                        refActivityEl.click();
+                        log("SA Builder: Reference Activity checkbox checked");
+                        await sleep(200);
+                    }
+                }
 
-                if (daysInput) {
-                    daysInput.value = String(timeOffset.days);
-                    daysInput.dispatchEvent(new Event("input", { bubbles: true }));
-                }
-                if (hoursInput) {
-                    hoursInput.value = String(timeOffset.hours);
-                    hoursInput.dispatchEvent(new Event("input", { bubbles: true }));
-                }
-                if (minutesInput) {
-                    minutesInput.value = String(timeOffset.minutes);
-                    minutesInput.dispatchEvent(new Event("input", { bubbles: true }));
-                }
-                if (secondsInput) {
-                    secondsInput.value = String(timeOffset.seconds);
-                    secondsInput.dispatchEvent(new Event("input", { bubbles: true }));
+                // Set time offset values (skip if Reference Activity is checked)
+                if (!userSelection.refActivity) {
+                    var daysInput = document.querySelector("input[name='offset.days']");
+                    var hoursInput = document.querySelector("input[name='offset.hours']");
+                    var minutesInput = document.querySelector("input[name='offset.minutes']");
+                    var secondsInput = document.querySelector("input[name='offset.seconds']");
+
+                    if (daysInput) {
+                        daysInput.value = String(timeOffset.days);
+                        daysInput.dispatchEvent(new Event("input", { bubbles: true }));
+                    }
+                    if (hoursInput) {
+                        hoursInput.value = String(timeOffset.hours);
+                        hoursInput.dispatchEvent(new Event("input", { bubbles: true }));
+                    }
+                    if (minutesInput) {
+                        minutesInput.value = String(timeOffset.minutes);
+                        minutesInput.dispatchEvent(new Event("input", { bubbles: true }));
+                    }
+                    if (secondsInput) {
+                        secondsInput.value = String(timeOffset.seconds);
+                        secondsInput.dispatchEvent(new Event("input", { bubbles: true }));
+                    }
+                } else {
+                    log("SA Builder: Skipping time offset values (Reference Activity checked)");
                 }
 
                 await sleep(300);
@@ -2775,7 +3168,6 @@
         var guiContent = createSABuilderSelectionGUI(dropdownData.segments, dropdownData.studyEvents, dropdownData.forms);
         SA_BUILDER_POPUP_REF = createPopup({
             title: "Scheduled Activities Builder - Select Items",
-            description: "Choose segments, study events, and forms to add scheduled activities",
             content: guiContent,
             width: "95%",
             maxWidth: "1400px",

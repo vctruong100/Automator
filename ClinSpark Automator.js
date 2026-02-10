@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.7.2
+// @version     1.7.3
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -137,1073 +137,1466 @@
     var SUBJECT_ELIG_POPUP = null;
 
     
-        //==========================
-        // SCHEDULED ACTIVITIES BUILDER FEATURE
-        //==========================
-        // This section contains all functions related to the Scheduled Activities Builder.
-        // This feature automates adding scheduled activities by allowing users to select
-        // segments, study events, and forms, then automatically populating and submitting them.
-        //==========================
-    
-        var STORAGE_SA_BUILDER_EXISTING = "activityPlanState.saBuilder.existing";
-        var STORAGE_SA_BUILDER_SEGMENTS = "activityPlanState.saBuilder.segments";
-        var STORAGE_SA_BUILDER_STUDY_EVENTS = "activityPlanState.saBuilder.studyEvents";
-        var STORAGE_SA_BUILDER_FORMS = "activityPlanState.saBuilder.forms";
-        var STORAGE_SA_BUILDER_USER_SELECTION = "activityPlanState.saBuilder.userSelection";
-        var STORAGE_SA_BUILDER_MAPPED_ITEMS = "activityPlanState.saBuilder.mappedItems";
-        var STORAGE_SA_BUILDER_CURRENT_INDEX = "activityPlanState.saBuilder.currentIndex";
-        var STORAGE_SA_BUILDER_RUNNING = "activityPlanState.saBuilder.running";
-        var STORAGE_SA_BUILDER_TIME_OFFSET = "activityPlanState.saBuilder.timeOffset";
-        var STORAGE_SA_BUILDER_SEGMENT_CHECKBOXES = "activityPlanState.saBuilder.segmentCheckboxes";
-        var SA_BUILDER_POPUP_REF = null;
-        var SA_BUILDER_PROGRESS_POPUP_REF = null;
-        var SA_BUILDER_CANCELLED = false;
-        var SA_BUILDER_PAUSE = false;
-        var SA_BUILDER_TARGET_URL = "https://cenexel.clinspark.com/secure/crfdesign/activityplans/show/";
-    
-        function SABuilderFunctions() {}
-    
-        // Normalize text for comparison: trim, collapse whitespace
-        function normalizeSAText(t) {
-            if (typeof t !== "string") return "";
-            return t.trim().replace(/\s+/g, " ");
-        }
-    
-        // Clear all SA Builder storage
-        function clearSABuilderStorage() {
-            try {
-                localStorage.removeItem(STORAGE_SA_BUILDER_EXISTING);
-                localStorage.removeItem(STORAGE_SA_BUILDER_SEGMENTS);
-                localStorage.removeItem(STORAGE_SA_BUILDER_STUDY_EVENTS);
-                localStorage.removeItem(STORAGE_SA_BUILDER_FORMS);
-                localStorage.removeItem(STORAGE_SA_BUILDER_USER_SELECTION);
-                localStorage.removeItem(STORAGE_SA_BUILDER_MAPPED_ITEMS);
-                localStorage.removeItem(STORAGE_SA_BUILDER_CURRENT_INDEX);
-                localStorage.removeItem(STORAGE_SA_BUILDER_RUNNING);
-                localStorage.removeItem(STORAGE_SA_BUILDER_TIME_OFFSET);
-                localStorage.removeItem(STORAGE_SA_BUILDER_SEGMENT_CHECKBOXES);
-            } catch (e) {}
-            log("SA Builder: storage cleared");
-        }
-    
-        // Check if user is on the correct page
-        function isOnSABuilderPage() {
-            var currentUrl = location.href;
-            return currentUrl.indexOf(SA_BUILDER_TARGET_URL) !== -1;
-        }
-    
-        // Scan existing table and collect items
-        function scanExistingSATable() {
-            var existing = [];
-            var tbody = document.getElementById("saTableBody");
-            if (!tbody) {
-                log("SA Builder: saTableBody not found");
-                return existing;
-            }
-            var rows = tbody.querySelectorAll("tr");
-            log("SA Builder: found " + rows.length + " rows in saTableBody");
-            for (var i = 0; i < rows.length; i++) {
-                var row = rows[i];
-                var cells = row.querySelectorAll("td");
-                if (cells.length >= 4) {
-                    var segment = normalizeSAText(cells[1].textContent);
-                    var studyEvent = normalizeSAText(cells[2].textContent);
-                    var form = normalizeSAText(cells[3].textContent);
-                    if (segment && studyEvent && form) {
-                        var key = segment + " - " + studyEvent + " - " + form;
-                        existing.push(key);
-                    }
-                }
-            }
-            log("SA Builder: collected " + existing.length + " existing items");
+
+    //==========================
+    // SCHEDULED ACTIVITIES BUILDER FEATURE
+    //==========================
+    // This section contains all functions related to the Scheduled Activities Builder.
+    // This feature automates adding scheduled activities by allowing users to select
+    // segments, study events, and forms, then automatically populating and submitting them.
+    //==========================
+
+    var STORAGE_SA_BUILDER_EXISTING = "activityPlanState.saBuilder.existing";
+    var STORAGE_SA_BUILDER_SEGMENTS = "activityPlanState.saBuilder.segments";
+    var STORAGE_SA_BUILDER_STUDY_EVENTS = "activityPlanState.saBuilder.studyEvents";
+    var STORAGE_SA_BUILDER_FORMS = "activityPlanState.saBuilder.forms";
+    var STORAGE_SA_BUILDER_USER_SELECTION = "activityPlanState.saBuilder.userSelection";
+    var STORAGE_SA_BUILDER_MAPPED_ITEMS = "activityPlanState.saBuilder.mappedItems";
+    var STORAGE_SA_BUILDER_CURRENT_INDEX = "activityPlanState.saBuilder.currentIndex";
+    var STORAGE_SA_BUILDER_RUNNING = "activityPlanState.saBuilder.running";
+    var STORAGE_SA_BUILDER_TIME_OFFSET = "activityPlanState.saBuilder.timeOffset";
+    var STORAGE_SA_BUILDER_SEGMENT_CHECKBOXES = "activityPlanState.saBuilder.segmentCheckboxes";
+    var SA_BUILDER_POPUP_REF = null;
+    var SA_BUILDER_PROGRESS_POPUP_REF = null;
+    var SA_BUILDER_CANCELLED = false;
+    var SA_BUILDER_PAUSE = false;
+    var SA_BUILDER_TARGET_URL = "https://cenexel.clinspark.com/secure/crfdesign/activityplans/show/";
+
+    function SABuilderFunctions() {}
+
+    // Normalize text for comparison: trim, collapse whitespace
+    function normalizeSAText(t) {
+        if (typeof t !== "string") return "";
+        return t.trim().replace(/\s+/g, " ");
+    }
+
+    // Clear all SA Builder storage
+    function clearSABuilderStorage() {
+        try {
+            localStorage.removeItem(STORAGE_SA_BUILDER_EXISTING);
+            localStorage.removeItem(STORAGE_SA_BUILDER_SEGMENTS);
+            localStorage.removeItem(STORAGE_SA_BUILDER_STUDY_EVENTS);
+            localStorage.removeItem(STORAGE_SA_BUILDER_FORMS);
+            localStorage.removeItem(STORAGE_SA_BUILDER_USER_SELECTION);
+            localStorage.removeItem(STORAGE_SA_BUILDER_MAPPED_ITEMS);
+            localStorage.removeItem(STORAGE_SA_BUILDER_CURRENT_INDEX);
+            localStorage.removeItem(STORAGE_SA_BUILDER_RUNNING);
+            localStorage.removeItem(STORAGE_SA_BUILDER_TIME_OFFSET);
+            localStorage.removeItem(STORAGE_SA_BUILDER_SEGMENT_CHECKBOXES);
+        } catch (e) {}
+        log("SA Builder: storage cleared");
+    }
+
+    // Check if user is on the correct page
+    function isOnSABuilderPage() {
+        var currentUrl = location.href;
+        return currentUrl.indexOf(SA_BUILDER_TARGET_URL) !== -1;
+    }
+
+    // Scan existing table and collect items
+    function scanExistingSATable() {
+        var existing = [];
+        var tbody = document.getElementById("saTableBody");
+        if (!tbody) {
+            log("SA Builder: saTableBody not found");
             return existing;
         }
-    
-        // Check if Add button is disabled
-        function isAddSaButtonDisabled() {
-            var btn = document.getElementById("addSaButton");
-            if (!btn) {
-                log("SA Builder: addSaButton not found");
-                return true;
+        var rows = tbody.querySelectorAll("tr");
+        log("SA Builder: found " + rows.length + " rows in saTableBody");
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var cells = row.querySelectorAll("td");
+            if (cells.length >= 4) {
+                var segment = normalizeSAText(cells[1].textContent);
+                var studyEvent = normalizeSAText(cells[2].textContent);
+                var form = normalizeSAText(cells[3].textContent);
+                if (segment && studyEvent && form) {
+                    var key = segment + " - " + studyEvent + " - " + form;
+                    existing.push(key);
+                }
             }
-            return btn.hasAttribute("disabled");
         }
-    
-        // Click the Add button
-        function clickAddSaButton() {
-            var btn = document.getElementById("addSaButton");
-            if (!btn) {
-                log("SA Builder: addSaButton not found for click");
-                return false;
-            }
-            btn.click();
-            log("SA Builder: Add button clicked");
+        log("SA Builder: collected " + existing.length + " existing items");
+        return existing;
+    }
+
+    // Check if Add button is disabled
+    function isAddSaButtonDisabled() {
+        var btn = document.getElementById("addSaButton");
+        if (!btn) {
+            log("SA Builder: addSaButton not found");
             return true;
         }
-    
-        // Wait for modal to appear and be ready
-        async function waitForSAModal(timeoutMs) {
-            var start = Date.now();
-            var maxTime = timeoutMs || 10000;
-            while (Date.now() - start < maxTime) {
-                var modal = document.getElementById("ajaxModal");
-                if (modal && modal.classList.contains("in")) {
-                    var modalBody = modal.querySelector("#modalbody, .modal-body");
-                    if (modalBody) {
-                        await sleep(500);
-                        return modal;
-                    }
-                }
-                await sleep(300);
-            }
-            return null;
-        }
-    
-        // Wait for modal to close
-        async function waitForSAModalClose(timeoutMs) {
-            var start = Date.now();
-            var maxTime = timeoutMs || 10000;
-            while (Date.now() - start < maxTime) {
-                var modal = document.getElementById("ajaxModal");
-                if (!modal || !modal.classList.contains("in")) {
-                    return true;
-                }
-                await sleep(300);
-            }
+        return btn.hasAttribute("disabled");
+    }
+
+    // Click the Add button
+    function clickAddSaButton() {
+        var btn = document.getElementById("addSaButton");
+        if (!btn) {
+            log("SA Builder: addSaButton not found for click");
             return false;
         }
-    
-        // Click Select2 field to open dropdown and force options to load
-        async function openSelect2Dropdown(containerId) {
-            var container = document.getElementById(containerId);
-            if (!container) return false;
-            var choice = container.querySelector(".select2-choice");
-            if (choice) {
-                choice.click();
-                await sleep(300);
+        btn.click();
+        log("SA Builder: Add button clicked");
+        return true;
+    }
+
+    // Wait for modal to appear and be ready
+    async function waitForSAModal(timeoutMs) {
+        var start = Date.now();
+        var maxTime = timeoutMs || 10000;
+        while (Date.now() - start < maxTime) {
+            var modal = document.getElementById("ajaxModal");
+            if (modal && modal.classList.contains("in")) {
+                var modalBody = modal.querySelector("#modalbody, .modal-body");
+                if (modalBody) {
+                    await sleep(500);
+                    return modal;
+                }
+            }
+            await sleep(300);
+        }
+        return null;
+    }
+
+    // Wait for modal to close
+    async function waitForSAModalClose(timeoutMs) {
+        var start = Date.now();
+        var maxTime = timeoutMs || 10000;
+        while (Date.now() - start < maxTime) {
+            var modal = document.getElementById("ajaxModal");
+            if (!modal || !modal.classList.contains("in")) {
                 return true;
             }
-            return false;
-        }
-    
-        // Close Select2 dropdown
-        async function closeSelect2Dropdown() {
-            var active = document.querySelector(".select2-drop-active");
-            if (active) {
-                var body = document.body;
-                body.click();
-                await sleep(200);
-            }
-        }
-    
-        // Collect options from a select element
-        function collectSelectOptions(selectId) {
-            var select = document.getElementById(selectId);
-            if (!select) return [];
-            var options = [];
-            var opts = select.querySelectorAll("option");
-            for (var i = 0; i < opts.length; i++) {
-                var opt = opts[i];
-                var val = (opt.value || "").trim();
-                var txt = normalizeSAText(opt.textContent);
-                if (val && txt) {
-                    options.push({ value: val, text: txt });
-                }
-            }
-            return options;
-        }
-    
-        // Collect all dropdown data from the Add SA modal
-        async function collectModalDropdownData() {
-            log("SA Builder: collecting dropdown data from modal");
-    
-            // Collect segments
-            await openSelect2Dropdown("s2id_segment");
             await sleep(300);
-            await closeSelect2Dropdown();
-            var segments = collectSelectOptions("segment");
-            log("SA Builder: collected " + segments.length + " segments");
-    
-            // Collect study events
-            await openSelect2Dropdown("s2id_studyEvent");
-            await sleep(300);
-            await closeSelect2Dropdown();
-            var studyEvents = collectSelectOptions("studyEvent");
-            log("SA Builder: collected " + studyEvents.length + " study events");
-    
-            // Collect forms
-            await openSelect2Dropdown("s2id_form");
-            await sleep(300);
-            await closeSelect2Dropdown();
-            var forms = collectSelectOptions("form");
-            log("SA Builder: collected " + forms.length + " forms");
-    
-            return {
-                segments: segments,
-                studyEvents: studyEvents,
-                forms: forms
-            };
         }
-    
-        async function selectSelect2Value(selectId, value) {
-            if (SA_BUILDER_CANCELLED) {
-                log("SA Builder: cancelled during selectSelect2Value");
-                return false;
-            }
-    
-            var select = document.getElementById(selectId);
-            if (!select) {
-                log("SA Builder: select element " + selectId + " not found");
-                return false;
-            }
-    
-            // Set the value directly
-            select.value = value;
-    
-            // Trigger change event
-            var evt = new Event("change", { bubbles: true });
-            select.dispatchEvent(evt);
-    
-            // Also try to update Select2
-            try {
-                if (window.jQuery && window.jQuery.fn.select2) {
-                    window.jQuery("#" + selectId).trigger("change");
-                }
-            } catch (e) {}
-    
+        return false;
+    }
+
+    // Click Select2 field to open dropdown and force options to load
+    async function openSelect2Dropdown(containerId) {
+        var container = document.getElementById(containerId);
+        if (!container) return false;
+        var choice = container.querySelector(".select2-choice");
+        if (choice) {
+            choice.click();
             await sleep(300);
-            
-            if (SA_BUILDER_CANCELLED) {
-                log("SA Builder: cancelled after selectSelect2Value sleep");
-                return false;
-            }
-            
-            log("SA Builder: selected value " + value + " in " + selectId);
             return true;
         }
-    
-        // Create the selection GUI popup
-        function createSABuilderSelectionGUI(segments, studyEvents, forms) {
-            var container = document.createElement("div");
-            container.style.display = "flex";
-            container.style.flexDirection = "column";
-            container.style.gap = "16px";
-            container.style.height = "100%";
-            container.style.minHeight = "500px";
-    
-            // Search bars row
-            var searchRow = document.createElement("div");
-            searchRow.style.display = "grid";
-            searchRow.style.gridTemplateColumns = "1fr 1fr 1fr 200px";
-            searchRow.style.gap = "8px";
-    
-            var segmentSearch = document.createElement("input");
-            segmentSearch.type = "text";
-            segmentSearch.placeholder = "Search Segments...";
-            segmentSearch.style.cssText = "padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;";
-    
-            var eventSearch = document.createElement("input");
-            eventSearch.type = "text";
-            eventSearch.placeholder = "Search Study Events...";
-            eventSearch.style.cssText = "padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;";
-    
-            var formSearch = document.createElement("input");
-            formSearch.type = "text";
-            formSearch.placeholder = "Search Forms...";
-            formSearch.style.cssText = "padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;";
-    
-            var timeLabel = document.createElement("div");
-            timeLabel.textContent = "Time Relative to Segment";
-            timeLabel.style.cssText = "padding:8px;font-weight:600;text-align:center;";
-    
-            searchRow.appendChild(segmentSearch);
-            searchRow.appendChild(eventSearch);
-            searchRow.appendChild(formSearch);
-            searchRow.appendChild(timeLabel);
-            container.appendChild(searchRow);
-    
-            // Main content row
-            var contentRow = document.createElement("div");
-            contentRow.style.display = "grid";
-            contentRow.style.gridTemplateColumns = "1fr 1fr 1fr 200px";
-            contentRow.style.gap = "8px";
-            contentRow.style.flex = "1";
-            contentRow.style.overflow = "hidden";
-    
-            // Segments column (with checkboxes and dropzones)
-            var segmentColumnWrapper = document.createElement("div");
-            segmentColumnWrapper.style.cssText = "display:flex;flex-direction:column;border:1px solid #333;border-radius:4px;background:#1a1a1a;height:100%;overflow:hidden;";
+        return false;
+    }
+
+    // Close Select2 dropdown
+    async function closeSelect2Dropdown() {
+        var active = document.querySelector(".select2-drop-active");
+        if (active) {
+            var body = document.body;
+            body.click();
+            await sleep(200);
+        }
+    }
+
+    // Collect options from a select element
+    function collectSelectOptions(selectId) {
+        var select = document.getElementById(selectId);
+        if (!select) return [];
+        var options = [];
+        var opts = select.querySelectorAll("option");
+        for (var i = 0; i < opts.length; i++) {
+            var opt = opts[i];
+            var val = (opt.value || "").trim();
+            var txt = normalizeSAText(opt.textContent);
+            if (val && txt) {
+                options.push({ value: val, text: txt });
+            }
+        }
+        return options;
+    }
+
+    // Collect all dropdown data from the Add SA modal
+    async function collectModalDropdownData() {
+        log("SA Builder: collecting dropdown data from modal");
+
+        // Collect segments
+        await openSelect2Dropdown("s2id_segment");
+        await sleep(300);
+        await closeSelect2Dropdown();
+        var segments = collectSelectOptions("segment");
+        log("SA Builder: collected " + segments.length + " segments");
+
+        // Collect study events
+        await openSelect2Dropdown("s2id_studyEvent");
+        await sleep(300);
+        await closeSelect2Dropdown();
+        var studyEvents = collectSelectOptions("studyEvent");
+        log("SA Builder: collected " + studyEvents.length + " study events");
+
+        // Collect forms
+        await openSelect2Dropdown("s2id_form");
+        await sleep(300);
+        await closeSelect2Dropdown();
+        var forms = collectSelectOptions("form");
+        log("SA Builder: collected " + forms.length + " forms");
+
+        return {
+            segments: segments,
+            studyEvents: studyEvents,
+            forms: forms
+        };
+    }
+
+    async function selectSelect2Value(selectId, value) {
+        if (SA_BUILDER_CANCELLED) {
+            log("SA Builder: cancelled during selectSelect2Value");
+            return false;
+        }
+
+        var select = document.getElementById(selectId);
+        if (!select) {
+            log("SA Builder: select element " + selectId + " not found");
+            return false;
+        }
+
+        // Set the value directly
+        select.value = value;
+
+        // Trigger change event
+        var evt = new Event("change", { bubbles: true });
+        select.dispatchEvent(evt);
+
+        // Also try to update Select2
+        try {
+            if (window.jQuery && window.jQuery.fn.select2) {
+                window.jQuery("#" + selectId).trigger("change");
+            }
+        } catch (e) {}
+
+        await sleep(300);
+        
+        if (SA_BUILDER_CANCELLED) {
+            log("SA Builder: cancelled after selectSelect2Value sleep");
+            return false;
+        }
+        
+        log("SA Builder: selected value " + value + " in " + selectId);
+        return true;
+    }
+
+    // Create the selection GUI popup
+    function createSABuilderSelectionGUI(segments, studyEvents, forms) {
+        var container = document.createElement("div");
+        container.style.display = "flex";
+        container.style.flexDirection = "column";
+        container.style.gap = "16px";
+        container.style.height = "100%";
+        container.style.minHeight = "500px";
+
+        // Search bars row
+        var searchRow = document.createElement("div");
+        searchRow.style.display = "grid";
+        searchRow.style.gridTemplateColumns = "1fr 1fr 1fr 200px";
+        searchRow.style.gap = "8px";
+
+        var segmentSearch = document.createElement("input");
+        segmentSearch.type = "text";
+        segmentSearch.placeholder = "Search Segments...";
+        segmentSearch.style.cssText = "padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;";
+
+        var eventSearch = document.createElement("input");
+        eventSearch.type = "text";
+        eventSearch.placeholder = "Search Study Events...";
+        eventSearch.style.cssText = "padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;";
+
+        var formSearch = document.createElement("input");
+        formSearch.type = "text";
+        formSearch.placeholder = "Search Forms...";
+        formSearch.style.cssText = "padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;";
+
+        var timeLabel = document.createElement("div");
+        timeLabel.textContent = "Time Relative to Segment";
+        timeLabel.style.cssText = "padding:8px;font-weight:600;text-align:center;";
+
+        searchRow.appendChild(segmentSearch);
+        searchRow.appendChild(eventSearch);
+        searchRow.appendChild(formSearch);
+        searchRow.appendChild(timeLabel);
+        container.appendChild(searchRow);
+
+        // Main content row
+        var contentRow = document.createElement("div");
+        contentRow.style.display = "grid";
+        contentRow.style.gridTemplateColumns = "1fr 1fr 1fr 200px";
+        contentRow.style.gap = "8px";
+        contentRow.style.flex = "1";
+        contentRow.style.overflow = "hidden";
+
+        // Segments column (with checkboxes and dropzones)
+        var segmentColumnWrapper = document.createElement("div");
+        segmentColumnWrapper.style.cssText = "display:flex;flex-direction:column;border:1px solid #333;border-radius:4px;background:#1a1a1a;height:100%;overflow:hidden;";
+        
+        // Select All header for segments
+        var segmentHeader = document.createElement("div");
+        segmentHeader.style.cssText = "display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid #333;background:#222;";
+        
+        var selectAllCheckbox = document.createElement("input");
+        selectAllCheckbox.type = "checkbox";
+        selectAllCheckbox.id = "saBuilderSelectAllSegments";
+        selectAllCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;";
+        
+        var selectAllLabel = document.createElement("span");
+        selectAllLabel.textContent = "Select All";
+        selectAllLabel.style.cssText = "font-weight:600;font-size:13px;";
+        
+        segmentHeader.appendChild(selectAllCheckbox);
+        segmentHeader.appendChild(selectAllLabel);
+        
+        var segmentColumn = document.createElement("div");
+        segmentColumn.style.cssText = "overflow-y:auto;padding:8px;flex:1;";
+        segmentColumn.id = "saBuilderSegments";
+        
+        segmentColumnWrapper.appendChild(segmentHeader);
+        segmentColumnWrapper.appendChild(segmentColumn);
+
+        // Study Events column (draggable items)
+        var eventColumn = document.createElement("div");
+        eventColumn.style.cssText = "overflow-y:auto;border:1px solid #444;border-radius:6px;padding:10px;background:#1e1e1e;box-shadow:inset 0 1px 3px rgba(0,0,0,0.3);";
+        eventColumn.id = "saBuilderEvents";
+
+        // Make Study Events column a drop zone for restoring events
+        eventColumn.addEventListener("dragover", function(e) {
+            e.preventDefault();
+            this.style.background = "#252525";
+            this.style.border = "2px dashed #007bff";
+            this.style.transition = "all 0.2s ease";
+        });
+
+        eventColumn.addEventListener("dragleave", function(e) {
+            e.preventDefault();
+            this.style.background = "#1e1e1e";
+            this.style.border = "1px solid #444";
+            this.style.transition = "all 0.2s ease";
+        });
+
+        eventColumn.addEventListener("drop", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            this.style.background = "#1e1e1e";
+            this.style.border = "1px solid #444";
+            this.style.transition = "all 0.2s ease";
             
-            // Select All header for segments
-            var segmentHeader = document.createElement("div");
-            segmentHeader.style.cssText = "display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid #333;background:#222;";
-            
-            var selectAllCheckbox = document.createElement("input");
-            selectAllCheckbox.type = "checkbox";
-            selectAllCheckbox.id = "saBuilderSelectAllSegments";
-            selectAllCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;";
-            
-            var selectAllLabel = document.createElement("span");
-            selectAllLabel.textContent = "Select All";
-            selectAllLabel.style.cssText = "font-weight:600;font-size:13px;";
-            
-            segmentHeader.appendChild(selectAllCheckbox);
-            segmentHeader.appendChild(selectAllLabel);
-            
-            var segmentColumn = document.createElement("div");
-            segmentColumn.style.cssText = "overflow-y:auto;padding:8px;flex:1;";
-            segmentColumn.id = "saBuilderSegments";
-            
-            segmentColumnWrapper.appendChild(segmentHeader);
-            segmentColumnWrapper.appendChild(segmentColumn);
-    
-            // Study Events column (draggable items)
-            var eventColumn = document.createElement("div");
-            eventColumn.style.cssText = "overflow-y:auto;border:1px solid #333;border-radius:4px;padding:8px;background:#1a1a1a;";
-            eventColumn.id = "saBuilderEvents";
-    
-            // Forms column (checkboxes)
-            var formColumn = document.createElement("div");
-            formColumn.style.cssText = "overflow-y:auto;border:1px solid #333;border-radius:4px;padding:8px;background:#1a1a1a;";
-            formColumn.id = "saBuilderForms";
-    
-            // Time inputs column
-            var timeColumn = document.createElement("div");
-            timeColumn.style.cssText = "display:flex;flex-direction:column;gap:12px;padding:8px;border:1px solid #333;border-radius:4px;background:#1a1a1a;";
-            timeColumn.id = "saBuilderTime";
-    
-            // Track segment-event assignments
-            var segmentEventMap = {};
-            
-            // Track segment checkbox states separately to prevent resets
-            var segmentCheckboxStates = {};
-            
-            // Load saved checkbox states
-            try {
-                var savedStates = localStorage.getItem(STORAGE_SA_BUILDER_SEGMENT_CHECKBOXES);
-                if (savedStates) {
-                    segmentCheckboxStates = JSON.parse(savedStates);
-                }
-            } catch (e) {}
-    
-            // Populate segments
-            function renderSegments(filter) {
-                segmentColumn.innerHTML = "";
-                var filterLower = (filter || "").toLowerCase();
-                for (var i = 0; i < segments.length; i++) {
-                    var seg = segments[i];
-                    if (filterLower && seg.text.toLowerCase().indexOf(filterLower) === -1) continue;
-    
-                    var segItem = document.createElement("div");
-                    segItem.style.cssText = "margin-bottom:8px;padding:8px;border:1px solid #444;border-radius:4px;background:#222;";
-                    segItem.dataset.segmentValue = seg.value;
-                    segItem.dataset.segmentText = seg.text;
-    
-                    var checkRow = document.createElement("div");
-                    checkRow.style.cssText = "display:flex;align-items:center;gap:8px;";
-    
-                    var checkbox = document.createElement("input");
-                    checkbox.type = "checkbox";
-                    checkbox.dataset.segmentValue = seg.value;
-                    checkbox.style.cssText = "width:18px;height:18px;cursor:pointer;";
-                    
-                    // Restore checkbox state from saved states
-                    if (segmentCheckboxStates[seg.value]) {
-                        checkbox.checked = true;
-                    }
-                    
-                    // Save checkbox state when changed
-                    checkbox.addEventListener("change", function() {
-                        segmentCheckboxStates[this.dataset.segmentValue] = this.checked;
-                        try {
-                            localStorage.setItem(STORAGE_SA_BUILDER_SEGMENT_CHECKBOXES, JSON.stringify(segmentCheckboxStates));
-                        } catch (e) {}
-                        updateSelectAllCheckbox();
-                    });
-    
-                    var label = document.createElement("span");
-                    label.textContent = seg.text;
-                    label.style.cssText = "font-weight:500;";
-    
-                    checkRow.appendChild(checkbox);
-                    checkRow.appendChild(label);
-                    segItem.appendChild(checkRow);
-    
-                    // Dropzone for study events
-                    var dropzone = document.createElement("div");
-                    dropzone.style.cssText = "min-height:30px;margin-top:8px;padding:4px;border:1px dashed #555;border-radius:4px;background:#1a1a1a;";
-                    dropzone.dataset.segmentValue = seg.value;
-                    dropzone.className = "sa-segment-dropzone";
-    
-                    // Initialize the map
-                    if (!segmentEventMap[seg.value]) {
-                        segmentEventMap[seg.value] = [];
-                    }
-    
-                    // Render existing attached events
-                    function renderAttachedEvents(dz, segVal) {
-                        dz.innerHTML = "";
-                        var events = segmentEventMap[segVal] || [];
-                        if (events.length === 0) {
-                            var placeholder = document.createElement("div");
-                            placeholder.textContent = "Drop study events here";
-                            placeholder.style.cssText = "color:#666;font-size:12px;text-align:center;padding:8px;";
-                            dz.appendChild(placeholder);
-                        } else {
-                            for (var j = 0; j < events.length; j++) {
-                                var ev = events[j];
-                                var evItem = document.createElement("div");
-                                evItem.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:4px 8px;margin:2px 0;background:#333;border-radius:3px;font-size:12px;";
-                                evItem.dataset.eventValue = ev.value;
-                                evItem.dataset.eventText = ev.text;
-                                evItem.draggable = true;
-    
-                                var evLabel = document.createElement("span");
-                                evLabel.textContent = ev.text;
-                                evLabel.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
-    
-                                var removeBtn = document.createElement("button");
-                                removeBtn.textContent = "×";
-                                removeBtn.style.cssText = "background:transparent;border:none;color:#f66;cursor:pointer;font-size:16px;padding:0 4px;";
-                                removeBtn.addEventListener("click", (function(segV, evV) {
-                                    return function(e) {
-                                        e.stopPropagation();
-                                        var arr = segmentEventMap[segV] || [];
-                                        segmentEventMap[segV] = arr.filter(function(x) { return x.value !== evV; });
-                                        renderSegments(segmentSearch.value);
-                                    };
-                                })(segVal, ev.value));
-    
-                                evItem.appendChild(evLabel);
-                                evItem.appendChild(removeBtn);
-    
-                                // Make attached events re-draggable
-                                evItem.addEventListener("dragstart", (function(evData, segV) {
-                                    return function(e) {
-                                        e.dataTransfer.setData("text/plain", JSON.stringify({ value: evData.value, text: evData.text, fromSegment: segV }));
-                                        e.dataTransfer.effectAllowed = "move";
-                                    };
-                                })(ev, segVal));
-    
-                                dz.appendChild(evItem);
-                            }
+            var eventData = e.dataTransfer.getData("text/plain");
+            if (eventData) {
+                var data = JSON.parse(eventData);
+                if (data.fromSegment) {
+                    // Remove from segment
+                    if (data.segmentValue && segmentEventMap[data.segmentValue]) {
+                        var events = segmentEventMap[data.segmentValue];
+                        var index = events.findIndex(function(ev) {
+                            return ev.value === data.value;
+                        });
+                        if (index > -1) {
+                            events.splice(index, 1);
+                            segmentEventMap[data.segmentValue] = events;
+                            // Refresh the segment
+                            renderSegments(segmentSearch.value);
                         }
                     }
-    
-                    renderAttachedEvents(dropzone, seg.value);
-    
-                    // Handle dragover
-                    dropzone.addEventListener("dragover", function(e) {
-                        e.preventDefault();
-                        e.dataTransfer.dropEffect = "copy";
-                        this.style.background = "#2a2a4a";
-                    });
-    
-                    dropzone.addEventListener("dragleave", function(e) {
-                        this.style.background = "#1a1a1a";
-                    });
-    
-                    // Handle drop
-                    dropzone.addEventListener("drop", (function(segVal) {
-                        return function(e) {
-                            e.preventDefault();
-                            this.style.background = "#1a1a1a";
-                            try {
-                                var data = JSON.parse(e.dataTransfer.getData("text/plain"));
-                                if (data && data.value && data.text) {
-                                    // Remove from old segment if exists
-                                    if (data.fromSegment && segmentEventMap[data.fromSegment]) {
-                                        segmentEventMap[data.fromSegment] = segmentEventMap[data.fromSegment].filter(function(x) {
-                                            return x.value !== data.value;
-                                        });
-                                    }
-                                    // Check for duplicate in this segment
-                                    var existing = (segmentEventMap[segVal] || []).find(function(x) { return x.value === data.value; });
-                                    if (!existing) {
-                                        if (!segmentEventMap[segVal]) segmentEventMap[segVal] = [];
-                                        segmentEventMap[segVal].push({ value: data.value, text: data.text });
-                                    }
-                                    renderSegments(segmentSearch.value);
-                                }
-                            } catch (err) {
-                                log("SA Builder: drop error " + err);
-                            }
-                        };
-                    })(seg.value));
-    
-                    segItem.appendChild(dropzone);
-                    segmentColumn.appendChild(segItem);
+                    // Restore to column
+                    restoreEventToStudyEventsColumn(data);
+                    log("SA Builder: Event '" + data.text + "' moved back to Study Events column");
                 }
             }
-    
-            // Populate study events (draggable)
-            function renderStudyEvents(filter) {
-                eventColumn.innerHTML = "";
-                var filterLower = (filter || "").toLowerCase();
-                for (var i = 0; i < studyEvents.length; i++) {
-                    var ev = studyEvents[i];
-                    if (filterLower && ev.text.toLowerCase().indexOf(filterLower) === -1) continue;
-    
-                    var evItem = document.createElement("div");
-                    evItem.style.cssText = "padding:8px;margin-bottom:4px;border:1px solid #444;border-radius:4px;background:#222;cursor:grab;";
-                    evItem.textContent = ev.text;
-                    evItem.draggable = true;
-                    evItem.dataset.eventValue = ev.value;
-                    evItem.dataset.eventText = ev.text;
-    
-                    evItem.addEventListener("dragstart", function(e) {
-                        e.dataTransfer.setData("text/plain", JSON.stringify({ value: this.dataset.eventValue, text: this.dataset.eventText }));
-                        e.dataTransfer.effectAllowed = "copy";
-                        this.style.opacity = "0.5";
-                    });
-    
-                    evItem.addEventListener("dragend", function(e) {
-                        this.style.opacity = "1";
-                    });
-    
-                    eventColumn.appendChild(evItem);
-                }
+        });
+
+        // Forms column (checkboxes)
+        var formColumn = document.createElement("div");
+        formColumn.style.cssText = "overflow-y:auto;border:1px solid #333;border-radius:4px;padding:8px;background:#1a1a1a;";
+        formColumn.id = "saBuilderForms";
+
+        // Time inputs column
+        var timeColumn = document.createElement("div");
+        timeColumn.style.cssText = "display:flex;flex-direction:column;gap:12px;padding:8px;border:1px solid #333;border-radius:4px;background:#1a1a1a;height:100%;overflow-y:auto;overflow-x:hidden;";
+        timeColumn.id = "saBuilderTime";
+
+        // Track segment-event assignments
+        var segmentEventMap = {};
+        
+        // Track segment checkbox states separately to prevent resets
+        var segmentCheckboxStates = {};
+        
+        // Load saved checkbox states
+        try {
+            var savedStates = localStorage.getItem(STORAGE_SA_BUILDER_SEGMENT_CHECKBOXES);
+            if (savedStates) {
+                segmentCheckboxStates = JSON.parse(savedStates);
             }
-    
-            // Populate forms (checkboxes)
-            function renderForms(filter) {
-                formColumn.innerHTML = "";
-                var filterLower = (filter || "").toLowerCase();
-                for (var i = 0; i < forms.length; i++) {
-                    var frm = forms[i];
-                    if (filterLower && frm.text.toLowerCase().indexOf(filterLower) === -1) continue;
-    
-                    var frmItem = document.createElement("div");
-                    frmItem.style.cssText = "display:flex;align-items:flex-start;gap:8px;padding:6px;margin-bottom:4px;border:1px solid #444;border-radius:4px;background:#222;";
-    
-                    var checkbox = document.createElement("input");
-                    checkbox.type = "checkbox";
-                    checkbox.dataset.formValue = frm.value;
-                    checkbox.dataset.formText = frm.text;
-                    checkbox.style.cssText = "width:18px;height:18px;cursor:pointer;flex-shrink:0;margin-top:2px;accent-color:#007bff;";
-    
-                    var label = document.createElement("span");
-                    label.textContent = frm.text;
-                    label.style.cssText = "font-size:13px;word-break:break-word;";
-    
-                    frmItem.appendChild(checkbox);
-                    frmItem.appendChild(label);
-                    formColumn.appendChild(frmItem);
-                }
-            }
-    
-            // Create time inputs
-            function createTimeInput(labelText, id, max) {
-                var row = document.createElement("div");
-                row.style.cssText = "display:flex;flex-direction:column;gap:4px;";
-    
-                var lbl = document.createElement("label");
-                lbl.textContent = labelText;
-                lbl.style.cssText = "font-size:12px;color:#aaa;";
-    
-                var input = document.createElement("input");
-                input.type = "number";
-                input.id = id;
-                input.min = "0";
-                input.max = String(max);
-                input.value = "0";
-                input.style.cssText = "padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;width:100%;";
-    
-                row.appendChild(lbl);
-                row.appendChild(input);
-                return row;
-            }
-    
-            timeColumn.appendChild(createTimeInput("Days", "saBuilderDays", 200));
-            timeColumn.appendChild(createTimeInput("Hours", "saBuilderHours", 23));
-            timeColumn.appendChild(createTimeInput("Minutes", "saBuilderMinutes", 59));
-            timeColumn.appendChild(createTimeInput("Seconds", "saBuilderSeconds", 59));
-    
-            // Hidden checkbox row
-            var hiddenRow = document.createElement("div");
-            hiddenRow.style.cssText = "display:flex;align-items:center;gap:8px;padding-top:12px;margin-top:12px;border-top:1px solid #444;";
+        } catch (e) {}
 
-            var hiddenCheckbox = document.createElement("input");
-            hiddenCheckbox.type = "checkbox";
-            hiddenCheckbox.id = "saBuilderHidden";
-            hiddenCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;accent-color:#007bff;";
-
-            var hiddenLabel = document.createElement("label");
-            hiddenLabel.textContent = "Hidden?";
-            hiddenLabel.setAttribute("for", "saBuilderHidden");
-            hiddenLabel.style.cssText = "font-size:13px;font-weight:600;cursor:pointer;";
-
-            hiddenRow.appendChild(hiddenCheckbox);
-            hiddenRow.appendChild(hiddenLabel);
-            timeColumn.appendChild(hiddenRow);
-
-            // Initial render
-            renderSegments("");
-            renderStudyEvents("");
-            renderForms("");
-    
-            // Restore saved time offset values
-            try {
-                var savedTimeOffset = localStorage.getItem(STORAGE_SA_BUILDER_TIME_OFFSET);
-                if (savedTimeOffset) {
-                    var timeData = JSON.parse(savedTimeOffset);
-                    if (timeData.days !== undefined) document.getElementById("saBuilderDays").value = timeData.days;
-                    if (timeData.hours !== undefined) document.getElementById("saBuilderHours").value = timeData.hours;
-                    if (timeData.minutes !== undefined) document.getElementById("saBuilderMinutes").value = timeData.minutes;
-                    if (timeData.seconds !== undefined) document.getElementById("saBuilderSeconds").value = timeData.seconds;
-                }
-            } catch (e) {}
-    
-            // Select All checkbox handler
-            function updateSelectAllCheckbox() {
-                var allChecked = true;
-                for (var i = 0; i < segments.length; i++) {
-                    if (!segmentCheckboxStates[segments[i].value]) {
-                        allChecked = false;
-                        break;
-                    }
-                }
-                selectAllCheckbox.checked = allChecked;
-            }
-    
-            selectAllCheckbox.addEventListener("change", function() {
-                var isChecked = this.checked;
-                for (var i = 0; i < segments.length; i++) {
-                    segmentCheckboxStates[segments[i].value] = isChecked;
-                }
-                try {
-                    localStorage.setItem(STORAGE_SA_BUILDER_SEGMENT_CHECKBOXES, JSON.stringify(segmentCheckboxStates));
-                } catch (e) {}
-                renderSegments(segmentSearch.value);
-            });
-    
-            // Initialize Select All checkbox state
-            updateSelectAllCheckbox();
-    
-            // Search handlers
-            segmentSearch.addEventListener("input", function() { renderSegments(this.value); });
-            eventSearch.addEventListener("input", function() { renderStudyEvents(this.value); });
-            formSearch.addEventListener("input", function() { renderForms(this.value); });
-    
-            contentRow.appendChild(segmentColumnWrapper);
-            contentRow.appendChild(eventColumn);
-            contentRow.appendChild(formColumn);
-            contentRow.appendChild(timeColumn);
-            container.appendChild(contentRow);
-    
-            // Confirm button row
-            var buttonRow = document.createElement("div");
-            buttonRow.style.cssText = "display:flex;justify-content:flex-end;gap:12px;padding-top:12px;border-top:1px solid #333;";
-    
-            var confirmBtn = document.createElement("button");
-            confirmBtn.textContent = "Confirm";
-            confirmBtn.style.cssText = "padding:10px 24px;border-radius:6px;border:none;background:#28a745;color:#fff;font-weight:600;cursor:pointer;";
-            confirmBtn.addEventListener("mouseenter", function() { this.style.background = "#218838"; });
-            confirmBtn.addEventListener("mouseleave", function() { this.style.background = "#28a745"; });
-    
-            confirmBtn.addEventListener("click", function() {
-                // Collect selected segments and their events
-                var selectedSegments = [];
-                var segmentCheckboxes = segmentColumn.querySelectorAll("input[type='checkbox']:checked");
-                for (var i = 0; i < segmentCheckboxes.length; i++) {
-                    var cb = segmentCheckboxes[i];
-                    var segVal = cb.dataset.segmentValue;
-                    var segText = cb.closest("[data-segment-text]");
-                    var segName = segText ? segText.dataset.segmentText : "";
-                    var events = segmentEventMap[segVal] || [];
-                    if (events.length > 0) {
-                        selectedSegments.push({ value: segVal, text: segName, events: events });
-                    }
-                }
-    
-                // Collect selected forms
-                var selectedForms = [];
-                var formCheckboxes = formColumn.querySelectorAll("input[type='checkbox']:checked");
-                for (var j = 0; j < formCheckboxes.length; j++) {
-                    var fcb = formCheckboxes[j];
-                    selectedForms.push({ value: fcb.dataset.formValue, text: fcb.dataset.formText });
-                }
-    
-                // Validate
-                if (selectedSegments.length === 0) {
-                    alert("Please check at least one segment that has study events attached.");
-                    return;
-                }
-                if (selectedForms.length === 0) {
-                    alert("Please select at least one form.");
-                    return;
-                }
-    
-                // Get time offset
-                var timeOffset = {
-                    days: parseInt(document.getElementById("saBuilderDays").value) || 0,
-                    hours: parseInt(document.getElementById("saBuilderHours").value) || 0,
-                    minutes: parseInt(document.getElementById("saBuilderMinutes").value) || 0,
-                    seconds: parseInt(document.getElementById("saBuilderSeconds").value) || 0
-                };
-    
-                log("SA Builder: Time offset - Days: " + timeOffset.days + ", Hours: " + timeOffset.hours + ", Minutes: " + timeOffset.minutes + ", Seconds: " + timeOffset.seconds);
-                    
-                var hiddenChecked = document.getElementById("saBuilderHidden").checked;
-
-                var userSelection = {
-                    segments: selectedSegments,
-                    forms: selectedForms,
-                    timeOffset: timeOffset,
-                    hidden: hiddenChecked
-                };
-    
-                try {
-                    localStorage.setItem(STORAGE_SA_BUILDER_USER_SELECTION, JSON.stringify(userSelection));
-                    localStorage.setItem(STORAGE_SA_BUILDER_TIME_OFFSET, JSON.stringify(timeOffset));
-                } catch (e) {}
-    
-                // Close selection popup and start adding
-                if (SA_BUILDER_POPUP_REF) {
-                    SA_BUILDER_POPUP_REF.close();
-                    SA_BUILDER_POPUP_REF = null;
-                }
-                if (SA_BUILDER_CANCELLED) {
-                    log("SA Builder: cancelled");
-                    return;
-                }
-                // Start the adding process
-                startSABuilderAddProcess(userSelection);
-            });
-    
-            buttonRow.appendChild(confirmBtn);
-            container.appendChild(buttonRow);
-    
-            return container;
-        }
-    
-        // Create mapped item list from user selection
-        function createMappedItemList(userSelection, existingItems) {
-            var mappedItems = [];
-            var segments = userSelection.segments || [];
-            var forms = userSelection.forms || [];
-    
-            log("SA Builder: creating mapped items from " + segments.length + " segments and " + forms.length + " forms");
-    
+        // Populate segments
+        function renderSegments(filter) {
+            segmentColumn.innerHTML = "";
+            var filterLower = (filter || "").toLowerCase();
             for (var i = 0; i < segments.length; i++) {
                 var seg = segments[i];
-                var events = seg.events || [];
-                for (var j = 0; j < events.length; j++) {
-                    var ev = events[j];
-                    for (var k = 0; k < forms.length; k++) {
-                        var frm = forms[k];
-                        var key = normalizeSAText(seg.text) + " - " + normalizeSAText(ev.text) + " - " + normalizeSAText(frm.text);
-    
-                        // Check for duplicates
-                        var isDuplicate = existingItems.some(function(existing) {
-                            return normalizeSAText(existing) === key;
-                        });
-    
-                        mappedItems.push({
-                            segmentValue: seg.value,
-                            segmentText: seg.text,
-                            eventValue: ev.value,
-                            eventText: ev.text,
-                            formValue: frm.value,
-                            formText: frm.text,
-                            key: key,
-                            status: isDuplicate ? "Duplicate (Removed)" : "Incomplete"
-                        });
-                    }
+                if (filterLower && seg.text.toLowerCase().indexOf(filterLower) === -1) continue;
+
+                var segItem = document.createElement("div");
+                segItem.style.cssText = "margin-bottom:8px;padding:8px;border:1px solid #444;border-radius:4px;background:#222;";
+                segItem.dataset.segmentValue = seg.value;
+                segItem.dataset.segmentText = seg.text;
+
+                var checkRow = document.createElement("div");
+                checkRow.style.cssText = "display:flex;align-items:center;gap:8px;";
+
+                var checkbox = document.createElement("input");
+                checkbox.type = "checkbox";
+                checkbox.dataset.segmentValue = seg.value;
+                checkbox.style.cssText = "width:18px;height:18px;cursor:pointer;";
+                
+                // Restore checkbox state from saved states
+                if (segmentCheckboxStates[seg.value]) {
+                    checkbox.checked = true;
                 }
-            }
-    
-            log("SA Builder: created " + mappedItems.length + " mapped items");
-            return mappedItems;
-        }
-    
-        // Create progress popup
-        function createSABuilderProgressPopup(mappedItems) {
-            var container = document.createElement("div");
-            container.style.cssText = "display:flex;flex-direction:column;gap:12px;max-height:500px;";
-    
-            var statusDiv = document.createElement("div");
-            statusDiv.id = "saBuilderProgressStatus";
-            statusDiv.style.cssText = "text-align:center;font-size:16px;font-weight:600;padding:8px;";
-            statusDiv.textContent = "Processing...";
-    
-            var loadingDiv = document.createElement("div");
-            loadingDiv.id = "saBuilderProgressLoading";
-            loadingDiv.style.cssText = "text-align:center;font-size:14px;color:#9df;";
-            loadingDiv.textContent = "Running.";
-    
-            var listContainer = document.createElement("div");
-            listContainer.id = "saBuilderProgressList";
-            listContainer.style.cssText = "flex:1;overflow-y:auto;border:1px solid #333;border-radius:4px;padding:8px;background:#1a1a1a;max-height:350px;";
-    
-            // Render items
-            function renderItems() {
-                listContainer.innerHTML = "";
-                for (var i = 0; i < mappedItems.length; i++) {
-                    var item = mappedItems[i];
-                    var row = document.createElement("div");
-                    row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:6px 8px;margin-bottom:4px;border-radius:4px;font-size:12px;";
-    
-                    if (item.status === "Complete") {
-                        row.style.background = "#1a3a1a";
-                    } else if (item.status === "Duplicate (Removed)") {
-                        row.style.background = "#3a3a1a";
-                    } else {
-                        row.style.background = "#222";
-                    }
-    
-                    var keySpan = document.createElement("span");
-                    keySpan.textContent = item.key;
-                    keySpan.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:8px;";
-    
-                    var statusSpan = document.createElement("span");
-                    statusSpan.textContent = item.status;
-                    statusSpan.style.cssText = "font-weight:500;flex-shrink:0;";
-                    if (item.status === "Complete") {
-                        statusSpan.style.color = "#4f4";
-                    } else if (item.status === "Duplicate (Removed)") {
-                        statusSpan.style.color = "#ff4";
-                    } else {
-                        statusSpan.style.color = "#aaa";
-                    }
-    
-                    row.appendChild(keySpan);
-                    row.appendChild(statusSpan);
-                    listContainer.appendChild(row);
-                }
-            }
-    
-            renderItems();
-    
-            var buttonRow = document.createElement("div");
-            buttonRow.style.cssText = "display:flex;justify-content:center;padding-top:12px;";
-    
-            var stopBtn = document.createElement("button");
-            stopBtn.textContent = "Close";
-            stopBtn.style.cssText = "padding:10px 24px;border-radius:6px;border:none;background:#dc3545;color:#fff;font-weight:600;cursor:pointer;";
-            stopBtn.addEventListener("click", function() {
-                SA_BUILDER_CANCELLED = true;
-                log("SA Builder: stopped by user");
-                clearSABuilderStorage();
-                if (SA_BUILDER_PROGRESS_POPUP_REF && SA_BUILDER_PROGRESS_POPUP_REF.close) {
+                
+                // Save checkbox state when changed
+                checkbox.addEventListener("change", function() {
+                    segmentCheckboxStates[this.dataset.segmentValue] = this.checked;
                     try {
-                        SA_BUILDER_PROGRESS_POPUP_REF.close();
-                    } catch (e) {
-                        log("SA Builder: error closing popup - " + String(e));
-                    }
-                    SA_BUILDER_PROGRESS_POPUP_REF = null;
+                        localStorage.setItem(STORAGE_SA_BUILDER_SEGMENT_CHECKBOXES, JSON.stringify(segmentCheckboxStates));
+                    } catch (e) {}
+                    updateSelectAllCheckbox();
+                });
+
+                var label = document.createElement("span");
+                label.textContent = seg.text;
+                label.style.cssText = "font-weight:500;";
+
+                checkRow.appendChild(checkbox);
+                checkRow.appendChild(label);
+                segItem.appendChild(checkRow);
+
+                // Dropzone for study events
+                var dropzone = document.createElement("div");
+                dropzone.style.cssText = "min-height:30px;margin-top:8px;padding:4px;border:1px dashed #555;border-radius:4px;background:#1a1a1a;";
+                dropzone.dataset.segmentValue = seg.value;
+                dropzone.className = "sa-segment-dropzone";
+
+                // Initialize the map
+                if (!segmentEventMap[seg.value]) {
+                    segmentEventMap[seg.value] = [];
                 }
-            });
-            if (SA_BUILDER_CANCELLED) {
-                log("SA_BUILDER_CANCELLED: " + SA_BUILDER_CANCELLED);
-                log("SA Builder: cancelled");
-                return;
+
+                // Render existing attached events
+                function renderAttachedEvents(dz, segVal) {
+                    dz.innerHTML = "";
+                    var events = segmentEventMap[segVal] || [];
+                    if (events.length === 0) {
+                        var placeholder = document.createElement("div");
+                        placeholder.textContent = "Drop study events here";
+                        placeholder.style.cssText = "color:#666;font-size:12px;text-align:center;padding:8px;";
+                        dz.appendChild(placeholder);
+                    } else {
+                        for (var j = 0; j < events.length; j++) {
+                            var ev = events[j];
+                            var evItem = document.createElement("div");
+                            evItem.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:4px 8px;margin:2px 0;background:#333;border-radius:3px;font-size:12px;";
+                            evItem.dataset.eventValue = ev.value;
+                            evItem.dataset.eventText = ev.text;
+                            evItem.draggable = true;
+
+                            var attachedItem = document.createElement("div");
+                            attachedItem.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:8px 10px;margin-bottom:4px;border:1px solid #666;border-radius:5px;background:#3a3a3a;color:#fff;font-size:13px;font-weight:500;cursor:move;transition:all 0.2s ease;box-shadow:0 1px 3px rgba(0,0,0,0.2);";
+                            attachedItem.draggable = true;
+                            attachedItem.dataset.eventValue = ev.value;
+                            attachedItem.dataset.eventText = ev.text;
+
+                            var eventLabel = document.createElement("span");
+                            eventLabel.textContent = ev.text;
+                            eventLabel.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+
+                            // Make attached events draggable back to Study Events column
+                            attachedItem.addEventListener("dragstart", function(e) {
+                                e.dataTransfer.setData("text/plain", JSON.stringify({ 
+                                    value: this.dataset.eventValue, 
+                                    text: this.dataset.eventText,
+                                    fromSegment: true,
+                                    segmentValue: segVal
+                                }));
+                                e.dataTransfer.effectAllowed = "move";
+                                this.style.opacity = "0.7";
+                                this.style.transform = "scale(0.95)";
+                                this.style.boxShadow = "0 4px 8px rgba(0,0,0,0.3)";
+                            });
+
+                            attachedItem.addEventListener("dragend", function(e) {
+                                this.style.opacity = "1";
+                                this.style.transform = "scale(1)";
+                                this.style.boxShadow = "0 1px 3px rgba(0,0,0,0.2)";
+                            });
+
+                            attachedItem.addEventListener("mouseenter", function() {
+                                this.style.background = "#4a4a4a";
+                                this.style.border = "1px solid #777";
+                                this.style.transform = "translateY(-1px)";
+                                this.style.boxShadow = "0 2px 5px rgba(0,0,0,0.3)";
+                            });
+
+                            attachedItem.addEventListener("mouseleave", function() {
+                                this.style.background = "#3a3a3a";
+                                this.style.border = "1px solid #666";
+                                this.style.transform = "translateY(0)";
+                                this.style.boxShadow = "0 1px 3px rgba(0,0,0,0.2)";
+                            });
+
+                            var removeBtn = document.createElement("button");
+                            removeBtn.textContent = "×";
+                            removeBtn.style.cssText = "background:transparent;border:none;color:#ff6b6b;cursor:pointer;font-size:18px;font-weight:bold;padding:0;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:all 0.2s ease;flex-shrink:0;margin-left:8px;";
+
+                            removeBtn.addEventListener("mouseenter", function() {
+                                this.style.background = "rgba(255,107,107,0.2)";
+                                this.style.color = "#ff5252";
+                                this.style.transform = "scale(1.1)";
+                            });
+
+                            removeBtn.addEventListener("mouseleave", function() {
+                                this.style.background = "transparent";
+                                this.style.color = "#ff6b6b";
+                                this.style.transform = "scale(1)";
+                            });
+
+                            removeBtn.addEventListener("click", function(e) {
+                                e.stopPropagation();
+                                var index = events.indexOf(ev);
+                                if (index > -1) {
+                                    events.splice(index, 1);
+                                    segmentEventMap[segVal] = events;
+                                    renderAttachedEvents(dz, segVal);
+                                    log("SA Builder: Event '" + ev.text + "' removed from segment");
+                                    
+                                    // Restore event to Study Events column
+                                    restoreEventToStudyEventsColumn({ value: ev.value, text: ev.text });
+                                }
+                            });
+
+                            attachedItem.appendChild(eventLabel);
+                            attachedItem.appendChild(removeBtn);
+                            dz.appendChild(attachedItem);
+
+                            // Make attached events re-draggable
+                            evItem.addEventListener("dragstart", (function(evData, segV) {
+                                return function(e) {
+                                    e.dataTransfer.setData("text/plain", JSON.stringify({ value: evData.value, text: evData.text, fromSegment: segV }));
+                                    e.dataTransfer.effectAllowed = "move";
+                                };
+                            })(ev, segVal));
+
+                            dz.appendChild(evItem);
+                        }
+                    }
+                }
+
+                renderAttachedEvents(dropzone, seg.value);
+
+                // Handle dragover
+                dropzone.addEventListener("dragover", function(e) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "copy";
+                    this.style.background = "#2a2a4a";
+                });
+
+                dropzone.addEventListener("dragleave", function(e) {
+                    this.style.background = "#1a1a1a";
+                });
+
+                // Handle drop
+                dropzone.addEventListener("drop", (function(segVal) {
+                    return function(e) {
+                        e.preventDefault();
+                        this.style.background = "#1a1a1a";
+                        try {
+                            var data = JSON.parse(e.dataTransfer.getData("text/plain"));
+                            if (data && data.value && data.text) {
+                                // Remove from old segment if exists
+                                if (data.fromSegment && segmentEventMap[data.fromSegment]) {
+                                    segmentEventMap[data.fromSegment] = segmentEventMap[data.fromSegment].filter(function(x) {
+                                        return x.value !== data.value;
+                                    });
+                                }
+                                // Check for duplicate in this segment
+                                var existing = (segmentEventMap[segVal] || []).find(function(x) { return x.value === data.value; });
+                                if (!existing) {
+                                    if (!segmentEventMap[segVal]) segmentEventMap[segVal] = [];
+                                    segmentEventMap[segVal].push({ value: data.value, text: data.text });
+                                    
+                                    removeEventFromStudyEventsColumn(data.value);
+                                }
+                                renderSegments(segmentSearch.value);
+                            }
+                        } catch (err) {
+                            log("SA Builder: drop error " + err);
+                        }
+                    };
+                })(seg.value));
+
+                segItem.appendChild(dropzone);
+                segmentColumn.appendChild(segItem);
             }
-            buttonRow.appendChild(stopBtn);
-    
-            container.appendChild(statusDiv);
-            container.appendChild(loadingDiv);
-            container.appendChild(listContainer);
-            container.appendChild(buttonRow);
-    
-            // Animate loading
-            var dots = 1;
-            var loadingInterval = setInterval(function() {
-                if (!SA_BUILDER_PROGRESS_POPUP_REF || SA_BUILDER_CANCELLED) {
-                    clearInterval(loadingInterval);
-                    return;
-                }
-                dots = (dots % 3) + 1;
-                var text = "Running";
-                for (var i = 0; i < dots; i++) text += ".";
-                loadingDiv.textContent = text;
-            }, 500);
-    
-            return {
-                element: container,
-                updateStatus: function(text) {
-                    statusDiv.textContent = text;
-                },
-                updateItem: function(index, status) {
-                    if (mappedItems[index]) {
-                        mappedItems[index].status = status;
-                        renderItems();
-                    }
-                },
-                setComplete: function() {
-                    clearInterval(loadingInterval);
-                    loadingDiv.textContent = "Done!";
-                    loadingDiv.style.color = "#4f4";
-                    stopBtn.textContent = "Close";
-                    stopBtn.style.background = "#28a745";
-                }
-            };
         }
-    
-        // Start the adding process
-        async function startSABuilderAddProcess(userSelection) {
-            // Get existing items from storage
-            var existingItems = [];
-            try {
-                var raw = localStorage.getItem(STORAGE_SA_BUILDER_EXISTING);
-                if (raw) existingItems = JSON.parse(raw);
-            } catch (e) {}
-    
-            // Create mapped items
-            var mappedItems = createMappedItemList(userSelection, existingItems);
-    
-            // Log mapped items
-            log("SA Builder: Mapped items list:");
-            for (var i = 0; i < mappedItems.length; i++) {
-                log("  " + (i + 1) + ". " + mappedItems[i].key + " [" + mappedItems[i].status + "]");
+
+        // Populate study events (draggable)
+        function renderStudyEvents(filter) {
+            eventColumn.innerHTML = "";
+            var filterLower = (filter || "").toLowerCase();
+            for (var i = 0; i < studyEvents.length; i++) {
+                var ev = studyEvents[i];
+                if (filterLower && ev.text.toLowerCase().indexOf(filterLower) === -1) continue;
+
+                var evItem = document.createElement("div");
+                evItem.style.cssText = "padding:10px 12px;margin-bottom:6px;border:1px solid #555;border-radius:6px;background:#2a2a2a;cursor:grab;color:#fff;font-size:14px;font-weight:500;transition:all 0.2s ease;box-shadow:0 2px 4px rgba(0,0,0,0.2);";
+                evItem.textContent = ev.text;
+                evItem.draggable = true;
+                evItem.dataset.eventValue = ev.value;
+                evItem.dataset.eventText = ev.text;
+
+                evItem.addEventListener("mouseenter", function() {
+                    this.style.background = "#333";
+                    this.style.border = "1px solid #666";
+                    this.style.transform = "translateY(-1px)";
+                    this.style.boxShadow = "0 4px 8px rgba(0,0,0,0.3)";
+                });
+
+                evItem.addEventListener("mouseleave", function() {
+                    this.style.background = "#2a2a2a";
+                    this.style.border = "1px solid #555";
+                    this.style.transform = "translateY(0)";
+                    this.style.boxShadow = "0 2px 4px rgba(0,0,0,0.2)";
+                });
+
+                evItem.addEventListener("dragstart", function(e) {
+                    e.dataTransfer.setData("text/plain", JSON.stringify({ 
+                        value: this.dataset.eventValue, 
+                        text: this.dataset.eventText 
+                    }));
+                    e.dataTransfer.effectAllowed = "copy";
+                    this.style.opacity = "0.6";
+                    this.style.transform = "scale(0.95)";
+                    this.style.boxShadow = "0 6px 12px rgba(0,0,0,0.4)";
+                });
+
+                evItem.addEventListener("dragend", function(e) {
+                    this.style.opacity = "1";
+                    this.style.transform = "scale(1)";
+                    this.style.boxShadow = "0 2px 4px rgba(0,0,0,0.2)";
+                });
+
+                eventColumn.appendChild(evItem);
+                sortStudyEventsColumn();
             }
-    
-            // Store for persistence
-            try {
-                localStorage.setItem(STORAGE_SA_BUILDER_MAPPED_ITEMS, JSON.stringify(mappedItems));
-                localStorage.setItem(STORAGE_SA_BUILDER_RUNNING, "1");
-                localStorage.setItem(STORAGE_SA_BUILDER_CURRENT_INDEX, "0");
-            } catch (e) {}
-    
-            // Create progress popup
-            var progressContent = createSABuilderProgressPopup(mappedItems);
-            SA_BUILDER_PROGRESS_POPUP_REF = createPopup({
-                title: "Adding Scheduled Activities",
-                content: progressContent.element,
-                width: "600px",
-                height: "auto",
-                maxHeight: "80%",
-                onClose: function() {
-                    SA_BUILDER_CANCELLED = true;
-                    log("SA Builder: cancelled by user (X button)");
-                    clearSABuilderStorage();
-                    SA_BUILDER_PROGRESS_POPUP_REF = null;
-                }
-            });
-            log("SA_BUILDER_CANCELLED: " + SA_BUILDER_CANCELLED);
-            if (SA_BUILDER_CANCELLED) {
-                log("SA Builder: cancelled");
-                return;
-            }
-            // Process items
-            var timeOffset = userSelection.timeOffset || { days: 0, hours: 0, minutes: 0, seconds: 0 };
-            log("SA Builder: Using time offset - Days: " + timeOffset.days + ", Hours: " + timeOffset.hours + ", Minutes: " + timeOffset.minutes + ", Seconds: " + timeOffset.seconds);
-    
-            for (var idx = 0; idx < mappedItems.length; idx++) {
-                if (SA_BUILDER_CANCELLED) {
-                    log("SA Builder: cancelled");
+        }
+
+        // Remove event from Study Events column
+        function removeEventFromStudyEventsColumn(eventValue) {
+            var eventItems = eventColumn.querySelectorAll("[data-event-value]");
+            for (var i = 0; i < eventItems.length; i++) {
+                var item = eventItems[i];
+                if (item.dataset.eventValue === eventValue) {
+                    item.remove();
+                    log("SA Builder: Event removed from Study Events column");
                     break;
                 }
-    
-                var item = mappedItems[idx];
-    
-                // Skip duplicates
-                if (item.status === "Duplicate (Removed)") {
-                    log("SA Builder: skipping duplicate - " + item.key);
-                    continue;
+            }
+        }
+        // Restore event to Study Events column
+        function restoreEventToStudyEventsColumn(eventData) {
+            // Check if event already exists in column
+            var existingItems = eventColumn.querySelectorAll("[data-event-value]");
+            for (var i = 0; i < existingItems.length; i++) {
+                if (existingItems[i].dataset.eventValue === eventData.value) {
+                    log("SA Builder: Event already exists in Study Events column");
+                    return;
                 }
-    
-                progressContent.updateStatus("Adding item " + (idx + 1) + " of " + mappedItems.length);
-                log("SA Builder: adding item " + (idx + 1) + " - " + item.key);
-    
+            }
+            
+            // Create the event item
+            var evItem = document.createElement("div");
+            evItem.textContent = eventData.text;
+            evItem.style.cssText = "padding:10px 12px;margin-bottom:6px;border:1px solid #555;border-radius:6px;background:#2a2a2a;cursor:grab;color:#fff;font-size:14px;font-weight:500;transition:all 0.2s ease;box-shadow:0 2px 4px rgba(0,0,0,0.2);animation:slideIn 0.3s ease;";
+            evItem.draggable = true;
+            evItem.dataset.eventValue = eventData.value;
+            evItem.dataset.eventText = eventData.text;
+
+            evItem.addEventListener("mouseenter", function() {
+                this.style.background = "#333";
+                this.style.border = "1px solid #666";
+                this.style.transform = "translateY(-1px)";
+                this.style.boxShadow = "0 4px 8px rgba(0,0,0,0.3)";
+            });
+
+            evItem.addEventListener("mouseleave", function() {
+                this.style.background = "#2a2a2a";
+                this.style.border = "1px solid #555";
+                this.style.transform = "translateY(0)";
+                this.style.boxShadow = "0 2px 4px rgba(0,0,0,0.2)";
+            });
+
+            evItem.addEventListener("dragstart", function(e) {
+                e.dataTransfer.setData("text/plain", JSON.stringify({ 
+                    value: this.dataset.eventValue, 
+                    text: this.dataset.eventText 
+                }));
+                e.dataTransfer.effectAllowed = "copy";
+                this.style.opacity = "0.6";
+                this.style.transform = "scale(0.95)";
+                this.style.boxShadow = "0 6px 12px rgba(0,0,0,0.4)";
+            });
+
+            evItem.addEventListener("dragend", function(e) {
+                this.style.opacity = "1";
+                this.style.transform = "scale(1)";
+                this.style.boxShadow = "0 2px 4px rgba(0,0,0,0.2)";
+            });
+
+            // Add the event to the column and sort
+            eventColumn.appendChild(evItem);
+            sortStudyEventsColumn();
+            log("SA Builder: Event '" + eventData.text + "' restored to Study Events column");
+        }
+
+        // Sort the Study Events column alphabetically
+        function sortStudyEventsColumn() {
+            var allItems = eventColumn.querySelectorAll("[data-event-value]");
+            var itemsArray = Array.prototype.slice.call(allItems);
+            
+            // Sort by text content (case-insensitive)
+            itemsArray.sort(function(a, b) {
+                var textA = (a.dataset.eventText || a.textContent || "").toLowerCase();
+                var textB = (b.dataset.eventText || b.textContent || "").toLowerCase();
+                return textA.localeCompare(textB);
+            });
+            
+            // Clear and re-append in sorted order
+            eventColumn.innerHTML = "";
+            itemsArray.forEach(function(item) {
+                eventColumn.appendChild(item);
+            });
+            
+            log("SA Builder: Study Events column sorted alphabetically");
+        }
+
+        // Populate forms (checkboxes)
+        function renderForms(filter) {
+            formColumn.innerHTML = "";
+            var filterLower = (filter || "").toLowerCase();
+            for (var i = 0; i < forms.length; i++) {
+                var frm = forms[i];
+                if (filterLower && frm.text.toLowerCase().indexOf(filterLower) === -1) continue;
+
+                var frmItem = document.createElement("div");
+                frmItem.style.cssText = "display:flex;align-items:flex-start;gap:8px;padding:6px;margin-bottom:4px;border:1px solid #444;border-radius:4px;background:#222;";
+
+                var checkbox = document.createElement("input");
+                checkbox.type = "checkbox";
+                checkbox.dataset.formValue = frm.value;
+                checkbox.dataset.formText = frm.text;
+                checkbox.style.cssText = "width:18px;height:18px;cursor:pointer;flex-shrink:0;margin-top:2px;accent-color:#007bff;";
+
+                var label = document.createElement("span");
+                label.textContent = frm.text;
+                label.style.cssText = "font-size:13px;word-break:break-word;";
+
+                frmItem.appendChild(checkbox);
+                frmItem.appendChild(label);
+                formColumn.appendChild(frmItem);
+            }
+        }
+
+        // Create time inputs
+        function createTimeInput(labelText, id, max) {
+            var row = document.createElement("div");
+            row.style.cssText = "display:flex;flex-direction:column;gap:4px;";
+
+            var lbl = document.createElement("label");
+            lbl.textContent = labelText;
+            lbl.style.cssText = "font-size:12px;color:#aaa;";
+
+            var input = document.createElement("input");
+            input.type = "number";
+            input.id = id;
+            input.min = "0";
+            input.max = String(max);
+            input.value = "0";
+            input.style.cssText = "padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;width:100%;";
+
+            row.appendChild(lbl);
+            row.appendChild(input);
+            return row;
+        }
+
+        // Hidden checkbox row
+        var hiddenRow = document.createElement("div");
+        hiddenRow.style.cssText = "display:flex;align-items:center;gap:8px;padding-top:12px;margin-top:12px;border-top:1px solid #444;";
+
+        var hiddenCheckbox = document.createElement("input");
+        hiddenCheckbox.type = "checkbox";
+        hiddenCheckbox.id = "saBuilderHidden";
+        hiddenCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;accent-color:#007bff;";
+
+        var hiddenLabel = document.createElement("label");
+        hiddenLabel.textContent = "Hidden?";
+        hiddenLabel.setAttribute("for", "saBuilderHidden");
+        hiddenLabel.style.cssText = "font-size:13px;font-weight:600;cursor:pointer;";
+
+        hiddenRow.appendChild(hiddenCheckbox);
+        hiddenRow.appendChild(hiddenLabel);
+        timeColumn.appendChild(hiddenRow);
+
+        // Mandatory checkbox row
+        var mandatoryRow = document.createElement("div");
+        mandatoryRow.style.cssText = "display:flex;align-items:center;gap:8px;margin-top:8px;";
+
+        var mandatoryCheckbox = document.createElement("input");
+        mandatoryCheckbox.type = "checkbox";
+        mandatoryCheckbox.id = "saBuilderMandatory";
+        mandatoryCheckbox.checked = true;
+        mandatoryCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;accent-color:#007bff;";
+
+        var mandatoryLabel = document.createElement("label");
+        mandatoryLabel.textContent = "Mandatory";
+        mandatoryLabel.setAttribute("for", "saBuilderMandatory");
+        mandatoryLabel.style.cssText = "font-size:13px;font-weight:600;cursor:pointer;";
+
+        mandatoryRow.appendChild(mandatoryCheckbox);
+        mandatoryRow.appendChild(mandatoryLabel);
+        timeColumn.appendChild(mandatoryRow);
+
+        // Enforce Data Collection Order checkbox row
+        var enforceRow = document.createElement("div");
+        enforceRow.style.cssText = "display:flex;align-items:center;gap:8px;margin-top:8px;";
+
+        var enforceCheckbox = document.createElement("input");
+        enforceCheckbox.type = "checkbox";
+        enforceCheckbox.id = "saBuilderEnforce";
+        enforceCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;accent-color:#007bff;";
+
+        var enforceLabel = document.createElement("label");
+        enforceLabel.textContent = "Enforce Data Collection Order";
+        enforceLabel.setAttribute("for", "saBuilderEnforce");
+        enforceLabel.style.cssText = "font-size:13px;font-weight:600;cursor:pointer;";
+
+        enforceRow.appendChild(enforceCheckbox);
+        enforceRow.appendChild(enforceLabel);
+        timeColumn.appendChild(enforceRow);
+
+        // Pre-Window input row
+        var preWindowRow = document.createElement("div");
+        preWindowRow.style.cssText = "display:flex;flex-direction:column;gap:4px;margin-top:8px;";
+
+        var preWindowLabel = document.createElement("label");
+        preWindowLabel.textContent = "Pre-Window";
+        preWindowLabel.style.cssText = "font-size:12px;color:#aaa;";
+
+        var preWindowInput = document.createElement("input");
+        preWindowInput.type = "text";
+        preWindowInput.id = "saBuilderPreWindow";
+        preWindowInput.placeholder = "";
+        preWindowInput.style.cssText = "padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;width:100%;";
+
+        preWindowRow.appendChild(preWindowLabel);
+        preWindowRow.appendChild(preWindowInput);
+        timeColumn.appendChild(preWindowRow);
+
+        // Post-Window input row
+        var postWindowRow = document.createElement("div");
+        postWindowRow.style.cssText = "display:flex;flex-direction:column;gap:4px;margin-top:8px;";
+
+        var postWindowLabel = document.createElement("label");
+        postWindowLabel.textContent = "Post-Window";
+        postWindowLabel.style.cssText = "font-size:12px;color:#aaa;";
+
+        var postWindowInput = document.createElement("input");
+        postWindowInput.type = "text";
+        postWindowInput.id = "saBuilderPostWindow";
+        postWindowInput.placeholder = "";
+        postWindowInput.style.cssText = "padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;width:100%;";
+
+        postWindowRow.appendChild(postWindowLabel);
+        postWindowRow.appendChild(postWindowInput);
+        timeColumn.appendChild(postWindowRow);
+
+        // Reference Activity checkbox row
+        var refActivityRow = document.createElement("div");
+        refActivityRow.style.cssText = "display:flex;align-items:center;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid #444;";
+
+        var refActivityCheckbox = document.createElement("input");
+        refActivityCheckbox.type = "checkbox";
+        refActivityCheckbox.id = "saBuilderRefActivity";
+        refActivityCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;accent-color:#007bff;";
+
+        var refActivityLabel = document.createElement("label");
+        refActivityLabel.textContent = "Reference Activity";
+        refActivityLabel.setAttribute("for", "saBuilderRefActivity");
+        refActivityLabel.style.cssText = "font-size:13px;font-weight:600;cursor:pointer;";
+
+        refActivityRow.appendChild(refActivityCheckbox);
+        refActivityRow.appendChild(refActivityLabel);
+        timeColumn.appendChild(refActivityRow);
+
+        // Reference Activity disables time inputs
+        refActivityCheckbox.addEventListener("change", function() {
+            var isChecked = this.checked;
+            var daysEl = document.getElementById("saBuilderDays");
+            var hoursEl = document.getElementById("saBuilderHours");
+            var minutesEl = document.getElementById("saBuilderMinutes");
+            var secondsEl = document.getElementById("saBuilderSeconds");
+            if (daysEl) {
+                daysEl.disabled = isChecked;
+                daysEl.style.opacity = isChecked ? "0.5" : "1";
+            }
+            if (hoursEl) {
+                hoursEl.disabled = isChecked;
+                hoursEl.style.opacity = isChecked ? "0.5" : "1";
+            }
+            if (minutesEl) {
+                minutesEl.disabled = isChecked;
+                minutesEl.style.opacity = isChecked ? "0.5" : "1";
+            }
+            if (secondsEl) {
+                secondsEl.disabled = isChecked;
+                secondsEl.style.opacity = isChecked ? "0.5" : "1";
+            }
+        });
+
+        // Time inputs section (moved below other inputs)
+        var timeInputsSection = document.createElement("div");
+        timeInputsSection.style.cssText = "padding-top:12px;margin-top:12px;border-top:1px solid #444;";
+
+        timeInputsSection.appendChild(createTimeInput("Days", "saBuilderDays", 200));
+        timeInputsSection.appendChild(createTimeInput("Hours", "saBuilderHours", 23));
+        timeInputsSection.appendChild(createTimeInput("Minutes", "saBuilderMinutes", 59));
+        timeInputsSection.appendChild(createTimeInput("Seconds", "saBuilderSeconds", 59));
+
+        timeColumn.appendChild(timeInputsSection);
+
+        // Initial render
+        renderSegments("");
+        renderStudyEvents("");
+        renderForms("");
+
+        // Restore saved time offset values
+        try {
+            var savedTimeOffset = localStorage.getItem(STORAGE_SA_BUILDER_TIME_OFFSET);
+            if (savedTimeOffset) {
+                var timeData = JSON.parse(savedTimeOffset);
+                if (timeData.days !== undefined) document.getElementById("saBuilderDays").value = timeData.days;
+                if (timeData.hours !== undefined) document.getElementById("saBuilderHours").value = timeData.hours;
+                if (timeData.minutes !== undefined) document.getElementById("saBuilderMinutes").value = timeData.minutes;
+                if (timeData.seconds !== undefined) document.getElementById("saBuilderSeconds").value = timeData.seconds;
+            }
+        } catch (e) {}
+
+        // Select All checkbox handler
+        function updateSelectAllCheckbox() {
+            var allChecked = true;
+            for (var i = 0; i < segments.length; i++) {
+                if (!segmentCheckboxStates[segments[i].value]) {
+                    allChecked = false;
+                    break;
+                }
+            }
+            selectAllCheckbox.checked = allChecked;
+        }
+
+        selectAllCheckbox.addEventListener("change", function() {
+            var isChecked = this.checked;
+            for (var i = 0; i < segments.length; i++) {
+                segmentCheckboxStates[segments[i].value] = isChecked;
+            }
+            try {
+                localStorage.setItem(STORAGE_SA_BUILDER_SEGMENT_CHECKBOXES, JSON.stringify(segmentCheckboxStates));
+            } catch (e) {}
+            renderSegments(segmentSearch.value);
+        });
+
+        // Initialize Select All checkbox state
+        updateSelectAllCheckbox();
+
+        // Search handlers
+        segmentSearch.addEventListener("input", function() { renderSegments(this.value); });
+        eventSearch.addEventListener("input", function() { renderStudyEvents(this.value); });
+        formSearch.addEventListener("input", function() { renderForms(this.value); });
+
+        contentRow.appendChild(segmentColumnWrapper);
+        contentRow.appendChild(eventColumn);
+        contentRow.appendChild(formColumn);
+        contentRow.appendChild(timeColumn);
+        container.appendChild(contentRow);
+
+        // Confirm button row
+        var buttonRow = document.createElement("div");
+        buttonRow.style.cssText = "display:flex;justify-content:flex-end;gap:12px;padding-top:12px;border-top:1px solid #333;";
+
+        var confirmBtn = document.createElement("button");
+        confirmBtn.textContent = "Confirm";
+        confirmBtn.style.cssText = "padding:10px 24px;border-radius:6px;border:none;background:#28a745;color:#fff;font-weight:600;cursor:pointer;";
+        confirmBtn.addEventListener("mouseenter", function() { this.style.background = "#218838"; });
+        confirmBtn.addEventListener("mouseleave", function() { this.style.background = "#28a745"; });
+
+        confirmBtn.addEventListener("click", function() {
+            // Collect selected segments and their events
+            var selectedSegments = [];
+            var segmentCheckboxes = segmentColumn.querySelectorAll("input[type='checkbox']:checked");
+            for (var i = 0; i < segmentCheckboxes.length; i++) {
+                var cb = segmentCheckboxes[i];
+                var segVal = cb.dataset.segmentValue;
+                var segText = cb.closest("[data-segment-text]");
+                var segName = segText ? segText.dataset.segmentText : "";
+                var events = segmentEventMap[segVal] || [];
+                if (events.length > 0) {
+                    selectedSegments.push({ value: segVal, text: segName, events: events });
+                }
+            }
+
+            // Collect selected forms
+            var selectedForms = [];
+            var formCheckboxes = formColumn.querySelectorAll("input[type='checkbox']:checked");
+            for (var j = 0; j < formCheckboxes.length; j++) {
+                var fcb = formCheckboxes[j];
+                selectedForms.push({ value: fcb.dataset.formValue, text: fcb.dataset.formText });
+            }
+
+            // Validate
+            if (selectedSegments.length === 0) {
+                alert("Please check at least one segment that has study events attached.");
+                return;
+            }
+            if (selectedForms.length === 0) {
+                alert("Please select at least one form.");
+                return;
+            }
+
+            // Get time offset
+            var timeOffset = {
+                days: parseInt(document.getElementById("saBuilderDays").value) || 0,
+                hours: parseInt(document.getElementById("saBuilderHours").value) || 0,
+                minutes: parseInt(document.getElementById("saBuilderMinutes").value) || 0,
+                seconds: parseInt(document.getElementById("saBuilderSeconds").value) || 0
+            };
+
+            log("SA Builder: Time offset - Days: " + timeOffset.days + ", Hours: " + timeOffset.hours + ", Minutes: " + timeOffset.minutes + ", Seconds: " + timeOffset.seconds);
+
+            var hiddenChecked = document.getElementById("saBuilderHidden").checked;
+            var mandatoryChecked = document.getElementById("saBuilderMandatory").checked;
+            var enforceChecked = document.getElementById("saBuilderEnforce").checked;
+            var preWindowValue = document.getElementById("saBuilderPreWindow").value.trim();
+            var postWindowValue = document.getElementById("saBuilderPostWindow").value.trim();
+            var refActivityChecked = document.getElementById("saBuilderRefActivity").checked;
+
+            // If Reference Activity is checked, void the time offset
+            if (refActivityChecked) {
+                timeOffset = { days: 0, hours: 0, minutes: 0, seconds: 0 };
+            }
+
+            var userSelection = {
+                segments: selectedSegments,
+                forms: selectedForms,
+                timeOffset: timeOffset,
+                hidden: hiddenChecked,
+                mandatory: mandatoryChecked,
+                enforce: enforceChecked,
+                preWindow: preWindowValue,
+                postWindow: postWindowValue,
+                refActivity: refActivityChecked
+            };
+            try {
+                localStorage.setItem(STORAGE_SA_BUILDER_USER_SELECTION, JSON.stringify(userSelection));
+                localStorage.setItem(STORAGE_SA_BUILDER_TIME_OFFSET, JSON.stringify(timeOffset));
+            } catch (e) {}
+
+            // Close selection popup and start adding
+            if (SA_BUILDER_POPUP_REF) {
+                SA_BUILDER_POPUP_REF.close();
+                SA_BUILDER_POPUP_REF = null;
+            }
+            if (SA_BUILDER_CANCELLED) {
+                log("SA Builder: cancelled");
+                return;
+            }
+            // Start the adding process
+            startSABuilderAddProcess(userSelection);
+        });
+
+        buttonRow.appendChild(confirmBtn);
+        container.appendChild(buttonRow);
+
+        return container;
+    }
+
+    // Create mapped item list from user selection
+    function createMappedItemList(userSelection, existingItems) {
+        var mappedItems = [];
+        var segments = userSelection.segments || [];
+        var forms = userSelection.forms || [];
+
+        log("SA Builder: creating mapped items from " + segments.length + " segments and " + forms.length + " forms");
+
+        for (var i = 0; i < segments.length; i++) {
+            var seg = segments[i];
+            var events = seg.events || [];
+            for (var j = 0; j < events.length; j++) {
+                var ev = events[j];
+                for (var k = 0; k < forms.length; k++) {
+                    var frm = forms[k];
+                    var key = normalizeSAText(seg.text) + " - " + normalizeSAText(ev.text) + " - " + normalizeSAText(frm.text);
+
+                    // Check for duplicates
+                    var isDuplicate = existingItems.some(function(existing) {
+                        return normalizeSAText(existing) === key;
+                    });
+
+                    mappedItems.push({
+                        segmentValue: seg.value,
+                        segmentText: seg.text,
+                        eventValue: ev.value,
+                        eventText: ev.text,
+                        formValue: frm.value,
+                        formText: frm.text,
+                        key: key,
+                        status: isDuplicate ? "Duplicate (Removed)" : "Incomplete"
+                    });
+                }
+            }
+        }
+
+        log("SA Builder: created " + mappedItems.length + " mapped items");
+        return mappedItems;
+    }
+
+    // Create progress popup
+    function createSABuilderProgressPopup(mappedItems) {
+        var container = document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;gap:12px;max-height:500px;";
+
+        var statusDiv = document.createElement("div");
+        statusDiv.id = "saBuilderProgressStatus";
+        statusDiv.style.cssText = "text-align:center;font-size:16px;font-weight:600;padding:8px;";
+        statusDiv.textContent = "Processing...";
+
+        var loadingDiv = document.createElement("div");
+        loadingDiv.id = "saBuilderProgressLoading";
+        loadingDiv.style.cssText = "text-align:center;font-size:14px;color:#9df;";
+        loadingDiv.textContent = "Running.";
+
+        var listContainer = document.createElement("div");
+        listContainer.id = "saBuilderProgressList";
+        listContainer.style.cssText = "flex:1;overflow-y:auto;border:1px solid #333;border-radius:4px;padding:8px;background:#1a1a1a;max-height:350px;";
+
+        // Render items
+        function renderItems() {
+            listContainer.innerHTML = "";
+            for (var i = 0; i < mappedItems.length; i++) {
+                var item = mappedItems[i];
+                var row = document.createElement("div");
+                row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:6px 8px;margin-bottom:4px;border-radius:4px;font-size:12px;";
+
+                if (item.status === "Complete") {
+                    row.style.background = "#1a3a1a";
+                } else if (item.status === "Duplicate (Removed)") {
+                    row.style.background = "#3a3a1a";
+                } else {
+                    row.style.background = "#222";
+                }
+
+                var keySpan = document.createElement("span");
+                keySpan.textContent = item.key;
+                keySpan.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:8px;";
+
+                var statusSpan = document.createElement("span");
+                statusSpan.textContent = item.status;
+                statusSpan.style.cssText = "font-weight:500;flex-shrink:0;";
+                if (item.status === "Complete") {
+                    statusSpan.style.color = "#4f4";
+                } else if (item.status === "Duplicate (Removed)") {
+                    statusSpan.style.color = "#ff4";
+                } else {
+                    statusSpan.style.color = "#aaa";
+                }
+
+                row.appendChild(keySpan);
+                row.appendChild(statusSpan);
+                listContainer.appendChild(row);
+            }
+        }
+
+        renderItems();
+
+        var buttonRow = document.createElement("div");
+        buttonRow.style.cssText = "display:flex;justify-content:center;padding-top:12px;";
+
+        var stopBtn = document.createElement("button");
+        stopBtn.textContent = "Close";
+        stopBtn.style.cssText = "padding:10px 24px;border-radius:6px;border:none;background:#dc3545;color:#fff;font-weight:600;cursor:pointer;";
+        stopBtn.addEventListener("click", function() {
+            SA_BUILDER_CANCELLED = true;
+            log("SA Builder: stopped by user");
+            clearSABuilderStorage();
+            if (SA_BUILDER_PROGRESS_POPUP_REF && SA_BUILDER_PROGRESS_POPUP_REF.close) {
                 try {
-                    // Check cancellation before starting
-                    if (SA_BUILDER_CANCELLED) {
-                        log("SA Builder: cancelled before Add button");
-                        break;
-                    }
-    
-                    // Click Add button
-                    if (!clickAddSaButton()) {
-                        log("SA Builder: failed to click Add button");
-                        break;
-                    }
-    
-                    // Wait for modal
-                    var modal = await waitForSAModal(10000);
-                    if (!modal) {
-                        log("SA Builder: modal did not appear");
-                        break;
-                    }
-    
-                    // Check cancellation after modal appears
-                    if (SA_BUILDER_CANCELLED) {
-                        log("SA Builder: cancelled after modal appeared");
-                        break;
-                    }
-    
-                    await sleep(1000);
-    
-                    // Check cancellation before selections
-                    if (SA_BUILDER_CANCELLED) {
-                        log("SA Builder: cancelled before selections");
-                        break;
-                    }
-                    log("SA_BUILDER_CANCELLED: " + SA_BUILDER_CANCELLED);
-                    // Select segment
-                    log("SA Builder: selecting segment " + item.segmentText + " (value: " + item.segmentValue + ")");
-                    await selectSelect2Value("segment", item.segmentValue);
-                    await sleep(500);
-    
-                    // Check cancellation
-                    if (SA_BUILDER_CANCELLED) {
-                        log("SA Builder: cancelled after segment selection");
-                        break;
-                    }
-    
-                    // Select study event
-                    log("SA Builder: selecting study event " + item.eventText + " (value: " + item.eventValue + ")");
-                    await selectSelect2Value("studyEvent", item.eventValue);
-                    await sleep(500);
-    
-                    // Check cancellation
-                    if (SA_BUILDER_CANCELLED) {
-                        log("SA Builder: cancelled after study event selection");
-                        break;
-                    }
-    
-                    // Select form
-                    log("SA Builder: selecting form " + item.formText + " (value: " + item.formValue + ")");
-                    await selectSelect2Value("form", item.formValue);
-                    await sleep(500);
+                    SA_BUILDER_PROGRESS_POPUP_REF.close();
+                } catch (e) {
+                    log("SA Builder: error closing popup - " + String(e));
+                }
+                SA_BUILDER_PROGRESS_POPUP_REF = null;
+            }
+        });
+        if (SA_BUILDER_CANCELLED) {
+            log("SA_BUILDER_CANCELLED: " + SA_BUILDER_CANCELLED);
+            log("SA Builder: cancelled");
+            return;
+        }
+        buttonRow.appendChild(stopBtn);
 
-                    // Check cancellation
-                    if (SA_BUILDER_CANCELLED) {
-                        log("SA Builder: cancelled after form selection");
-                        break;
-                    }
+        container.appendChild(statusDiv);
+        container.appendChild(loadingDiv);
+        container.appendChild(listContainer);
+        container.appendChild(buttonRow);
 
-                    // Check Hidden checkbox if user selected it
-                    if (userSelection.hidden) {
-                        var hiddenCheckboxEl = document.querySelector("#uniform-hidden span input#hidden.checkbox");
-                        if (!hiddenCheckboxEl) {
-                            hiddenCheckboxEl = document.getElementById("hidden");
-                        }
-                        if (hiddenCheckboxEl && !hiddenCheckboxEl.checked) {
-                            hiddenCheckboxEl.click();
-                            log("SA Builder: Hidden checkbox checked");
-                            await sleep(200);
-                        }
+        // Animate loading
+        var dots = 1;
+        var loadingInterval = setInterval(function() {
+            if (!SA_BUILDER_PROGRESS_POPUP_REF || SA_BUILDER_CANCELLED) {
+                clearInterval(loadingInterval);
+                return;
+            }
+            dots = (dots % 3) + 1;
+            var text = "Running";
+            for (var i = 0; i < dots; i++) text += ".";
+            loadingDiv.textContent = text;
+        }, 500);
+
+        return {
+            element: container,
+            updateStatus: function(text) {
+                statusDiv.textContent = text;
+            },
+            updateItem: function(index, status) {
+                if (mappedItems[index]) {
+                    mappedItems[index].status = status;
+                    renderItems();
+                }
+            },
+            setComplete: function() {
+                clearInterval(loadingInterval);
+                loadingDiv.textContent = "Done!";
+                loadingDiv.style.color = "#4f4";
+                stopBtn.textContent = "Close";
+                stopBtn.style.background = "#28a745";
+            }
+        };
+    }
+
+    // Start the adding process
+    async function startSABuilderAddProcess(userSelection) {
+        // Get existing items from storage
+        var existingItems = [];
+        try {
+            var raw = localStorage.getItem(STORAGE_SA_BUILDER_EXISTING);
+            if (raw) existingItems = JSON.parse(raw);
+        } catch (e) {}
+
+        // Create mapped items
+        var mappedItems = createMappedItemList(userSelection, existingItems);
+
+        // Log mapped items
+        log("SA Builder: Mapped items list:");
+        for (var i = 0; i < mappedItems.length; i++) {
+            log("  " + (i + 1) + ". " + mappedItems[i].key + " [" + mappedItems[i].status + "]");
+        }
+
+        // Store for persistence
+        try {
+            localStorage.setItem(STORAGE_SA_BUILDER_MAPPED_ITEMS, JSON.stringify(mappedItems));
+            localStorage.setItem(STORAGE_SA_BUILDER_RUNNING, "1");
+            localStorage.setItem(STORAGE_SA_BUILDER_CURRENT_INDEX, "0");
+        } catch (e) {}
+
+        // Create progress popup
+        var progressContent = createSABuilderProgressPopup(mappedItems);
+        SA_BUILDER_PROGRESS_POPUP_REF = createPopup({
+            title: "Adding Scheduled Activities",
+            content: progressContent.element,
+            width: "600px",
+            height: "auto",
+            maxHeight: "80%",
+            onClose: function() {
+                SA_BUILDER_CANCELLED = true;
+                log("SA Builder: cancelled by user (X button)");
+                clearSABuilderStorage();
+                SA_BUILDER_PROGRESS_POPUP_REF = null;
+            }
+        });
+        log("SA_BUILDER_CANCELLED: " + SA_BUILDER_CANCELLED);
+        if (SA_BUILDER_CANCELLED) {
+            log("SA Builder: cancelled");
+            return;
+        }
+        // Process items
+        var timeOffset = userSelection.timeOffset || { days: 0, hours: 0, minutes: 0, seconds: 0 };
+        log("SA Builder: Using time offset - Days: " + timeOffset.days + ", Hours: " + timeOffset.hours + ", Minutes: " + timeOffset.minutes + ", Seconds: " + timeOffset.seconds);
+
+        for (var idx = 0; idx < mappedItems.length; idx++) {
+            if (SA_BUILDER_CANCELLED) {
+                log("SA Builder: cancelled");
+                break;
+            }
+
+            var item = mappedItems[idx];
+
+            // Skip duplicates
+            if (item.status === "Duplicate (Removed)") {
+                log("SA Builder: skipping duplicate - " + item.key);
+                continue;
+            }
+
+            progressContent.updateStatus("Adding item " + (idx + 1) + " of " + mappedItems.length);
+            log("SA Builder: adding item " + (idx + 1) + " - " + item.key);
+
+            try {
+                // Check cancellation before starting
+                if (SA_BUILDER_CANCELLED) {
+                    log("SA Builder: cancelled before Add button");
+                    break;
+                }
+
+                // Click Add button
+                if (!clickAddSaButton()) {
+                    log("SA Builder: failed to click Add button");
+                    break;
+                }
+
+                // Wait for modal
+                var modal = await waitForSAModal(10000);
+                if (!modal) {
+                    log("SA Builder: modal did not appear");
+                    break;
+                }
+
+                // Check cancellation after modal appears
+                if (SA_BUILDER_CANCELLED) {
+                    log("SA Builder: cancelled after modal appeared");
+                    break;
+                }
+
+                await sleep(1000);
+
+                // Check cancellation before selections
+                if (SA_BUILDER_CANCELLED) {
+                    log("SA Builder: cancelled before selections");
+                    break;
+                }
+                log("SA_BUILDER_CANCELLED: " + SA_BUILDER_CANCELLED);
+                // Select segment
+                log("SA Builder: selecting segment " + item.segmentText + " (value: " + item.segmentValue + ")");
+                await selectSelect2Value("segment", item.segmentValue);
+                await sleep(500);
+
+                // Check cancellation
+                if (SA_BUILDER_CANCELLED) {
+                    log("SA Builder: cancelled after segment selection");
+                    break;
+                }
+
+                // Select study event
+                log("SA Builder: selecting study event " + item.eventText + " (value: " + item.eventValue + ")");
+                await selectSelect2Value("studyEvent", item.eventValue);
+                await sleep(500);
+
+                // Check cancellation
+                if (SA_BUILDER_CANCELLED) {
+                    log("SA Builder: cancelled after study event selection");
+                    break;
+                }
+
+                // Select form
+                log("SA Builder: selecting form " + item.formText + " (value: " + item.formValue + ")");
+                await selectSelect2Value("form", item.formValue);
+                await sleep(500);
+
+                // Check cancellation
+                if (SA_BUILDER_CANCELLED) {
+                    log("SA Builder: cancelled after form selection");
+                    break;
+                }
+                // Check Hidden checkbox if user selected it
+                if (userSelection.hidden) {
+                    var hiddenCheckboxEl = document.querySelector("#uniform-hidden span input#hidden.checkbox");
+                    if (!hiddenCheckboxEl) {
+                        hiddenCheckboxEl = document.getElementById("hidden");
                     }
-    
-                    // Clear pre/post window fields
-                    var preWindow = document.getElementById("preWindow");
-                    var postWindow = document.getElementById("postWindow");
-                    if (preWindow) {
-                        preWindow.value = "";
-                        preWindow.dispatchEvent(new Event("input", { bubbles: true }));
+                    if (hiddenCheckboxEl && !hiddenCheckboxEl.checked) {
+                        hiddenCheckboxEl.click();
+                        log("SA Builder: Hidden checkbox checked");
+                        await sleep(200);
                     }
-                    if (postWindow) {
-                        postWindow.value = "";
-                        postWindow.dispatchEvent(new Event("input", { bubbles: true }));
+                }
+
+                // Handle Mandatory checkbox (default is checked, uncheck if user unchecked it)
+                if (!userSelection.mandatory) {
+                    var mandatoryEl = document.querySelector("#uniform-mandatory span input#mandatory.checkbox");
+                    if (!mandatoryEl) {
+                        mandatoryEl = document.getElementById("mandatory");
                     }
-    
-                    // Set time offset values
+                    if (mandatoryEl && mandatoryEl.checked) {
+                        mandatoryEl.click();
+                        log("SA Builder: Mandatory checkbox unchecked");
+                        await sleep(200);
+                    }
+                }
+
+                // Handle Enforce Data Collection Order checkbox (default is unchecked, check if user checked it)
+                if (userSelection.enforce) {
+                    var enforceEl = document.querySelector("#uniform-enforceDataCollectionOrder span input#enforceDataCollectionOrder.checkbox");
+                    if (!enforceEl) {
+                        enforceEl = document.getElementById("enforceDataCollectionOrder");
+                    }
+                    if (enforceEl && !enforceEl.checked) {
+                        enforceEl.click();
+                        log("SA Builder: Enforce Data Collection Order checkbox checked");
+                        await sleep(200);
+                    }
+                }
+
+                // Handle Pre-Window and Post-Window fields
+                var preWindow = document.getElementById("preWindow");
+                var postWindow = document.getElementById("postWindow");
+                if (preWindow) {
+                    preWindow.value = userSelection.preWindow || "";
+                    preWindow.dispatchEvent(new Event("input", { bubbles: true }));
+                    log("SA Builder: Pre-Window set to '" + (userSelection.preWindow || "") + "'");
+                }
+                if (postWindow) {
+                    postWindow.value = userSelection.postWindow || "";
+                    postWindow.dispatchEvent(new Event("input", { bubbles: true }));
+                    log("SA Builder: Post-Window set to '" + (userSelection.postWindow || "") + "'");
+                }
+
+                // Handle Reference Activity checkbox
+                if (userSelection.refActivity) {
+                    var refActivityEl = document.getElementById("referenceActivity");
+                    if (refActivityEl && !refActivityEl.checked) {
+                        refActivityEl.click();
+                        log("SA Builder: Reference Activity checkbox checked");
+                        await sleep(200);
+                    }
+                }
+
+                // Set time offset values (skip if Reference Activity is checked)
+                if (!userSelection.refActivity) {
                     var daysInput = document.querySelector("input[name='offset.days']");
                     var hoursInput = document.querySelector("input[name='offset.hours']");
                     var minutesInput = document.querySelector("input[name='offset.minutes']");
                     var secondsInput = document.querySelector("input[name='offset.seconds']");
-    
+
                     if (daysInput) {
                         daysInput.value = String(timeOffset.days);
                         daysInput.dispatchEvent(new Event("input", { bubbles: true }));
@@ -1220,219 +1613,220 @@
                         secondsInput.value = String(timeOffset.seconds);
                         secondsInput.dispatchEvent(new Event("input", { bubbles: true }));
                     }
-    
-                    await sleep(300);
-    
-                    // Check cancellation before saving
-                    if (SA_BUILDER_CANCELLED) {
-                        log("SA Builder: cancelled before Save button");
-                        break;
-                    }
-    
-                    // Click Save
-                    var saveBtn = document.getElementById("actionButton");
-                    if (saveBtn) {
-                        saveBtn.click();
-                        log("SA Builder: Save button clicked");
-                    } else {
-                        log("SA Builder: Save button not found");
-                        break;
-                    }
-    
-                    // Wait for modal to close
-                    var closed = await waitForSAModalClose(10000);
-                    if (!closed) {
-                        log("SA Builder: modal did not close");
-                        break;
-                    }
-    
-                    // Check cancellation after save completes
-                    if (SA_BUILDER_CANCELLED) {
-                        log("SA Builder: cancelled after save completed");
-                        break;
-                    }
-    
-                    // Update status
-                    mappedItems[idx].status = "Complete";
-                    progressContent.updateItem(idx, "Complete");
-                    log("SA Builder: item completed - " + item.key);
-    
-                    // Wait for table refresh
-                    await sleep(2000);
-    
-                    // Check cancellation after table refresh wait
-                    if (SA_BUILDER_CANCELLED) {
-                        log("SA Builder: cancelled after table refresh wait");
-                        break;
-                    }
-    
-                } catch (err) {
-                    log("SA Builder: error adding item - " + String(err));
+                } else {
+                    log("SA Builder: Skipping time offset values (Reference Activity checked)");
+                }
+
+                await sleep(300);
+
+                // Check cancellation before saving
+                if (SA_BUILDER_CANCELLED) {
+                    log("SA Builder: cancelled before Save button");
                     break;
                 }
-            }
-    
-            // Complete
-            if (!SA_BUILDER_CANCELLED) {
-                progressContent.updateStatus("Completed!");
-                progressContent.setComplete();
-                log("SA Builder: all items processed");
-            }
-    
-            if (SA_BUILDER_CANCELLED) {
-                log("SA Builder: cancelled");
-                return;
-            }
-            // Clear running state
-            try {
-                localStorage.removeItem(STORAGE_SA_BUILDER_RUNNING);
-                localStorage.removeItem(STORAGE_SA_BUILDER_CURRENT_INDEX);
-            } catch (e) {}
-        }
-    
-        // Main entry point for SA Builder
-        async function runSABuilder() {
-            // Check if on correct page
-            if (!isOnSABuilderPage()) {
-                var errorPopup = createPopup({
-                    title: "Scheduled Activities Builder",
-                    content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;font-size:16px;margin-bottom:16px;">⚠️ Wrong Page</p><p>You must be on the Activity Plans Show page to use this feature.</p><p style="margin-top:12px;font-size:12px;color:#888;">Required URL: ' + SA_BUILDER_TARGET_URL + '</p></div>',
-                    width: "450px",
-                    height: "auto"
-                });
-                log("SA Builder: wrong page - " + location.href);
-                return;
-            }
-    
-            // Show loading popup
-            var loadingContent = document.createElement("div");
-            loadingContent.style.cssText = "text-align:center;padding:30px;";
-            loadingContent.innerHTML = '<div style="font-size:16px;margin-bottom:16px;">Collecting data...</div><div id="saBuilderLoadingDots" style="color:#9df;">Loading.</div>';
-    
-            var loadingPopup = createPopup({
-                title: "Scheduled Activities Builder",
-                content: loadingContent,
-                width: "350px",
-                height: "auto",
-            });
-    
-            // Animate loading
-            var dots = 1;
-            var loadingInterval = setInterval(function() {
-                var el = document.getElementById("saBuilderLoadingDots");
-                if (!el || SA_BUILDER_CANCELLED) {
-                    clearInterval(loadingInterval);
-                    return;
+
+                // Click Save
+                var saveBtn = document.getElementById("actionButton");
+                if (saveBtn) {
+                    saveBtn.click();
+                    log("SA Builder: Save button clicked");
+                } else {
+                    log("SA Builder: Save button not found");
+                    break;
                 }
-                dots = (dots % 3) + 1;
-                var text = "Loading";
-                for (var i = 0; i < dots; i++) text += ".";
-                el.textContent = text;
-            }, 500);
-    
-            // Scan existing table
-            var existingItems = scanExistingSATable();
-            try {
-                localStorage.setItem(STORAGE_SA_BUILDER_EXISTING, JSON.stringify(existingItems));
-            } catch (e) {}
-    
-            // Check if Add button is disabled
-            if (isAddSaButtonDisabled()) {
+
+                // Wait for modal to close
+                var closed = await waitForSAModalClose(10000);
+                if (!closed) {
+                    log("SA Builder: modal did not close");
+                    break;
+                }
+
+                // Check cancellation after save completes
+                if (SA_BUILDER_CANCELLED) {
+                    log("SA Builder: cancelled after save completed");
+                    break;
+                }
+
+                // Update status
+                mappedItems[idx].status = "Complete";
+                progressContent.updateItem(idx, "Complete");
+                log("SA Builder: item completed - " + item.key);
+
+                // Wait for table refresh
+                await sleep(2000);
+
+                // Check cancellation after table refresh wait
+                if (SA_BUILDER_CANCELLED) {
+                    log("SA Builder: cancelled after table refresh wait");
+                    break;
+                }
+
+            } catch (err) {
+                log("SA Builder: error adding item - " + String(err));
+                break;
+            }
+        }
+
+        // Complete
+        if (!SA_BUILDER_CANCELLED) {
+            progressContent.updateStatus("Completed!");
+            progressContent.setComplete();
+            log("SA Builder: all items processed");
+        }
+
+        if (SA_BUILDER_CANCELLED) {
+            log("SA Builder: cancelled");
+            return;
+        }
+        // Clear running state
+        try {
+            localStorage.removeItem(STORAGE_SA_BUILDER_RUNNING);
+            localStorage.removeItem(STORAGE_SA_BUILDER_CURRENT_INDEX);
+        } catch (e) {}
+    }
+
+    // Main entry point for SA Builder
+    async function runSABuilder() {
+        // Check if on correct page
+        if (!isOnSABuilderPage()) {
+            var errorPopup = createPopup({
+                title: "Scheduled Activities Builder",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;font-size:16px;margin-bottom:16px;">⚠️ Wrong Page</p><p>You must be on the Activity Plans Show page to use this feature.</p><p style="margin-top:12px;font-size:12px;color:#888;">Required URL: ' + SA_BUILDER_TARGET_URL + '</p></div>',
+                width: "450px",
+                height: "auto"
+            });
+            log("SA Builder: wrong page - " + location.href);
+            return;
+        }
+
+        // Show loading popup
+        var loadingContent = document.createElement("div");
+        loadingContent.style.cssText = "text-align:center;padding:30px;";
+        loadingContent.innerHTML = '<div style="font-size:16px;margin-bottom:16px;">Collecting data...</div><div id="saBuilderLoadingDots" style="color:#9df;">Loading.</div>';
+
+        var loadingPopup = createPopup({
+            title: "Scheduled Activities Builder",
+            content: loadingContent,
+            width: "350px",
+            height: "auto",
+        });
+
+        // Animate loading
+        var dots = 1;
+        var loadingInterval = setInterval(function() {
+            var el = document.getElementById("saBuilderLoadingDots");
+            if (!el || SA_BUILDER_CANCELLED) {
                 clearInterval(loadingInterval);
-                loadingPopup.close();
-                createPopup({
-                    title: "Scheduled Activities Builder",
-                    content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;font-size:16px;margin-bottom:16px;">⚠️ Add Button Disabled</p><p>The Add button is currently disabled. This activity plan may no longer be in design mode.</p></div>',
-                    width: "400px",
-                    height: "auto"
-                });
-                log("SA Builder: Add button is disabled");
                 return;
             }
-    
-            // Click Add button to open modal
-            if (!clickAddSaButton()) {
-                clearInterval(loadingInterval);
-                loadingPopup.close();
-                createPopup({
-                    title: "Scheduled Activities Builder",
-                    content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;">Failed to find or click the Add button.</p></div>',
-                    width: "350px",
-                    height: "auto"
-                });
-                return;
-            }
-    
-            // Wait for modal
-            var modal = await waitForSAModal(10000);
-            if (!modal) {
-                clearInterval(loadingInterval);
-                loadingPopup.close();
-                createPopup({
-                    title: "Scheduled Activities Builder",
-                    content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;">Modal did not appear within timeout.</p></div>',
-                    width: "350px",
-                    height: "auto"
-                });
-                return;
-            }
-    
-            // Collect dropdown data
-            var dropdownData = await collectModalDropdownData();
-    
-            // Store for persistence
-            try {
-                localStorage.setItem(STORAGE_SA_BUILDER_SEGMENTS, JSON.stringify(dropdownData.segments));
-                localStorage.setItem(STORAGE_SA_BUILDER_STUDY_EVENTS, JSON.stringify(dropdownData.studyEvents));
-                localStorage.setItem(STORAGE_SA_BUILDER_FORMS, JSON.stringify(dropdownData.forms));
-            } catch (e) {}
-    
-            // Close the modal
-            var closeBtn = modal.querySelector(".close, [data-dismiss='modal']");
-            if (closeBtn) {
-                closeBtn.click();
-            } else {
-                var escEvent = new KeyboardEvent("keydown", { key: "Escape", bubbles: true });
-                document.dispatchEvent(escEvent);
-            }
-            await sleep(500);
-    
+            dots = (dots % 3) + 1;
+            var text = "Loading";
+            for (var i = 0; i < dots; i++) text += ".";
+            el.textContent = text;
+        }, 500);
+
+        // Scan existing table
+        var existingItems = scanExistingSATable();
+        try {
+            localStorage.setItem(STORAGE_SA_BUILDER_EXISTING, JSON.stringify(existingItems));
+        } catch (e) {}
+
+        // Check if Add button is disabled
+        if (isAddSaButtonDisabled()) {
             clearInterval(loadingInterval);
             loadingPopup.close();
-    
-            if (SA_BUILDER_CANCELLED) {
-                log("SA Builder: cancelled during data collection");
-                return;
-            }
-    
-            // Show selection GUI
-            var guiContent = createSABuilderSelectionGUI(dropdownData.segments, dropdownData.studyEvents, dropdownData.forms);
-            SA_BUILDER_POPUP_REF = createPopup({
-                title: "Scheduled Activities Builder - Select Items",
-                description: "Choose segments, study events, and forms to add scheduled activities",
-                content: guiContent,
-                width: "95%",
-                maxWidth: "1400px",
-                height: "80%",
-                maxHeight: "800px",
-                onClose: function() {
-                    // Only clear storage if user explicitly cancelled, not on auto-close
-                    if (SA_BUILDER_CANCELLED) {
-                        clearSABuilderStorage();
-                        log("SA Builder: cancelled after table refresh wait");
-                    }
-                    SA_BUILDER_POPUP_REF = null;
-                }
+            createPopup({
+                title: "Scheduled Activities Builder",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;font-size:16px;margin-bottom:16px;">⚠️ Add Button Disabled</p><p>The Add button is currently disabled. This activity plan may no longer be in design mode.</p></div>',
+                width: "400px",
+                height: "auto"
             });
-            if (SA_BUILDER_CANCELLED) {
-                log("SA Builder: cancelled after table refresh wait");
-                return;
-            }
-            log("SA Builder: selection GUI displayed");
+            log("SA Builder: Add button is disabled");
+            return;
         }
-    
-    
-        //==========================
+
+        // Click Add button to open modal
+        if (!clickAddSaButton()) {
+            clearInterval(loadingInterval);
+            loadingPopup.close();
+            createPopup({
+                title: "Scheduled Activities Builder",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;">Failed to find or click the Add button.</p></div>',
+                width: "350px",
+                height: "auto"
+            });
+            return;
+        }
+
+        // Wait for modal
+        var modal = await waitForSAModal(10000);
+        if (!modal) {
+            clearInterval(loadingInterval);
+            loadingPopup.close();
+            createPopup({
+                title: "Scheduled Activities Builder",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;">Modal did not appear within timeout.</p></div>',
+                width: "350px",
+                height: "auto"
+            });
+            return;
+        }
+
+        // Collect dropdown data
+        var dropdownData = await collectModalDropdownData();
+
+        // Store for persistence
+        try {
+            localStorage.setItem(STORAGE_SA_BUILDER_SEGMENTS, JSON.stringify(dropdownData.segments));
+            localStorage.setItem(STORAGE_SA_BUILDER_STUDY_EVENTS, JSON.stringify(dropdownData.studyEvents));
+            localStorage.setItem(STORAGE_SA_BUILDER_FORMS, JSON.stringify(dropdownData.forms));
+        } catch (e) {}
+
+        // Close the modal
+        var closeBtn = modal.querySelector(".close, [data-dismiss='modal']");
+        if (closeBtn) {
+            closeBtn.click();
+        } else {
+            var escEvent = new KeyboardEvent("keydown", { key: "Escape", bubbles: true });
+            document.dispatchEvent(escEvent);
+        }
+        await sleep(500);
+
+        clearInterval(loadingInterval);
+        loadingPopup.close();
+
+        if (SA_BUILDER_CANCELLED) {
+            log("SA Builder: cancelled during data collection");
+            return;
+        }
+
+        // Show selection GUI
+        var guiContent = createSABuilderSelectionGUI(dropdownData.segments, dropdownData.studyEvents, dropdownData.forms);
+        SA_BUILDER_POPUP_REF = createPopup({
+            title: "Scheduled Activities Builder - Select Items",
+            content: guiContent,
+            width: "95%",
+            maxWidth: "1400px",
+            height: "80%",
+            maxHeight: "800px",
+            onClose: function() {
+                // Only clear storage if user explicitly cancelled, not on auto-close
+                if (SA_BUILDER_CANCELLED) {
+                    clearSABuilderStorage();
+                    log("SA Builder: cancelled after table refresh wait");
+                }
+                SA_BUILDER_POPUP_REF = null;
+            }
+        });
+        if (SA_BUILDER_CANCELLED) {
+            log("SA Builder: cancelled after table refresh wait");
+            return;
+        }
+        log("SA Builder: selection GUI displayed");
+    }
+
+    //==========================
     // BACKGROUND HTTP REQUEST HELPERS
     //==========================
     // Helper functions for making background HTTP requests without opening tabs
