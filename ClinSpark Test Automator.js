@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.1.0
+// @version 3.1.1
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -87,6 +87,7 @@
     var STORAGE_FIND_STUDY_EVENT_STATUS_VALUES = "activityPlanState.findStudyEvent.statusValues";
 
     var STUDY_EVENT_POPUP_TITLE = "Find Study Events";
+    var STUDY_EVENT_POPUP_DESCRIPTION = "Auto-navigate to Study Events data page based on keywords and status";
     var STUDY_EVENT_POPUP_KEYWORD_LABEL = "Study Event Keyword";
     var STUDY_EVENT_POPUP_SUBJECT_LABEL = "Subject Identifier";
     var STUDY_EVENT_POPUP_OK_TEXT = "Continue";
@@ -98,6 +99,7 @@
     // Run Find Form
     var FORM_LIST_URL = "https://cenexeltest.clinspark.com/secure/study/data/list";
     var FORM_POPUP_TITLE = "Find Form";
+    var FORM_POPUP_DESCRIPTION = "Auto-navigate to Form data page based on keywords and status"; 
     var FORM_POPUP_KEYWORD_LABEL = "Form Keyword";
     var FORM_POPUP_SUBJECT_LABEL = "Subject Identifier";
     var FORM_POPUP_OK_TEXT = "Continue";
@@ -110,6 +112,8 @@
     const RUNMODE_CLEAR_MAPPING = "clearMapping";
 
     // Run Parse Method
+    var PARSE_METHOD_POPUP_TITLE = "Parse Method";
+    var PARSE_METHOD_POPUP_DESCRIPTION = "Auto-navigate to data page with forms that has methods that pulls this item.";
     var STORAGE_PARSE_METHOD_RUNNING = "activityPlanState.parseMethod.running";
     var STORAGE_PARSE_METHOD_ITEM_NAME = "activityPlanState.parseMethod.itemName";
     var STORAGE_PARSE_METHOD_RESULTS = "activityPlanState.parseMethod.results";
@@ -130,6 +134,8 @@
     var IMPORT_COHORT_POPUP_REF = null;
     var ADD_COHORT_POPUP_REF = null;
     var ICF_BARCODE_POPUP_REF = null;
+    var RUN_ALL_POPUP_TITLE = "Run All";
+    var RUN_ALL_POPUP_DESCRIPTION = "Auto-navigate to Run All data page based on keywords and status";
     const STORAGE_RUN_ALL_POPUP = "activityPlanState.runAllPopup";
     const STORAGE_ICF_BARCODE_POPUP = "activityPlanState.icfBarcodePopup";
     const STORAGE_RUN_ALL_STATUS = "activityPlanState.runAllStatus";
@@ -139,6 +145,8 @@
     const STORAGE_ADD_COHORT_POPUP = "activityPlanState.addCohortPopup";
 
     // Run Subject Eligibility
+    var ELIGIBILITY_POPUP_TITLE = "Run Subject Eligibility";
+    var ELIGIBILITY_POPUP_DESCRIPTION = "Auto-navigate to Run Subject Eligibility data page based on keywords and status";
     var STORAGE_ELIG_FORM_EXCLUSION = "activityPlanState.elig.formExclusion";
     var STORAGE_ELIG_FORM_PRIORITY = "activityPlanState.elig.formPriority";
     var STORAGE_ELIG_FORM_PRIORITY_ONLY = "activityPlanState.elig.formPriorityOnly";
@@ -152,7 +160,8 @@
     var DEFAULT_FORM_EXCLUSION = "check";
     var DEFAULT_FORM_PRIORITY = "mh, bm, review, process, dm, rep, subs, med, elg_pi, vitals, ecg";
 
-
+    var CLEAR_MAPPING_CANCELED = false;
+    var CLEAR_MAPPING_PAUSE = false;
     //==========================
     // ADD EXISTING SUBJECT FEATURE
     //==========================
@@ -160,6 +169,8 @@
     //==========================
     // Add Existing Subject Feature
 
+    var ADD_EXISTING_SUBJECT_POPUP_TITLE = "Add Existing Subject";
+    var ADD_EXISTING_SUBJECT_POPUP_DESCRIPTION = "Auto-navigate to Add Existing Subject data page based on keywords and status";
     var RUNMODE_ADD_EXISTING_SUBJECT = "addExistingSubject";
     var STORAGE_AES_POPUP = "activityPlanState.aes.popup";
     var STORAGE_AES_SELECTED_EPOCH = "activityPlanState.aes.selectedEpoch";
@@ -1497,6 +1508,8 @@
     // segments, study events, and forms, then automatically populating and submitting them.
     //==========================
 
+    var SA_BUILDER_POPUP_TITLE = "Scheduled Activities Builder";
+    var SA_BUILDER_POPUP_DESCRIPTION = "Auto-navigate to Scheduled Activities Builder data page based on keywords and status";
     var STORAGE_SA_BUILDER_EXISTING = "activityPlanState.saBuilder.existing";
     var STORAGE_SA_BUILDER_SEGMENTS = "activityPlanState.saBuilder.segments";
     var STORAGE_SA_BUILDER_STUDY_EVENTS = "activityPlanState.saBuilder.studyEvents";
@@ -2400,7 +2413,8 @@
         // Create progress popup
         var progressContent = createSABuilderProgressPopup(mappedItems);
         SA_BUILDER_PROGRESS_POPUP_REF = createPopup({
-            title: "Adding Scheduled Activities",
+            title: SA_BUILDER_POPUP_TITLE,
+            description: "Choose segments, study events, and forms to add scheduled activities",
             content: progressContent.element,
             width: "600px",
             height: "auto",
@@ -2728,6 +2742,7 @@
         var guiContent = createSABuilderSelectionGUI(dropdownData.segments, dropdownData.studyEvents, dropdownData.forms);
         SA_BUILDER_POPUP_REF = createPopup({
             title: "Scheduled Activities Builder - Select Items",
+            description: "Choose segments, study events, and forms to add scheduled activities",
             content: guiContent,
             width: "95%",
             maxWidth: "1400px",
@@ -3023,7 +3038,7 @@
         btnRow.appendChild(okBtn);
         container.appendChild(btnRow);
 
-        var popup = createPopup({ title: STUDY_EVENT_POPUP_TITLE, content: container, width: "520px", height: "auto" });
+        var popup = createPopup({ title: STUDY_EVENT_POPUP_TITLE, description: STUDY_EVENT_POPUP_DESCRIPTION, content: container, width: "520px", height: "auto" });
 
         window.setTimeout(function () {
             try {
@@ -3916,7 +3931,7 @@
         btnRow.appendChild(okBtn);
         container.appendChild(btnRow);
 
-        var popup = createPopup({ title: FORM_POPUP_TITLE, content: container, width: "520px", height: "auto" });
+        var popup = createPopup({ title: FORM_POPUP_TITLE, description: FORM_POPUP_DESCRIPTION, content: container, width: "520px", height: "auto" });
 
         window.setTimeout(function () {
             try {
@@ -4279,7 +4294,7 @@
         okBtn.style.cssText = "background:#0b82ff;color:#fff;border:none;border-radius:6px;padding:10px 30px;cursor:pointer;font-weight:600";
         okRow.appendChild(okBtn);
         container.appendChild(okRow);
-        var popup = createPopup({ title: "Parse Method", content: container, width: "480px", height: "auto", onClose: function() { stopParseMethodAutomation(); } });
+        var popup = createPopup({ title: PARSE_METHOD_POPUP_TITLE, description: PARSE_METHOD_POPUP_DESCRIPTION, content: container, width: "480px", height: "auto", onClose: function() { stopParseMethodAutomation(); } });
         setTimeout(function() { try { inputEl.focus(); } catch (e) {} }, 50);
 
         function doConfirm() {
@@ -4947,6 +4962,7 @@
 
         var popup = createPopup({
             title: "Locating Barcode",
+            description: "Locating barcode in background…",
             content: loadingText,
             width: "300px",
             height: "auto"
@@ -5075,6 +5091,7 @@
 
         var pop = createPopup({
             title: "Collect All",
+            description: "Collect all forms for the current subject.",
             content: popupContainer,
             width: "450px",
             height: "500px",
@@ -5324,6 +5341,10 @@
     function ClearEligibilityFunctions() {}
 
     function startClearMapping() {
+        if (CLEAR_MAPPING_CANCELED) {
+            log("ClearMapping: startClearMapping cancelled");
+            return;
+        }
         log("ClearMapping: startClearMapping invoked");
 
         try {
@@ -5342,6 +5363,10 @@
     }
 
     async function executeClearMappingAutomation() {
+        if (CLEAR_MAPPING_CANCELED) {
+            log("ClearMapping: executeClearMappingAutomation cancelled");
+            return;
+        }
         log("ClearMapping: executor started");
 
         var path = location.pathname;
@@ -5377,6 +5402,10 @@
 
 
     async function deleteFirstEligibilityRow() {
+        if (CLEAR_MAPPING_CANCELED) {
+            log("ClearMapping: deleteFirstEligibilityRow cancelled");
+            return;
+        }
         log("ClearMapping: deleteFirstEligibilityRow started");
 
         var tbody = await waitForSelector("tbody#eligibilityRefTableBody", 15000);
@@ -5423,6 +5452,10 @@
 
         var i = 0;
         while (i < items.length) {
+            if (CLEAR_MAPPING_CANCELED) {
+                log("ClearMapping: deleteFirstEligibilityRow cancelled");
+                return;
+            }
             var a = items[i];
             var txt = (a.textContent + "").trim().toLowerCase();
             if (txt.indexOf("delete") >= 0) {
@@ -5438,6 +5471,10 @@
             return;
         }
 
+        if (CLEAR_MAPPING_CANCELED) {
+            log("ClearMapping: deleteFirstEligibilityRow cancelled");
+            return;
+        }
         log("ClearMapping: clicking delete link");
         deleteLink.click();
         await sleep(600);
@@ -5448,6 +5485,10 @@
         var maxWait = 4000;
 
         while (waited < maxWait) {
+            if (CLEAR_MAPPING_CANCELED) {
+                log("ClearMapping: deleteFirstEligibilityRow cancelled");
+                return;
+            }
             okBtn = document.querySelector("button[data-bb-handler='confirm'].btn.btn-primary");
             if (okBtn) {
                 break;
@@ -6115,6 +6156,7 @@
 
         var popup = createPopup({
             title: "Import Eligibility Mapping",
+            description: "Add I/E items to Eligibility Mapping",
             content: container,
             width: "500px",
             height: "auto",
@@ -11277,7 +11319,7 @@
         contentDiv.appendChild(checkboxRow);
 
         popup = createPopup({
-            title: "Select Epoch for Import",
+            title: "Select Epoch to Import Subject",
             content: contentDiv,
             width: "350px",
             height: "auto",
@@ -13910,6 +13952,7 @@
 
                     RUN_ALL_POPUP_REF = createPopup({
                         title: "Run Button (1-5) Progress",
+                        description: "Run 'Lock Activity Plans', 'Lock Sample Paths', 'Update Study Status', 'Add Cohort Subjects', and 'Run ICF Barcode'",
                         content: popupContainer,
                         width: "400px",
                         height: "auto",
@@ -13980,6 +14023,7 @@
 
                     CLEAR_MAPPING_POPUP_REF = createPopup({
                         title: "Clear Mapping",
+                        description: "Remove each I/E item on Eligibility Mapping",
                         content: popupContainer,
                         width: "350px",
                         height: "auto",
@@ -15092,6 +15136,7 @@
     function createPopup(options) {
         options = options || {};
         var title = options.title || "Popup";
+        var description = options.description || "";
         var content = options.content || "";
         var width = options.width || "400px";
         var height = options.height || "auto";
@@ -15141,11 +15186,28 @@
         headerBar.style.cursor = "move";
         headerBar.style.userSelect = "none";
 
+        var titleContainer = document.createElement("div");
+        titleContainer.style.display = "flex";
+        titleContainer.style.flexDirection = "column";
+        titleContainer.style.justifyContent = "center";
+
         var titleEl = document.createElement("div");
         titleEl.textContent = title;
         titleEl.style.fontWeight = "600";
         titleEl.style.textAlign = "left";
-        headerBar.appendChild(titleEl);
+        titleContainer.appendChild(titleEl);
+
+        if (description) {
+            var descEl = document.createElement("div");
+            descEl.textContent = description;
+            descEl.style.fontSize = "12px";
+            descEl.style.color = "#aaa";
+            descEl.style.textAlign = "left";
+            descEl.style.marginTop = "2px";
+            titleContainer.appendChild(descEl);
+        }
+
+        headerBar.appendChild(titleContainer);
 
         var closeBtn = document.createElement("button");
         closeBtn.textContent = "✕";
@@ -16139,6 +16201,7 @@
 
             ICF_BARCODE_POPUP_REF = createPopup({
                 title: "Run ICF Barcode Progress",
+                description: "Collect the last subject ICF Barcode",
                 content: popupContainer,
                 width: "400px",
                 height: "auto",
@@ -16219,6 +16282,7 @@
 
             RUN_ALL_POPUP_REF = createPopup({
                 title: "Run Button (1-5) Progress",
+                description: "Run 'Lock Activity Plans', 'Lock Sample Paths', 'Update Study Status', 'Add Cohort Subjects', 'Run ICF Barcode'",
                 content: popupContainer,
                 width: "400px",
                 height: "auto",
@@ -16272,6 +16336,7 @@
                 pauseBtn.textContent = "Pause";
                 status.textContent = "Resumed";
                 SA_BUILDER_PAUSE = false;
+                CLEAR_MAPPING_PAUSE = false;
                 log("Resumed");
             } else {
                 setPaused(true);
@@ -16282,6 +16347,7 @@
                 COLLECT_ALL_CANCELLED = true;
                 SA_BUILDER_PAUSE = true;
                 SA_BUILDER_CANCELLED = true;
+                CLEAR_MAPPING_CANCELED = true;
                 clearCollectAllData();
                 clearEligibilityWorkingState();
                 if (SA_BUILDER_PROGRESS_POPUP_REF) {
@@ -16378,7 +16444,11 @@
         });
         clearMappingBtn.addEventListener("click", function () {
             log("ClearMapping: button clicked");
-
+            CLEAR_MAPPING_CANCELED = false;
+            if (CLEAR_MAPPING_PAUSE == true) {
+                log("ClearMapping: Paused");
+                return;
+            }
             // Create running animation popup
             var popupContainer = document.createElement("div");
             popupContainer.style.display = "flex";
@@ -16405,6 +16475,7 @@
 
             var clearMappingPopup = createPopup({
                 title: "Clear Mapping",
+                description: "Remove every I/E items in Eligibility Mapping",
                 content: popupContainer,
                 width: "350px",
                 height: "auto",
@@ -16415,6 +16486,7 @@
                         localStorage.removeItem(STORAGE_CLEAR_MAPPING_POPUP);
                     } catch (e) {}
                     CLEAR_MAPPING_POPUP_REF = null;
+                    CLEAR_MAPPING_CANCELED = true;
                 }
             });
 
@@ -16739,8 +16811,7 @@
             return;
         }
 
-            if (runModeRaw === RUNMODE_ELIG_IMPORT) {
-
+        if (runModeRaw === RUNMODE_ELIG_IMPORT) {
             if (pendingPopup === "1") {
                 if (!isEligibilityListPage()) {
                     log("ImportElig: pending popup but not on list page; redirecting");
@@ -16882,6 +16953,7 @@
 
                 IMPORT_ELIG_POPUP_REF = createPopup({
                     title: "Import I/E",
+                    description: " Add I/E items to Eligibility Mapping",
                     content: container,
                     width: "500px",
                     height: "auto",
@@ -16923,6 +16995,9 @@
         }
 
         if (runModeRaw === RUNMODE_CLEAR_MAPPING) {
+            if (CLEAR_MAPPING_CANCELED) {
+                return;
+            }
             if (!isEligibilityListPage()) {
                 log("ClearMapping: run mode set but not on list page; redirecting");
                 location.href = "https://cenexeltest.clinspark.com/secure/crfdesign/studylibrary/eligibility/list";
@@ -16930,6 +17005,10 @@
             }
             log("ClearMapping: run mode set on list page; resuming in 4s");
             setTimeout(function () {
+                if (CLEAR_MAPPING_CANCELED) {
+                    return;
+                }
+                logger("CLEAR_MAPPING_CANCELED: " + CLEAR_MAPPING_CANCELED)
                 executeClearMappingAutomation();
             }, 4000);
             return;
