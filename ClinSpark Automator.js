@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.7.6
+// @version     1.7.7
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -159,7 +159,7 @@
     var SA_BUILDER_PROGRESS_POPUP_REF = null;
     var SA_BUILDER_CANCELLED = false;
     var SA_BUILDER_PAUSE = false;
-    var SA_BUILDER_TARGET_URL = "https://cenexeltest.clinspark.com/secure/crfdesign/activityplans/show/";
+    var SA_BUILDER_TARGET_URL = "https://cenexel.clinspark.com/secure/crfdesign/activityplans/show/";
 
     function SABuilderFunctions() {}
 
