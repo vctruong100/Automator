@@ -3344,13 +3344,15 @@
         refActivityRow.appendChild(refActivityLabel);
         timeColumn.appendChild(refActivityRow);
 
-        // Reference Activity disables time inputs
+        // Reference Activity disables time inputs and Pre-Reference checkbox
         refActivityCheckbox.addEventListener("change", function() {
             var isChecked = this.checked;
             var daysEl = document.getElementById("saBuilderDays");
             var hoursEl = document.getElementById("saBuilderHours");
             var minutesEl = document.getElementById("saBuilderMinutes");
             var secondsEl = document.getElementById("saBuilderSeconds");
+            var preRefEl = document.getElementById("saBuilderPreReference");
+            
             if (daysEl) {
                 daysEl.disabled = isChecked;
                 daysEl.style.opacity = isChecked ? "0.5" : "1";
@@ -3367,11 +3369,36 @@
                 secondsEl.disabled = isChecked;
                 secondsEl.style.opacity = isChecked ? "0.5" : "1";
             }
+            if (preRefEl) {
+                preRefEl.disabled = isChecked;
+                preRefEl.style.opacity = isChecked ? "0.5" : "1";
+                if (isChecked) {
+                    preRefEl.checked = false;
+                }
+            }
         });
 
         // Time inputs section (moved below other inputs)
         var timeInputsSection = document.createElement("div");
         timeInputsSection.style.cssText = "padding-top:12px;margin-top:12px;border-top:1px solid #444;";
+
+        // Pre-Reference checkbox row (positioned right above time inputs)
+        var preRefRow = document.createElement("div");
+        preRefRow.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:12px;";
+
+        var preRefCheckbox = document.createElement("input");
+        preRefCheckbox.type = "checkbox";
+        preRefCheckbox.id = "saBuilderPreReference";
+        preRefCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;accent-color:#007bff;";
+
+        var preRefLabel = document.createElement("label");
+        preRefLabel.textContent = "Pre-Reference?";
+        preRefLabel.setAttribute("for", "saBuilderPreReference");
+        preRefLabel.style.cssText = "font-size:13px;font-weight:600;cursor:pointer;";
+
+        preRefRow.appendChild(preRefCheckbox);
+        preRefRow.appendChild(preRefLabel);
+        timeInputsSection.appendChild(preRefRow);
 
         timeInputsSection.appendChild(createTimeInput("Days", "saBuilderDays", 200));
         timeInputsSection.appendChild(createTimeInput("Hours", "saBuilderHours", 23));
@@ -3493,6 +3520,7 @@
             var preWindowValue = document.getElementById("saBuilderPreWindow").value.trim();
             var postWindowValue = document.getElementById("saBuilderPostWindow").value.trim();
             var refActivityChecked = document.getElementById("saBuilderRefActivity").checked;
+            var preReferenceChecked = document.getElementById("saBuilderPreReference").checked;
 
             // If Reference Activity is checked, void the time offset
             if (refActivityChecked) {
@@ -3508,7 +3536,8 @@
                 enforce: enforceChecked,
                 preWindow: preWindowValue,
                 postWindow: postWindowValue,
-                refActivity: refActivityChecked
+                refActivity: refActivityChecked,
+                preReference: preReferenceChecked
             };
             try {
                 localStorage.setItem(STORAGE_SA_BUILDER_USER_SELECTION, JSON.stringify(userSelection));
@@ -3888,6 +3917,19 @@
                     if (refActivityEl && !refActivityEl.checked) {
                         refActivityEl.click();
                         log("SA Builder: Reference Activity checkbox checked");
+                        await sleep(200);
+                    }
+                }
+
+                // Handle Pre-Reference checkbox
+                if (userSelection.preReference) {
+                    var preRefEl = document.querySelector("#uniform-offset\\.preReference span input#offset\\.preReference.checkbox");
+                    if (!preRefEl) {
+                        preRefEl = document.getElementById("offset.preReference");
+                    }
+                    if (preRefEl && !preRefEl.checked) {
+                        preRefEl.click();
+                        log("SA Builder: Pre-Reference checkbox checked");
                         await sleep(200);
                     }
                 }

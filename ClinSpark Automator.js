@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.7.4
+// @version     1.7.6
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -137,7 +137,6 @@
     var SUBJECT_ELIG_POPUP = null;
 
     
-
     //==========================
     // SCHEDULED ACTIVITIES BUILDER FEATURE
     //==========================
@@ -160,7 +159,7 @@
     var SA_BUILDER_PROGRESS_POPUP_REF = null;
     var SA_BUILDER_CANCELLED = false;
     var SA_BUILDER_PAUSE = false;
-    var SA_BUILDER_TARGET_URL = "https://cenexel.clinspark.com/secure/crfdesign/activityplans/show/";
+    var SA_BUILDER_TARGET_URL = "https://cenexeltest.clinspark.com/secure/crfdesign/activityplans/show/";
 
     function SABuilderFunctions() {}
 
@@ -1042,13 +1041,15 @@
         refActivityRow.appendChild(refActivityLabel);
         timeColumn.appendChild(refActivityRow);
 
-        // Reference Activity disables time inputs
+        // Reference Activity disables time inputs and Pre-Reference checkbox
         refActivityCheckbox.addEventListener("change", function() {
             var isChecked = this.checked;
             var daysEl = document.getElementById("saBuilderDays");
             var hoursEl = document.getElementById("saBuilderHours");
             var minutesEl = document.getElementById("saBuilderMinutes");
             var secondsEl = document.getElementById("saBuilderSeconds");
+            var preRefEl = document.getElementById("saBuilderPreReference");
+            
             if (daysEl) {
                 daysEl.disabled = isChecked;
                 daysEl.style.opacity = isChecked ? "0.5" : "1";
@@ -1065,11 +1066,36 @@
                 secondsEl.disabled = isChecked;
                 secondsEl.style.opacity = isChecked ? "0.5" : "1";
             }
+            if (preRefEl) {
+                preRefEl.disabled = isChecked;
+                preRefEl.style.opacity = isChecked ? "0.5" : "1";
+                if (isChecked) {
+                    preRefEl.checked = false;
+                }
+            }
         });
 
         // Time inputs section (moved below other inputs)
         var timeInputsSection = document.createElement("div");
         timeInputsSection.style.cssText = "padding-top:12px;margin-top:12px;border-top:1px solid #444;";
+
+        // Pre-Reference checkbox row (positioned right above time inputs)
+        var preRefRow = document.createElement("div");
+        preRefRow.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:12px;";
+
+        var preRefCheckbox = document.createElement("input");
+        preRefCheckbox.type = "checkbox";
+        preRefCheckbox.id = "saBuilderPreReference";
+        preRefCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;accent-color:#007bff;";
+
+        var preRefLabel = document.createElement("label");
+        preRefLabel.textContent = "Pre-Reference?";
+        preRefLabel.setAttribute("for", "saBuilderPreReference");
+        preRefLabel.style.cssText = "font-size:13px;font-weight:600;cursor:pointer;";
+
+        preRefRow.appendChild(preRefCheckbox);
+        preRefRow.appendChild(preRefLabel);
+        timeInputsSection.appendChild(preRefRow);
 
         timeInputsSection.appendChild(createTimeInput("Days", "saBuilderDays", 200));
         timeInputsSection.appendChild(createTimeInput("Hours", "saBuilderHours", 23));
@@ -1191,6 +1217,7 @@
             var preWindowValue = document.getElementById("saBuilderPreWindow").value.trim();
             var postWindowValue = document.getElementById("saBuilderPostWindow").value.trim();
             var refActivityChecked = document.getElementById("saBuilderRefActivity").checked;
+            var preReferenceChecked = document.getElementById("saBuilderPreReference").checked;
 
             // If Reference Activity is checked, void the time offset
             if (refActivityChecked) {
@@ -1206,7 +1233,8 @@
                 enforce: enforceChecked,
                 preWindow: preWindowValue,
                 postWindow: postWindowValue,
-                refActivity: refActivityChecked
+                refActivity: refActivityChecked,
+                preReference: preReferenceChecked
             };
             try {
                 localStorage.setItem(STORAGE_SA_BUILDER_USER_SELECTION, JSON.stringify(userSelection));
@@ -1590,6 +1618,19 @@
                     }
                 }
 
+                // Handle Pre-Reference checkbox
+                if (userSelection.preReference) {
+                    var preRefEl = document.querySelector("#uniform-offset\\.preReference span input#offset\\.preReference.checkbox");
+                    if (!preRefEl) {
+                        preRefEl = document.getElementById("offset.preReference");
+                    }
+                    if (preRefEl && !preRefEl.checked) {
+                        preRefEl.click();
+                        log("SA Builder: Pre-Reference checkbox checked");
+                        await sleep(200);
+                    }
+                }
+
                 // Set time offset values (skip if Reference Activity is checked)
                 if (!userSelection.refActivity) {
                     var daysInput = document.querySelector("input[name='offset.days']");
@@ -1825,7 +1866,6 @@
         }
         log("SA Builder: selection GUI displayed");
     }
-
     //==========================
     // BACKGROUND HTTP REQUEST HELPERS
     //==========================
@@ -7871,9 +7911,9 @@
             pw = 340;
         }
         var minTop = 0;
-        var maxTop = vh - ph;
-        var minRight = 0;
-        var maxRight = vw - pw;
+        var maxTop = vh - ph / 2;
+        var minRight = -pw / 2;
+        var maxRight = vw - pw / 2;
         if (maxTop < 0) {
             maxTop = 0;
         }
@@ -8000,7 +8040,7 @@
                 resizeHandle.style.display = "none";
             }
             if (collapseBtn) {
-                collapseBtn.textContent = "Expand";
+                collapseBtn.textContent = "+";
             }
         } else {
             var size = getStoredPanelSize();
@@ -8015,7 +8055,7 @@
                 resizeHandle.style.display = "block";
             }
             if (collapseBtn) {
-                collapseBtn.textContent = "Collapse";
+                collapseBtn.textContent = "-";
             }
         }
     }
@@ -8311,7 +8351,7 @@
         var leftSpacer = document.createElement("div");
         leftSpacer.style.width = "32px";
         var title = document.createElement("div");
-        title.textContent = "ClinSpark Test Automator";
+        title.textContent = "Automator";
         title.style.fontWeight = "600";
         title.style.textAlign = "center";
         title.style.justifySelf = "center";
@@ -8681,8 +8721,8 @@
         var pw = panel.offsetWidth || 340;
         var minTop = 0;
         var maxTop = vh - ph;
-        var minRight = 0;
-        var maxRight = vw - pw;
+        var minRight = -pw / 2;
+        var maxRight = vw - pw / 2;
         if (maxTop < 0) {
             maxTop = 0;
         }

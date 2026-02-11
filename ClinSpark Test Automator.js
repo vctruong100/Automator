@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.1.5
+// @version 3.1.6
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -99,7 +99,7 @@
     // Run Find Form
     var FORM_LIST_URL = "https://cenexeltest.clinspark.com/secure/study/data/list";
     var FORM_POPUP_TITLE = "Find Form";
-    var FORM_POPUP_DESCRIPTION = "Auto-navigate to Form data page based on keywords and status"; 
+    var FORM_POPUP_DESCRIPTION = "Auto-navigate to Form data page based on keywords and status";
     var FORM_POPUP_KEYWORD_LABEL = "Form Keyword";
     var FORM_POPUP_SUBJECT_LABEL = "Subject Identifier";
     var FORM_POPUP_OK_TEXT = "Continue";
@@ -301,7 +301,7 @@
     async function startAddExistingSubject() {
         log("AES: starting Add Existing Subject");
         var studiesUrl = "https://cenexeltest.clinspark.com/secure/administration/studies/show";
-        
+
         if (location.href.indexOf(studiesUrl) === -1) {
             log("AES: navigating to studies page");
             setRunMode(RUNMODE_ADD_EXISTING_SUBJECT);
@@ -310,13 +310,13 @@
             location.href = studiesUrl;
             return;
         }
-        
+
         await showEpochSelectionPopup();
     }
 
     async function showEpochSelectionPopup() {
         log("AES: showing epoch selection popup");
-        
+
         var epochTableBody = await waitForSelectorWithRetry("#epochTableBody", 5000, 3);
         if (!epochTableBody) {
             log("AES: epochTableBody not found");
@@ -425,7 +425,7 @@
 
     async function collectAllSubjectsFromEpochs() {
         log("AES: collecting subjects from all epochs");
-        
+
         var popupContent = document.createElement("div");
         popupContent.style.display = "flex";
         popupContent.style.flexDirection = "column";
@@ -689,7 +689,7 @@
 
     async function showSubjectSelectionPopup(collectedData, excludeVolunteerIds) {
         log("AES: showing subject selection popup");
-        
+
         var selectedEpochId = localStorage.getItem(STORAGE_AES_SELECTED_EPOCH) || "";
         var selectedEpochName = localStorage.getItem(STORAGE_AES_SELECTED_EPOCH_NAME) || "";
 
@@ -824,10 +824,10 @@
     async function startCohortAdditionProcess() {
         log("AES: starting cohort addition process");
         setAESStep("navigateToEpoch");
-        
+
         var selectedEpochId = localStorage.getItem(STORAGE_AES_SELECTED_EPOCH) || "";
         var epochUrl = "/secure/administration/studies/epoch/show/" + selectedEpochId;
-        
+
         showAESProgressPopup("Navigating to target epoch...");
         location.href = epochUrl;
     }
@@ -928,7 +928,7 @@
 
         var subjectNumber = localStorage.getItem(STORAGE_AES_SELECTED_SUBJECT) || "";
         var epochName = localStorage.getItem(STORAGE_AES_SELECTED_EPOCH_NAME) || "";
-        
+
         var detailsDiv = document.createElement("div");
         detailsDiv.style.fontSize = "14px";
         detailsDiv.style.color = "#aaa";
@@ -956,7 +956,7 @@
     async function processAESOnPageLoad() {
         var runMode = getRunMode();
         if (runMode !== RUNMODE_ADD_EXISTING_SUBJECT) return;
-        
+
         var step = getAESStep();
         log("AES: processing on page load, step=" + step);
 
@@ -1029,7 +1029,7 @@
     async function processCohortPage() {
         log("AES: processing cohort page");
         var cohortEditDone = localStorage.getItem(STORAGE_AES_COHORT_EDIT_DONE);
-        
+
         if (cohortEditDone !== "1") {
             showAESProgressPopup("Configuring cohort settings...");
             await editCohortSettings();
@@ -1068,7 +1068,7 @@
         }
 
         editLink.click();
-        
+
         var modal = await waitForSelectorWithRetry("#ajaxModal", 10000, 3);
         if (!modal) {
             showAESError("Edit modal did not open.");
@@ -1273,7 +1273,7 @@
             var enterUp = new KeyboardEvent("keyup", { bubbles: true, key: "Enter", keyCode: 13 });
             s2input.dispatchEvent(enterUp);
             await sleep(400);
-            
+
             var containerClass = s2container.getAttribute("class") + "";
             var hasAllow = containerClass.indexOf("select2-allowclear") !== -1;
             var notOpen = containerClass.indexOf("select2-dropdown-open") === -1;
@@ -1287,7 +1287,7 @@
                 chosenText = (chosenEl.textContent + "").trim();
             }
             var notSearch = chosenText.trim().toLowerCase() !== "search";
-            
+
             if (hasAllow && notOpen && notSearch) {
                 selectionConfirmed = true;
                 log("AES: selection confirmed; chosenText=" + chosenText);
@@ -1382,11 +1382,11 @@
     async function processActivatePlan() {
         log("AES: processing activate plan");
         var assignmentId = localStorage.getItem(STORAGE_AES_ASSIGNMENT_ID) || "";
-        
+
         updateAESProgressStatus("Activating plan...");
 
         var activatePlanLink = document.getElementById("cohortAssignmentActivatePlanLink_" + assignmentId);
-        
+
         if (!activatePlanLink) {
             activatePlanLink = document.querySelector("a[onclick*='activatePlan(" + assignmentId + ")']");
         }
@@ -1411,11 +1411,11 @@
                 await processActivateVolunteer();
                 return;
             }
-            
+
             setAESStep("activateVolunteer");
             activatePlanLink.click();
             log("AES: clicked Activate Plan");
-            
+
             // Wait for and click OK button in confirmation modal
             await sleep(500);
             var okBtn = await waitForSelector('button[data-bb-handler="confirm"].btn.btn-primary', 3000);
@@ -1426,7 +1426,7 @@
             } else {
                 log("AES: OK button not found after Activate Plan");
             }
-            
+
             await processActivateVolunteer();
         } else {
             log("AES: Activate Plan link not found, may already be activated");
@@ -1438,7 +1438,7 @@
     async function processActivateVolunteer() {
         log("AES: processing activate volunteer");
         var assignmentId = localStorage.getItem(STORAGE_AES_ASSIGNMENT_ID) || "";
-        
+
         updateAESProgressStatus("Activating volunteer...");
 
         var maxWait = 30000;
@@ -1460,7 +1460,7 @@
 
             await sleep(1000);
             waited += 1000;
-            
+
             var row = document.getElementById("ca_" + assignmentId);
             if (row) {
                 var actionBtn = row.querySelector("button.dropdown-toggle");
@@ -1478,10 +1478,10 @@
                 showAESComplete();
                 return;
             }
-            
+
             activateVolunteerLink.click();
             log("AES: clicked Activate Volunteer");
-            
+
             // Wait for and click OK button in confirmation modal
             await sleep(500);
             var okBtn = await waitForSelector('button[data-bb-handler="confirm"].btn.btn-primary', 3000);
@@ -1492,14 +1492,13 @@
             } else {
                 log("AES: OK button not found after Activate Volunteer");
             }
-            
+
             showAESComplete();
         } else {
             log("AES: Activate Volunteer link not found after waiting");
             showAESComplete();
         }
     }
-
 
     //==========================
     // SCHEDULED ACTIVITIES BUILDER FEATURE
@@ -2405,13 +2404,15 @@
         refActivityRow.appendChild(refActivityLabel);
         timeColumn.appendChild(refActivityRow);
 
-        // Reference Activity disables time inputs
+        // Reference Activity disables time inputs and Pre-Reference checkbox
         refActivityCheckbox.addEventListener("change", function() {
             var isChecked = this.checked;
             var daysEl = document.getElementById("saBuilderDays");
             var hoursEl = document.getElementById("saBuilderHours");
             var minutesEl = document.getElementById("saBuilderMinutes");
             var secondsEl = document.getElementById("saBuilderSeconds");
+            var preRefEl = document.getElementById("saBuilderPreReference");
+            
             if (daysEl) {
                 daysEl.disabled = isChecked;
                 daysEl.style.opacity = isChecked ? "0.5" : "1";
@@ -2428,11 +2429,36 @@
                 secondsEl.disabled = isChecked;
                 secondsEl.style.opacity = isChecked ? "0.5" : "1";
             }
+            if (preRefEl) {
+                preRefEl.disabled = isChecked;
+                preRefEl.style.opacity = isChecked ? "0.5" : "1";
+                if (isChecked) {
+                    preRefEl.checked = false;
+                }
+            }
         });
 
         // Time inputs section (moved below other inputs)
         var timeInputsSection = document.createElement("div");
         timeInputsSection.style.cssText = "padding-top:12px;margin-top:12px;border-top:1px solid #444;";
+
+        // Pre-Reference checkbox row (positioned right above time inputs)
+        var preRefRow = document.createElement("div");
+        preRefRow.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:12px;";
+
+        var preRefCheckbox = document.createElement("input");
+        preRefCheckbox.type = "checkbox";
+        preRefCheckbox.id = "saBuilderPreReference";
+        preRefCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;accent-color:#007bff;";
+
+        var preRefLabel = document.createElement("label");
+        preRefLabel.textContent = "Pre-Reference?";
+        preRefLabel.setAttribute("for", "saBuilderPreReference");
+        preRefLabel.style.cssText = "font-size:13px;font-weight:600;cursor:pointer;";
+
+        preRefRow.appendChild(preRefCheckbox);
+        preRefRow.appendChild(preRefLabel);
+        timeInputsSection.appendChild(preRefRow);
 
         timeInputsSection.appendChild(createTimeInput("Days", "saBuilderDays", 200));
         timeInputsSection.appendChild(createTimeInput("Hours", "saBuilderHours", 23));
@@ -2554,6 +2580,7 @@
             var preWindowValue = document.getElementById("saBuilderPreWindow").value.trim();
             var postWindowValue = document.getElementById("saBuilderPostWindow").value.trim();
             var refActivityChecked = document.getElementById("saBuilderRefActivity").checked;
+            var preReferenceChecked = document.getElementById("saBuilderPreReference").checked;
 
             // If Reference Activity is checked, void the time offset
             if (refActivityChecked) {
@@ -2569,7 +2596,8 @@
                 enforce: enforceChecked,
                 preWindow: preWindowValue,
                 postWindow: postWindowValue,
-                refActivity: refActivityChecked
+                refActivity: refActivityChecked,
+                preReference: preReferenceChecked
             };
             try {
                 localStorage.setItem(STORAGE_SA_BUILDER_USER_SELECTION, JSON.stringify(userSelection));
@@ -2949,6 +2977,19 @@
                     if (refActivityEl && !refActivityEl.checked) {
                         refActivityEl.click();
                         log("SA Builder: Reference Activity checkbox checked");
+                        await sleep(200);
+                    }
+                }
+
+                // Handle Pre-Reference checkbox
+                if (userSelection.preReference) {
+                    var preRefEl = document.querySelector("#uniform-offset\\.preReference span input#offset\\.preReference.checkbox");
+                    if (!preRefEl) {
+                        preRefEl = document.getElementById("offset.preReference");
+                    }
+                    if (preRefEl && !preRefEl.checked) {
+                        preRefEl.click();
+                        log("SA Builder: Pre-Reference checkbox checked");
                         await sleep(200);
                     }
                 }
@@ -15080,7 +15121,7 @@
                 resizeHandle.style.display = "none";
             }
             if (collapseBtn) {
-                collapseBtn.textContent = "Expand";
+                collapseBtn.textContent = "+";
             }
         } else {
             // Expand: restore last stored size
@@ -15096,7 +15137,7 @@
                 resizeHandle.style.display = "block";
             }
             if (collapseBtn) {
-                collapseBtn.textContent = "Collapse";
+                collapseBtn.textContent = "-";
             }
         }
     }
@@ -15498,9 +15539,9 @@
             pw = 340;
         }
         var minTop = 0;
-        var maxTop = vh - ph;
-        var minRight = 0;
-        var maxRight = vw - pw;
+        var maxTop = vh - ph / 2;
+        var minRight = -pw / 2;
+        var maxRight = vw - pw / 2;
         if (maxTop < 0) {
             maxTop = 0;
         }
@@ -16025,7 +16066,7 @@
         var leftSpacer = document.createElement("div");
         leftSpacer.style.width = "32px";
         var title = document.createElement("div");
-        title.textContent = "ClinSpark Test Automator";
+        title.textContent = "Automator";
         title.style.fontWeight = "600";
         title.style.textAlign = "center";
         title.style.justifySelf = "center";
