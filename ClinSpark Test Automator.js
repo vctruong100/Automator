@@ -21,7 +21,11 @@
     var PANEL_DEFAULT_HEIGHT = "auto";
     var PANEL_HEADER_HEIGHT_PX = 48;
     var PANEL_HEADER_GAP_PX = 8;
-    var PANEL_MAX_WIDTH_PX = 60
+    var PANEL_MAX_WIDTH_PX = 600;
+    var PANEL_BASE_WIDTH = 340;
+    var PANEL_BASE_HEIGHT = 500;
+    var PANEL_MIN_WIDTH = 50;
+    var PANEL_MIN_HEIGHT = 50;
     var STORAGE_KEY = "activityPlanState.run";
     var STORAGE_PENDING = "activityPlanState.pendingIds";
     var STORAGE_AFTER_REFRESH = "activityPlanState.afterRefresh";
@@ -15120,6 +15124,10 @@
             if (resizeHandle) {
                 resizeHandle.style.display = "none";
             }
+            var corners = panel.querySelectorAll("div[style*='cursor'][style*='resize']");
+            for (var i = 0; i < corners.length; i++) {
+                corners[i].style.display = "none";
+            }
             if (collapseBtn) {
                 collapseBtn.textContent = "+";
             }
@@ -15135,6 +15143,10 @@
             }
             if (resizeHandle) {
                 resizeHandle.style.display = "block";
+            }
+            var corners = panel.querySelectorAll("div[style*='cursor'][style*='resize']");
+            for (var i = 0; i < corners.length; i++) {
+                corners[i].style.display = "block";
             }
             if (collapseBtn) {
                 collapseBtn.textContent = "-";
@@ -15849,24 +15861,9 @@
             }
         };
     }
-
     function setupResizeHandle(panel, bodyContainer) {
-        var handle = document.createElement("div");
-        handle.style.position = "absolute";
-        handle.style.width = "12px";
-        handle.style.height = "12px";
-        handle.style.right = "6px";
-        handle.style.bottom = "6px";
-        handle.style.cursor = "se-resize";
-        handle.style.background = "#333";
-        handle.style.borderRadius = "2px";
-        handle.style.display = "block";
-
-        var isResizing = false;
-        var startX = 0;
-        var startY = 0;
-        var startW = 0;
-        var startH = 0;
+        var cornerSize = 16;
+        var corners = [];
 
         function toInt(s) {
             var n = parseInt(String(s).replace("px", ""), 10);
@@ -15876,48 +15873,175 @@
             return n;
         }
 
-        handle.addEventListener("mousedown", function (e) {
+        function applyScale(panel) {
+            var currentWidth = toInt(panel.style.width);
+            var currentHeight = toInt(panel.style.height);
+            var scaleX = currentWidth / PANEL_BASE_WIDTH;
+            var scaleY = currentHeight / PANEL_BASE_HEIGHT;
+            var scale = Math.min(scaleX, scaleY);
+            
+            panel.style.fontSize = (14 * scale) + "px";
+            
+            var allButtons = panel.querySelectorAll("button");
+            for (var i = 0; i < allButtons.length; i++) {
+                allButtons[i].style.padding = (8 * scale) + "px";
+                allButtons[i].style.borderRadius = (6 * scale) + "px";
+                allButtons[i].style.fontSize = (14 * scale) + "px";
+                allButtons[i].style.minHeight = (32 * scale) + "px";
+                allButtons[i].style.minWidth = "0";
+                allButtons[i].style.height = "auto";
+                allButtons[i].style.lineHeight = (1.2 * scale);
+                allButtons[i].style.whiteSpace = scale < 0.6 ? "normal" : "nowrap";
+            }
+
+            var headerBar = panel.querySelector("div[style*='cursor: grab'], div[style*='cursor: grabbing']");
+            if (headerBar) {
+                headerBar.style.height = (48 * scale) + "px";
+                headerBar.style.gap = (8 * scale) + "px";
+                var title = headerBar.querySelector("div");
+                if (title) {
+                    title.style.fontSize = (14 * scale) + "px";
+                    title.style.fontWeight = "600";
+                }
+            }
+
+            var btnRow = panel.querySelector("div[style*='grid-template-columns: 1fr 1fr']");
+            if (btnRow) {
+                btnRow.style.gap = (8 * scale) + "px";
+            }
+
+            var status = bodyContainer.querySelector("div[style*='background: #1a1a1a']");
+            if (status) {
+                status.style.marginTop = (10 * scale) + "px";
+                status.style.padding = (6 * scale) + "px";
+                status.style.fontSize = (13 * scale) + "px";
+                status.style.borderRadius = (6 * scale) + "px";
+            }
+
+            var logBox = document.getElementById(LOG_ID);
+            if (logBox) {
+                logBox.style.marginTop = (8 * scale) + "px";
+                logBox.style.height = (220 * scale) + "px";
+                logBox.style.padding = (6 * scale) + "px";
+                logBox.style.fontSize = (12 * scale) + "px";
+                logBox.style.borderRadius = (6 * scale) + "px";
+            }
+
+            panel.style.padding = (12 * scale) + "px";
+            panel.style.borderRadius = (8 * scale) + "px";
+
+            for (var j = 0; j < corners.length; j++) {
+                corners[j].element.style.width = (cornerSize * scale) + "px";
+                corners[j].element.style.height = (cornerSize * scale) + "px";
+            }
+        }
+
+        function createCorner(position, cursor) {
+            var corner = document.createElement("div");
+            corner.style.position = "absolute";
+            corner.style.width = cornerSize + "px";
+            corner.style.height = cornerSize + "px";
+            corner.style.cursor = cursor;
+            corner.style.background = "#444";
+            corner.style.borderRadius = "3px";
+            corner.style.zIndex = "10";
+            corner.style.display = "block";
+
+            if (position === "sw") {
+                corner.style.bottom = "6px";
+                corner.style.left = "6px";
+            } else if (position === "se") {
+                corner.style.bottom = "6px";
+                corner.style.right = "6px";
+            }
+
+            return { element: corner, position: position };
+        }
+
+        var swCorner = createCorner("sw", "sw-resize");
+        var seCorner = createCorner("se", "ns-resize");
+
+        corners = [swCorner, seCorner];
+
+        panel.appendChild(swCorner.element);
+        panel.appendChild(seCorner.element);
+
+        var isResizing = false;
+        var currentCorner = null;
+        var startX = 0;
+        var startY = 0;
+        var startW = 0;
+        var startH = 0;
+
+        function startResize(e, corner) {
             if (getPanelCollapsed()) {
                 return;
             }
             isResizing = true;
+            currentCorner = corner;
             startX = e.clientX;
             startY = e.clientY;
             startW = toInt(panel.style.width);
-            startH = panel.offsetHeight;
+            startH = toInt(panel.style.height);
             e.preventDefault();
-        });
+            e.stopPropagation();
+        }
+
+        swCorner.element.addEventListener("mousedown", function(e) { startResize(e, "sw"); });
+        seCorner.element.addEventListener("mousedown", function(e) { startResize(e, "se"); });
 
         document.addEventListener("mousemove", function (e) {
             if (!isResizing) {
                 return;
             }
+
             var dx = e.clientX - startX;
             var dy = e.clientY - startY;
-            var newW = startW + dx;
-            var newH = startH + dy;
+            var newW = startW;
+            var newH = startH;
 
-            var minW = toInt(PANEL_DEFAULT_WIDTH);
-            if (newW < minW) {
-                newW = minW;
-            }
-            if (newW > PANEL_MAX_WIDTH_PX) {
-                newW = PANEL_MAX_WIDTH_PX; // Enforce max width
-            }
+            if (currentCorner === "sw") {
+                newW = startW - dx;
+                newH = startH + dy;
 
-            var minH = PANEL_HEADER_HEIGHT_PX + 80;
-            if (newH < minH) {
-                newH = minH;
-            }
+                if (newW < PANEL_MIN_WIDTH) {
+                    newW = PANEL_MIN_WIDTH;
+                }
+                if (newW > PANEL_MAX_WIDTH_PX) {
+                    newW = PANEL_MAX_WIDTH_PX;
+                }
+                if (newH < PANEL_MIN_HEIGHT) {
+                    newH = PANEL_MIN_HEIGHT;
+                }
 
-            panel.style.width = String(newW) + "px";
-            panel.style.height = String(newH) + "px";
+                panel.style.width = String(newW) + "px";
+                panel.style.height = String(newH) + "px";
 
-            if (bodyContainer) {
-                bodyContainer.style.display = "block";
-                bodyContainer.style.height = "calc(100% - " + String(PANEL_HEADER_HEIGHT_PX) + "px)";
-                bodyContainer.style.maxHeight = "calc(100% - " + String(PANEL_HEADER_HEIGHT_PX) + "px)";
-                bodyContainer.style.overflowY = "auto";
+                if (bodyContainer) {
+                    var scaledHeaderHeight = (48 * Math.min(newW / PANEL_BASE_WIDTH, newH / PANEL_BASE_HEIGHT));
+                    bodyContainer.style.display = "block";
+                    bodyContainer.style.height = "calc(100% - " + String(scaledHeaderHeight) + "px)";
+                    bodyContainer.style.maxHeight = "calc(100% - " + String(scaledHeaderHeight) + "px)";
+                    bodyContainer.style.overflowY = "auto";
+                }
+
+                applyScale(panel);
+            } else if (currentCorner === "se") {
+                newH = startH + dy;
+
+                var minH = PANEL_HEADER_HEIGHT_PX + 80;
+                if (newH < minH) {
+                    newH = minH;
+                }
+
+                panel.style.height = String(newH) + "px";
+
+                if (bodyContainer) {
+                    bodyContainer.style.display = "block";
+                    bodyContainer.style.height = "calc(100% - " + String(PANEL_HEADER_HEIGHT_PX) + "px)";
+                    bodyContainer.style.maxHeight = "calc(100% - " + String(PANEL_HEADER_HEIGHT_PX) + "px)";
+                    bodyContainer.style.overflowY = "auto";
+                }
             }
         });
 
@@ -15926,10 +16050,13 @@
                 return;
             }
             isResizing = false;
+            currentCorner = null;
             setStoredPanelSize(panel.style.width, panel.style.height);
         });
 
-        return handle;
+        applyScale(panel);
+
+        return seCorner.element;
     }
 
     function getPanelHidden() {
