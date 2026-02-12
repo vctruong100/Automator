@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.1.8
+// @version 3.1.9
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -386,15 +386,20 @@
                 nameSpan.textContent = epoch.name;
                 nameSpan.style.fontWeight = "500";
 
-                var confirmBtn = document.createElement("button");
-                confirmBtn.textContent = "Confirm";
-                confirmBtn.style.background = "#2e7d32";
-                confirmBtn.style.color = "#fff";
-                confirmBtn.style.border = "none";
-                confirmBtn.style.borderRadius = "4px";
-                confirmBtn.style.padding = "6px 12px";
-                confirmBtn.style.cursor = "pointer";
-                confirmBtn.style.fontWeight = "500";
+                var btn = document.createElement("button");
+                btn.textContent = label;
+                btn.style.background = "#ddd";
+                btn.style.color = "#000";
+                btn.style.border = "none";
+                btn.style.borderRadius = "6px";
+                btn.style.padding = "8px";
+                btn.style.cursor = "pointer";
+                btn.style.whiteSpace = "normal";
+                btn.style.wordWrap = "break-word";
+                btn.style.wordBreak = "break-word";
+                btn.style.maxWidth = "100%";
+                btn.style.overflow = "hidden";
+                btn.style.textOverflow = "ellipsis";
                 confirmBtn.addEventListener("click", async function() {
                     log("AES: epoch selected - " + epoch.name + " (id=" + epoch.id + ")");
                     localStorage.setItem(STORAGE_AES_SELECTED_EPOCH, epoch.id);
@@ -16228,7 +16233,7 @@
         bodyContainer.style.boxSizing = "border-box";
         var btnRow = document.createElement("div");
         btnRow.style.display = "grid";
-        btnRow.style.gridTemplateColumns = "1fr 1fr";
+        btnRow.style.gridTemplateColumns = "repeat(auto-fit, minmax(120px, 1fr))";
         btnRow.style.gap = "8px";
         btnRowRef = btnRow;
         var runPlansBtn = document.createElement("button");
@@ -16241,6 +16246,11 @@
         runPlansBtn.style.cursor = "pointer";
         runPlansBtn.style.fontWeight = "500";
         runPlansBtn.style.transition = "background 0.2s";
+        runPlansBtn.style.whiteSpace = "normal";
+        runPlansBtn.style.wordWrap = "break-word";
+        runPlansBtn.style.wordBreak = "break-word";
+        runPlansBtn.style.overflow = "hidden";
+        runPlansBtn.style.textOverflow = "ellipsis";
         runPlansBtn.onmouseenter = function() { this.style.background = "#357abd"; };
         runPlansBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
         var runStudyBtn = document.createElement("button");
@@ -16253,6 +16263,11 @@
         runStudyBtn.style.cursor = "pointer";
         runStudyBtn.style.fontWeight = "500";
         runStudyBtn.style.transition = "background 0.2s";
+        runStudyBtn.style.whiteSpace = "normal";
+        runStudyBtn.style.wordWrap = "break-word";
+        runStudyBtn.style.wordBreak = "break-word";
+        runStudyBtn.style.overflow = "hidden";
+        runStudyBtn.style.textOverflow = "ellipsis";
         runStudyBtn.onmouseenter = function() { this.style.background = "#357abd"; };
         runStudyBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
         var runAddCohortBtn = document.createElement("button");
@@ -16265,6 +16280,11 @@
         runAddCohortBtn.style.cursor = "pointer";
         runAddCohortBtn.style.fontWeight = "500";
         runAddCohortBtn.style.transition = "background 0.2s";
+        runAddCohortBtn.style.whiteSpace = "normal";
+        runAddCohortBtn.style.wordWrap = "break-word";
+        runAddCohortBtn.style.wordBreak = "break-word";
+        runAddCohortBtn.style.overflow = "hidden";
+        runAddCohortBtn.style.textOverflow = "ellipsis";
         runAddCohortBtn.onmouseenter = function() { this.style.background = "#357abd"; };
         runAddCohortBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
         var runConsentBtn = document.createElement("button");
@@ -16277,6 +16297,11 @@
         runConsentBtn.style.cursor = "pointer";
         runConsentBtn.style.fontWeight = "500";
         runConsentBtn.style.transition = "background 0.2s";
+        runConsentBtn.style.whiteSpace = "normal";
+        runConsentBtn.style.wordWrap = "break-word";
+        runConsentBtn.style.wordBreak = "break-word";
+        runConsentBtn.style.overflow = "hidden";
+        runConsentBtn.style.textOverflow = "ellipsis";
         runConsentBtn.onmouseenter = function() { this.style.background = "#357abd"; };
         runConsentBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
         var runAllBtn = document.createElement("button");
@@ -16289,6 +16314,11 @@
         runAllBtn.style.cursor = "pointer";
         runAllBtn.style.fontWeight = "600";
         runAllBtn.style.transition = "background 0.2s";
+        runAllBtn.style.whiteSpace = "normal";
+        runAllBtn.style.wordWrap = "break-word";
+        runAllBtn.style.wordBreak = "break-word";
+        runAllBtn.style.overflow = "hidden";
+        runAllBtn.style.textOverflow = "ellipsis";
         runAllBtn.onmouseenter = function() { this.style.background = "#449d44"; };
         runAllBtn.onmouseleave = function() { this.style.background = "#5cb85c"; };
         var runNonScrnBtn = document.createElement("button");
@@ -16301,6 +16331,11 @@
         runNonScrnBtn.style.cursor = "pointer";
         runNonScrnBtn.style.fontWeight = "500";
         runNonScrnBtn.style.transition = "background 0.2s";
+        runNonScrnBtn.style.whiteSpace = "normal";
+        runNonScrnBtn.style.wordWrap = "break-word";
+        runNonScrnBtn.style.wordBreak = "break-word";
+        runNonScrnBtn.style.overflow = "hidden";
+        runNonScrnBtn.style.textOverflow = "ellipsis";
         runNonScrnBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
         runNonScrnBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
 
@@ -16314,6 +16349,11 @@
         addExistingSubjectBtn.style.cursor = "pointer";
         addExistingSubjectBtn.style.fontWeight = "500";
         addExistingSubjectBtn.style.transition = "background 0.2s";
+        addExistingSubjectBtn.style.whiteSpace = "normal";
+        addExistingSubjectBtn.style.wordWrap = "break-word";
+        addExistingSubjectBtn.style.wordBreak = "break-word";
+        addExistingSubjectBtn.style.overflow = "hidden";
+        addExistingSubjectBtn.style.textOverflow = "ellipsis";
         addExistingSubjectBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
         addExistingSubjectBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
 
@@ -16327,6 +16367,11 @@
         saBuilderBtn.style.cursor = "pointer";
         saBuilderBtn.style.fontWeight = "500";
         saBuilderBtn.style.transition = "background 0.2s";
+        saBuilderBtn.style.whiteSpace = "normal";
+        saBuilderBtn.style.wordWrap = "break-word";
+        saBuilderBtn.style.wordBreak = "break-word";
+        saBuilderBtn.style.overflow = "hidden";
+        saBuilderBtn.style.textOverflow = "ellipsis";
         saBuilderBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
         saBuilderBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
 
@@ -16340,6 +16385,11 @@
         runBarcodeBtn.style.cursor = "pointer";
         runBarcodeBtn.style.fontWeight = "500";
         runBarcodeBtn.style.transition = "background 0.2s";
+        runBarcodeBtn.style.whiteSpace = "normal";
+        runBarcodeBtn.style.wordWrap = "break-word";
+        runBarcodeBtn.style.wordBreak = "break-word";
+        runBarcodeBtn.style.overflow = "hidden";
+        runBarcodeBtn.style.textOverflow = "ellipsis";
         runBarcodeBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
         runBarcodeBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
         var runFormOORBtn = document.createElement("button");
@@ -16352,6 +16402,11 @@
         runFormOORBtn.style.cursor = "pointer";
         runFormOORBtn.style.fontWeight = "500";
         runFormOORBtn.style.transition = "background 0.2s";
+        runFormOORBtn.style.whiteSpace = "normal";
+        runFormOORBtn.style.wordWrap = "break-word";
+        runFormOORBtn.style.wordBreak = "break-word";
+        runFormOORBtn.style.overflow = "hidden";
+        runFormOORBtn.style.textOverflow = "ellipsis";
         runFormOORBtn.onmouseenter = function() { this.style.background = "#ec971f"; };
         runFormOORBtn.onmouseleave = function() { this.style.background = "#f0ad4e"; };
         var runFormOORABtn = document.createElement("button");
@@ -16364,6 +16419,11 @@
         runFormOORABtn.style.cursor = "pointer";
         runFormOORABtn.style.fontWeight = "500";
         runFormOORABtn.style.transition = "background 0.2s";
+        runFormOORABtn.style.whiteSpace = "normal";
+        runFormOORABtn.style.wordWrap = "break-word";
+        runFormOORABtn.style.wordBreak = "break-word";
+        runFormOORABtn.style.overflow = "hidden";
+        runFormOORABtn.style.textOverflow = "ellipsis";
         runFormOORABtn.onmouseenter = function() { this.style.background = "#ec971f"; };
         runFormOORABtn.onmouseleave = function() { this.style.background = "#f0ad4e"; };
         var runFormIRBtn = document.createElement("button");
@@ -16376,6 +16436,11 @@
         runFormIRBtn.style.cursor = "pointer";
         runFormIRBtn.style.fontWeight = "500";
         runFormIRBtn.style.transition = "background 0.2s";
+        runFormIRBtn.style.whiteSpace = "normal";
+        runFormIRBtn.style.wordWrap = "break-word";
+        runFormIRBtn.style.wordBreak = "break-word";
+        runFormIRBtn.style.overflow = "hidden";
+        runFormIRBtn.style.textOverflow = "ellipsis";
         runFormIRBtn.onmouseenter = function() { this.style.background = "#ec971f"; };
         runFormIRBtn.onmouseleave = function() { this.style.background = "#f0ad4e"; };
         var parseMethodBtn = document.createElement("button");
@@ -16386,6 +16451,11 @@
         parseMethodBtn.style.borderRadius = "6px";
         parseMethodBtn.style.padding = "8px";
         parseMethodBtn.style.cursor = "pointer";
+        parseMethodBtn.style.whiteSpace = "normal";
+        parseMethodBtn.style.wordWrap = "break-word";
+        parseMethodBtn.style.wordBreak = "break-word";
+        parseMethodBtn.style.overflow = "hidden";
+        parseMethodBtn.style.textOverflow = "ellipsis";
         parseMethodBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         parseMethodBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
         var pauseBtn = document.createElement("button");
@@ -16398,6 +16468,11 @@
         pauseBtn.style.cursor = "pointer";
         pauseBtn.style.fontWeight = "500";
         pauseBtn.style.transition = "background 0.2s";
+        pauseBtn.style.whiteSpace = "normal";
+        pauseBtn.style.wordWrap = "break-word";
+        pauseBtn.style.wordBreak = "break-word";
+        pauseBtn.style.overflow = "hidden";
+        pauseBtn.style.textOverflow = "ellipsis";
         pauseBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
         pauseBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
 
@@ -16411,6 +16486,11 @@
         clearLogsBtn.style.cursor = "pointer";
         clearLogsBtn.style.fontWeight = "500";
         clearLogsBtn.style.transition = "background 0.2s";
+        clearLogsBtn.style.whiteSpace = "normal";
+        clearLogsBtn.style.wordWrap = "break-word";
+        clearLogsBtn.style.wordBreak = "break-word";
+        clearLogsBtn.style.overflow = "hidden";
+        clearLogsBtn.style.textOverflow = "ellipsis";
         clearLogsBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
         clearLogsBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
 
@@ -16425,6 +16505,11 @@
         toggleLogsBtn.style.cursor = "pointer";
         toggleLogsBtn.style.fontWeight = "500";
         toggleLogsBtn.style.transition = "background 0.2s";
+        toggleLogsBtn.style.whiteSpace = "normal";
+        toggleLogsBtn.style.wordWrap = "break-word";
+        toggleLogsBtn.style.wordBreak = "break-word";
+        toggleLogsBtn.style.overflow = "hidden";
+        toggleLogsBtn.style.textOverflow = "ellipsis";
         toggleLogsBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
         toggleLogsBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
 
@@ -16438,6 +16523,11 @@
         runLockSamplePathsBtn.style.cursor = "pointer";
         runLockSamplePathsBtn.style.fontWeight = "500";
         runLockSamplePathsBtn.style.transition = "background 0.2s";
+        runLockSamplePathsBtn.style.whiteSpace = "normal";
+        runLockSamplePathsBtn.style.wordWrap = "break-word";
+        runLockSamplePathsBtn.style.wordBreak = "break-word";
+        runLockSamplePathsBtn.style.overflow = "hidden";
+        runLockSamplePathsBtn.style.textOverflow = "ellipsis";
         runLockSamplePathsBtn.onmouseenter = function() { this.style.background = "#357abd"; };
         runLockSamplePathsBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
@@ -16451,6 +16541,11 @@
         importEligBtn.style.cursor = "pointer";
         importEligBtn.style.fontWeight = "500";
         importEligBtn.style.transition = "background 0.2s";
+        importEligBtn.style.whiteSpace = "normal";
+        importEligBtn.style.wordWrap = "break-word";
+        importEligBtn.style.wordBreak = "break-word";
+        importEligBtn.style.overflow = "hidden";
+        importEligBtn.style.textOverflow = "ellipsis";
         importEligBtn.onmouseenter = function() { this.style.background = "#2bb9c4"; };
         importEligBtn.onmouseleave = function() { this.style.background = "#38dae6"; };
 
@@ -16462,6 +16557,11 @@
         findFormBtn.style.borderRadius = "6px";
         findFormBtn.style.padding = "8px";
         findFormBtn.style.cursor = "pointer";
+        findFormBtn.style.whiteSpace = "normal";
+        findFormBtn.style.wordWrap = "break-word";
+        findFormBtn.style.wordBreak = "break-word";
+        findFormBtn.style.overflow = "hidden";
+        findFormBtn.style.textOverflow = "ellipsis";
         findFormBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         findFormBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
@@ -16473,6 +16573,11 @@
         findStudyEventsBtn.style.borderRadius = "6px";
         findStudyEventsBtn.style.padding = "8px";
         findStudyEventsBtn.style.cursor = "pointer";
+        findStudyEventsBtn.style.whiteSpace = "normal";
+        findStudyEventsBtn.style.wordWrap = "break-word";
+        findStudyEventsBtn.style.wordBreak = "break-word";
+        findStudyEventsBtn.style.overflow = "hidden";
+        findStudyEventsBtn.style.textOverflow = "ellipsis";
         findStudyEventsBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         findStudyEventsBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
@@ -16486,6 +16591,11 @@
         clearMappingBtn.style.cursor = "pointer";
         clearMappingBtn.style.fontWeight = "500";
         clearMappingBtn.style.transition = "background 0.2s";
+        clearMappingBtn.style.whiteSpace = "normal";
+        clearMappingBtn.style.wordWrap = "break-word";
+        clearMappingBtn.style.wordBreak = "break-word";
+        clearMappingBtn.style.overflow = "hidden";
+        clearMappingBtn.style.textOverflow = "ellipsis";
         clearMappingBtn.onmouseenter = function() { this.style.background = "#2bb9c4"; };
         clearMappingBtn.onmouseleave = function() { this.style.background = "#38dae6"; };
 
@@ -16499,6 +16609,11 @@
         collectAllBtn.style.cursor = "pointer";
         collectAllBtn.style.fontWeight = "500";
         collectAllBtn.style.transition = "background 0.2s";
+        collectAllBtn.style.whiteSpace = "normal";
+        collectAllBtn.style.wordWrap = "break-word";
+        collectAllBtn.style.wordBreak = "break-word";
+        collectAllBtn.style.overflow = "hidden";
+        collectAllBtn.style.textOverflow = "ellipsis";
         collectAllBtn.onmouseenter = function() { this.style.background = "#ec971f"; };
         collectAllBtn.onmouseleave = function() { this.style.background = "#f0ad4e"; };
 

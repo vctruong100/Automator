@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.7.7
+// @version     1.7.8
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -8427,6 +8427,12 @@
         btn.style.borderRadius = "6px";
         btn.style.padding = "8px";
         btn.style.cursor = "pointer";
+        btn.style.whiteSpace = "normal";
+        btn.style.wordWrap = "break-word";
+        btn.style.wordBreak = "break-word";
+        btn.style.maxWidth = "100%";
+        btn.style.overflow = "hidden";
+        btn.style.textOverflow = "ellipsis";
         btn.addEventListener("click", function () {
             try {
                 handler();
@@ -8515,7 +8521,7 @@
         bodyContainer.style.boxSizing = "border-box";
         var btnRow = document.createElement("div");
         btnRow.style.display = "grid";
-        btnRow.style.gridTemplateColumns = "1fr 1fr";
+        btnRow.style.gridTemplateColumns = "repeat(auto-fit, minmax(120px, 1fr))";
         btnRow.style.gap = "8px";
         btnRowRef = btnRow;
         var pauseBtn = document.createElement("button");
@@ -8526,6 +8532,11 @@
         pauseBtn.style.borderRadius = "6px";
         pauseBtn.style.padding = "8px";
         pauseBtn.style.cursor = "pointer";
+        pauseBtn.style.whiteSpace = "normal";
+        pauseBtn.style.wordWrap = "break-word";
+        pauseBtn.style.wordBreak = "break-word";
+        pauseBtn.style.overflow = "hidden";
+        pauseBtn.style.textOverflow = "ellipsis";
         pauseBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
         pauseBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
         var runBarcodeBtn = document.createElement("button");
@@ -8536,6 +8547,11 @@
         runBarcodeBtn.style.borderRadius = "6px";
         runBarcodeBtn.style.padding = "8px";
         runBarcodeBtn.style.cursor = "pointer";
+        runBarcodeBtn.style.whiteSpace = "normal";
+        runBarcodeBtn.style.wordWrap = "break-word";
+        runBarcodeBtn.style.wordBreak = "break-word";
+        runBarcodeBtn.style.overflow = "hidden";
+        runBarcodeBtn.style.textOverflow = "ellipsis";
         runBarcodeBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         runBarcodeBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
         var findAeBtn = document.createElement("button");
@@ -8546,6 +8562,11 @@
         findAeBtn.style.borderRadius = "6px";
         findAeBtn.style.padding = "8px";
         findAeBtn.style.cursor = "pointer";
+        findAeBtn.style.whiteSpace = "normal";
+        findAeBtn.style.wordWrap = "break-word";
+        findAeBtn.style.wordBreak = "break-word";
+        findAeBtn.style.overflow = "hidden";
+        findAeBtn.style.textOverflow = "ellipsis";
         findAeBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         findAeBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
         var findFormBtn = document.createElement("button");
@@ -8556,6 +8577,11 @@
         findFormBtn.style.borderRadius = "6px";
         findFormBtn.style.padding = "8px";
         findFormBtn.style.cursor = "pointer";
+        findFormBtn.style.whiteSpace = "normal";
+        findFormBtn.style.wordWrap = "break-word";
+        findFormBtn.style.wordBreak = "break-word";
+        findFormBtn.style.overflow = "hidden";
+        findFormBtn.style.textOverflow = "ellipsis";
         findFormBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         findFormBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
@@ -8567,6 +8593,11 @@
         findStudyEventsBtn.style.borderRadius = "6px";
         findStudyEventsBtn.style.padding = "8px";
         findStudyEventsBtn.style.cursor = "pointer";
+        findStudyEventsBtn.style.whiteSpace = "normal";
+        findStudyEventsBtn.style.wordWrap = "break-word";
+        findStudyEventsBtn.style.wordBreak = "break-word";
+        findStudyEventsBtn.style.overflow = "hidden";
+        findStudyEventsBtn.style.textOverflow = "ellipsis";
         findStudyEventsBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         findStudyEventsBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
@@ -8578,6 +8609,11 @@
         openEligBtn.style.borderRadius = "6px";
         openEligBtn.style.padding = "8px";
         openEligBtn.style.cursor = "pointer";
+        openEligBtn.style.whiteSpace = "normal";
+        openEligBtn.style.wordWrap = "break-word";
+        openEligBtn.style.wordBreak = "break-word";
+        openEligBtn.style.overflow = "hidden";
+        openEligBtn.style.textOverflow = "ellipsis";
         openEligBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         openEligBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
@@ -8589,6 +8625,11 @@
         subjectEligBtn.style.borderRadius = "6px";
         subjectEligBtn.style.padding = "8px";
         subjectEligBtn.style.cursor = "pointer";
+        subjectEligBtn.style.whiteSpace = "normal";
+        subjectEligBtn.style.wordWrap = "break-word";
+        subjectEligBtn.style.wordBreak = "break-word";
+        subjectEligBtn.style.overflow = "hidden";
+        subjectEligBtn.style.textOverflow = "ellipsis";
         subjectEligBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         subjectEligBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
@@ -8600,6 +8641,11 @@
         saBuilderBtn.style.borderRadius = "6px";
         saBuilderBtn.style.padding = "8px";
         saBuilderBtn.style.cursor = "pointer";
+        saBuilderBtn.style.whiteSpace = "normal";
+        saBuilderBtn.style.wordWrap = "break-word";
+        saBuilderBtn.style.wordBreak = "break-word";
+        saBuilderBtn.style.overflow = "hidden";
+        saBuilderBtn.style.textOverflow = "ellipsis";
         saBuilderBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         saBuilderBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
@@ -8611,6 +8657,11 @@
         parseMethodBtn.style.borderRadius = "6px";
         parseMethodBtn.style.padding = "8px";
         parseMethodBtn.style.cursor = "pointer";
+        parseMethodBtn.style.whiteSpace = "normal";
+        parseMethodBtn.style.wordWrap = "break-word";
+        parseMethodBtn.style.wordBreak = "break-word";
+        parseMethodBtn.style.overflow = "hidden";
+        parseMethodBtn.style.textOverflow = "ellipsis";
         parseMethodBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         parseMethodBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
@@ -8623,6 +8674,11 @@
         toggleLogsBtn.style.borderRadius = "6px";
         toggleLogsBtn.style.padding = "8px";
         toggleLogsBtn.style.cursor = "pointer";
+        toggleLogsBtn.style.whiteSpace = "normal";
+        toggleLogsBtn.style.wordWrap = "break-word";
+        toggleLogsBtn.style.wordBreak = "break-word";
+        toggleLogsBtn.style.overflow = "hidden";
+        toggleLogsBtn.style.textOverflow = "ellipsis";
         toggleLogsBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
         toggleLogsBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
         var importEligBtn = document.createElement("button");
@@ -8633,6 +8689,11 @@
         importEligBtn.style.borderRadius = "6px";
         importEligBtn.style.padding = "8px";
         importEligBtn.style.cursor = "pointer";
+        importEligBtn.style.whiteSpace = "normal";
+        importEligBtn.style.wordWrap = "break-word";
+        importEligBtn.style.wordBreak = "break-word";
+        importEligBtn.style.overflow = "hidden";
+        importEligBtn.style.textOverflow = "ellipsis";
         importEligBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         importEligBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
         btnRow.appendChild(runBarcodeBtn);
