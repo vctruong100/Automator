@@ -4,7 +4,7 @@
 // @namespace vinh.activity.plan.state
 // @version 1.1.0
 // @description
-// @match https://cenexeltest.clinspark.com/*
+// @match https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/heads/main/ClinSpark%20Basic%20Automator.js
 // @downloadURL  https://raw.githubusercontent.com/vctruong100/Automator/heads/main/ClinSpark%20Basic%20Automator.js
 // @run-at document-idle
@@ -3105,10 +3105,19 @@
         if (METHODS_BODY_CACHE[url]) {
             return { success: true, body: METHODS_BODY_CACHE[url] };
         }
+        
+        var fetchUrl = url;
+        if (url.indexOf("github.com") !== -1 && url.indexOf("raw.githubusercontent.com") === -1) {
+            fetchUrl = url.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/");
+        } else if (url.indexOf("http") !== 0) {
+            var baseUrl = "https://raw.githubusercontent.com/vctruong100/Automator/main/";
+            fetchUrl = baseUrl + url.replace(/^\/+/, "");
+        }
+        
         try {
-            var response = await fetch(url);
+            var response = await fetch(fetchUrl);
             if (!response.ok) {
-                return { success: false, error: "HTTP " + response.status };
+                return { success: false, error: "HTTP " + response.status + " for " + fetchUrl };
             }
             var text = await response.text();
             METHODS_BODY_CACHE[url] = text;
