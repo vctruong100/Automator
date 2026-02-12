@@ -1,0 +1,16 @@
+[
+  {
+    "id": "M-001",
+    "title": "Average DBP, SBP, Heart Rate (NON-REPEAT)",
+    "tags": ["Average", "ECG"],
+    "url": "https://raw.githubusercontent.com/OWNER/REPO/BRANCH/methods/CS-001.md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-002",
+    "title": "BM_BMI (Non-Screening)",
+    "tags": ["BMI", "Non-Screening"],
+    "url": "https://raw.githubusercontent.com/OWNER/REPO/BRANCH/methods/CS-002.md",
+    "updated": "2026-02-12"
+  }
+]
