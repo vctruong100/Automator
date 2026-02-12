@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.1.7
+// @version 3.1.8
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -24,8 +24,8 @@
     var PANEL_MAX_WIDTH_PX = 600;
     var PANEL_BASE_WIDTH = 340;
     var PANEL_BASE_HEIGHT = 500;
-    var PANEL_MIN_WIDTH = 50;
-    var PANEL_MIN_HEIGHT = 50;
+    var PANEL_MIN_WIDTH = 200;
+    var PANEL_MIN_HEIGHT = 200;
     var STORAGE_KEY = "activityPlanState.run";
     var STORAGE_PENDING = "activityPlanState.pendingIds";
     var STORAGE_AFTER_REFRESH = "activityPlanState.afterRefresh";

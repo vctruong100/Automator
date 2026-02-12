@@ -49,8 +49,8 @@
     var PANEL_MAX_WIDTH_PX = 600;
     var PANEL_BASE_WIDTH = 340;
     var PANEL_BASE_HEIGHT = 500;
-    var PANEL_MIN_WIDTH = 0;
-    var PANEL_MIN_HEIGHT = 50;
+    var PANEL_MIN_WIDTH = 200;
+    var PANEL_MIN_HEIGHT = 200;
     var FORM_DELAY_MS = 800;
     var DELAY_BETWEEN_ITEMS_MS = 100;
     var DELAY_AFTER_COLLECT_CLICK_MS = 500;
@@ -7997,7 +7997,7 @@
                 btnRow.style.minWidth = "0";
                 btnRow.style.gridTemplateColumns = "minmax(0, 1fr) minmax(0, 1fr)";
             }
-            
+
             var status = bodyContainer.querySelector("div[style*='background: #1a1a1a']");
             if (status) {
                 status.style.marginTop = (10 * scale) + "px";
