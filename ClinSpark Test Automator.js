@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.2.3
+// @version 3.2.4
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -3573,7 +3573,7 @@
         btnRow.appendChild(okBtn);
         container.appendChild(btnRow);
 
-        var popup = createPopup({ title: STUDY_EVENT_POPUP_TITLE, description: STUDY_EVENT_POPUP_DESCRIPTION, content: container, width: "520px", height: "auto" });
+        var popup = createPopup({ title: STUDY_EVENT_POPUP_TITLE, content: container, width: "520px", height: "auto" });
 
         window.setTimeout(function () {
             try {
@@ -15690,8 +15690,8 @@
         popup.style.background = "#111";
         popup.style.color = "#fff";
         popup.style.border = "1px solid #444";
-        popup.style.borderRadius = "8px";
-        popup.style.padding = "5";
+        popup.style.borderRadius = "8";
+        popup.style.padding = "10px";
         popup.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
         popup.style.fontSize = "14px";
         popup.style.width = width;
@@ -15708,10 +15708,10 @@
         headerBar.style.display = "grid";
         headerBar.style.gridTemplateColumns = "1fr auto";
         headerBar.style.alignItems = "center";
-        headerBar.style.gap = scale(PANEL_HEADER_GAP_PX);
-        headerBar.style.height = scale(PANEL_HEADER_HEIGHT_PX);
+        headerBar.style.gap = String(PANEL_HEADER_GAP_PX) + "px";
+        headerBar.style.height = String(PANEL_HEADER_HEIGHT_PX) + "px";
         headerBar.style.boxSizing = "border-box";
-        headerBar.style.padding = "4 12px";
+        headerBar.style.padding = "0 12px";
         headerBar.style.borderBottom = "1px solid #444";
         headerBar.style.cursor = "move";
         headerBar.style.userSelect = "none";
@@ -15789,7 +15789,7 @@
         bodyContainer.style.flex = "1";
         bodyContainer.style.overflowY = "auto";
         bodyContainer.style.overflowX = "hidden";
-        bodyContainer.style.padding = scale(12) + "px";
+        bodyContainer.style.padding = "12px";
         bodyContainer.style.boxSizing = "border-box";
 
         if (typeof content === "string") {

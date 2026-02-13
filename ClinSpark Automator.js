@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.8.1
+// @version     1.8.2
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -8166,8 +8166,8 @@
         popup.style.background = "#111";
         popup.style.color = "#fff";
         popup.style.border = "1px solid #444";
-        popup.style.borderRadius = "8px";
-        popup.style.padding = "0";
+        popup.style.borderRadius = "8";
+        popup.style.padding = "10px";
         popup.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
         popup.style.fontSize = "14px";
         popup.style.width = width;
