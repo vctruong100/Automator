@@ -22,7 +22,7 @@ var qtcfOOR = false;
 var list = [];
 
 var form = pullForm(baselineFormStudyEvents, baselineForms);
-if (!form) return null;
+if (!form) return true;
 var baseline = pullItemFromForm(form, baselineItem);
 
 list = populateList(formJson, qtcfItems, list);

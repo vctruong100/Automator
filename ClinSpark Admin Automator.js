@@ -127,6 +127,15 @@
     var METHODS_PRELOAD_BODIES = false;
     var METHODS_BODY_CACHE = {};
     var METHODS_LIBRARY_MODAL_REF = null;
+    var STORAGE_METHODS_FAVORITES = "activityPlanState.methodsLibrary.favorites";
+    var STORAGE_METHODS_RECENTS = "activityPlanState.methodsLibrary.recents";
+    var STORAGE_METHODS_PINS = "activityPlanState.methodsLibrary.pins";
+    var STORAGE_METHODS_LAST_SEARCH = "activityPlanState.methodsLibrary.lastSearch";
+    var STORAGE_METHODS_LAST_TAG = "activityPlanState.methodsLibrary.lastTag";
+    var STORAGE_METHODS_LAST_METHOD = "activityPlanState.methodsLibrary.lastMethod";
+    var STORAGE_METHODS_SORT_ORDER = "activityPlanState.methodsLibrary.sortOrder";
+    var MAX_RECENTS = 10;
+    var MAX_PINS = 5;
 
     // Run Data Collection
     const DATA_COLLECTION_SUBJECT_URL = "https://cenexeltest.clinspark.com/secure/datacollection/subject";
@@ -3105,15 +3114,18 @@
         if (METHODS_BODY_CACHE[url]) {
             return { success: true, body: METHODS_BODY_CACHE[url] };
         }
-        
+
+        // Convert relative or GitHub blob URLs to raw.githubusercontent.com format
         var fetchUrl = url;
         if (url.indexOf("github.com") !== -1 && url.indexOf("raw.githubusercontent.com") === -1) {
+            // Convert github.com/user/repo/blob/branch/path to raw.githubusercontent.com/user/repo/branch/path
             fetchUrl = url.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/");
         } else if (url.indexOf("http") !== 0) {
+            // Handle relative paths - prepend the base GitHub raw URL
             var baseUrl = "https://raw.githubusercontent.com/vctruong100/Automator/main/";
             fetchUrl = baseUrl + url.replace(/^\/+/, "");
         }
-        
+
         try {
             var response = await fetch(fetchUrl);
             if (!response.ok) {
@@ -3169,7 +3181,7 @@
         return score;
     }
 
-    function filterAndSortMethods(methods, query, tagFilter, searchBody, bodiesMap) {
+        function filterAndSortMethods(methods, query, tagFilter, searchBody, bodiesMap, sortOrder, favorites, pins) {
         var results = [];
         for (var i = 0; i < methods.length; i++) {
             var m = methods[i];
@@ -3189,13 +3201,36 @@
             if (query && query.trim().length > 0 && score === 0) continue;
             results.push({ method: m, score: score });
         }
+        
         results.sort(function(a, b) {
-            if (b.score !== a.score) return b.score - a.score;
-            var titleA = (a.method.title || "").toLowerCase();
-            var titleB = (b.method.title || "").toLowerCase();
-            if (titleA < titleB) return -1;
-            if (titleA > titleB) return 1;
-            return 0;
+            // Pinned items always come first
+            var isPinA = pins.indexOf(a.method.id) !== -1;
+            var isPinB = pins.indexOf(b.method.id) !== -1;
+            if (isPinA && !isPinB) return -1;
+            if (!isPinA && isPinB) return 1;
+            
+            // Then sort by selected order
+            if (sortOrder === "title") {
+                var titleA = (a.method.title || "").toLowerCase();
+                var titleB = (b.method.title || "").toLowerCase();
+                if (titleA < titleB) return -1;
+                if (titleA > titleB) return 1;
+                return 0;
+            } else if (sortOrder === "updated") {
+                var dateA = a.method.updated || "";
+                var dateB = b.method.updated || "";
+                if (dateB < dateA) return -1;
+                if (dateB > dateA) return 1;
+                return 0;
+            } else {
+                // Relevance (default)
+                if (b.score !== a.score) return b.score - a.score;
+                var titleA = (a.method.title || "").toLowerCase();
+                var titleB = (b.method.title || "").toLowerCase();
+                if (titleA < titleB) return -1;
+                if (titleA > titleB) return 1;
+                return 0;
+            }
         });
         return results.map(function(r) { return r.method; });
     }
@@ -3313,6 +3348,28 @@
         tagSelect.style.cursor = "pointer";
         toolbar.appendChild(tagSelect);
 
+        var sortSelect = document.createElement("select");
+        sortSelect.setAttribute("aria-label", "Sort order");
+        sortSelect.style.padding = "8px 12px";
+        sortSelect.style.background = "#2a2a2a";
+        sortSelect.style.border = "1px solid #444";
+        sortSelect.style.borderRadius = "6px";
+        sortSelect.style.color = "#fff";
+        sortSelect.style.fontSize = "14px";
+        sortSelect.style.cursor = "pointer";
+        var sortOpts = [
+            { value: "relevance", text: "Sort: Relevance" },
+            { value: "title", text: "Sort: Title" },
+            { value: "updated", text: "Sort: Updated" }
+        ];
+        for (var i = 0; i < sortOpts.length; i++) {
+            var opt = document.createElement("option");
+            opt.value = sortOpts[i].value;
+            opt.textContent = sortOpts[i].text;
+            sortSelect.appendChild(opt);
+        }
+        toolbar.appendChild(sortSelect);
+
         var searchBodyLabel = document.createElement("label");
         searchBodyLabel.style.display = "flex";
         searchBodyLabel.style.alignItems = "center";
@@ -3326,6 +3383,20 @@
         searchBodyLabel.appendChild(searchBodyCheckbox);
         searchBodyLabel.appendChild(document.createTextNode("Search body"));
         toolbar.appendChild(searchBodyLabel);
+
+        var favoritesLabel = document.createElement("label");
+        favoritesLabel.style.display = "flex";
+        favoritesLabel.style.alignItems = "center";
+        favoritesLabel.style.gap = "6px";
+        favoritesLabel.style.cursor = "pointer";
+        favoritesLabel.style.fontSize = "13px";
+        favoritesLabel.style.color = "#aaa";
+        var favoritesCheckbox = document.createElement("input");
+        favoritesCheckbox.type = "checkbox";
+        favoritesCheckbox.setAttribute("aria-label", "Show only favorites");
+        favoritesLabel.appendChild(favoritesCheckbox);
+        favoritesLabel.appendChild(document.createTextNode("★ Favorites"));
+        toolbar.appendChild(favoritesLabel);
 
         var toolbarBtns = document.createElement("div");
         toolbarBtns.style.display = "flex";
@@ -3441,7 +3512,7 @@
             }
         }
 
-        function renderList(methods) {
+                function renderList(methods) {
             listPane.innerHTML = "";
             if (methods.length === 0) {
                 var empty = document.createElement("div");
@@ -3452,16 +3523,23 @@
                 listPane.appendChild(empty);
                 return;
             }
+            
+            var favorites = getFavorites();
+            var recents = getRecents();
+            var pins = getPins();
+            
             for (var i = 0; i < methods.length; i++) {
                 (function(m, idx) {
                     var item = document.createElement("div");
                     item.setAttribute("role", "option");
                     item.setAttribute("aria-selected", "false");
+                    item.setAttribute("data-method-id", m.id);
                     item.tabIndex = 0;
                     item.style.padding = "10px 14px";
                     item.style.borderBottom = "1px solid #2a2a2a";
                     item.style.cursor = "pointer";
                     item.style.transition = "background 0.1s";
+                    item.style.position = "relative";
 
                     var itemId = document.createElement("div");
                     itemId.style.fontSize = "11px";
@@ -3484,12 +3562,95 @@
                         itemTags.textContent = m.tags.join(", ");
                         item.appendChild(itemTags);
                     }
+                    
+                    // Badges container
+                    var badges = document.createElement("div");
+                    badges.style.display = "flex";
+                    badges.style.gap = "4px";
+                    badges.style.marginTop = "4px";
+                    badges.style.fontSize = "10px";
+                    
+                    var isFav = favorites.indexOf(m.id) !== -1;
+                    var isRecent = recents.indexOf(m.id) !== -1;
+                    var isPinned = pins.indexOf(m.id) !== -1;
+                    
+                    if (isPinned) {
+                        var pinBadge = document.createElement("span");
+                        pinBadge.textContent = "📌 Pinned";
+                        pinBadge.style.color = "#f39c12";
+                        badges.appendChild(pinBadge);
+                    }
+                    if (isFav) {
+                        var favBadge = document.createElement("span");
+                        favBadge.textContent = "★ Favorite";
+                        favBadge.style.color = "#ffd700";
+                        badges.appendChild(favBadge);
+                    }
+                    if (isRecent && !isPinned) {
+                        var recentBadge = document.createElement("span");
+                        recentBadge.textContent = "🕒 Recent";
+                        recentBadge.style.color = "#888";
+                        badges.appendChild(recentBadge);
+                    }
+                    
+                    if (badges.children.length > 0) {
+                        item.appendChild(badges);
+                    }
+                    
+                    // Action buttons (show on hover)
+                    var actions = document.createElement("div");
+                    actions.style.position = "absolute";
+                    actions.style.top = "8px";
+                    actions.style.right = "8px";
+                    actions.style.display = "none";
+                    actions.style.gap = "4px";
+                    
+                    var favBtn = document.createElement("button");
+                    favBtn.textContent = isFav ? "★" : "☆";
+                    favBtn.title = isFav ? "Remove from favorites" : "Add to favorites";
+                    favBtn.style.background = "transparent";
+                    favBtn.style.border = "none";
+                    favBtn.style.color = isFav ? "#ffd700" : "#888";
+                    favBtn.style.fontSize = "16px";
+                    favBtn.style.cursor = "pointer";
+                    favBtn.style.padding = "2px 6px";
+                    favBtn.onclick = function(e) {
+                        e.stopPropagation();
+                        toggleFavorite(m.id);
+                        doSearch();
+                    };
+                    actions.appendChild(favBtn);
+                    
+                    var pinBtn = document.createElement("button");
+                    pinBtn.textContent = isPinned ? "📌" : "📍";
+                    pinBtn.title = isPinned ? "Unpin" : "Pin to top";
+                    pinBtn.style.background = "transparent";
+                    pinBtn.style.border = "none";
+                    pinBtn.style.color = isPinned ? "#f39c12" : "#888";
+                    pinBtn.style.fontSize = "14px";
+                    pinBtn.style.cursor = "pointer";
+                    pinBtn.style.padding = "2px 6px";
+                    pinBtn.onclick = function(e) {
+                        e.stopPropagation();
+                        var result = togglePin(m.id);
+                        if (!result.success) {
+                            updateStatus(result.message, true);
+                            setTimeout(function() { doSearch(); }, 2000);
+                        } else {
+                            doSearch();
+                        }
+                    };
+                    actions.appendChild(pinBtn);
+                    
+                    item.appendChild(actions);
 
                     item.onmouseenter = function() {
                         if (selectedMethod !== m) item.style.background = "#252525";
+                        actions.style.display = "flex";
                     };
                     item.onmouseleave = function() {
                         if (selectedMethod !== m) item.style.background = "transparent";
+                        actions.style.display = "none";
                     };
                     item.onclick = function() { selectMethod(m, item); };
                     item.onkeydown = function(e) {
@@ -3507,6 +3668,10 @@
         async function selectMethod(m, itemEl) {
             selectedMethod = m;
             currentBodyText = "";
+            
+            // Track as recent and save as last method
+            addRecent(m.id);
+            saveLastMethod(m.id);
 
             var items = listPane.querySelectorAll("[role='option']");
             for (var i = 0; i < items.length; i++) {
@@ -3516,6 +3681,7 @@
             if (itemEl) {
                 itemEl.setAttribute("aria-selected", "true");
                 itemEl.style.background = "#2a2a2a";
+                itemEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
             }
 
             previewTitle.textContent = (m.id || "") + " — " + (m.title || "(Untitled)");
@@ -3543,12 +3709,30 @@
             var query = searchInput.value;
             var tagFilter = tagSelect.value;
             var searchBody = searchBodyCheckbox.checked;
-            var filtered = filterAndSortMethods(allMethods, query, tagFilter, searchBody, METHODS_BODY_CACHE);
+            var sortOrder = sortSelect.value;
+            var showOnlyFavorites = favoritesCheckbox.checked;
+            
+            // Save session state
+            saveLastSearch(query);
+            saveLastTag(tagFilter);
+            saveSortOrder(sortOrder);
+            
+            var favorites = getFavorites();
+            var pins = getPins();
+            
+            var methodsToFilter = allMethods;
+            if (showOnlyFavorites) {
+                methodsToFilter = allMethods.filter(function(m) {
+                    return favorites.indexOf(m.id) !== -1;
+                });
+            }
+            
+            var filtered = filterAndSortMethods(methodsToFilter, query, tagFilter, searchBody, METHODS_BODY_CACHE, sortOrder, favorites, pins);
             renderList(filtered);
             updateStatus(filtered.length + " of " + allMethods.length + " methods");
         }
 
-        async function loadIndex(forceRefresh) {
+            async function loadIndex(forceRefresh) {
             updateStatus("Loading methods index...");
             var result = await fetchMethodsIndex(forceRefresh);
             if (!result.success) {
@@ -3568,6 +3752,10 @@
                     }
                 }
             }
+            
+            searchInput.value = getLastSearch();
+            tagSelect.value = getLastTag();
+            sortSelect.value = getSortOrder();
 
             doSearch();
         }
@@ -3575,7 +3763,9 @@
         searchInput.oninput = doSearch;
         tagSelect.onchange = doSearch;
         searchBodyCheckbox.onchange = doSearch;
-
+        sortSelect.onchange = doSearch;
+        favoritesCheckbox.onchange = doSearch;
+        
         refreshBtn.onclick = function() {
             METHODS_BODY_CACHE = {};
             loadIndex(true);
@@ -3610,7 +3800,53 @@
         function keyHandler(e) {
             if (e.key === "Escape") {
                 closeModal();
+                return;
             }
+            
+            // Enter key when search box is focused - select first result
+            if (e.key === "Enter" && document.activeElement === searchInput) {
+                var firstItem = listPane.querySelector("[role='option']");
+                if (firstItem) {
+                    var methodId = firstItem.getAttribute("data-method-id");
+                    var method = allMethods.find(function(m) { return m.id === methodId; });
+                    if (method) {
+                        selectMethod(method, firstItem);
+                    }
+                }
+                return;
+            }
+            
+            // Arrow Up/Down navigation in list
+            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                var items = Array.from(listPane.querySelectorAll("[role='option']"));
+                if (items.length === 0) return;
+                
+                var currentIndex = -1;
+                for (var i = 0; i < items.length; i++) {
+                    if (items[i].getAttribute("aria-selected") === "true") {
+                        currentIndex = i;
+                        break;
+                    }
+                }
+                
+                var nextIndex;
+                if (e.key === "ArrowDown") {
+                    nextIndex = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
+                } else {
+                    nextIndex = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
+                }
+                
+                var nextItem = items[nextIndex];
+                var methodId = nextItem.getAttribute("data-method-id");
+                var method = allMethods.find(function(m) { return m.id === methodId; });
+                if (method) {
+                    selectMethod(method, nextItem);
+                }
+                e.preventDefault();
+                return;
+            }
+            
+            // Tab cycling
             if (e.key === "Tab") {
                 var focusable = modal.querySelectorAll('button, input, select, [tabindex]:not([tabindex="-1"])');
                 if (focusable.length === 0) return;
@@ -3663,6 +3899,146 @@
         log("Methods Library: modal opened");
     }
 
+        function getFavorites() {
+        try {
+            var raw = localStorage.getItem(STORAGE_METHODS_FAVORITES);
+            if (!raw) return [];
+            return JSON.parse(raw);
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function saveFavorites(favs) {
+        try {
+            localStorage.setItem(STORAGE_METHODS_FAVORITES, JSON.stringify(favs));
+        } catch (e) {}
+    }
+
+    function toggleFavorite(methodId) {
+        var favs = getFavorites();
+        var idx = favs.indexOf(methodId);
+        if (idx !== -1) {
+            favs.splice(idx, 1);
+        } else {
+            favs.push(methodId);
+        }
+        saveFavorites(favs);
+        return favs;
+    }
+
+    function getRecents() {
+        try {
+            var raw = localStorage.getItem(STORAGE_METHODS_RECENTS);
+            if (!raw) return [];
+            return JSON.parse(raw);
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function addRecent(methodId) {
+        var recents = getRecents();
+        var idx = recents.indexOf(methodId);
+        if (idx !== -1) {
+            recents.splice(idx, 1);
+        }
+        recents.unshift(methodId);
+        if (recents.length > MAX_RECENTS) {
+            recents = recents.slice(0, MAX_RECENTS);
+        }
+        try {
+            localStorage.setItem(STORAGE_METHODS_RECENTS, JSON.stringify(recents));
+        } catch (e) {}
+    }
+
+    function getPins() {
+        try {
+            var raw = localStorage.getItem(STORAGE_METHODS_PINS);
+            if (!raw) return [];
+            return JSON.parse(raw);
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function savePins(pins) {
+        try {
+            localStorage.setItem(STORAGE_METHODS_PINS, JSON.stringify(pins));
+        } catch (e) {}
+    }
+
+    function togglePin(methodId) {
+        var pins = getPins();
+        var idx = pins.indexOf(methodId);
+        if (idx !== -1) {
+            pins.splice(idx, 1);
+        } else {
+            if (pins.length >= MAX_PINS) {
+                return { success: false, message: "Maximum " + MAX_PINS + " pins allowed" };
+            }
+            pins.push(methodId);
+        }
+        savePins(pins);
+        return { success: true, pins: pins };
+    }
+
+    function getLastSearch() {
+        try {
+            return localStorage.getItem(STORAGE_METHODS_LAST_SEARCH) || "";
+        } catch (e) {
+            return "";
+        }
+    }
+
+    function saveLastSearch(query) {
+        try {
+            localStorage.setItem(STORAGE_METHODS_LAST_SEARCH, query);
+        } catch (e) {}
+    }
+
+    function getLastTag() {
+        try {
+            return localStorage.getItem(STORAGE_METHODS_LAST_TAG) || "all";
+        } catch (e) {
+            return "all";
+        }
+    }
+
+    function saveLastTag(tag) {
+        try {
+            localStorage.setItem(STORAGE_METHODS_LAST_TAG, tag);
+        } catch (e) {}
+    }
+
+    function getLastMethod() {
+        try {
+            return localStorage.getItem(STORAGE_METHODS_LAST_METHOD) || "";
+        } catch (e) {
+            return "";
+        }
+    }
+
+    function saveLastMethod(methodId) {
+        try {
+            localStorage.setItem(STORAGE_METHODS_LAST_METHOD, methodId);
+        } catch (e) {}
+    }
+
+    function getSortOrder() {
+        try {
+            return localStorage.getItem(STORAGE_METHODS_SORT_ORDER) || "relevance";
+        } catch (e) {
+            return "relevance";
+        }
+    }
+
+    function saveSortOrder(order) {
+        try {
+            localStorage.setItem(STORAGE_METHODS_SORT_ORDER, order);
+        } catch (e) {}
+    }
+
     //==========================
     // MAKE PANEL FUNCTIONS
     //==========================
@@ -3711,7 +4087,7 @@
         var leftSpacer = document.createElement("div");
         leftSpacer.style.width = "32px";
         var title = document.createElement("div");
-        title.textContent = "ClinSpark Test Automator";
+        title.textContent = "ClinSpark Admin Automator";
         title.style.fontWeight = "600";
         title.style.textAlign = "center";
         title.style.justifySelf = "center";
