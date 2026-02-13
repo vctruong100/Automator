@@ -1,16 +1,338 @@
 [
   {
     "id": "M-001",
-    "title": "Average DBP, SBP, Heart Rate (NON-REPEAT)",
-    "tags": ["Average", "ECG"],
-    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20DBP%2C%20SBP%2C%20Heart%20Rate%20(NON-REPEAT).md",
+    "title": "Average Circumference (Hip)",
+    "tags": ["Average", "Circumference", "Hip"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20Circumference%20(Hip).md",
     "updated": "2026-02-12"
   },
   {
     "id": "M-002",
+    "title": "Average Circumference (Waist)",
+    "tags": ["Average", "Circumference", "Waist"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20Circumference%20(Waist).md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-003",
+    "title": "Average DBP, SBP, Heart Rate (NON-REPEAT)",
+    "tags": ["Average", "Vitals", "NON-REPEAT"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20DBP%2C%20SBP%2C%20Heart%20Rate%20(NON-REPEAT).md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-004",
     "title": "BM_BMI (Non-Screening)",
     "tags": ["BMI", "Non-Screening"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/BM_BMI%20(Non-Screening).md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-005",
+    "title": "BM_BMI (Screening)",
+    "tags": ["BMI", "Screening"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/BM_BMI%20(Screening).md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-006",
+    "title": "Baseline QtcF",
+    "tags": ["Baseline", "QtcF", "ECG"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Baseline%20QtcF.md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-007",
+    "title": "Common Functions",
+    "tags": ["Functions", "Utilities"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Common%20Functions.md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-008",
+    "title": "Difference between 2 SBP, DBP, and HR (NON-REPEAT)",
+    "tags": ["Difference", "Vitals", "NON-REPEAT"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Difference%20between%202%20SBP%2C%20DBP%2C%20and%20HR%20(NON-REPEAT).md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-009",
+    "title": "Difference between 2 SBP, DBP, and HR (REPEAT)",
+    "tags": ["Difference", "Vitals", "REPEAT"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Difference%20between%202%20SBP%2C%20DBP%2C%20and%20HR%20(REPEAT).md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-010",
+    "title": "Difference between Baseline and Entered Value",
+    "tags": ["Difference", "Baseline"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Difference%20between%20Baseline%20and%20Entered%20Value.md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-011",
+    "title": "Dominant Arm (Pull from Screening)",
+    "tags": ["Dominant Arm", "Screening"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Dominant%20Arm%20(Pull%20from%20Screening).md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-012",
+    "title": "Edit Check QtcF (Trigger if > 500 OR male > 450 OR female > 470 OR difference from baseline > 60",
+    "tags": ["Edit Check", "QtcF", "ECG"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20QtcF%20(Trigger%20if%20%20500%20OR%20male%20%20450%20OR%20female%20%20470%20OR%20difference%20from%20baseline%20%2060.md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-013",
+    "title": "Edit Check Trigger if there is dispensed kit number",
+    "tags": ["Edit Check", "Kit"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Trigger%20if%20there%20is%20dispensed%20kit%20number.md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-014",
+    "title": "Edit Check Visit Window Target Date",
+    "tags": ["Edit Check", "Visit Window", "Target Date"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Visit%20Window%20Target%20Date.md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-015",
+    "title": "FormJson and ItemJson Structure",
+    "tags": ["FormJson", "ItemJson", "Structure"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/FormJson%20and%20ItemJson%20Structure.md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-016",
+    "title": "Height (Screening)",
+    "tags": ["Height", "Screening"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Height%20(Screening).md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-017",
+    "title": "Help Text Code (AE, Auto-Navigate)",
+    "tags": ["Help Text", "AE", "Auto-Navigate"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Help%20Text%20Code%20(AE%2C%20Auto-Navigate).md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-018",
+    "title": "HipWaist Circumference from Previous Visit",
+    "tags": ["Circumference", "Hip", "Waist", "Previous Visit"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/HipWaist%20Circumference%20from%20Previous%20Visit.md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-019",
+    "title": "Is FSH or Pregnancy testing required (For Safety Labs)",
+    "tags": ["FSH", "Pregnancy", "Safety Labs"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Is%20FSH%20or%20Pregnancy%20testing%20required%20(For%20Safety%20Labs).md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-020",
+    "title": "Is the subject a woman of childbearing potential",
+    "tags": ["Childbearing", "Eligibility"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Is%20the%20subject%20a%20woman%20of%20childbearing%20potential.md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-021",
+    "title": "Kit Accession Number",
+    "tags": ["Kit", "Accession Number"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Kit%20Accession%20Number.md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-022",
+    "title": "Last Meal Time",
+    "tags": ["Meal Time"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Last%20Meal%20Time.md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-023",
+    "title": "Median HR, SYS, DIA (NON-REPEAT)",
+    "tags": ["Median", "Vitals", "NON-REPEAT"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Median%20HR%2C%20SYS%2C%20DIA%20(NON-REPEAT).md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-024",
+    "title": "Median HR, SYS, DIA (REPEAT)",
+    "tags": ["Median", "Vitals", "REPEAT"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Median%20HR%2C%20SYS%2C%20DIA%20(REPEAT).md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-025",
+    "title": "Median for HR, RR, PR, QRS, QT, QTC, QTcF (non-repeat)",
+    "tags": ["Median", "ECG", "NON-REPEAT"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Median%20for%20HR%2C%20RR%2C%20PR%2C%20QRS%2C%20QT%2C%20QTC%2C%20QTcF%20(non-repeat).md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-026",
+    "title": "Median for HR, RR, PR, QRS, QT, QTC, QTcF (repeat)",
+    "tags": ["Median", "ECG", "REPEAT"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Median%20for%20HR%2C%20RR%2C%20PR%2C%20QRS%2C%20QT%2C%20QTC%2C%20QTcF%20(repeat).md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-027",
+    "title": "POCBP or Partner POCBP",
+    "tags": ["POCBP"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/POCBP%20or%20Partner%20POCBP.md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-028",
+    "title": "Process No.",
+    "tags": ["Process Number"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Process%20No..md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-029",
+    "title": "Protocol Check Any QTcF increase ≥60 msec from Baseline OR average QTcF 500 msec (NON-REPEAT)",
+    "tags": ["Protocol Check", "QtcF", "NON-REPEAT"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Any%20QTcF%20increase%20%E2%89%A560%20msec%20from%20Baseline%20OR%20average%20QTcF%20500%20msec%20(NON-REPEAT).md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-030",
+    "title": "Protocol Check Any QTcF increase ≥60 msec from Baseline OR average QTcF 500 msec (REPEAT)",
+    "tags": ["Protocol Check", "QtcF", "REPEAT"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Any%20QTcF%20increase%20%E2%89%A560%20msec%20from%20Baseline%20OR%20average%20QTcF%20500%20msec%20(REPEAT).md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-031",
+    "title": "Protocol Check Is (AVERAGE) QTcFQRS Out of Range (NON-REPEAT)",
+    "tags": ["Protocol Check", "QtcF", "QRS", "NON-REPEAT"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Is%20(AVERAGE)%20QTcFQRS%20Out%20of%20Range%20(NON-REPEAT).md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-032",
+    "title": "Protocol Check Is (AVERAGE) QTcFQRS Out of Range (REPEAT)",
+    "tags": ["Protocol Check", "QtcF", "QRS", "REPEAT"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Is%20(AVERAGE)%20QTcFQRS%20Out%20of%20Range%20(REPEAT).md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-033",
+    "title": "Protocol Check Is BMI within range",
+    "tags": ["Protocol Check", "BMI"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Is%20BMI%20within%20range.md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-034",
+    "title": "Protocol Check Vital Signs Range #1 (NON-REPEAT)",
+    "tags": ["Protocol Check", "Vitals", "NON-REPEAT"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Vital%20Signs%20Range%20%231%20(NON-REPEAT).md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-035",
+    "title": "Protocol Check Vital Signs Range #2 (REPEAT)",
+    "tags": ["Protocol Check", "Vitals", "REPEAT"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Vital%20Signs%20Range%20%232%20(REPEAT).md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-036",
+    "title": "QTcF (Screening)",
+    "tags": ["QtcF", "Screening", "ECG"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/QTcF%20(Screening).md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-037",
+    "title": "Sample Barcode",
+    "tags": ["Barcode", "Sample"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Sample%20Barcode.md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-038",
+    "title": "Start Supine From ECG (Same-Study Event) - Vitals",
+    "tags": ["Supine", "ECG", "Vitals"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Start%20Supine%20From%20ECG%20(Same-Study%20Event)%20-%20Vitals.md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-039",
+    "title": "Start Supine From ECG (Screening) - Screen Vitals",
+    "tags": ["Supine", "ECG", "Screening", "Vitals"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Start%20Supine%20From%20ECG%20(Screening)%20-%20Screen%20Vitals.md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-040",
+    "title": "Subject's Initials",
+    "tags": ["Initials", "Subject"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Subject's%20Initials.md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-041",
+    "title": "Target Date",
+    "tags": ["Target Date", "Visit Window"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Target%20Date.md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-042",
+    "title": "Total Urine Volume",
+    "tags": ["Urine", "Volume"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Total%20Urine%20Volume.md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-043",
+    "title": "Total Urine Weight",
+    "tags": ["Urine", "Weight"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Total%20Urine%20Weight.md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-044",
+    "title": "Transfer Barcode",
+    "tags": ["Barcode", "Transfer"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Transfer%20Barcode.md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-045",
+    "title": "Tween-20 DateTime is more than 1 hour after PCVOID",
+    "tags": ["Tween", "DateTime", "PCVOID"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Tween-20%20DateTime%20is%20more%20than%201%20hour%20after%20PCVOID.md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-046",
+    "title": "Tween-20 Volume = (Urine Volume)10",
+    "tags": ["Tween", "Volume", "Urine"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Tween-20%20Volume%20%3D%20(Urine%20Volume)10.md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-047",
+    "title": "Waist to Height Ratio",
+    "tags": ["Waist", "Height", "Ratio"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Waist%20to%20Height%20Ratio.md",
+    "updated": "2026-02-12"
+  },
+  {
+    "id": "M-048",
+    "title": "Waist to Hip Ratio",
+    "tags": ["Waist", "Hip", "Ratio"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Waist%20to%20Hip%20Ratio.md",
     "updated": "2026-02-12"
   }
 ]
