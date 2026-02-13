@@ -161,6 +161,25 @@
     var SUBJECT_ELIG_POPUP = null;
 
 
+    function clearLogs() {
+        try {
+            localStorage.removeItem("activityPlanState.logs");
+            log("ClearLogs: localStorage logs removed");
+        } catch (e) {
+            log("ClearLogs: error removing logs from storage " + String(e));
+        }
+
+        var box = document.getElementById(LOG_ID);
+        var hadBox = !!box;
+        log("ClearLogs: log box exists=" + String(hadBox));
+        if (box) {
+            var removed = 0;
+            while (box.firstChild) {
+                box.removeChild(box.firstChild);
+                removed = removed + 1;
+            }
+        }
+    }
 
     function scale(value) {
         if (typeof value === 'string' && value.endsWith('px')) {
@@ -2061,7 +2080,6 @@
 
         var popup = createPopup({
             title: "Cohort Eligibility",
-            description: "Check eligibility criteria for multiple subjects at once",
             content: container,
             width: "600px",
             height: "auto",
@@ -2731,7 +2749,6 @@
 
         var popup = createPopup({
             title: "Subject Eligibility",
-            description: "Check eligibility criteria for individual subjects",
             content: container,
             width: "450px",
             height: "auto"
@@ -3530,7 +3547,7 @@
         btnRow.appendChild(okBtn);
         container.appendChild(btnRow);
 
-        var popup = createPopup({ title: FORM_POPUP_TITLE, description: "Auto-navigate to Form data page based on keywords and status", content: container, width: "520px", height: "auto" });
+        var popup = createPopup({ title: FORM_POPUP_TITLE , content: container, width: "520px", height: "auto" });
 
         window.setTimeout(function () {
             try {
@@ -4100,7 +4117,7 @@
         btnRow.appendChild(okBtn);
         container.appendChild(btnRow);
 
-        var popup = createPopup({ title: STUDY_EVENT_POPUP_TITLE, description: "Auto-navigate to Study Events data page based on keywords", content: container, width: "520px", height: "auto" });
+        var popup = createPopup({ title: STUDY_EVENT_POPUP_TITLE, content: container, width: "520px", height: "auto" });
 
         window.setTimeout(function () {
             try {
@@ -4454,7 +4471,7 @@
         okBtn.style.cssText = "background:#0b82ff;color:#fff;border:none;border-radius:6px;padding:10px 30px;cursor:pointer;font-weight:600";
         okRow.appendChild(okBtn);
         container.appendChild(okRow);
-        var popup = createPopup({ title: "Parse Method", description: "Extract and parse method data from forms", content: container, width: "480px", height: "auto", onClose: function() { stopParseMethodAutomation(); } });
+        var popup = createPopup({ title: "Parse Method", content: container, width: "480px", height: "auto", onClose: function() { stopParseMethodAutomation(); } });
         setTimeout(function() { try { inputEl.focus(); } catch (e) {} }, 50);
 
         function doConfirm() {
@@ -5311,7 +5328,6 @@
 
         var popup = createPopup({
             title: "Import I/E",
-            description: "Add I/E to Eligibility Mapping",
             content: container,
             width: "450px",
             height: "auto",
@@ -6899,7 +6915,7 @@
         btnRow.appendChild(okBtn);
         container.appendChild(btnRow);
 
-        var popup = createPopup({ title: AE_POPUP_TITLE, description: "Auto-navigate to AE data page for subject", content: container, width: "380px", height: "auto" });
+        var popup = createPopup({ title: AE_POPUP_TITLE, content: container, width: "380px", height: "auto" });
 
         window.setTimeout(function () {
             try {
@@ -7377,7 +7393,6 @@
 
         var popup = createPopup({
             title: "Locating Barcode",
-            description: "Find and pull barcode in background…",
             content: loadingText,
             width: "300px",
             height: "auto"
@@ -8471,15 +8486,15 @@
         pauseBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
         var runBarcodeBtn = document.createElement("button");
         runBarcodeBtn.textContent = "Run Barcode";
-        runBarcodeBtn.style.background = "#4a90e2";
+        runBarcodeBtn.style.background = "#5b43c7";
         runBarcodeBtn.style.color = "#fff";
         runBarcodeBtn.style.border = "none";
         runBarcodeBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
         runBarcodeBtn.style.padding = scale(BUTTON_PADDING_PX);
         runBarcodeBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         runBarcodeBtn.style.cursor = "pointer";
-        runBarcodeBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
-        runBarcodeBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+        runBarcodeBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
+        runBarcodeBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
         var findAeBtn = document.createElement("button");
         findAeBtn.textContent = "Find Adverse Event";
         findAeBtn.style.background = "#4a90e2";
@@ -8541,15 +8556,15 @@
 
         var saBuilderBtn = document.createElement("button");
         saBuilderBtn.textContent = "Scheduled Activities Builder";
-        saBuilderBtn.style.background = "#4a90e2";
+        saBuilderBtn.style.background = "#5b43c7";
         saBuilderBtn.style.color = "#fff";
         saBuilderBtn.style.border = "none";
         saBuilderBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
         saBuilderBtn.style.padding = scale(BUTTON_PADDING_PX);
         saBuilderBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         saBuilderBtn.style.cursor = "pointer";
-        saBuilderBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
-        saBuilderBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+        saBuilderBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
+        saBuilderBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
 
         var parseMethodBtn = document.createElement("button");
         parseMethodBtn.textContent = "Item Method Forms";
@@ -8588,17 +8603,33 @@
         importEligBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         importEligBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
+        var clearLogsBtn = document.createElement("button");
+        clearLogsBtn.textContent = "Clear Logs";
+        clearLogsBtn.style.background = "#6c757d";
+        clearLogsBtn.style.color = "#fff";
+        clearLogsBtn.style.border = "none";
+        clearLogsBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        clearLogsBtn.style.padding = scale(BUTTON_PADDING_PX);
+        clearLogsBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
+        clearLogsBtn.style.cursor = "pointer";
+        clearLogsBtn.style.fontWeight = "500";
+        clearLogsBtn.style.transition = "background 0.2s";
+        clearLogsBtn.onmouseenter = () => { clearLogsBtn.style.background = "#5a6268"; };
+        clearLogsBtn.onmouseleave = () => { clearLogsBtn.style.background = "#6c757d"; };
+
         btnRow.appendChild(runBarcodeBtn);
+        btnRow.appendChild(saBuilderBtn);
+        btnRow.appendChild(importEligBtn);
         btnRow.appendChild(findAeBtn);
         btnRow.appendChild(findFormBtn);
         btnRow.appendChild(findStudyEventsBtn);
-        btnRow.appendChild(importEligBtn);
         btnRow.appendChild(parseMethodBtn);
         btnRow.appendChild(openEligBtn);
         btnRow.appendChild(subjectEligBtn);
-        btnRow.appendChild(saBuilderBtn);
         btnRow.appendChild(pauseBtn);
+        btnRow.appendChild(clearLogsBtn);
         btnRow.appendChild(toggleLogsBtn);
+
         bodyContainer.appendChild(btnRow);
         var status = document.createElement("div");
         status.style.marginTop = scale(STATUS_MARGIN_TOP_PX);
@@ -8720,6 +8751,10 @@
                     } catch (e) {}
                 }
             }
+        });
+        clearLogsBtn.addEventListener("click", function () {
+            clearLogs();
+            status.textContent = "Logs cleared";
         });
         runBarcodeBtn.addEventListener("click", async function () {
             log("Run Barcode: button clicked");

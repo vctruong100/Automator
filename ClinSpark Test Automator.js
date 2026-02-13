@@ -4466,7 +4466,7 @@
         btnRow.appendChild(okBtn);
         container.appendChild(btnRow);
 
-        var popup = createPopup({ title: FORM_POPUP_TITLE, description: FORM_POPUP_DESCRIPTION, content: container, width: "520px", height: "auto" });
+        var popup = createPopup({ title: FORM_POPUP_TITLE, content: container, width: "520px", height: "auto" });
 
         window.setTimeout(function () {
             try {
@@ -4829,7 +4829,7 @@
         okBtn.style.cssText = "background:#0b82ff;color:#fff;border:none;border-radius:6px;padding:10px 30px;cursor:pointer;font-weight:600";
         okRow.appendChild(okBtn);
         container.appendChild(okRow);
-        var popup = createPopup({ title: PARSE_METHOD_POPUP_TITLE, description: PARSE_METHOD_POPUP_DESCRIPTION, content: container, width: "480px", height: "auto", onClose: function() { stopParseMethodAutomation(); } });
+        var popup = createPopup({ title: PARSE_METHOD_POPUP_TITLE, content: container, width: "480px", height: "auto", onClose: function() { stopParseMethodAutomation(); } });
         setTimeout(function() { try { inputEl.focus(); } catch (e) {} }, 50);
 
         function doConfirm() {
@@ -5497,7 +5497,6 @@
 
         var popup = createPopup({
             title: "Locating Barcode",
-            description: "Locating barcode in background…",
             content: loadingText,
             width: "300px",
             height: "auto"
@@ -5626,7 +5625,6 @@
 
         var pop = createPopup({
             title: "Collect All",
-            description: "Collect all forms for the current subject.",
             content: popupContainer,
             width: "450px",
             height: "500px",
@@ -6691,7 +6689,6 @@
 
         var popup = createPopup({
             title: "Import Eligibility Mapping",
-            description: "Add I/E items to Eligibility Mapping",
             content: container,
             width: "500px",
             height: "auto",
@@ -14487,7 +14484,6 @@
 
                     RUN_ALL_POPUP_REF = createPopup({
                         title: "Run Button (1-5) Progress",
-                        description: "Run 'Lock Activity Plans', 'Lock Sample Paths', 'Update Study Status', 'Add Cohort Subjects', and 'Run ICF Barcode'",
                         content: popupContainer,
                         width: "400px",
                         height: "auto",
@@ -14558,7 +14554,7 @@
 
                     CLEAR_MAPPING_POPUP_REF = createPopup({
                         title: "Clear Mapping",
-                        description: "Remove each I/E item on Eligibility Mapping",
+
                         content: popupContainer,
                         width: "350px",
                         height: "auto",
@@ -15010,8 +15006,6 @@
         log("Removed pending id=" + String(id));
     }
 
-    // If autostate param present, open and save edit state modal and close tab.
-    // NOTE: This function is now stubbed out because Lock Activity Plans uses background HTTP requests.
     async function processShowPageIfAuto() {
         log("processShowPageIfAuto: not needed with background approach");
     }
@@ -15697,7 +15691,7 @@
         popup.style.color = "#fff";
         popup.style.border = "1px solid #444";
         popup.style.borderRadius = "8px";
-        popup.style.padding = "0";
+        popup.style.padding = "5";
         popup.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
         popup.style.fontSize = "14px";
         popup.style.width = width;
@@ -16807,7 +16801,6 @@
 
             ICF_BARCODE_POPUP_REF = createPopup({
                 title: "Run ICF Barcode Progress",
-                description: "Collect the last subject ICF Barcode",
                 content: popupContainer,
                 width: "400px",
                 height: "auto",
@@ -16888,7 +16881,6 @@
 
             RUN_ALL_POPUP_REF = createPopup({
                 title: "Run Button (1-5) Progress",
-                description: "Run 'Lock Activity Plans', 'Lock Sample Paths', 'Update Study Status', 'Add Cohort Subjects', 'Run ICF Barcode'",
                 content: popupContainer,
                 width: "400px",
                 height: "auto",
@@ -17081,7 +17073,6 @@
 
             var clearMappingPopup = createPopup({
                 title: "Clear Mapping",
-                description: "Remove every I/E items in Eligibility Mapping",
                 content: popupContainer,
                 width: "350px",
                 height: "auto",
@@ -17559,7 +17550,6 @@
 
                 IMPORT_ELIG_POPUP_REF = createPopup({
                     title: "Import I/E",
-                    description: " Add I/E items to Eligibility Mapping",
                     content: container,
                     width: "500px",
                     height: "auto",
