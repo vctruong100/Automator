@@ -8075,8 +8075,8 @@
 
             if (bodyContainer) {
                 bodyContainer.style.display = "block";
-                bodyContainer.style.height = "calc(100% - " + String(PANEL_HEADER_HEIGHT_PX) + "px)";
-                bodyContainer.style.maxHeight = "calc(100% - " + String(PANEL_HEADER_HEIGHT_PX) + "px)";
+                bodyContainer.style.height = "calc(100% - " + String(scale(PANEL_HEADER_HEIGHT_PX)) + "px)";
+                bodyContainer.style.maxHeight = "calc(100% - " + String(scale(PANEL_HEADER_HEIGHT_PX)) + "px)";
                 bodyContainer.style.overflowY = "auto";
             }
         });
@@ -8422,7 +8422,7 @@
         title.style.textAlign = "center";
         title.style.justifySelf = "center";
         title.style.transform = "translateX(" + scale(HEADER_TITLE_OFFSET_PX) + ")";
-        title.style.paddingBottom = scale(8); 
+        title.style.paddingBottom = scale(8);
         headerBar.appendChild(title);
         headerBar.appendChild(leftSpacer);
         var rightControls = document.createElement("div");
@@ -8682,10 +8682,7 @@
             }
         } catch (e) {
             console.log("[APS] Failed to restore logs: " + e);
-        }        importEligBtn.addEventListener("click", function () {
-            log("ImportElig: button clicked");
-            startImportEligibilityMapping();
-        });
+        }
         importEligBtn.addEventListener("click", function () {
             log("ImportElig: button clicked");
             startImportEligibilityMapping();

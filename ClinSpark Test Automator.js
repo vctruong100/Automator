@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.2.0
+// @version 3.2.3
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -21,7 +21,7 @@
     var UI_SCALE = 1.0; // Master scale factor (will be initialized after function definitions)
     var PANEL_DEFAULT_WIDTH = 340;
     var PANEL_DEFAULT_HEIGHT = "auto";
-    var PANEL_HEADER_HEIGHT_PX = 24;
+    var PANEL_HEADER_HEIGHT_PX = 50;
     var PANEL_HEADER_GAP_PX = 8;
     var PANEL_MAX_WIDTH_PX = 60;
     var PANEL_PADDING_PX = 12;
@@ -15180,7 +15180,7 @@
         if (collapsed) {
             // Collapse: shrink height but DO NOT overwrite stored expanded size
             panel.style.width = scale(PANEL_DEFAULT_WIDTH);
-            panel.style.height = scale(PANEL_HEADER_HEIGHT_PX + 30);
+            panel.style.height = scale(PANEL_HEADER_HEIGHT_PX);
             panel.style.overflow = "hidden";
 
             if (bodyContainer) {
@@ -15795,7 +15795,7 @@
         bodyContainer.style.flex = "1";
         bodyContainer.style.overflowY = "auto";
         bodyContainer.style.overflowX = "hidden";
-        bodyContainer.style.padding = "12px";
+        bodyContainer.style.padding = scale(12) + "px";
         bodyContainer.style.boxSizing = "border-box";
 
         if (typeof content === "string") {
@@ -15986,8 +15986,8 @@
             if (bodyContainer) {
                 bodyContainer.style.display = "block";
 
-                bodyContainer.style.height = "calc(100% - " + String(PANEL_HEADER_HEIGHT_PX) + "px)";
-                bodyContainer.style.maxHeight = "calc(100% - " + String(PANEL_HEADER_HEIGHT_PX) + "px)";
+                bodyContainer.style.height = "calc(100% - " + String(scale(PANEL_HEADER_HEIGHT_PX)) + "px)";
+                bodyContainer.style.maxHeight = "calc(100% - " + String(scale(PANEL_HEADER_HEIGHT_PX)) + "px)";
 
                 bodyContainer.style.overflowY = "auto";
             }
@@ -16132,8 +16132,8 @@
         headerBar.style.display = "grid";
         headerBar.style.gridTemplateColumns = "auto 1fr auto";
         headerBar.style.alignItems = "center";
-        headerBar.style.gap = String(PANEL_HEADER_GAP_PX) + "px";
-        headerBar.style.height = String(PANEL_HEADER_HEIGHT_PX) + "px";
+        headerBar.style.gap = String(scale(PANEL_HEADER_GAP_PX)) + "px";
+        headerBar.style.height = String(scale(PANEL_HEADER_HEIGHT_PX)) + "px";
         headerBar.style.boxSizing = "border-box";
         headerBar.style.cursor = "grab";
         headerBar.style.userSelect = "none";
@@ -16172,10 +16172,11 @@
         panel.appendChild(headerBar);
         var bodyContainer = document.createElement("div");
         bodyContainer.style.display = "block";
-        bodyContainer.style.height = "calc(100% - " + String(PANEL_HEADER_HEIGHT_PX) + "px)";
-        bodyContainer.style.maxHeight = "calc(100% - " + String(PANEL_HEADER_HEIGHT_PX) + "px)";
+        bodyContainer.style.height = "calc(100% - " + String(scale(PANEL_HEADER_HEIGHT_PX)) + "px)";
+        bodyContainer.style.maxHeight = "calc(100% - " + String(scale(PANEL_HEADER_HEIGHT_PX)) + "px)";
         bodyContainer.style.overflowY = "auto";
         bodyContainer.style.boxSizing = "border-box";
+        bodyContainer.style.padding = scale(12) + "px";
         var btnRow = document.createElement("div");
         btnRow.style.display = "grid";
         btnRow.style.gridTemplateColumns = "1fr 1fr";
@@ -16575,6 +16576,7 @@
             logBox.style.display = "none";
         }
         bodyContainer.appendChild(logBox);
+
         runNonScrnBtn.addEventListener("click", function () {
             status.textContent = "Preparing non-SCRN subject import...";
             log("Run Add non-SCRN Subject clicked");
