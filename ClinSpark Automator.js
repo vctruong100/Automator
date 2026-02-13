@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.7.8
+// @version     1.8.0
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -46,11 +46,7 @@
     var PANEL_DEFAULT_HEIGHT = "auto";
     var PANEL_HEADER_HEIGHT_PX = 48;
     var PANEL_HEADER_GAP_PX = 8;
-    var PANEL_MAX_WIDTH_PX = 600;
-    var PANEL_BASE_WIDTH = 340;
-    var PANEL_BASE_HEIGHT = 500;
-    var PANEL_MIN_WIDTH = 200;
-    var PANEL_MIN_HEIGHT = 200;
+    var PANEL_MAX_WIDTH_PX = 60;
     var FORM_DELAY_MS = 800;
     var DELAY_BETWEEN_ITEMS_MS = 100;
     var DELAY_AFTER_COLLECT_CLICK_MS = 500;
@@ -122,7 +118,7 @@
     var PARSE_METHOD_COLLECTED_METHODS = [];
     var PARSE_METHOD_COLLECTED_FORMS = [];
 
-    // Cohort Eligibility Feature
+        // Cohort Eligibility Feature
     var STORAGE_COHORT_ELIG_DATA = "activityPlanState.cohortElig.data";
     var STORAGE_COHORT_ELIG_RUNNING = "activityPlanState.cohortElig.running";
     var STORAGE_COHORT_ELIG_AUTO_TAB = "activityPlanState.cohortElig.autoTab";
@@ -140,7 +136,7 @@
     var SUBJECT_ELIG_SUBJECTS_LIST_URL = "https://cenexel.clinspark.com/secure/study/subjects/list";
     var SUBJECT_ELIG_POPUP = null;
 
-
+    
     //==========================
     // SCHEDULED ACTIVITIES BUILDER FEATURE
     //==========================
@@ -376,12 +372,12 @@
         } catch (e) {}
 
         await sleep(300);
-
+        
         if (SA_BUILDER_CANCELLED) {
             log("SA Builder: cancelled after selectSelect2Value sleep");
             return false;
         }
-
+        
         log("SA Builder: selected value " + value + " in " + selectId);
         return true;
     }
@@ -437,27 +433,27 @@
         // Segments column (with checkboxes and dropzones)
         var segmentColumnWrapper = document.createElement("div");
         segmentColumnWrapper.style.cssText = "display:flex;flex-direction:column;border:1px solid #333;border-radius:4px;background:#1a1a1a;height:100%;overflow:hidden;";
-
+        
         // Select All header for segments
         var segmentHeader = document.createElement("div");
         segmentHeader.style.cssText = "display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid #333;background:#222;";
-
+        
         var selectAllCheckbox = document.createElement("input");
         selectAllCheckbox.type = "checkbox";
         selectAllCheckbox.id = "saBuilderSelectAllSegments";
         selectAllCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;";
-
+        
         var selectAllLabel = document.createElement("span");
         selectAllLabel.textContent = "Select All";
         selectAllLabel.style.cssText = "font-weight:600;font-size:13px;";
-
+        
         segmentHeader.appendChild(selectAllCheckbox);
         segmentHeader.appendChild(selectAllLabel);
-
+        
         var segmentColumn = document.createElement("div");
         segmentColumn.style.cssText = "overflow-y:auto;padding:8px;flex:1;";
         segmentColumn.id = "saBuilderSegments";
-
+        
         segmentColumnWrapper.appendChild(segmentHeader);
         segmentColumnWrapper.appendChild(segmentColumn);
 
@@ -487,7 +483,7 @@
             this.style.background = "#1e1e1e";
             this.style.border = "1px solid #444";
             this.style.transition = "all 0.2s ease";
-
+            
             var eventData = e.dataTransfer.getData("text/plain");
             if (eventData) {
                 var data = JSON.parse(eventData);
@@ -524,10 +520,10 @@
 
         // Track segment-event assignments
         var segmentEventMap = {};
-
+        
         // Track segment checkbox states separately to prevent resets
         var segmentCheckboxStates = {};
-
+        
         // Load saved checkbox states
         try {
             var savedStates = localStorage.getItem(STORAGE_SA_BUILDER_SEGMENT_CHECKBOXES);
@@ -556,12 +552,12 @@
                 checkbox.type = "checkbox";
                 checkbox.dataset.segmentValue = seg.value;
                 checkbox.style.cssText = "width:18px;height:18px;cursor:pointer;";
-
+                
                 // Restore checkbox state from saved states
                 if (segmentCheckboxStates[seg.value]) {
                     checkbox.checked = true;
                 }
-
+                
                 // Save checkbox state when changed
                 checkbox.addEventListener("change", function() {
                     segmentCheckboxStates[this.dataset.segmentValue] = this.checked;
@@ -620,8 +616,8 @@
 
                             // Make attached events draggable back to Study Events column
                             attachedItem.addEventListener("dragstart", function(e) {
-                                e.dataTransfer.setData("text/plain", JSON.stringify({
-                                    value: this.dataset.eventValue,
+                                e.dataTransfer.setData("text/plain", JSON.stringify({ 
+                                    value: this.dataset.eventValue, 
                                     text: this.dataset.eventText,
                                     fromSegment: true,
                                     segmentValue: segVal
@@ -676,7 +672,7 @@
                                     segmentEventMap[segVal] = events;
                                     renderAttachedEvents(dz, segVal);
                                     log("SA Builder: Event '" + ev.text + "' removed from segment");
-
+                                    
                                     // Restore event to Study Events column
                                     restoreEventToStudyEventsColumn({ value: ev.value, text: ev.text });
                                 }
@@ -731,7 +727,7 @@
                                 if (!existing) {
                                     if (!segmentEventMap[segVal]) segmentEventMap[segVal] = [];
                                     segmentEventMap[segVal].push({ value: data.value, text: data.text });
-
+                                    
                                     removeEventFromStudyEventsColumn(data.value);
                                 }
                                 renderSegments(segmentSearch.value);
@@ -777,9 +773,9 @@
                 });
 
                 evItem.addEventListener("dragstart", function(e) {
-                    e.dataTransfer.setData("text/plain", JSON.stringify({
-                        value: this.dataset.eventValue,
-                        text: this.dataset.eventText
+                    e.dataTransfer.setData("text/plain", JSON.stringify({ 
+                        value: this.dataset.eventValue, 
+                        text: this.dataset.eventText 
                     }));
                     e.dataTransfer.effectAllowed = "copy";
                     this.style.opacity = "0.6";
@@ -820,7 +816,7 @@
                     return;
                 }
             }
-
+            
             // Create the event item
             var evItem = document.createElement("div");
             evItem.textContent = eventData.text;
@@ -844,9 +840,9 @@
             });
 
             evItem.addEventListener("dragstart", function(e) {
-                e.dataTransfer.setData("text/plain", JSON.stringify({
-                    value: this.dataset.eventValue,
-                    text: this.dataset.eventText
+                e.dataTransfer.setData("text/plain", JSON.stringify({ 
+                    value: this.dataset.eventValue, 
+                    text: this.dataset.eventText 
                 }));
                 e.dataTransfer.effectAllowed = "copy";
                 this.style.opacity = "0.6";
@@ -870,20 +866,20 @@
         function sortStudyEventsColumn() {
             var allItems = eventColumn.querySelectorAll("[data-event-value]");
             var itemsArray = Array.prototype.slice.call(allItems);
-
+            
             // Sort by text content (case-insensitive)
             itemsArray.sort(function(a, b) {
                 var textA = (a.dataset.eventText || a.textContent || "").toLowerCase();
                 var textB = (b.dataset.eventText || b.textContent || "").toLowerCase();
                 return textA.localeCompare(textB);
             });
-
+            
             // Clear and re-append in sorted order
             eventColumn.innerHTML = "";
             itemsArray.forEach(function(item) {
                 eventColumn.appendChild(item);
             });
-
+            
             log("SA Builder: Study Events column sorted alphabetically");
         }
 
@@ -1053,7 +1049,7 @@
             var minutesEl = document.getElementById("saBuilderMinutes");
             var secondsEl = document.getElementById("saBuilderSeconds");
             var preRefEl = document.getElementById("saBuilderPreReference");
-
+            
             if (daysEl) {
                 daysEl.disabled = isChecked;
                 daysEl.style.opacity = isChecked ? "0.5" : "1";
@@ -2296,7 +2292,7 @@
 
                             var showLink = null;
                             var href = "";
-
+                            
                             // Search through all columns for the Show link
                             for (var tdIdx = 0; tdIdx < tds.length; tdIdx++) {
                                 var td = tds[tdIdx];
@@ -2453,7 +2449,7 @@
             localStorage.removeItem(STORAGE_COHORT_ELIG_DATA);
         } catch (e) {}
         log("CohortElig: Cohort Eligibility data cleared (auto-tab flag preserved for child tabs)");
-
+        
         // Clear auto-tab flag after a delay to allow all tabs to load and navigate
         setTimeout(function() {
             try {
@@ -2507,21 +2503,21 @@
 
     function subjectEligibilityFeature() {
         log("SubjectElig: Starting Subject Eligibility feature");
-
+        
         var info = getSubjectIdentifierForAE();
         var scannedId = info.raw || "";
-
+        
         if (scannedId && !containsNumber(scannedId)) {
             log("SubjectElig: Scanned identifier '" + scannedId + "' excluded (no number)");
             scannedId = "";
         }
-
+        
         showSubjectEligInputPopup(scannedId, function(userInput) {
             if (!userInput) {
                 log("SubjectElig: Canceled by user");
                 return;
             }
-
+            
             try {
                 localStorage.setItem(STORAGE_SUBJECT_ELIG_PENDING, "1");
                 localStorage.setItem(STORAGE_SUBJECT_ELIG_IDENTIFIER, userInput);
@@ -2529,26 +2525,26 @@
             } catch (e) {
                 log("SubjectElig: Error saving state: " + String(e));
             }
-
+            
             showSubjectEligSpinnerPopup(userInput);
-
+            
             log("SubjectElig: Navigating to subjects list with identifier: " + userInput);
             setTimeout(function() {
                 location.href = SUBJECT_ELIG_SUBJECTS_LIST_URL;
             }, 100);
         });
     }
-
+    
     function showSubjectEligSpinnerPopup(identifier) {
         log("SubjectElig: Showing spinner popup");
-
+        
         var container = document.createElement("div");
         container.style.display = "flex";
         container.style.flexDirection = "column";
         container.style.alignItems = "center";
         container.style.gap = "16px";
         container.style.padding = "20px";
-
+        
         var spinner = document.createElement("div");
         spinner.style.width = "40px";
         spinner.style.height = "40px";
@@ -2556,20 +2552,20 @@
         spinner.style.borderTop = "4px solid #28a745";
         spinner.style.borderRadius = "50%";
         spinner.style.animation = "spin 1s linear infinite";
-
+        
         var style = document.createElement("style");
         style.textContent = "@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }";
         document.head.appendChild(style);
-
+        
         var statusText = document.createElement("div");
         statusText.style.color = "#fff";
         statusText.style.fontSize = "14px";
         statusText.style.textAlign = "center";
         statusText.textContent = "Searching for subject: " + identifier;
-
+        
         container.appendChild(spinner);
         container.appendChild(statusText);
-
+        
         var popup = createPopup({
             title: "Subject Eligibility - Processing",
             content: container,
@@ -2580,10 +2576,10 @@
                 clearSubjectEligData();
             }
         });
-
+        
         SUBJECT_ELIG_POPUP = popup;
     }
-
+    
     function clearSubjectEligData() {
         try {
             localStorage.removeItem(STORAGE_SUBJECT_ELIG_PENDING);
@@ -2595,24 +2591,24 @@
 
     function showSubjectEligInputPopup(prefill, onDone) {
         log("SubjectElig: Showing input popup");
-
+        
         var container = document.createElement("div");
         container.style.display = "flex";
         container.style.flexDirection = "column";
         container.style.gap = "12px";
         container.style.padding = "10px";
-
+        
         var fieldRow = document.createElement("div");
         fieldRow.style.display = "grid";
         fieldRow.style.gridTemplateColumns = "140px 1fr";
         fieldRow.style.alignItems = "center";
         fieldRow.style.gap = "8px";
-
+        
         var label = document.createElement("div");
         label.textContent = "Subject Identifier";
         label.style.fontWeight = "600";
         label.style.color = "#fff";
-
+        
         var input = document.createElement("input");
         input.type = "text";
         input.placeholder = "e.g., 101-001, S-101-001, L-101-001";
@@ -2624,17 +2620,17 @@
         input.style.border = "1px solid #444";
         input.style.background = "#1a1a1a";
         input.style.color = "#fff";
-
+        
         fieldRow.appendChild(label);
         fieldRow.appendChild(input);
         container.appendChild(fieldRow);
-
+        
         var btnRow = document.createElement("div");
         btnRow.style.display = "inline-flex";
         btnRow.style.justifyContent = "flex-end";
         btnRow.style.gap = "8px";
         btnRow.style.marginTop = "10px";
-
+        
         var clearIdBtn = document.createElement("button");
         clearIdBtn.textContent = "Clear ID";
         clearIdBtn.style.background = "#6c757d";
@@ -2643,7 +2639,7 @@
         clearIdBtn.style.borderRadius = "6px";
         clearIdBtn.style.padding = "8px 16px";
         clearIdBtn.style.cursor = "pointer";
-
+        
         var cancelBtn = document.createElement("button");
         cancelBtn.textContent = "Cancel";
         cancelBtn.style.background = "#333";
@@ -2652,7 +2648,7 @@
         cancelBtn.style.borderRadius = "6px";
         cancelBtn.style.padding = "8px 16px";
         cancelBtn.style.cursor = "pointer";
-
+        
         var confirmBtn = document.createElement("button");
         confirmBtn.textContent = "Confirm";
         confirmBtn.style.background = "#28a745";
@@ -2661,12 +2657,12 @@
         confirmBtn.style.borderRadius = "6px";
         confirmBtn.style.padding = "8px 16px";
         confirmBtn.style.cursor = "pointer";
-
+        
         btnRow.appendChild(clearIdBtn);
         btnRow.appendChild(cancelBtn);
         btnRow.appendChild(confirmBtn);
         container.appendChild(btnRow);
-
+        
         var popup = createPopup({
             title: "Subject Eligibility",
             description: "Check eligibility criteria for individual subjects",
@@ -2674,44 +2670,44 @@
             width: "450px",
             height: "auto"
         });
-
+        
         SUBJECT_ELIG_POPUP = popup;
-
+        
         setTimeout(function() {
             input.focus();
             input.select();
         }, 50);
-
+        
         function doConfirm() {
             var value = input.value.trim();
             if (!value) {
                 log("SubjectElig: Empty input");
                 return;
             }
-
+            
             if (!containsNumber(value)) {
                 log("SubjectElig: Identifier must contain a number");
                 input.style.borderColor = "#f90";
                 return;
             }
-
+            
             if (popup && popup.close) {
                 popup.close();
             }
-
+            
             if (typeof onDone === "function") {
                 onDone(value);
             }
         }
-
+        
         clearIdBtn.addEventListener("click", function() {
             input.value = "";
             input.style.borderColor = "#444";
             input.focus();
         });
-
+        
         confirmBtn.addEventListener("click", doConfirm);
-
+        
         cancelBtn.addEventListener("click", function() {
             if (popup && popup.close) {
                 popup.close();
@@ -2720,7 +2716,7 @@
                 onDone(null);
             }
         });
-
+        
         input.addEventListener("keydown", function(e) {
             if (e.key === "Enter") {
                 doConfirm();
@@ -2739,56 +2735,56 @@
 
     function processSubjectEligOnSubjectsList() {
         log("SubjectElig: On subjects list, searching for identifier...");
-
+        
         var identifier = null;
         try {
             identifier = localStorage.getItem(STORAGE_SUBJECT_ELIG_IDENTIFIER);
         } catch (e) {}
-
+        
         if (!identifier) {
             log("SubjectElig: No identifier found in storage");
             return;
         }
-
+        
         var subjectTbody = document.getElementById("subjectTableBody");
         if (!subjectTbody) {
             log("SubjectElig: subjectTableBody not found, waiting...");
             setTimeout(processSubjectEligOnSubjectsList, 1000);
             return;
         }
-
+        
         var subjectRows = subjectTbody.querySelectorAll("tr");
         log("SubjectElig: Found " + subjectRows.length + " subject rows");
-
+        
         // Split identifier by " / " to get individual identifiers
         var identifierParts = identifier.split(" / ");
         log("SubjectElig: Split identifier into " + identifierParts.length + " parts: " + JSON.stringify(identifierParts));
-
+        
         var matchedUrl = null;
-
+        
         for (var i = 0; i < subjectRows.length; i++) {
             var row = subjectRows[i];
             var tds = row.querySelectorAll("td");
-
+            
             if (tds.length > 0) {
                 for (var tdIdx = 0; tdIdx < tds.length; tdIdx++) {
                     var td = tds[tdIdx];
                     var divs = td.querySelectorAll("div.vertSepNoBorder, div.vertSep");
-
+                    
                     for (var divIdx = 0; divIdx < divs.length; divIdx++) {
                         var div = divs[divIdx];
                         var text = (div.textContent || "").trim();
                         // Extract just the identifier value (after the label like "R:", "L:", "S:")
                         var idValue = text.replace(/^[A-Z]:\s*/, "").trim();
                         var normalizedIdValue = idValue.toUpperCase();
-
+                        
                         // Check if any of the identifier parts match this value
                         for (var partIdx = 0; partIdx < identifierParts.length; partIdx++) {
                             var searchPart = identifierParts[partIdx].trim().toUpperCase();
-
+                            
                             if (searchPart && normalizedIdValue === searchPart) {
                                 log("SubjectElig: MATCH found in row " + i + ", column " + tdIdx + ": '" + searchPart + "' matches '" + idValue + "'");
-
+                                
                                 for (var linkIdx = 0; linkIdx < tds.length; linkIdx++) {
                                     var linkTd = tds[linkIdx];
                                     var showLink = linkTd.querySelector("a[href*='/subjects/show/']");
@@ -2799,21 +2795,21 @@
                                         break;
                                     }
                                 }
-
+                                
                                 if (matchedUrl) break;
                             }
                         }
-
+                        
                         if (matchedUrl) break;
                     }
-
+                    
                     if (matchedUrl) break;
                 }
             }
-
+            
             if (matchedUrl) break;
         }
-
+        
         if (matchedUrl) {
             log("SubjectElig: Navigating to: " + matchedUrl);
             try {
@@ -2828,7 +2824,7 @@
                 localStorage.removeItem(STORAGE_SUBJECT_ELIG_IDENTIFIER);
                 localStorage.removeItem(STORAGE_SUBJECT_ELIG_AUTO_TAB);
             } catch (e) {}
-
+            
             var noMatchDiv = document.createElement("div");
             noMatchDiv.style.padding = "20px";
             noMatchDiv.style.textAlign = "center";
@@ -3763,7 +3759,7 @@
         s = s.toUpperCase();
         return s;
     }
-
+    
     //==========================
     // FIND STUDY EVENTS FEATURE
     //==========================
@@ -7947,9 +7943,24 @@
             localStorage.setItem("activityPlanState.panel.right", panelEl.style.right);
         } catch (e2) {}
     }
+
     function setupResizeHandle(panel, bodyContainer) {
-        var cornerSize = 16;
-        var corners = [];
+        var handle = document.createElement("div");
+        handle.style.position = "absolute";
+        handle.style.width = "12px";
+        handle.style.height = "12px";
+        handle.style.right = "6px";
+        handle.style.bottom = "6px";
+        handle.style.cursor = "se-resize";
+        handle.style.background = "#333";
+        handle.style.borderRadius = "2px";
+        handle.style.display = "block";
+
+        var isResizing = false;
+        var startX = 0;
+        var startY = 0;
+        var startW = 0;
+        var startH = 0;
 
         function toInt(s) {
             var n = parseInt(String(s).replace("px", ""), 10);
@@ -7959,177 +7970,48 @@
             return n;
         }
 
-        function applyScale(panel) {
-            var currentWidth = toInt(panel.style.width);
-            var currentHeight = toInt(panel.style.height);
-            var scaleX = currentWidth / PANEL_BASE_WIDTH;
-            var scaleY = currentHeight / PANEL_BASE_HEIGHT;
-            var scale = Math.min(scaleX, scaleY);
-            
-            panel.style.fontSize = (14 * scale) + "px";
-            
-            var allButtons = panel.querySelectorAll("button");
-            for (var i = 0; i < allButtons.length; i++) {
-                allButtons[i].style.padding = (8 * scale) + "px";
-                allButtons[i].style.borderRadius = (6 * scale) + "px";
-                allButtons[i].style.fontSize = (14 * scale) + "px";
-                allButtons[i].style.minHeight = (32 * scale) + "px";
-                allButtons[i].style.minWidth = "0";
-                allButtons[i].style.height = "auto";
-                allButtons[i].style.lineHeight = (1.2 * scale);
-                allButtons[i].style.whiteSpace = scale < 0.6 ? "normal" : "nowrap";
-            }
-
-            var headerBar = panel.querySelector("div[style*='cursor: grab'], div[style*='cursor: grabbing']");
-            if (headerBar) {
-                headerBar.style.height = (48 * scale) + "px";
-                headerBar.style.gap = (8 * scale) + "px";
-                var title = headerBar.querySelector("div");
-                if (title) {
-                    title.style.fontSize = (14 * scale) + "px";
-                    title.style.fontWeight = "600";
-                }
-            }
-
-            var btnRow = panel.querySelector("div[style*='grid-template-columns: 1fr 1fr']");
-            if (btnRow) {
-                btnRow.style.gap = (8 * scale) + "px";
-                btnRow.style.minWidth = "0";
-                btnRow.style.gridTemplateColumns = "minmax(0, 1fr) minmax(0, 1fr)";
-            }
-
-            var status = bodyContainer.querySelector("div[style*='background: #1a1a1a']");
-            if (status) {
-                status.style.marginTop = (10 * scale) + "px";
-                status.style.padding = (6 * scale) + "px";
-                status.style.fontSize = (13 * scale) + "px";
-                status.style.borderRadius = (6 * scale) + "px";
-            }
-
-            var logBox = document.getElementById(LOG_ID);
-            if (logBox) {
-                logBox.style.marginTop = (8 * scale) + "px";
-                logBox.style.height = (220 * scale) + "px";
-                logBox.style.padding = (6 * scale) + "px";
-                logBox.style.fontSize = (12 * scale) + "px";
-                logBox.style.borderRadius = (6 * scale) + "px";
-            }
-
-            panel.style.padding = (12 * scale) + "px";
-            panel.style.borderRadius = (8 * scale) + "px";
-
-            for (var j = 0; j < corners.length; j++) {
-                corners[j].element.style.width = (cornerSize * scale) + "px";
-                corners[j].element.style.height = (cornerSize * scale) + "px";
-            }
-        }
-
-        function createCorner(position, cursor) {
-            var corner = document.createElement("div");
-            corner.style.position = "absolute";
-            corner.style.width = cornerSize + "px";
-            corner.style.height = cornerSize + "px";
-            corner.style.cursor = cursor;
-            corner.style.background = "#444";
-            corner.style.borderRadius = "3px";
-            corner.style.zIndex = "10";
-            corner.style.display = "block";
-
-            if (position === "sw") {
-                corner.style.bottom = "6px";
-                corner.style.left = "6px";
-            } else if (position === "se") {
-                corner.style.bottom = "6px";
-                corner.style.right = "6px";
-            }
-
-            return { element: corner, position: position };
-        }
-
-        var swCorner = createCorner("sw", "sw-resize");
-        var seCorner = createCorner("se", "ns-resize");
-
-        corners = [swCorner, seCorner];
-
-        panel.appendChild(swCorner.element);
-        panel.appendChild(seCorner.element);
-
-        var isResizing = false;
-        var currentCorner = null;
-        var startX = 0;
-        var startY = 0;
-        var startW = 0;
-        var startH = 0;
-
-        function startResize(e, corner) {
+        handle.addEventListener("mousedown", function (e) {
             if (getPanelCollapsed()) {
                 return;
             }
             isResizing = true;
-            currentCorner = corner;
             startX = e.clientX;
             startY = e.clientY;
             startW = toInt(panel.style.width);
-            startH = toInt(panel.style.height);
+            startH = panel.offsetHeight;
             e.preventDefault();
-            e.stopPropagation();
-        }
-
-        swCorner.element.addEventListener("mousedown", function(e) { startResize(e, "sw"); });
-        seCorner.element.addEventListener("mousedown", function(e) { startResize(e, "se"); });
+        });
 
         document.addEventListener("mousemove", function (e) {
             if (!isResizing) {
                 return;
             }
-
             var dx = e.clientX - startX;
             var dy = e.clientY - startY;
-            var newW = startW;
-            var newH = startH;
+            var newW = startW + dx;
+            var newH = startH + dy;
 
-            if (currentCorner === "sw") {
-                newW = startW - dx;
-                newH = startH + dy;
+            var minW = toInt(PANEL_DEFAULT_WIDTH);
+            if (newW < minW) {
+                newW = minW;
+            }
+            if (newW > PANEL_MAX_WIDTH_PX) {
+                newW = PANEL_MAX_WIDTH_PX;
+            }
 
-                if (newW < PANEL_MIN_WIDTH) {
-                    newW = PANEL_MIN_WIDTH;
-                }
-                if (newW > PANEL_MAX_WIDTH_PX) {
-                    newW = PANEL_MAX_WIDTH_PX;
-                }
-                if (newH < PANEL_MIN_HEIGHT) {
-                    newH = PANEL_MIN_HEIGHT;
-                }
+            var minH = PANEL_HEADER_HEIGHT_PX + 80;
+            if (newH < minH) {
+                newH = minH;
+            }
 
-                panel.style.width = String(newW) + "px";
-                panel.style.height = String(newH) + "px";
+            panel.style.width = String(newW) + "px";
+            panel.style.height = String(newH) + "px";
 
-                if (bodyContainer) {
-                    var scaledHeaderHeight = (48 * Math.min(newW / PANEL_BASE_WIDTH, newH / PANEL_BASE_HEIGHT));
-                    bodyContainer.style.display = "block";
-                    bodyContainer.style.height = "calc(100% - " + String(scaledHeaderHeight) + "px)";
-                    bodyContainer.style.maxHeight = "calc(100% - " + String(scaledHeaderHeight) + "px)";
-                    bodyContainer.style.overflowY = "auto";
-                }
-
-                applyScale(panel);
-            } else if (currentCorner === "se") {
-                newH = startH + dy;
-
-                var minH = PANEL_HEADER_HEIGHT_PX + 80;
-                if (newH < minH) {
-                    newH = minH;
-                }
-
-                panel.style.height = String(newH) + "px";
-
-                if (bodyContainer) {
-                    bodyContainer.style.display = "block";
-                    bodyContainer.style.height = "calc(100% - " + String(PANEL_HEADER_HEIGHT_PX) + "px)";
-                    bodyContainer.style.maxHeight = "calc(100% - " + String(PANEL_HEADER_HEIGHT_PX) + "px)";
-                    bodyContainer.style.overflowY = "auto";
-                }
+            if (bodyContainer) {
+                bodyContainer.style.display = "block";
+                bodyContainer.style.height = "calc(100% - " + String(PANEL_HEADER_HEIGHT_PX) + "px)";
+                bodyContainer.style.maxHeight = "calc(100% - " + String(PANEL_HEADER_HEIGHT_PX) + "px)";
+                bodyContainer.style.overflowY = "auto";
             }
         });
 
@@ -8138,13 +8020,10 @@
                 return;
             }
             isResizing = false;
-            currentCorner = null;
             setStoredPanelSize(panel.style.width, panel.style.height);
         });
 
-        applyScale(panel);
-
-        return seCorner.element;
+        return handle;
     }
 
     function updatePanelCollapsedState(panel, bodyContainer, resizeHandle, collapseBtn, headerBar) {
@@ -8160,10 +8039,6 @@
             if (resizeHandle) {
                 resizeHandle.style.display = "none";
             }
-            var corners = panel.querySelectorAll("div[style*='cursor'][style*='resize']");
-            for (var i = 0; i < corners.length; i++) {
-                corners[i].style.display = "none";
-            }
             if (collapseBtn) {
                 collapseBtn.textContent = "+";
             }
@@ -8178,10 +8053,6 @@
             }
             if (resizeHandle) {
                 resizeHandle.style.display = "block";
-            }
-            var corners = panel.querySelectorAll("div[style*='cursor'][style*='resize']");
-            for (var i = 0; i < corners.length; i++) {
-                corners[i].style.display = "block";
             }
             if (collapseBtn) {
                 collapseBtn.textContent = "-";
@@ -8427,12 +8298,6 @@
         btn.style.borderRadius = "6px";
         btn.style.padding = "8px";
         btn.style.cursor = "pointer";
-        btn.style.whiteSpace = "normal";
-        btn.style.wordWrap = "break-word";
-        btn.style.wordBreak = "break-word";
-        btn.style.maxWidth = "100%";
-        btn.style.overflow = "hidden";
-        btn.style.textOverflow = "ellipsis";
         btn.addEventListener("click", function () {
             try {
                 handler();
@@ -8521,7 +8386,7 @@
         bodyContainer.style.boxSizing = "border-box";
         var btnRow = document.createElement("div");
         btnRow.style.display = "grid";
-        btnRow.style.gridTemplateColumns = "repeat(auto-fit, minmax(120px, 1fr))";
+        btnRow.style.gridTemplateColumns = "1fr 1fr";
         btnRow.style.gap = "8px";
         btnRowRef = btnRow;
         var pauseBtn = document.createElement("button");
@@ -8532,11 +8397,6 @@
         pauseBtn.style.borderRadius = "6px";
         pauseBtn.style.padding = "8px";
         pauseBtn.style.cursor = "pointer";
-        pauseBtn.style.whiteSpace = "normal";
-        pauseBtn.style.wordWrap = "break-word";
-        pauseBtn.style.wordBreak = "break-word";
-        pauseBtn.style.overflow = "hidden";
-        pauseBtn.style.textOverflow = "ellipsis";
         pauseBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
         pauseBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
         var runBarcodeBtn = document.createElement("button");
@@ -8547,11 +8407,6 @@
         runBarcodeBtn.style.borderRadius = "6px";
         runBarcodeBtn.style.padding = "8px";
         runBarcodeBtn.style.cursor = "pointer";
-        runBarcodeBtn.style.whiteSpace = "normal";
-        runBarcodeBtn.style.wordWrap = "break-word";
-        runBarcodeBtn.style.wordBreak = "break-word";
-        runBarcodeBtn.style.overflow = "hidden";
-        runBarcodeBtn.style.textOverflow = "ellipsis";
         runBarcodeBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         runBarcodeBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
         var findAeBtn = document.createElement("button");
@@ -8562,11 +8417,6 @@
         findAeBtn.style.borderRadius = "6px";
         findAeBtn.style.padding = "8px";
         findAeBtn.style.cursor = "pointer";
-        findAeBtn.style.whiteSpace = "normal";
-        findAeBtn.style.wordWrap = "break-word";
-        findAeBtn.style.wordBreak = "break-word";
-        findAeBtn.style.overflow = "hidden";
-        findAeBtn.style.textOverflow = "ellipsis";
         findAeBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         findAeBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
         var findFormBtn = document.createElement("button");
@@ -8577,11 +8427,6 @@
         findFormBtn.style.borderRadius = "6px";
         findFormBtn.style.padding = "8px";
         findFormBtn.style.cursor = "pointer";
-        findFormBtn.style.whiteSpace = "normal";
-        findFormBtn.style.wordWrap = "break-word";
-        findFormBtn.style.wordBreak = "break-word";
-        findFormBtn.style.overflow = "hidden";
-        findFormBtn.style.textOverflow = "ellipsis";
         findFormBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         findFormBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
@@ -8593,11 +8438,6 @@
         findStudyEventsBtn.style.borderRadius = "6px";
         findStudyEventsBtn.style.padding = "8px";
         findStudyEventsBtn.style.cursor = "pointer";
-        findStudyEventsBtn.style.whiteSpace = "normal";
-        findStudyEventsBtn.style.wordWrap = "break-word";
-        findStudyEventsBtn.style.wordBreak = "break-word";
-        findStudyEventsBtn.style.overflow = "hidden";
-        findStudyEventsBtn.style.textOverflow = "ellipsis";
         findStudyEventsBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         findStudyEventsBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
@@ -8609,11 +8449,6 @@
         openEligBtn.style.borderRadius = "6px";
         openEligBtn.style.padding = "8px";
         openEligBtn.style.cursor = "pointer";
-        openEligBtn.style.whiteSpace = "normal";
-        openEligBtn.style.wordWrap = "break-word";
-        openEligBtn.style.wordBreak = "break-word";
-        openEligBtn.style.overflow = "hidden";
-        openEligBtn.style.textOverflow = "ellipsis";
         openEligBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         openEligBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
@@ -8625,11 +8460,6 @@
         subjectEligBtn.style.borderRadius = "6px";
         subjectEligBtn.style.padding = "8px";
         subjectEligBtn.style.cursor = "pointer";
-        subjectEligBtn.style.whiteSpace = "normal";
-        subjectEligBtn.style.wordWrap = "break-word";
-        subjectEligBtn.style.wordBreak = "break-word";
-        subjectEligBtn.style.overflow = "hidden";
-        subjectEligBtn.style.textOverflow = "ellipsis";
         subjectEligBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         subjectEligBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
@@ -8641,11 +8471,6 @@
         saBuilderBtn.style.borderRadius = "6px";
         saBuilderBtn.style.padding = "8px";
         saBuilderBtn.style.cursor = "pointer";
-        saBuilderBtn.style.whiteSpace = "normal";
-        saBuilderBtn.style.wordWrap = "break-word";
-        saBuilderBtn.style.wordBreak = "break-word";
-        saBuilderBtn.style.overflow = "hidden";
-        saBuilderBtn.style.textOverflow = "ellipsis";
         saBuilderBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         saBuilderBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
@@ -8657,11 +8482,6 @@
         parseMethodBtn.style.borderRadius = "6px";
         parseMethodBtn.style.padding = "8px";
         parseMethodBtn.style.cursor = "pointer";
-        parseMethodBtn.style.whiteSpace = "normal";
-        parseMethodBtn.style.wordWrap = "break-word";
-        parseMethodBtn.style.wordBreak = "break-word";
-        parseMethodBtn.style.overflow = "hidden";
-        parseMethodBtn.style.textOverflow = "ellipsis";
         parseMethodBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         parseMethodBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
@@ -8674,11 +8494,6 @@
         toggleLogsBtn.style.borderRadius = "6px";
         toggleLogsBtn.style.padding = "8px";
         toggleLogsBtn.style.cursor = "pointer";
-        toggleLogsBtn.style.whiteSpace = "normal";
-        toggleLogsBtn.style.wordWrap = "break-word";
-        toggleLogsBtn.style.wordBreak = "break-word";
-        toggleLogsBtn.style.overflow = "hidden";
-        toggleLogsBtn.style.textOverflow = "ellipsis";
         toggleLogsBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
         toggleLogsBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
         var importEligBtn = document.createElement("button");
@@ -8689,11 +8504,6 @@
         importEligBtn.style.borderRadius = "6px";
         importEligBtn.style.padding = "8px";
         importEligBtn.style.cursor = "pointer";
-        importEligBtn.style.whiteSpace = "normal";
-        importEligBtn.style.wordWrap = "break-word";
-        importEligBtn.style.wordBreak = "break-word";
-        importEligBtn.style.overflow = "hidden";
-        importEligBtn.style.textOverflow = "ellipsis";
         importEligBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         importEligBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
         btnRow.appendChild(runBarcodeBtn);
@@ -8966,7 +8776,7 @@
         };
         bindPanelHotkeyOnce();
 
-
+        
         // Restore Subject Eligibility spinner popup if pending
         if (isSubjectEligPending()) {
             var identifier = null;
@@ -8984,17 +8794,17 @@
         try {
             cohortAutoTabFlag = localStorage.getItem(STORAGE_COHORT_ELIG_AUTO_TAB);
         } catch (e) {}
-
+        
         // Subject Eligibility auto-tab detection for subject show pages
         var subjectAutoTabFlag = null;
         try {
             subjectAutoTabFlag = localStorage.getItem(STORAGE_SUBJECT_ELIG_AUTO_TAB);
         } catch (e) {}
-
+        
         if ((cohortAutoTabFlag === "1" || subjectAutoTabFlag === "1") && location.pathname.indexOf("/subjects/show/") !== -1) {
             var featureName = cohortAutoTabFlag === "1" ? "CohortElig" : "SubjectElig";
             log(featureName + ": Auto-tab detected on subject show page, navigating to Eligibility tab");
-
+            
             // Clear Subject Eligibility data after successful navigation
             if (subjectAutoTabFlag === "1") {
                 setTimeout(function() {
@@ -9002,15 +8812,15 @@
                     log("SubjectElig: Process complete, data cleared");
                 }, 4000);
             }
-
+            
             // Wait for eligibility tab link to be available with retry logic
             var attemptCount = 0;
             var maxAttempts = 20;
             var attemptInterval = 300;
-
+            
             function tryClickEligibilityTab() {
                 attemptCount++;
-
+                
                 var eligTabLink = document.getElementById("eligibilityTabLink");
                 if (eligTabLink) {
                     log(featureName + ": Found eligibilityTabLink on attempt " + attemptCount + ", clicking...");
@@ -9018,7 +8828,7 @@
                     log(featureName + ": Eligibility tab clicked successfully");
                     return;
                 }
-
+                
                 var tabLinks = document.querySelectorAll("a[href='#eligibilityTab']");
                 if (tabLinks && tabLinks.length > 0) {
                     log(featureName + ": Found eligibility tab link via selector on attempt " + attemptCount + ", clicking...");
@@ -9026,7 +8836,7 @@
                     log(featureName + ": Eligibility tab clicked via selector");
                     return;
                 }
-
+                
                 if (attemptCount < maxAttempts) {
                     log(featureName + ": Eligibility tab link not found, retrying... (attempt " + attemptCount + "/" + maxAttempts + ")");
                     setTimeout(tryClickEligibilityTab, attemptInterval);
@@ -9034,7 +8844,7 @@
                     log(featureName + ": Could not find eligibility tab link after " + maxAttempts + " attempts");
                 }
             }
-
+            
             setTimeout(tryClickEligibilityTab, 500);
         }
 
