@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.8.0
+// @version     1.8.1
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -42,11 +42,35 @@
     var STORAGE_PANEL_WIDTH = "activityPlanState.panel.width";
     var STORAGE_PANEL_HEIGHT = "activityPlanState.panel.height";
     var STORAGE_LOG_VISIBLE = "activityPlanState.log.visible";
-    var PANEL_DEFAULT_WIDTH = "340px";
+
+    // UI Scale Constants
+    var UI_SCALE = 1.0; // Master scale factor (will be initialized after function definitions)
+    var PANEL_DEFAULT_WIDTH = 340;
     var PANEL_DEFAULT_HEIGHT = "auto";
-    var PANEL_HEADER_HEIGHT_PX = 48;
+    var PANEL_HEADER_HEIGHT_PX = 30;
     var PANEL_HEADER_GAP_PX = 8;
     var PANEL_MAX_WIDTH_PX = 60;
+    var PANEL_PADDING_PX = 12;
+    var PANEL_BORDER_RADIUS_PX = 8;
+    var PANEL_FONT_SIZE_PX = 14;
+    var HEADER_FONT_WEIGHT = "600";
+    var HEADER_TITLE_OFFSET_PX = 16;
+    var HEADER_LEFT_SPACER_WIDTH_PX = 32;
+    var BUTTON_BORDER_RADIUS_PX = 6;
+    var BUTTON_PADDING_PX = 8;
+    var BUTTON_GAP_PX = 8;
+    var STATUS_MARGIN_TOP_PX = 10;
+    var STATUS_PADDING_PX = 6;
+    var STATUS_FONT_SIZE_PX = 13;
+    var STATUS_BORDER_RADIUS_PX = 6;
+    var LOG_MARGIN_TOP_PX = 8;
+    var LOG_HEIGHT_PX = 220;
+    var LOG_PADDING_PX = 6;
+    var LOG_FONT_SIZE_PX = 12;
+    var LOG_BORDER_RADIUS_PX = 6;
+    var CLOSE_BTN_TEXT = "✕";
+    var STORAGE_UI_SCALE = "activityPlanState.ui.scale";
+
     var FORM_DELAY_MS = 800;
     var DELAY_BETWEEN_ITEMS_MS = 100;
     var DELAY_AFTER_COLLECT_CLICK_MS = 500;
@@ -136,7 +160,48 @@
     var SUBJECT_ELIG_SUBJECTS_LIST_URL = "https://cenexel.clinspark.com/secure/study/subjects/list";
     var SUBJECT_ELIG_POPUP = null;
 
-    
+
+
+    function scale(value) {
+        if (typeof value === 'string' && value.endsWith('px')) {
+            return (parseFloat(value) * UI_SCALE) + 'px';
+        }
+        return (value * UI_SCALE) + 'px';
+    }
+
+    function getStoredUIScale() {
+        try {
+            var stored = localStorage.getItem(STORAGE_UI_SCALE);
+            if (stored) {
+                var scale = parseFloat(stored);
+                if (!isNaN(scale) && scale >= 0.5 && scale <= 1.0) {
+                    return scale;
+                }
+            }
+        } catch (e) {}
+        return 1.0;
+    }
+
+    /**
+     * @param {number} scale
+     */
+    function setStoredUIScale(scale) {
+        try {
+            localStorage.setItem(STORAGE_UI_SCALE, String(scale));
+        } catch (e) {}
+    }
+
+    /**
+     * @param {number} newScale
+     */
+    function updateUIScale(newScale) {
+        UI_SCALE = Math.max(0.5, Math.min(1.0, newScale));
+        setStoredUIScale(UI_SCALE);
+    }
+
+    // Initialize UI scale from storage
+    UI_SCALE = getStoredUIScale();
+
     //==========================
     // SCHEDULED ACTIVITIES BUILDER FEATURE
     //==========================
@@ -156,6 +221,7 @@
     var STORAGE_SA_BUILDER_TIME_OFFSET = "activityPlanState.saBuilder.timeOffset";
     var STORAGE_SA_BUILDER_SEGMENT_CHECKBOXES = "activityPlanState.saBuilder.segmentCheckboxes";
     var SA_BUILDER_POPUP_REF = null;
+    /** @type {any} */
     var SA_BUILDER_PROGRESS_POPUP_REF = null;
     var SA_BUILDER_CANCELLED = false;
     var SA_BUILDER_PAUSE = false;
@@ -372,12 +438,12 @@
         } catch (e) {}
 
         await sleep(300);
-        
+
         if (SA_BUILDER_CANCELLED) {
             log("SA Builder: cancelled after selectSelect2Value sleep");
             return false;
         }
-        
+
         log("SA Builder: selected value " + value + " in " + selectId);
         return true;
     }
@@ -433,27 +499,27 @@
         // Segments column (with checkboxes and dropzones)
         var segmentColumnWrapper = document.createElement("div");
         segmentColumnWrapper.style.cssText = "display:flex;flex-direction:column;border:1px solid #333;border-radius:4px;background:#1a1a1a;height:100%;overflow:hidden;";
-        
+
         // Select All header for segments
         var segmentHeader = document.createElement("div");
         segmentHeader.style.cssText = "display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid #333;background:#222;";
-        
+
         var selectAllCheckbox = document.createElement("input");
         selectAllCheckbox.type = "checkbox";
         selectAllCheckbox.id = "saBuilderSelectAllSegments";
         selectAllCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;";
-        
+
         var selectAllLabel = document.createElement("span");
         selectAllLabel.textContent = "Select All";
         selectAllLabel.style.cssText = "font-weight:600;font-size:13px;";
-        
+
         segmentHeader.appendChild(selectAllCheckbox);
         segmentHeader.appendChild(selectAllLabel);
-        
+
         var segmentColumn = document.createElement("div");
         segmentColumn.style.cssText = "overflow-y:auto;padding:8px;flex:1;";
         segmentColumn.id = "saBuilderSegments";
-        
+
         segmentColumnWrapper.appendChild(segmentHeader);
         segmentColumnWrapper.appendChild(segmentColumn);
 
@@ -483,7 +549,7 @@
             this.style.background = "#1e1e1e";
             this.style.border = "1px solid #444";
             this.style.transition = "all 0.2s ease";
-            
+
             var eventData = e.dataTransfer.getData("text/plain");
             if (eventData) {
                 var data = JSON.parse(eventData);
@@ -520,10 +586,10 @@
 
         // Track segment-event assignments
         var segmentEventMap = {};
-        
+
         // Track segment checkbox states separately to prevent resets
         var segmentCheckboxStates = {};
-        
+
         // Load saved checkbox states
         try {
             var savedStates = localStorage.getItem(STORAGE_SA_BUILDER_SEGMENT_CHECKBOXES);
@@ -552,12 +618,12 @@
                 checkbox.type = "checkbox";
                 checkbox.dataset.segmentValue = seg.value;
                 checkbox.style.cssText = "width:18px;height:18px;cursor:pointer;";
-                
+
                 // Restore checkbox state from saved states
                 if (segmentCheckboxStates[seg.value]) {
                     checkbox.checked = true;
                 }
-                
+
                 // Save checkbox state when changed
                 checkbox.addEventListener("change", function() {
                     segmentCheckboxStates[this.dataset.segmentValue] = this.checked;
@@ -616,8 +682,8 @@
 
                             // Make attached events draggable back to Study Events column
                             attachedItem.addEventListener("dragstart", function(e) {
-                                e.dataTransfer.setData("text/plain", JSON.stringify({ 
-                                    value: this.dataset.eventValue, 
+                                e.dataTransfer.setData("text/plain", JSON.stringify({
+                                    value: this.dataset.eventValue,
                                     text: this.dataset.eventText,
                                     fromSegment: true,
                                     segmentValue: segVal
@@ -672,7 +738,7 @@
                                     segmentEventMap[segVal] = events;
                                     renderAttachedEvents(dz, segVal);
                                     log("SA Builder: Event '" + ev.text + "' removed from segment");
-                                    
+
                                     // Restore event to Study Events column
                                     restoreEventToStudyEventsColumn({ value: ev.value, text: ev.text });
                                 }
@@ -727,7 +793,7 @@
                                 if (!existing) {
                                     if (!segmentEventMap[segVal]) segmentEventMap[segVal] = [];
                                     segmentEventMap[segVal].push({ value: data.value, text: data.text });
-                                    
+
                                     removeEventFromStudyEventsColumn(data.value);
                                 }
                                 renderSegments(segmentSearch.value);
@@ -773,9 +839,9 @@
                 });
 
                 evItem.addEventListener("dragstart", function(e) {
-                    e.dataTransfer.setData("text/plain", JSON.stringify({ 
-                        value: this.dataset.eventValue, 
-                        text: this.dataset.eventText 
+                    e.dataTransfer.setData("text/plain", JSON.stringify({
+                        value: this.dataset.eventValue,
+                        text: this.dataset.eventText
                     }));
                     e.dataTransfer.effectAllowed = "copy";
                     this.style.opacity = "0.6";
@@ -816,7 +882,7 @@
                     return;
                 }
             }
-            
+
             // Create the event item
             var evItem = document.createElement("div");
             evItem.textContent = eventData.text;
@@ -840,9 +906,9 @@
             });
 
             evItem.addEventListener("dragstart", function(e) {
-                e.dataTransfer.setData("text/plain", JSON.stringify({ 
-                    value: this.dataset.eventValue, 
-                    text: this.dataset.eventText 
+                e.dataTransfer.setData("text/plain", JSON.stringify({
+                    value: this.dataset.eventValue,
+                    text: this.dataset.eventText
                 }));
                 e.dataTransfer.effectAllowed = "copy";
                 this.style.opacity = "0.6";
@@ -866,20 +932,20 @@
         function sortStudyEventsColumn() {
             var allItems = eventColumn.querySelectorAll("[data-event-value]");
             var itemsArray = Array.prototype.slice.call(allItems);
-            
+
             // Sort by text content (case-insensitive)
             itemsArray.sort(function(a, b) {
                 var textA = (a.dataset.eventText || a.textContent || "").toLowerCase();
                 var textB = (b.dataset.eventText || b.textContent || "").toLowerCase();
                 return textA.localeCompare(textB);
             });
-            
+
             // Clear and re-append in sorted order
             eventColumn.innerHTML = "";
             itemsArray.forEach(function(item) {
                 eventColumn.appendChild(item);
             });
-            
+
             log("SA Builder: Study Events column sorted alphabetically");
         }
 
@@ -1049,7 +1115,7 @@
             var minutesEl = document.getElementById("saBuilderMinutes");
             var secondsEl = document.getElementById("saBuilderSeconds");
             var preRefEl = document.getElementById("saBuilderPreReference");
-            
+
             if (daysEl) {
                 daysEl.disabled = isChecked;
                 daysEl.style.opacity = isChecked ? "0.5" : "1";
@@ -2292,7 +2358,7 @@
 
                             var showLink = null;
                             var href = "";
-                            
+
                             // Search through all columns for the Show link
                             for (var tdIdx = 0; tdIdx < tds.length; tdIdx++) {
                                 var td = tds[tdIdx];
@@ -2449,7 +2515,7 @@
             localStorage.removeItem(STORAGE_COHORT_ELIG_DATA);
         } catch (e) {}
         log("CohortElig: Cohort Eligibility data cleared (auto-tab flag preserved for child tabs)");
-        
+
         // Clear auto-tab flag after a delay to allow all tabs to load and navigate
         setTimeout(function() {
             try {
@@ -2503,21 +2569,21 @@
 
     function subjectEligibilityFeature() {
         log("SubjectElig: Starting Subject Eligibility feature");
-        
+
         var info = getSubjectIdentifierForAE();
         var scannedId = info.raw || "";
-        
+
         if (scannedId && !containsNumber(scannedId)) {
             log("SubjectElig: Scanned identifier '" + scannedId + "' excluded (no number)");
             scannedId = "";
         }
-        
+
         showSubjectEligInputPopup(scannedId, function(userInput) {
             if (!userInput) {
                 log("SubjectElig: Canceled by user");
                 return;
             }
-            
+
             try {
                 localStorage.setItem(STORAGE_SUBJECT_ELIG_PENDING, "1");
                 localStorage.setItem(STORAGE_SUBJECT_ELIG_IDENTIFIER, userInput);
@@ -2525,26 +2591,26 @@
             } catch (e) {
                 log("SubjectElig: Error saving state: " + String(e));
             }
-            
+
             showSubjectEligSpinnerPopup(userInput);
-            
+
             log("SubjectElig: Navigating to subjects list with identifier: " + userInput);
             setTimeout(function() {
                 location.href = SUBJECT_ELIG_SUBJECTS_LIST_URL;
             }, 100);
         });
     }
-    
+
     function showSubjectEligSpinnerPopup(identifier) {
         log("SubjectElig: Showing spinner popup");
-        
+
         var container = document.createElement("div");
         container.style.display = "flex";
         container.style.flexDirection = "column";
         container.style.alignItems = "center";
         container.style.gap = "16px";
         container.style.padding = "20px";
-        
+
         var spinner = document.createElement("div");
         spinner.style.width = "40px";
         spinner.style.height = "40px";
@@ -2552,20 +2618,20 @@
         spinner.style.borderTop = "4px solid #28a745";
         spinner.style.borderRadius = "50%";
         spinner.style.animation = "spin 1s linear infinite";
-        
+
         var style = document.createElement("style");
         style.textContent = "@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }";
         document.head.appendChild(style);
-        
+
         var statusText = document.createElement("div");
         statusText.style.color = "#fff";
         statusText.style.fontSize = "14px";
         statusText.style.textAlign = "center";
         statusText.textContent = "Searching for subject: " + identifier;
-        
+
         container.appendChild(spinner);
         container.appendChild(statusText);
-        
+
         var popup = createPopup({
             title: "Subject Eligibility - Processing",
             content: container,
@@ -2576,10 +2642,10 @@
                 clearSubjectEligData();
             }
         });
-        
+
         SUBJECT_ELIG_POPUP = popup;
     }
-    
+
     function clearSubjectEligData() {
         try {
             localStorage.removeItem(STORAGE_SUBJECT_ELIG_PENDING);
@@ -2591,24 +2657,24 @@
 
     function showSubjectEligInputPopup(prefill, onDone) {
         log("SubjectElig: Showing input popup");
-        
+
         var container = document.createElement("div");
         container.style.display = "flex";
         container.style.flexDirection = "column";
         container.style.gap = "12px";
         container.style.padding = "10px";
-        
+
         var fieldRow = document.createElement("div");
         fieldRow.style.display = "grid";
         fieldRow.style.gridTemplateColumns = "140px 1fr";
         fieldRow.style.alignItems = "center";
         fieldRow.style.gap = "8px";
-        
+
         var label = document.createElement("div");
         label.textContent = "Subject Identifier";
         label.style.fontWeight = "600";
         label.style.color = "#fff";
-        
+
         var input = document.createElement("input");
         input.type = "text";
         input.placeholder = "e.g., 101-001, S-101-001, L-101-001";
@@ -2620,17 +2686,17 @@
         input.style.border = "1px solid #444";
         input.style.background = "#1a1a1a";
         input.style.color = "#fff";
-        
+
         fieldRow.appendChild(label);
         fieldRow.appendChild(input);
         container.appendChild(fieldRow);
-        
+
         var btnRow = document.createElement("div");
         btnRow.style.display = "inline-flex";
         btnRow.style.justifyContent = "flex-end";
-        btnRow.style.gap = "8px";
+        btnRow.style.gap = scale(BUTTON_GAP_PX);
         btnRow.style.marginTop = "10px";
-        
+
         var clearIdBtn = document.createElement("button");
         clearIdBtn.textContent = "Clear ID";
         clearIdBtn.style.background = "#6c757d";
@@ -2639,7 +2705,7 @@
         clearIdBtn.style.borderRadius = "6px";
         clearIdBtn.style.padding = "8px 16px";
         clearIdBtn.style.cursor = "pointer";
-        
+
         var cancelBtn = document.createElement("button");
         cancelBtn.textContent = "Cancel";
         cancelBtn.style.background = "#333";
@@ -2648,7 +2714,7 @@
         cancelBtn.style.borderRadius = "6px";
         cancelBtn.style.padding = "8px 16px";
         cancelBtn.style.cursor = "pointer";
-        
+
         var confirmBtn = document.createElement("button");
         confirmBtn.textContent = "Confirm";
         confirmBtn.style.background = "#28a745";
@@ -2657,12 +2723,12 @@
         confirmBtn.style.borderRadius = "6px";
         confirmBtn.style.padding = "8px 16px";
         confirmBtn.style.cursor = "pointer";
-        
+
         btnRow.appendChild(clearIdBtn);
         btnRow.appendChild(cancelBtn);
         btnRow.appendChild(confirmBtn);
         container.appendChild(btnRow);
-        
+
         var popup = createPopup({
             title: "Subject Eligibility",
             description: "Check eligibility criteria for individual subjects",
@@ -2670,44 +2736,44 @@
             width: "450px",
             height: "auto"
         });
-        
+
         SUBJECT_ELIG_POPUP = popup;
-        
+
         setTimeout(function() {
             input.focus();
             input.select();
         }, 50);
-        
+
         function doConfirm() {
             var value = input.value.trim();
             if (!value) {
                 log("SubjectElig: Empty input");
                 return;
             }
-            
+
             if (!containsNumber(value)) {
                 log("SubjectElig: Identifier must contain a number");
                 input.style.borderColor = "#f90";
                 return;
             }
-            
+
             if (popup && popup.close) {
                 popup.close();
             }
-            
+
             if (typeof onDone === "function") {
                 onDone(value);
             }
         }
-        
+
         clearIdBtn.addEventListener("click", function() {
             input.value = "";
             input.style.borderColor = "#444";
             input.focus();
         });
-        
+
         confirmBtn.addEventListener("click", doConfirm);
-        
+
         cancelBtn.addEventListener("click", function() {
             if (popup && popup.close) {
                 popup.close();
@@ -2716,7 +2782,7 @@
                 onDone(null);
             }
         });
-        
+
         input.addEventListener("keydown", function(e) {
             if (e.key === "Enter") {
                 doConfirm();
@@ -2735,56 +2801,56 @@
 
     function processSubjectEligOnSubjectsList() {
         log("SubjectElig: On subjects list, searching for identifier...");
-        
+
         var identifier = null;
         try {
             identifier = localStorage.getItem(STORAGE_SUBJECT_ELIG_IDENTIFIER);
         } catch (e) {}
-        
+
         if (!identifier) {
             log("SubjectElig: No identifier found in storage");
             return;
         }
-        
+
         var subjectTbody = document.getElementById("subjectTableBody");
         if (!subjectTbody) {
             log("SubjectElig: subjectTableBody not found, waiting...");
             setTimeout(processSubjectEligOnSubjectsList, 1000);
             return;
         }
-        
+
         var subjectRows = subjectTbody.querySelectorAll("tr");
         log("SubjectElig: Found " + subjectRows.length + " subject rows");
-        
+
         // Split identifier by " / " to get individual identifiers
         var identifierParts = identifier.split(" / ");
         log("SubjectElig: Split identifier into " + identifierParts.length + " parts: " + JSON.stringify(identifierParts));
-        
+
         var matchedUrl = null;
-        
+
         for (var i = 0; i < subjectRows.length; i++) {
             var row = subjectRows[i];
             var tds = row.querySelectorAll("td");
-            
+
             if (tds.length > 0) {
                 for (var tdIdx = 0; tdIdx < tds.length; tdIdx++) {
                     var td = tds[tdIdx];
                     var divs = td.querySelectorAll("div.vertSepNoBorder, div.vertSep");
-                    
+
                     for (var divIdx = 0; divIdx < divs.length; divIdx++) {
                         var div = divs[divIdx];
                         var text = (div.textContent || "").trim();
                         // Extract just the identifier value (after the label like "R:", "L:", "S:")
                         var idValue = text.replace(/^[A-Z]:\s*/, "").trim();
                         var normalizedIdValue = idValue.toUpperCase();
-                        
+
                         // Check if any of the identifier parts match this value
                         for (var partIdx = 0; partIdx < identifierParts.length; partIdx++) {
                             var searchPart = identifierParts[partIdx].trim().toUpperCase();
-                            
+
                             if (searchPart && normalizedIdValue === searchPart) {
                                 log("SubjectElig: MATCH found in row " + i + ", column " + tdIdx + ": '" + searchPart + "' matches '" + idValue + "'");
-                                
+
                                 for (var linkIdx = 0; linkIdx < tds.length; linkIdx++) {
                                     var linkTd = tds[linkIdx];
                                     var showLink = linkTd.querySelector("a[href*='/subjects/show/']");
@@ -2795,21 +2861,21 @@
                                         break;
                                     }
                                 }
-                                
+
                                 if (matchedUrl) break;
                             }
                         }
-                        
+
                         if (matchedUrl) break;
                     }
-                    
+
                     if (matchedUrl) break;
                 }
             }
-            
+
             if (matchedUrl) break;
         }
-        
+
         if (matchedUrl) {
             log("SubjectElig: Navigating to: " + matchedUrl);
             try {
@@ -2824,7 +2890,7 @@
                 localStorage.removeItem(STORAGE_SUBJECT_ELIG_IDENTIFIER);
                 localStorage.removeItem(STORAGE_SUBJECT_ELIG_AUTO_TAB);
             } catch (e) {}
-            
+
             var noMatchDiv = document.createElement("div");
             noMatchDiv.style.padding = "20px";
             noMatchDiv.style.textAlign = "center";
@@ -3759,7 +3825,7 @@
         s = s.toUpperCase();
         return s;
     }
-    
+
     //==========================
     // FIND STUDY EVENTS FEATURE
     //==========================
@@ -7864,7 +7930,7 @@
             h = localStorage.getItem(STORAGE_PANEL_HEIGHT);
         } catch (e) {}
         if (!w) {
-            w = PANEL_DEFAULT_WIDTH;
+            w = scale(PANEL_DEFAULT_WIDTH);
         }
         if (!h) {
             h = PANEL_DEFAULT_HEIGHT;
@@ -7991,7 +8057,7 @@
             var newW = startW + dx;
             var newH = startH + dy;
 
-            var minW = toInt(PANEL_DEFAULT_WIDTH);
+            var minW = toInt(scale(PANEL_DEFAULT_WIDTH));
             if (newW < minW) {
                 newW = minW;
             }
@@ -7999,7 +8065,7 @@
                 newW = PANEL_MAX_WIDTH_PX;
             }
 
-            var minH = PANEL_HEADER_HEIGHT_PX + 80;
+            var minH = PANEL_HEADER_HEIGHT_PX + 88;
             if (newH < minH) {
                 newH = minH;
             }
@@ -8029,8 +8095,8 @@
     function updatePanelCollapsedState(panel, bodyContainer, resizeHandle, collapseBtn, headerBar) {
         var collapsed = getPanelCollapsed();
         if (collapsed) {
-            panel.style.width = PANEL_DEFAULT_WIDTH;
-            panel.style.height = String(PANEL_HEADER_HEIGHT_PX + 12) + "px";
+            panel.style.width = scale(PANEL_DEFAULT_WIDTH);
+            panel.style.height = scale(PANEL_HEADER_HEIGHT_PX + 20);
             panel.style.overflow = "hidden";
 
             if (bodyContainer) {
@@ -8055,7 +8121,7 @@
                 resizeHandle.style.display = "block";
             }
             if (collapseBtn) {
-                collapseBtn.textContent = "-";
+                collapseBtn.textContent = "—";
             }
         }
     }
@@ -8326,11 +8392,11 @@
         panel.style.background = "#111";
         panel.style.color = "#fff";
         panel.style.border = "1px solid #444";
-        panel.style.borderRadius = "8px";
-        panel.style.padding = "12px";
+        panel.style.borderRadius = scale(PANEL_BORDER_RADIUS_PX);
+        panel.style.padding = scale(PANEL_PADDING_PX);
         panel.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
-        panel.style.fontSize = "14px";
-        panel.style.minWidth = PANEL_DEFAULT_WIDTH;
+        panel.style.fontSize = scale(PANEL_FONT_SIZE_PX);
+        panel.style.minWidth = scale(PANEL_DEFAULT_WIDTH);
         panel.style.width = savedSize.width;
         if (savedSize.height && savedSize.height !== PANEL_DEFAULT_HEIGHT) {
             panel.style.height = savedSize.height;
@@ -8343,33 +8409,36 @@
         headerBar.style.display = "grid";
         headerBar.style.gridTemplateColumns = "auto 1fr auto";
         headerBar.style.alignItems = "center";
-        headerBar.style.gap = String(PANEL_HEADER_GAP_PX) + "px";
-        headerBar.style.height = String(PANEL_HEADER_HEIGHT_PX) + "px";
+        headerBar.style.gap = scale(PANEL_HEADER_GAP_PX);
+        headerBar.style.height = scale(PANEL_HEADER_HEIGHT_PX);
         headerBar.style.boxSizing = "border-box";
         headerBar.style.cursor = "grab";
         headerBar.style.userSelect = "none";
         var leftSpacer = document.createElement("div");
-        leftSpacer.style.width = "32px";
+        leftSpacer.style.width = scale(HEADER_LEFT_SPACER_WIDTH_PX);
         var title = document.createElement("div");
         title.textContent = "Automator";
-        title.style.fontWeight = "600";
+        title.style.fontWeight = HEADER_FONT_WEIGHT;
         title.style.textAlign = "center";
         title.style.justifySelf = "center";
-        title.style.transform = "translateX(16px)"
+        title.style.transform = "translateX(" + scale(HEADER_TITLE_OFFSET_PX) + ")";
+        title.style.paddingBottom = scale(8); 
         headerBar.appendChild(title);
         headerBar.appendChild(leftSpacer);
         var rightControls = document.createElement("div");
         rightControls.style.display = "inline-flex";
         rightControls.style.alignItems = "center";
-        rightControls.style.gap = String(PANEL_HEADER_GAP_PX) + "px";
+        rightControls.style.gap = scale(PANEL_HEADER_GAP_PX);
         var collapseBtn = document.createElement("button");
         collapseBtn.textContent = getPanelCollapsed() ? "Expand" : "Collapse";
         collapseBtn.style.background = "transparent";
         collapseBtn.style.color = "#fff";
         collapseBtn.style.border = "none";
         collapseBtn.style.cursor = "pointer";
+        collapseBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         var closeBtn = document.createElement("button");
-        closeBtn.textContent = "✕";
+        closeBtn.textContent = CLOSE_BTN_TEXT;
+        closeBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         closeBtn.style.background = "transparent";
         closeBtn.style.color = "#fff";
         closeBtn.style.border = "none";
@@ -8380,22 +8449,23 @@
         panel.appendChild(headerBar);
         var bodyContainer = document.createElement("div");
         bodyContainer.style.display = "block";
-        bodyContainer.style.height = "calc(100% - " + String(PANEL_HEADER_HEIGHT_PX) + "px)";
-        bodyContainer.style.maxHeight = "calc(100% - " + String(PANEL_HEADER_HEIGHT_PX) + "px)";
+        bodyContainer.style.height = "calc(100% - " + scale(PANEL_HEADER_HEIGHT_PX) + ")";
+        bodyContainer.style.maxHeight = "calc(100% - " + scale(PANEL_HEADER_HEIGHT_PX) + ")";
         bodyContainer.style.overflowY = "auto";
         bodyContainer.style.boxSizing = "border-box";
         var btnRow = document.createElement("div");
         btnRow.style.display = "grid";
         btnRow.style.gridTemplateColumns = "1fr 1fr";
-        btnRow.style.gap = "8px";
+        btnRow.style.gap = scale(BUTTON_GAP_PX);
         btnRowRef = btnRow;
         var pauseBtn = document.createElement("button");
         pauseBtn.textContent = isPaused() ? "Resume" : "Pause";
         pauseBtn.style.background = "#6c757d";
         pauseBtn.style.color = "#fff";
         pauseBtn.style.border = "none";
-        pauseBtn.style.borderRadius = "6px";
-        pauseBtn.style.padding = "8px";
+        pauseBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        pauseBtn.style.padding = scale(BUTTON_PADDING_PX);
+        pauseBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         pauseBtn.style.cursor = "pointer";
         pauseBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
         pauseBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
@@ -8404,8 +8474,9 @@
         runBarcodeBtn.style.background = "#4a90e2";
         runBarcodeBtn.style.color = "#fff";
         runBarcodeBtn.style.border = "none";
-        runBarcodeBtn.style.borderRadius = "6px";
-        runBarcodeBtn.style.padding = "8px";
+        runBarcodeBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        runBarcodeBtn.style.padding = scale(BUTTON_PADDING_PX);
+        runBarcodeBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         runBarcodeBtn.style.cursor = "pointer";
         runBarcodeBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         runBarcodeBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
@@ -8414,8 +8485,9 @@
         findAeBtn.style.background = "#4a90e2";
         findAeBtn.style.color = "#fff";
         findAeBtn.style.border = "none";
-        findAeBtn.style.borderRadius = "6px";
-        findAeBtn.style.padding = "8px";
+        findAeBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        findAeBtn.style.padding = scale(BUTTON_PADDING_PX);
+        findAeBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         findAeBtn.style.cursor = "pointer";
         findAeBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         findAeBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
@@ -8424,8 +8496,9 @@
         findFormBtn.style.background = "#4a90e2";
         findFormBtn.style.color = "#fff";
         findFormBtn.style.border = "none";
-        findFormBtn.style.borderRadius = "6px";
-        findFormBtn.style.padding = "8px";
+        findFormBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        findFormBtn.style.padding = scale(BUTTON_PADDING_PX);
+        findFormBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         findFormBtn.style.cursor = "pointer";
         findFormBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         findFormBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
@@ -8435,8 +8508,9 @@
         findStudyEventsBtn.style.background = "#4a90e2";
         findStudyEventsBtn.style.color = "#fff";
         findStudyEventsBtn.style.border = "none";
-        findStudyEventsBtn.style.borderRadius = "6px";
-        findStudyEventsBtn.style.padding = "8px";
+        findStudyEventsBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        findStudyEventsBtn.style.padding = scale(BUTTON_PADDING_PX);
+        findStudyEventsBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         findStudyEventsBtn.style.cursor = "pointer";
         findStudyEventsBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         findStudyEventsBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
@@ -8446,8 +8520,9 @@
         openEligBtn.style.background = "#4a90e2";
         openEligBtn.style.color = "#fff";
         openEligBtn.style.border = "none";
-        openEligBtn.style.borderRadius = "6px";
-        openEligBtn.style.padding = "8px";
+        openEligBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        openEligBtn.style.padding = scale(BUTTON_PADDING_PX);
+        openEligBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         openEligBtn.style.cursor = "pointer";
         openEligBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         openEligBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
@@ -8457,8 +8532,9 @@
         subjectEligBtn.style.background = "#4a90e2";
         subjectEligBtn.style.color = "#fff";
         subjectEligBtn.style.border = "none";
-        subjectEligBtn.style.borderRadius = "6px";
-        subjectEligBtn.style.padding = "8px";
+        subjectEligBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        subjectEligBtn.style.padding = scale(BUTTON_PADDING_PX);
+        subjectEligBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         subjectEligBtn.style.cursor = "pointer";
         subjectEligBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         subjectEligBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
@@ -8468,8 +8544,9 @@
         saBuilderBtn.style.background = "#4a90e2";
         saBuilderBtn.style.color = "#fff";
         saBuilderBtn.style.border = "none";
-        saBuilderBtn.style.borderRadius = "6px";
-        saBuilderBtn.style.padding = "8px";
+        saBuilderBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        saBuilderBtn.style.padding = scale(BUTTON_PADDING_PX);
+        saBuilderBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         saBuilderBtn.style.cursor = "pointer";
         saBuilderBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         saBuilderBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
@@ -8479,8 +8556,9 @@
         parseMethodBtn.style.background = "#4a90e2";
         parseMethodBtn.style.color = "#fff";
         parseMethodBtn.style.border = "none";
-        parseMethodBtn.style.borderRadius = "6px";
-        parseMethodBtn.style.padding = "8px";
+        parseMethodBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        parseMethodBtn.style.padding = scale(BUTTON_PADDING_PX);
+        parseMethodBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         parseMethodBtn.style.cursor = "pointer";
         parseMethodBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         parseMethodBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
@@ -8491,21 +8569,25 @@
         toggleLogsBtn.style.background = "#6c757d";
         toggleLogsBtn.style.color = "#fff";
         toggleLogsBtn.style.border = "none";
-        toggleLogsBtn.style.borderRadius = "6px";
-        toggleLogsBtn.style.padding = "8px";
+        toggleLogsBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        toggleLogsBtn.style.padding = scale(BUTTON_PADDING_PX);
+        toggleLogsBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         toggleLogsBtn.style.cursor = "pointer";
         toggleLogsBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
         toggleLogsBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
+
         var importEligBtn = document.createElement("button");
         importEligBtn.textContent = "Import I/E";
         importEligBtn.style.background = "#4a90e2";
         importEligBtn.style.color = "#fff";
         importEligBtn.style.border = "none";
-        importEligBtn.style.borderRadius = "6px";
-        importEligBtn.style.padding = "8px";
+        importEligBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        importEligBtn.style.padding = scale(BUTTON_PADDING_PX);
+        importEligBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         importEligBtn.style.cursor = "pointer";
         importEligBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         importEligBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+
         btnRow.appendChild(runBarcodeBtn);
         btnRow.appendChild(findAeBtn);
         btnRow.appendChild(findFormBtn);
@@ -8519,25 +8601,64 @@
         btnRow.appendChild(toggleLogsBtn);
         bodyContainer.appendChild(btnRow);
         var status = document.createElement("div");
-        status.style.marginTop = "10px";
+        status.style.marginTop = scale(STATUS_MARGIN_TOP_PX);
         status.style.background = "#1a1a1a";
         status.style.border = "1px solid #333";
-        status.style.borderRadius = "6px";
-        status.style.padding = "6px";
-        status.style.fontSize = "13px";
+        status.style.borderRadius = scale(STATUS_BORDER_RADIUS_PX);
+        status.style.padding = scale(STATUS_PADDING_PX);
+        status.style.fontSize = scale(STATUS_FONT_SIZE_PX);
         status.style.whiteSpace = "pre-wrap";
         status.textContent = "Ready";
         bodyContainer.appendChild(status);
+
+        // UI Scale Control
+        var scaleControl = document.createElement("div");
+        scaleControl.style.marginTop = scale(STATUS_MARGIN_TOP_PX);
+        scaleControl.style.background = "#1a1a1a";
+        scaleControl.style.border = "1px solid #333";
+        scaleControl.style.borderRadius = scale(STATUS_BORDER_RADIUS_PX);
+        scaleControl.style.padding = scale(STATUS_PADDING_PX);
+        scaleControl.style.fontSize = scale(STATUS_FONT_SIZE_PX);
+
+        var scaleLabel = document.createElement("div");
+        scaleLabel.textContent = "UI Scale: " + Math.round(UI_SCALE * 100) + "%";
+        scaleLabel.style.marginBottom = "4px";
+        scaleLabel.style.color = "#fff";
+
+        var scaleSlider = document.createElement("input");
+        scaleSlider.type = "range";
+        scaleSlider.min = "50";
+        scaleSlider.max = "100";
+        scaleSlider.value = String(UI_SCALE * 100);
+        scaleSlider.step = "10";
+        scaleSlider.style.width = "100%";
+        scaleSlider.style.cursor = "pointer";
+
+        scaleSlider.addEventListener("input", function() {
+            var newScale = parseFloat(this.value) / 100;
+            updateUIScale(newScale);
+            scaleLabel.textContent = "UI Scale: " + Math.round(newScale * 100) + "%";
+            status.textContent = "UI Scale updated to " + Math.round(newScale * 100) + "% - Refresh to see changes";
+        });
+
+        scaleSlider.addEventListener("change", function() {
+            log("UI Scale changed to " + Math.round(UI_SCALE * 100) + "%");
+        });
+
+        scaleControl.appendChild(scaleLabel);
+        scaleControl.appendChild(scaleSlider);
+        bodyContainer.appendChild(scaleControl);
+
         var logBox = document.createElement("div");
         logBox.id = LOG_ID;
-        logBox.style.marginTop = "8px";
-        logBox.style.height = "220px";
+        logBox.style.marginTop = scale(LOG_MARGIN_TOP_PX);
+        logBox.style.height = scale(LOG_HEIGHT_PX);
         logBox.style.overflowY = "auto";
         logBox.style.background = "#141414";
         logBox.style.border = "1px solid #333";
-        logBox.style.borderRadius = "6px";
-        logBox.style.padding = "6px";
-        logBox.style.fontSize = "12px";
+        logBox.style.borderRadius = scale(LOG_BORDER_RADIUS_PX);
+        logBox.style.padding = scale(LOG_PADDING_PX);
+        logBox.style.fontSize = scale(LOG_FONT_SIZE_PX);
         logBox.style.color = "#00000";
         logBox.style.whiteSpace = "pre-wrap";
         logBox.style.wordBreak = "break-word";
@@ -8776,7 +8897,7 @@
         };
         bindPanelHotkeyOnce();
 
-        
+
         // Restore Subject Eligibility spinner popup if pending
         if (isSubjectEligPending()) {
             var identifier = null;
@@ -8794,17 +8915,17 @@
         try {
             cohortAutoTabFlag = localStorage.getItem(STORAGE_COHORT_ELIG_AUTO_TAB);
         } catch (e) {}
-        
+
         // Subject Eligibility auto-tab detection for subject show pages
         var subjectAutoTabFlag = null;
         try {
             subjectAutoTabFlag = localStorage.getItem(STORAGE_SUBJECT_ELIG_AUTO_TAB);
         } catch (e) {}
-        
+
         if ((cohortAutoTabFlag === "1" || subjectAutoTabFlag === "1") && location.pathname.indexOf("/subjects/show/") !== -1) {
             var featureName = cohortAutoTabFlag === "1" ? "CohortElig" : "SubjectElig";
             log(featureName + ": Auto-tab detected on subject show page, navigating to Eligibility tab");
-            
+
             // Clear Subject Eligibility data after successful navigation
             if (subjectAutoTabFlag === "1") {
                 setTimeout(function() {
@@ -8812,15 +8933,15 @@
                     log("SubjectElig: Process complete, data cleared");
                 }, 4000);
             }
-            
+
             // Wait for eligibility tab link to be available with retry logic
             var attemptCount = 0;
             var maxAttempts = 20;
             var attemptInterval = 300;
-            
+
             function tryClickEligibilityTab() {
                 attemptCount++;
-                
+
                 var eligTabLink = document.getElementById("eligibilityTabLink");
                 if (eligTabLink) {
                     log(featureName + ": Found eligibilityTabLink on attempt " + attemptCount + ", clicking...");
@@ -8828,7 +8949,7 @@
                     log(featureName + ": Eligibility tab clicked successfully");
                     return;
                 }
-                
+
                 var tabLinks = document.querySelectorAll("a[href='#eligibilityTab']");
                 if (tabLinks && tabLinks.length > 0) {
                     log(featureName + ": Found eligibility tab link via selector on attempt " + attemptCount + ", clicking...");
@@ -8836,7 +8957,7 @@
                     log(featureName + ": Eligibility tab clicked via selector");
                     return;
                 }
-                
+
                 if (attemptCount < maxAttempts) {
                     log(featureName + ": Eligibility tab link not found, retrying... (attempt " + attemptCount + "/" + maxAttempts + ")");
                     setTimeout(tryClickEligibilityTab, attemptInterval);
@@ -8844,7 +8965,7 @@
                     log(featureName + ": Could not find eligibility tab link after " + maxAttempts + " attempts");
                 }
             }
-            
+
             setTimeout(tryClickEligibilityTab, 500);
         }
 

@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.1.9
+// @version 3.2.0
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -17,15 +17,34 @@
 (function () {
     var STORAGE_PANEL_WIDTH = "activityPlanState.panel.width";
     var STORAGE_PANEL_HEIGHT = "activityPlanState.panel.height";
-    var PANEL_DEFAULT_WIDTH = "340px";
+    // UI Scale Constants
+    var UI_SCALE = 1.0; // Master scale factor (will be initialized after function definitions)
+    var PANEL_DEFAULT_WIDTH = 340;
     var PANEL_DEFAULT_HEIGHT = "auto";
-    var PANEL_HEADER_HEIGHT_PX = 48;
+    var PANEL_HEADER_HEIGHT_PX = 24;
     var PANEL_HEADER_GAP_PX = 8;
-    var PANEL_MAX_WIDTH_PX = 600;
-    var PANEL_BASE_WIDTH = 340;
-    var PANEL_BASE_HEIGHT = 500;
-    var PANEL_MIN_WIDTH = 200;
-    var PANEL_MIN_HEIGHT = 200;
+    var PANEL_MAX_WIDTH_PX = 60;
+    var PANEL_PADDING_PX = 12;
+    var PANEL_BORDER_RADIUS_PX = 8;
+    var PANEL_FONT_SIZE_PX = 14;
+    var HEADER_FONT_WEIGHT = "600";
+    var HEADER_TITLE_OFFSET_PX = 16;
+    var HEADER_LEFT_SPACER_WIDTH_PX = 16;
+    var BUTTON_BORDER_RADIUS_PX = 6;
+    var BUTTON_PADDING_PX = 8;
+    var BUTTON_GAP_PX = 8;
+    var STATUS_MARGIN_TOP_PX = 10;
+    var STATUS_PADDING_PX = 6;
+    var STATUS_FONT_SIZE_PX = 13;
+    var STATUS_BORDER_RADIUS_PX = 6;
+    var LOG_MARGIN_TOP_PX = 8;
+    var LOG_HEIGHT_PX = 220;
+    var LOG_PADDING_PX = 6;
+    var LOG_FONT_SIZE_PX = 12;
+    var LOG_BORDER_RADIUS_PX = 6;
+    var CLOSE_BTN_TEXT = "✕";
+    var STORAGE_UI_SCALE = "activityPlanState.ui.scale";
+
     var STORAGE_KEY = "activityPlanState.run";
     var STORAGE_PENDING = "activityPlanState.pendingIds";
     var STORAGE_AFTER_REFRESH = "activityPlanState.afterRefresh";
@@ -166,6 +185,52 @@
 
     var CLEAR_MAPPING_CANCELED = false;
     var CLEAR_MAPPING_PAUSE = false;
+
+    // =========================
+    // UI SCALING FEATURE
+    // =========================
+
+
+    function scale(value) {
+        if (typeof value === 'string' && value.endsWith('px')) {
+            return (parseFloat(value) * UI_SCALE) + 'px';
+        }
+        return (value * UI_SCALE) + 'px';
+    }
+
+    function getStoredUIScale() {
+        try {
+            var stored = localStorage.getItem(STORAGE_UI_SCALE);
+            if (stored) {
+                var scale = parseFloat(stored);
+                if (!isNaN(scale) && scale >= 0.5 && scale <= 1.0) {
+                    return scale;
+                }
+            }
+        } catch (e) {}
+        return 1.0;
+    }
+
+    /**
+     * @param {number} scale
+     */
+    function setStoredUIScale(scale) {
+        try {
+            localStorage.setItem(STORAGE_UI_SCALE, String(scale));
+        } catch (e) {}
+    }
+
+    /**
+     * @param {number} newScale
+     */
+    function updateUIScale(newScale) {
+        UI_SCALE = Math.max(0.5, Math.min(1.0, newScale));
+        setStoredUIScale(UI_SCALE);
+    }
+
+    // Initialize UI scale from storage
+    UI_SCALE = getStoredUIScale();
+
     //==========================
     // ADD EXISTING SUBJECT FEATURE
     //==========================
@@ -386,20 +451,15 @@
                 nameSpan.textContent = epoch.name;
                 nameSpan.style.fontWeight = "500";
 
-                var btn = document.createElement("button");
-                btn.textContent = label;
-                btn.style.background = "#ddd";
-                btn.style.color = "#000";
-                btn.style.border = "none";
-                btn.style.borderRadius = "6px";
-                btn.style.padding = "8px";
-                btn.style.cursor = "pointer";
-                btn.style.whiteSpace = "normal";
-                btn.style.wordWrap = "break-word";
-                btn.style.wordBreak = "break-word";
-                btn.style.maxWidth = "100%";
-                btn.style.overflow = "hidden";
-                btn.style.textOverflow = "ellipsis";
+                var confirmBtn = document.createElement("button");
+                confirmBtn.textContent = "Confirm";
+                confirmBtn.style.background = "#2e7d32";
+                confirmBtn.style.color = "#fff";
+                confirmBtn.style.border = "none";
+                confirmBtn.style.borderRadius = "4px";
+                confirmBtn.style.padding = "6px 12px";
+                confirmBtn.style.cursor = "pointer";
+                confirmBtn.style.fontWeight = "500";
                 confirmBtn.addEventListener("click", async function() {
                     log("AES: epoch selected - " + epoch.name + " (id=" + epoch.id + ")");
                     localStorage.setItem(STORAGE_AES_SELECTED_EPOCH, epoch.id);
@@ -1744,12 +1804,12 @@
         } catch (e) {}
 
         await sleep(300);
-        
+
         if (SA_BUILDER_CANCELLED) {
             log("SA Builder: cancelled after selectSelect2Value sleep");
             return false;
         }
-        
+
         log("SA Builder: selected value " + value + " in " + selectId);
         return true;
     }
@@ -1805,27 +1865,27 @@
         // Segments column (with checkboxes and dropzones)
         var segmentColumnWrapper = document.createElement("div");
         segmentColumnWrapper.style.cssText = "display:flex;flex-direction:column;border:1px solid #333;border-radius:4px;background:#1a1a1a;height:100%;overflow:hidden;";
-        
+
         // Select All header for segments
         var segmentHeader = document.createElement("div");
         segmentHeader.style.cssText = "display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid #333;background:#222;";
-        
+
         var selectAllCheckbox = document.createElement("input");
         selectAllCheckbox.type = "checkbox";
         selectAllCheckbox.id = "saBuilderSelectAllSegments";
         selectAllCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;";
-        
+
         var selectAllLabel = document.createElement("span");
         selectAllLabel.textContent = "Select All";
         selectAllLabel.style.cssText = "font-weight:600;font-size:13px;";
-        
+
         segmentHeader.appendChild(selectAllCheckbox);
         segmentHeader.appendChild(selectAllLabel);
-        
+
         var segmentColumn = document.createElement("div");
         segmentColumn.style.cssText = "overflow-y:auto;padding:8px;flex:1;";
         segmentColumn.id = "saBuilderSegments";
-        
+
         segmentColumnWrapper.appendChild(segmentHeader);
         segmentColumnWrapper.appendChild(segmentColumn);
 
@@ -1855,7 +1915,7 @@
             this.style.background = "#1e1e1e";
             this.style.border = "1px solid #444";
             this.style.transition = "all 0.2s ease";
-            
+
             var eventData = e.dataTransfer.getData("text/plain");
             if (eventData) {
                 var data = JSON.parse(eventData);
@@ -1892,10 +1952,10 @@
 
         // Track segment-event assignments
         var segmentEventMap = {};
-        
+
         // Track segment checkbox states separately to prevent resets
         var segmentCheckboxStates = {};
-        
+
         // Load saved checkbox states
         try {
             var savedStates = localStorage.getItem(STORAGE_SA_BUILDER_SEGMENT_CHECKBOXES);
@@ -1924,12 +1984,12 @@
                 checkbox.type = "checkbox";
                 checkbox.dataset.segmentValue = seg.value;
                 checkbox.style.cssText = "width:18px;height:18px;cursor:pointer;";
-                
+
                 // Restore checkbox state from saved states
                 if (segmentCheckboxStates[seg.value]) {
                     checkbox.checked = true;
                 }
-                
+
                 // Save checkbox state when changed
                 checkbox.addEventListener("change", function() {
                     segmentCheckboxStates[this.dataset.segmentValue] = this.checked;
@@ -1988,8 +2048,8 @@
 
                             // Make attached events draggable back to Study Events column
                             attachedItem.addEventListener("dragstart", function(e) {
-                                e.dataTransfer.setData("text/plain", JSON.stringify({ 
-                                    value: this.dataset.eventValue, 
+                                e.dataTransfer.setData("text/plain", JSON.stringify({
+                                    value: this.dataset.eventValue,
                                     text: this.dataset.eventText,
                                     fromSegment: true,
                                     segmentValue: segVal
@@ -2044,7 +2104,7 @@
                                     segmentEventMap[segVal] = events;
                                     renderAttachedEvents(dz, segVal);
                                     log("SA Builder: Event '" + ev.text + "' removed from segment");
-                                    
+
                                     // Restore event to Study Events column
                                     restoreEventToStudyEventsColumn({ value: ev.value, text: ev.text });
                                 }
@@ -2099,7 +2159,7 @@
                                 if (!existing) {
                                     if (!segmentEventMap[segVal]) segmentEventMap[segVal] = [];
                                     segmentEventMap[segVal].push({ value: data.value, text: data.text });
-                                    
+
                                     removeEventFromStudyEventsColumn(data.value);
                                 }
                                 renderSegments(segmentSearch.value);
@@ -2145,9 +2205,9 @@
                 });
 
                 evItem.addEventListener("dragstart", function(e) {
-                    e.dataTransfer.setData("text/plain", JSON.stringify({ 
-                        value: this.dataset.eventValue, 
-                        text: this.dataset.eventText 
+                    e.dataTransfer.setData("text/plain", JSON.stringify({
+                        value: this.dataset.eventValue,
+                        text: this.dataset.eventText
                     }));
                     e.dataTransfer.effectAllowed = "copy";
                     this.style.opacity = "0.6";
@@ -2188,7 +2248,7 @@
                     return;
                 }
             }
-            
+
             // Create the event item
             var evItem = document.createElement("div");
             evItem.textContent = eventData.text;
@@ -2212,9 +2272,9 @@
             });
 
             evItem.addEventListener("dragstart", function(e) {
-                e.dataTransfer.setData("text/plain", JSON.stringify({ 
-                    value: this.dataset.eventValue, 
-                    text: this.dataset.eventText 
+                e.dataTransfer.setData("text/plain", JSON.stringify({
+                    value: this.dataset.eventValue,
+                    text: this.dataset.eventText
                 }));
                 e.dataTransfer.effectAllowed = "copy";
                 this.style.opacity = "0.6";
@@ -2238,20 +2298,20 @@
         function sortStudyEventsColumn() {
             var allItems = eventColumn.querySelectorAll("[data-event-value]");
             var itemsArray = Array.prototype.slice.call(allItems);
-            
+
             // Sort by text content (case-insensitive)
             itemsArray.sort(function(a, b) {
                 var textA = (a.dataset.eventText || a.textContent || "").toLowerCase();
                 var textB = (b.dataset.eventText || b.textContent || "").toLowerCase();
                 return textA.localeCompare(textB);
             });
-            
+
             // Clear and re-append in sorted order
             eventColumn.innerHTML = "";
             itemsArray.forEach(function(item) {
                 eventColumn.appendChild(item);
             });
-            
+
             log("SA Builder: Study Events column sorted alphabetically");
         }
 
@@ -2421,7 +2481,7 @@
             var minutesEl = document.getElementById("saBuilderMinutes");
             var secondsEl = document.getElementById("saBuilderSeconds");
             var preRefEl = document.getElementById("saBuilderPreReference");
-            
+
             if (daysEl) {
                 daysEl.disabled = isChecked;
                 daysEl.style.opacity = isChecked ? "0.5" : "1";
@@ -3483,7 +3543,7 @@
         var btnRow = document.createElement("div");
         btnRow.style.display = "inline-flex";
         btnRow.style.justifyContent = "flex-end";
-        btnRow.style.gap = "8px";
+        btnRow.style.gap = scale(BUTTON_GAP_PX);
         var clearIdBtn = document.createElement("button");
         clearIdBtn.textContent = "Clear ID";
         clearIdBtn.style.background = "#777";
@@ -4081,7 +4141,7 @@
         return s;
     }
 
-        function getSubjectIdentifierForAE() {
+    function getSubjectIdentifierForAE() {
         var normalized = "";
         var rawCandidate = "";
         var confident = false;
@@ -10781,14 +10841,14 @@
         if (!ok2) {
             await sleep(500);
         }
-            if (getRunMode() === "all") {
-                setRunMode("consent");
-                updateRunAllPopupStatus("Running ICF Barcode");
-                await sleep(3000);
-                location.href = STUDY_SHOW_URL + "?autoconsent=1";
-                log("Continuing ALL to consent after pause");
-                return;
-            }
+        if (getRunMode() === "all") {
+            setRunMode("consent");
+            updateRunAllPopupStatus("Running ICF Barcode");
+            await sleep(3000);
+            location.href = STUDY_SHOW_URL + "?autoconsent=1";
+            log("Continuing ALL to consent after pause");
+            return;
+        }
         clearContinueEpoch();
         clearRunMode();
         setCohortGuard("done");
@@ -13260,7 +13320,7 @@
             maxHeight: "80%"
         });
     }
-        //==========================
+    //==========================
     // RUN STUDY UPDATES FEATURE
     //==========================
     // This section contains all functions related to study update automation.
@@ -15107,7 +15167,7 @@
             h = localStorage.getItem(STORAGE_PANEL_HEIGHT);
         } catch (e) {}
         if (!w) {
-            w = PANEL_DEFAULT_WIDTH;
+            w = scale(PANEL_DEFAULT_WIDTH);
         }
         if (!h) {
             h = PANEL_DEFAULT_HEIGHT;
@@ -15119,8 +15179,8 @@
         var collapsed = getPanelCollapsed();
         if (collapsed) {
             // Collapse: shrink height but DO NOT overwrite stored expanded size
-            panel.style.width = PANEL_DEFAULT_WIDTH;
-            panel.style.height = String(PANEL_HEADER_HEIGHT_PX + 12) + "px"; // Add padding
+            panel.style.width = scale(PANEL_DEFAULT_WIDTH);
+            panel.style.height = scale(PANEL_HEADER_HEIGHT_PX + 30);
             panel.style.overflow = "hidden";
 
             if (bodyContainer) {
@@ -15128,10 +15188,6 @@
             }
             if (resizeHandle) {
                 resizeHandle.style.display = "none";
-            }
-            var corners = panel.querySelectorAll("div[style*='cursor'][style*='resize']");
-            for (var i = 0; i < corners.length; i++) {
-                corners[i].style.display = "none";
             }
             if (collapseBtn) {
                 collapseBtn.textContent = "+";
@@ -15141,7 +15197,7 @@
             var size = getStoredPanelSize();
             panel.style.width = size.width;
             panel.style.height = size.height;
-            panel.style.overflow = "visible";
+            panel.style.overflow = "hidden";
 
             if (bodyContainer) {
                 bodyContainer.style.display = "block";
@@ -15149,12 +15205,8 @@
             if (resizeHandle) {
                 resizeHandle.style.display = "block";
             }
-            var corners = panel.querySelectorAll("div[style*='cursor'][style*='resize']");
-            for (var i = 0; i < corners.length; i++) {
-                corners[i].style.display = "block";
-            }
             if (collapseBtn) {
-                collapseBtn.textContent = "-";
+                collapseBtn.textContent = "—";
             }
         }
     }
@@ -15599,8 +15651,9 @@
         btn.style.background = "#ddd";
         btn.style.color = "#000";
         btn.style.border = "none";
-        btn.style.borderRadius = "6px";
-        btn.style.padding = "8px";
+        btn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        btn.style.padding = scale(BUTTON_PADDING_PX);
+        btn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         btn.style.cursor = "pointer";
         btn.addEventListener("click", function () {
             try {
@@ -15661,10 +15714,10 @@
         headerBar.style.display = "grid";
         headerBar.style.gridTemplateColumns = "1fr auto";
         headerBar.style.alignItems = "center";
-        headerBar.style.gap = String(PANEL_HEADER_GAP_PX) + "px";
-        headerBar.style.height = String(PANEL_HEADER_HEIGHT_PX) + "px";
+        headerBar.style.gap = scale(PANEL_HEADER_GAP_PX);
+        headerBar.style.height = scale(PANEL_HEADER_HEIGHT_PX);
         headerBar.style.boxSizing = "border-box";
-        headerBar.style.padding = "0 12px";
+        headerBar.style.padding = "4 12px";
         headerBar.style.borderBottom = "1px solid #444";
         headerBar.style.cursor = "move";
         headerBar.style.userSelect = "none";
@@ -15866,9 +15919,24 @@
             }
         };
     }
+
     function setupResizeHandle(panel, bodyContainer) {
-        var cornerSize = 16;
-        var corners = [];
+        var handle = document.createElement("div");
+        handle.style.position = "absolute";
+        handle.style.width = "12px";
+        handle.style.height = "12px";
+        handle.style.right = "6px";
+        handle.style.bottom = "6px";
+        handle.style.cursor = "se-resize";
+        handle.style.background = "#333";
+        handle.style.borderRadius = "2px";
+        handle.style.display = "block";
+
+        var isResizing = false;
+        var startX = 0;
+        var startY = 0;
+        var startW = 0;
+        var startH = 0;
 
         function toInt(s) {
             var n = parseInt(String(s).replace("px", ""), 10);
@@ -15878,175 +15946,50 @@
             return n;
         }
 
-        function applyScale(panel) {
-            var currentWidth = toInt(panel.style.width);
-            var currentHeight = toInt(panel.style.height);
-            var scaleX = currentWidth / PANEL_BASE_WIDTH;
-            var scaleY = currentHeight / PANEL_BASE_HEIGHT;
-            var scale = Math.min(scaleX, scaleY);
-            
-            panel.style.fontSize = (14 * scale) + "px";
-            
-            var allButtons = panel.querySelectorAll("button");
-            for (var i = 0; i < allButtons.length; i++) {
-                allButtons[i].style.padding = (8 * scale) + "px";
-                allButtons[i].style.borderRadius = (6 * scale) + "px";
-                allButtons[i].style.fontSize = (14 * scale) + "px";
-                allButtons[i].style.minHeight = (32 * scale) + "px";
-                allButtons[i].style.minWidth = "0";
-                allButtons[i].style.height = "auto";
-                allButtons[i].style.lineHeight = (1.2 * scale);
-                allButtons[i].style.whiteSpace = scale < 0.6 ? "normal" : "nowrap";
-            }
-
-            var headerBar = panel.querySelector("div[style*='cursor: grab'], div[style*='cursor: grabbing']");
-            if (headerBar) {
-                headerBar.style.height = (48 * scale) + "px";
-                headerBar.style.gap = (8 * scale) + "px";
-                var title = headerBar.querySelector("div");
-                if (title) {
-                    title.style.fontSize = (14 * scale) + "px";
-                    title.style.fontWeight = "600";
-                }
-            }
-
-            var btnRow = panel.querySelector("div[style*='grid-template-columns: 1fr 1fr']");
-            if (btnRow) {
-                btnRow.style.gap = (8 * scale) + "px";
-            }
-
-            var status = bodyContainer.querySelector("div[style*='background: #1a1a1a']");
-            if (status) {
-                status.style.marginTop = (10 * scale) + "px";
-                status.style.padding = (6 * scale) + "px";
-                status.style.fontSize = (13 * scale) + "px";
-                status.style.borderRadius = (6 * scale) + "px";
-            }
-
-            var logBox = document.getElementById(LOG_ID);
-            if (logBox) {
-                logBox.style.marginTop = (8 * scale) + "px";
-                logBox.style.height = (220 * scale) + "px";
-                logBox.style.padding = (6 * scale) + "px";
-                logBox.style.fontSize = (12 * scale) + "px";
-                logBox.style.borderRadius = (6 * scale) + "px";
-            }
-
-            panel.style.padding = (12 * scale) + "px";
-            panel.style.borderRadius = (8 * scale) + "px";
-
-            for (var j = 0; j < corners.length; j++) {
-                corners[j].element.style.width = (cornerSize * scale) + "px";
-                corners[j].element.style.height = (cornerSize * scale) + "px";
-            }
-        }
-
-        function createCorner(position, cursor) {
-            var corner = document.createElement("div");
-            corner.style.position = "absolute";
-            corner.style.width = cornerSize + "px";
-            corner.style.height = cornerSize + "px";
-            corner.style.cursor = cursor;
-            corner.style.background = "#444";
-            corner.style.borderRadius = "3px";
-            corner.style.zIndex = "10";
-            corner.style.display = "block";
-
-            if (position === "sw") {
-                corner.style.bottom = "6px";
-                corner.style.left = "6px";
-            } else if (position === "se") {
-                corner.style.bottom = "6px";
-                corner.style.right = "6px";
-            }
-
-            return { element: corner, position: position };
-        }
-
-        var swCorner = createCorner("sw", "sw-resize");
-        var seCorner = createCorner("se", "ns-resize");
-
-        corners = [swCorner, seCorner];
-
-        panel.appendChild(swCorner.element);
-        panel.appendChild(seCorner.element);
-
-        var isResizing = false;
-        var currentCorner = null;
-        var startX = 0;
-        var startY = 0;
-        var startW = 0;
-        var startH = 0;
-
-        function startResize(e, corner) {
+        handle.addEventListener("mousedown", function (e) {
             if (getPanelCollapsed()) {
                 return;
             }
             isResizing = true;
-            currentCorner = corner;
             startX = e.clientX;
             startY = e.clientY;
             startW = toInt(panel.style.width);
-            startH = toInt(panel.style.height);
+            startH = panel.offsetHeight;
             e.preventDefault();
-            e.stopPropagation();
-        }
-
-        swCorner.element.addEventListener("mousedown", function(e) { startResize(e, "sw"); });
-        seCorner.element.addEventListener("mousedown", function(e) { startResize(e, "se"); });
+        });
 
         document.addEventListener("mousemove", function (e) {
             if (!isResizing) {
                 return;
             }
-
             var dx = e.clientX - startX;
             var dy = e.clientY - startY;
-            var newW = startW;
-            var newH = startH;
+            var newW = startW + dx;
+            var newH = startH + dy;
 
-            if (currentCorner === "sw") {
-                newW = startW - dx;
-                newH = startH + dy;
+            var minW = toInt(scale(PANEL_DEFAULT_WIDTH));
+            if (newW < minW) {
+                newW = minW;
+            }
+            if (newW > PANEL_MAX_WIDTH_PX) {
+                newW = PANEL_MAX_WIDTH_PX;
+            }
 
-                if (newW < PANEL_MIN_WIDTH) {
-                    newW = PANEL_MIN_WIDTH;
-                }
-                if (newW > PANEL_MAX_WIDTH_PX) {
-                    newW = PANEL_MAX_WIDTH_PX;
-                }
-                if (newH < PANEL_MIN_HEIGHT) {
-                    newH = PANEL_MIN_HEIGHT;
-                }
+            var minH = PANEL_HEADER_HEIGHT_PX + 88;
+            if (newH < minH) {
+                newH = minH;
+            }
 
-                panel.style.width = String(newW) + "px";
-                panel.style.height = String(newH) + "px";
+            panel.style.width = String(newW) + "px";
+            panel.style.height = String(newH) + "px";
 
-                if (bodyContainer) {
-                    var scaledHeaderHeight = (48 * Math.min(newW / PANEL_BASE_WIDTH, newH / PANEL_BASE_HEIGHT));
-                    bodyContainer.style.display = "block";
-                    bodyContainer.style.height = "calc(100% - " + String(scaledHeaderHeight) + "px)";
-                    bodyContainer.style.maxHeight = "calc(100% - " + String(scaledHeaderHeight) + "px)";
-                    bodyContainer.style.overflowY = "auto";
-                }
+            if (bodyContainer) {
+                bodyContainer.style.display = "block";
 
-                applyScale(panel);
-            } else if (currentCorner === "se") {
-                newH = startH + dy;
+                bodyContainer.style.height = "calc(100% - " + String(PANEL_HEADER_HEIGHT_PX) + "px)";
+                bodyContainer.style.maxHeight = "calc(100% - " + String(PANEL_HEADER_HEIGHT_PX) + "px)";
 
-                var minH = PANEL_HEADER_HEIGHT_PX + 80;
-                if (newH < minH) {
-                    newH = minH;
-                }
-
-                panel.style.height = String(newH) + "px";
-
-                if (bodyContainer) {
-                    bodyContainer.style.display = "block";
-                    bodyContainer.style.height = "calc(100% - " + String(PANEL_HEADER_HEIGHT_PX) + "px)";
-                    bodyContainer.style.maxHeight = "calc(100% - " + String(PANEL_HEADER_HEIGHT_PX) + "px)";
-                    bodyContainer.style.overflowY = "auto";
-                }
+                bodyContainer.style.overflowY = "auto";
             }
         });
 
@@ -16055,13 +15998,10 @@
                 return;
             }
             isResizing = false;
-            currentCorner = null;
             setStoredPanelSize(panel.style.width, panel.style.height);
         });
 
-        applyScale(panel);
-
-        return seCorner.element;
+        return handle;
     }
 
     function getPanelHidden() {
@@ -16173,18 +16113,20 @@
         panel.style.background = "#111";
         panel.style.color = "#fff";
         panel.style.border = "1px solid #444";
-        panel.style.borderRadius = "8px";
-        panel.style.padding = "12px";
+        panel.style.borderRadius = scale(PANEL_BORDER_RADIUS_PX);
+        panel.style.padding = scale(PANEL_PADDING_PX);
         panel.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
-        panel.style.fontSize = "14px";
-        panel.style.minWidth = PANEL_DEFAULT_WIDTH;
-        panel.style.width = savedSize.width;
+        panel.style.fontSize = scale(PANEL_FONT_SIZE_PX);
+        panel.style.minWidth = scale(PANEL_DEFAULT_WIDTH);
+        panel.style.width = savedSize.width || scale(PANEL_DEFAULT_WIDTH);
         if (savedSize.height && savedSize.height !== PANEL_DEFAULT_HEIGHT) {
             panel.style.height = savedSize.height;
         } else {
             panel.style.height = PANEL_DEFAULT_HEIGHT;
         }
         panel.style.boxSizing = "border-box";
+        panel.style.overflow = "hidden";
+
         var headerBar = document.createElement("div");
         headerBar.style.position = "relative";
         headerBar.style.display = "grid";
@@ -16196,27 +16138,30 @@
         headerBar.style.cursor = "grab";
         headerBar.style.userSelect = "none";
         var leftSpacer = document.createElement("div");
-        leftSpacer.style.width = "32px";
+        leftSpacer.style.width = scale(HEADER_LEFT_SPACER_WIDTH_PX);
         var title = document.createElement("div");
         title.textContent = "Automator";
-        title.style.fontWeight = "600";
+        title.style.fontWeight = HEADER_FONT_WEIGHT;
         title.style.textAlign = "center";
         title.style.justifySelf = "center";
-        title.style.transform = "translateX(16px)"
+        title.style.transform = "translateX(" + scale(HEADER_TITLE_OFFSET_PX) + ")";
+        title.style.paddingBottom = scale(8);
         headerBar.appendChild(title);
         headerBar.appendChild(leftSpacer);
         var rightControls = document.createElement("div");
         rightControls.style.display = "inline-flex";
         rightControls.style.alignItems = "center";
-        rightControls.style.gap = String(PANEL_HEADER_GAP_PX) + "px";
+        rightControls.style.gap = scale(PANEL_HEADER_GAP_PX);
         var collapseBtn = document.createElement("button");
         collapseBtn.textContent = getPanelCollapsed() ? "Expand" : "Collapse";
         collapseBtn.style.background = "transparent";
         collapseBtn.style.color = "#fff";
         collapseBtn.style.border = "none";
         collapseBtn.style.cursor = "pointer";
+        collapseBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         var closeBtn = document.createElement("button");
-        closeBtn.textContent = "✕";
+        closeBtn.textContent = CLOSE_BTN_TEXT;
+        closeBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         closeBtn.style.background = "transparent";
         closeBtn.style.color = "#fff";
         closeBtn.style.border = "none";
@@ -16233,7 +16178,7 @@
         bodyContainer.style.boxSizing = "border-box";
         var btnRow = document.createElement("div");
         btnRow.style.display = "grid";
-        btnRow.style.gridTemplateColumns = "repeat(auto-fit, minmax(120px, 1fr))";
+        btnRow.style.gridTemplateColumns = "1fr 1fr";
         btnRow.style.gap = "8px";
         btnRowRef = btnRow;
         var runPlansBtn = document.createElement("button");
@@ -16241,258 +16186,198 @@
         runPlansBtn.style.background = "#4a90e2";
         runPlansBtn.style.color = "#fff";
         runPlansBtn.style.border = "none";
-        runPlansBtn.style.borderRadius = "6px";
-        runPlansBtn.style.padding = "8px";
+        runPlansBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        runPlansBtn.style.padding = scale(BUTTON_PADDING_PX);
+        runPlansBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         runPlansBtn.style.cursor = "pointer";
         runPlansBtn.style.fontWeight = "500";
         runPlansBtn.style.transition = "background 0.2s";
-        runPlansBtn.style.whiteSpace = "normal";
-        runPlansBtn.style.wordWrap = "break-word";
-        runPlansBtn.style.wordBreak = "break-word";
-        runPlansBtn.style.overflow = "hidden";
-        runPlansBtn.style.textOverflow = "ellipsis";
-        runPlansBtn.onmouseenter = function() { this.style.background = "#357abd"; };
-        runPlansBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+        runPlansBtn.onmouseenter = () => { runPlansBtn.style.background = "#357abd"; };
+        runPlansBtn.onmouseleave = () => { runPlansBtn.style.background = "#4a90e2"; };
         var runStudyBtn = document.createElement("button");
         runStudyBtn.textContent = "Update Study Status";
         runStudyBtn.style.background = "#4a90e2";
         runStudyBtn.style.color = "#fff";
         runStudyBtn.style.border = "none";
-        runStudyBtn.style.borderRadius = "6px";
-        runStudyBtn.style.padding = "8px";
+        runStudyBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        runStudyBtn.style.padding = scale(BUTTON_PADDING_PX);
+        runStudyBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         runStudyBtn.style.cursor = "pointer";
         runStudyBtn.style.fontWeight = "500";
         runStudyBtn.style.transition = "background 0.2s";
-        runStudyBtn.style.whiteSpace = "normal";
-        runStudyBtn.style.wordWrap = "break-word";
-        runStudyBtn.style.wordBreak = "break-word";
-        runStudyBtn.style.overflow = "hidden";
-        runStudyBtn.style.textOverflow = "ellipsis";
-        runStudyBtn.onmouseenter = function() { this.style.background = "#357abd"; };
-        runStudyBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+        runStudyBtn.onmouseenter = () => { runStudyBtn.style.background = "#357abd"; };
+        runStudyBtn.onmouseleave = () => { runStudyBtn.style.background = "#4a90e2"; };
         var runAddCohortBtn = document.createElement("button");
         runAddCohortBtn.textContent = "Add Cohort Subjects";
         runAddCohortBtn.style.background = "#4a90e2";
         runAddCohortBtn.style.color = "#fff";
         runAddCohortBtn.style.border = "none";
-        runAddCohortBtn.style.borderRadius = "6px";
-        runAddCohortBtn.style.padding = "8px";
+        runAddCohortBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        runAddCohortBtn.style.padding = scale(BUTTON_PADDING_PX);
+        runAddCohortBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         runAddCohortBtn.style.cursor = "pointer";
         runAddCohortBtn.style.fontWeight = "500";
         runAddCohortBtn.style.transition = "background 0.2s";
-        runAddCohortBtn.style.whiteSpace = "normal";
-        runAddCohortBtn.style.wordWrap = "break-word";
-        runAddCohortBtn.style.wordBreak = "break-word";
-        runAddCohortBtn.style.overflow = "hidden";
-        runAddCohortBtn.style.textOverflow = "ellipsis";
-        runAddCohortBtn.onmouseenter = function() { this.style.background = "#357abd"; };
-        runAddCohortBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+        runAddCohortBtn.onmouseenter = () => { runAddCohortBtn.style.background = "#357abd"; };
+        runAddCohortBtn.onmouseleave = () => { runAddCohortBtn.style.background = "#4a90e2"; };
         var runConsentBtn = document.createElement("button");
         runConsentBtn.textContent = "Run ICF Barcode";
         runConsentBtn.style.background = "#4a90e2";
         runConsentBtn.style.color = "#fff";
         runConsentBtn.style.border = "none";
-        runConsentBtn.style.borderRadius = "6px";
-        runConsentBtn.style.padding = "8px";
+        runConsentBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        runConsentBtn.style.padding = scale(BUTTON_PADDING_PX);
+        runConsentBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         runConsentBtn.style.cursor = "pointer";
         runConsentBtn.style.fontWeight = "500";
         runConsentBtn.style.transition = "background 0.2s";
-        runConsentBtn.style.whiteSpace = "normal";
-        runConsentBtn.style.wordWrap = "break-word";
-        runConsentBtn.style.wordBreak = "break-word";
-        runConsentBtn.style.overflow = "hidden";
-        runConsentBtn.style.textOverflow = "ellipsis";
-        runConsentBtn.onmouseenter = function() { this.style.background = "#357abd"; };
-        runConsentBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+        runConsentBtn.onmouseenter = () => { runConsentBtn.style.background = "#357abd"; };
+        runConsentBtn.onmouseleave = () => { runConsentBtn.style.background = "#4a90e2"; };
         var runAllBtn = document.createElement("button");
         runAllBtn.textContent = "Run Button (1-5)";
         runAllBtn.style.background = "#5cb85c";
         runAllBtn.style.color = "#fff";
         runAllBtn.style.border = "none";
-        runAllBtn.style.borderRadius = "6px";
-        runAllBtn.style.padding = "8px";
+        runAllBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        runAllBtn.style.padding = scale(BUTTON_PADDING_PX);
+        runAllBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         runAllBtn.style.cursor = "pointer";
         runAllBtn.style.fontWeight = "600";
         runAllBtn.style.transition = "background 0.2s";
-        runAllBtn.style.whiteSpace = "normal";
-        runAllBtn.style.wordWrap = "break-word";
-        runAllBtn.style.wordBreak = "break-word";
-        runAllBtn.style.overflow = "hidden";
-        runAllBtn.style.textOverflow = "ellipsis";
-        runAllBtn.onmouseenter = function() { this.style.background = "#449d44"; };
-        runAllBtn.onmouseleave = function() { this.style.background = "#5cb85c"; };
+        runAllBtn.onmouseenter = () => { runAllBtn.style.background = "#449d44"; };
+        runAllBtn.onmouseleave = () => { runAllBtn.style.background = "#5cb85c"; };
         var runNonScrnBtn = document.createElement("button");
         runNonScrnBtn.textContent = "Import Cohort Subject";
         runNonScrnBtn.style.background = "#5b43c7";
         runNonScrnBtn.style.color = "#fff";
         runNonScrnBtn.style.border = "none";
-        runNonScrnBtn.style.borderRadius = "6px";
-        runNonScrnBtn.style.padding = "8px";
+        runNonScrnBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        runNonScrnBtn.style.padding = scale(BUTTON_PADDING_PX);
+        runNonScrnBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         runNonScrnBtn.style.cursor = "pointer";
         runNonScrnBtn.style.fontWeight = "500";
         runNonScrnBtn.style.transition = "background 0.2s";
-        runNonScrnBtn.style.whiteSpace = "normal";
-        runNonScrnBtn.style.wordWrap = "break-word";
-        runNonScrnBtn.style.wordBreak = "break-word";
-        runNonScrnBtn.style.overflow = "hidden";
-        runNonScrnBtn.style.textOverflow = "ellipsis";
-        runNonScrnBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
-        runNonScrnBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
+        runNonScrnBtn.onmouseenter = () => { runNonScrnBtn.style.background = "#4a37a0"; };
+        runNonScrnBtn.onmouseleave = () => { runNonScrnBtn.style.background = "#5b43c7"; };
 
         var addExistingSubjectBtn = document.createElement("button");
         addExistingSubjectBtn.textContent = "Add Existing Subject";
         addExistingSubjectBtn.style.background = "#5b43c7";
         addExistingSubjectBtn.style.color = "#fff";
         addExistingSubjectBtn.style.border = "none";
-        addExistingSubjectBtn.style.borderRadius = "6px";
-        addExistingSubjectBtn.style.padding = "8px";
+        addExistingSubjectBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        addExistingSubjectBtn.style.padding = scale(BUTTON_PADDING_PX);
+        addExistingSubjectBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         addExistingSubjectBtn.style.cursor = "pointer";
         addExistingSubjectBtn.style.fontWeight = "500";
         addExistingSubjectBtn.style.transition = "background 0.2s";
-        addExistingSubjectBtn.style.whiteSpace = "normal";
-        addExistingSubjectBtn.style.wordWrap = "break-word";
-        addExistingSubjectBtn.style.wordBreak = "break-word";
-        addExistingSubjectBtn.style.overflow = "hidden";
-        addExistingSubjectBtn.style.textOverflow = "ellipsis";
-        addExistingSubjectBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
-        addExistingSubjectBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
+        addExistingSubjectBtn.onmouseenter = () => { addExistingSubjectBtn.style.background = "#4a37a0"; };
+        addExistingSubjectBtn.onmouseleave = () => { addExistingSubjectBtn.style.background = "#5b43c7"; };
 
         var saBuilderBtn = document.createElement("button");
         saBuilderBtn.textContent = "Scheduled Activities Builder";
         saBuilderBtn.style.background = "#5b43c7";
         saBuilderBtn.style.color = "#fff";
         saBuilderBtn.style.border = "none";
-        saBuilderBtn.style.borderRadius = "6px";
-        saBuilderBtn.style.padding = "8px";
+        saBuilderBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        saBuilderBtn.style.padding = scale(BUTTON_PADDING_PX);
+        saBuilderBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         saBuilderBtn.style.cursor = "pointer";
         saBuilderBtn.style.fontWeight = "500";
         saBuilderBtn.style.transition = "background 0.2s";
-        saBuilderBtn.style.whiteSpace = "normal";
-        saBuilderBtn.style.wordWrap = "break-word";
-        saBuilderBtn.style.wordBreak = "break-word";
-        saBuilderBtn.style.overflow = "hidden";
-        saBuilderBtn.style.textOverflow = "ellipsis";
-        saBuilderBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
-        saBuilderBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
+        saBuilderBtn.onmouseenter = () => { saBuilderBtn.style.background = "#4a37a0"; };
+        saBuilderBtn.onmouseleave = () => { saBuilderBtn.style.background = "#5b43c7"; };
 
         var runBarcodeBtn = document.createElement("button");
         runBarcodeBtn.textContent = "Run Barcode";
         runBarcodeBtn.style.background = "#5b43c7";
         runBarcodeBtn.style.color = "#fff";
         runBarcodeBtn.style.border = "none";
-        runBarcodeBtn.style.borderRadius = "6px";
-        runBarcodeBtn.style.padding = "8px";
+        runBarcodeBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        runBarcodeBtn.style.padding = scale(BUTTON_PADDING_PX);
+        runBarcodeBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         runBarcodeBtn.style.cursor = "pointer";
         runBarcodeBtn.style.fontWeight = "500";
         runBarcodeBtn.style.transition = "background 0.2s";
-        runBarcodeBtn.style.whiteSpace = "normal";
-        runBarcodeBtn.style.wordWrap = "break-word";
-        runBarcodeBtn.style.wordBreak = "break-word";
-        runBarcodeBtn.style.overflow = "hidden";
-        runBarcodeBtn.style.textOverflow = "ellipsis";
-        runBarcodeBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
-        runBarcodeBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
+        runBarcodeBtn.onmouseenter = () => { runBarcodeBtn.style.background = "#4a37a0"; };
+        runBarcodeBtn.onmouseleave = () => { runBarcodeBtn.style.background = "#5b43c7"; };
         var runFormOORBtn = document.createElement("button");
         runFormOORBtn.textContent = "Run Form (OOR) Below Range";
         runFormOORBtn.style.background = "#f0ad4e";
         runFormOORBtn.style.color = "#fff";
         runFormOORBtn.style.border = "none";
-        runFormOORBtn.style.borderRadius = "6px";
-        runFormOORBtn.style.padding = "8px";
+        runFormOORBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        runFormOORBtn.style.padding = scale(BUTTON_PADDING_PX);
+        runFormOORBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         runFormOORBtn.style.cursor = "pointer";
         runFormOORBtn.style.fontWeight = "500";
         runFormOORBtn.style.transition = "background 0.2s";
-        runFormOORBtn.style.whiteSpace = "normal";
-        runFormOORBtn.style.wordWrap = "break-word";
-        runFormOORBtn.style.wordBreak = "break-word";
-        runFormOORBtn.style.overflow = "hidden";
-        runFormOORBtn.style.textOverflow = "ellipsis";
-        runFormOORBtn.onmouseenter = function() { this.style.background = "#ec971f"; };
-        runFormOORBtn.onmouseleave = function() { this.style.background = "#f0ad4e"; };
+        runFormOORBtn.onmouseenter = () => { runFormOORBtn.style.background = "#ec971f"; };
+        runFormOORBtn.onmouseleave = () => { runFormOORBtn.style.background = "#f0ad4e"; };
         var runFormOORABtn = document.createElement("button");
         runFormOORABtn.textContent = "Run Form (OOR) Above Range";
         runFormOORABtn.style.background = "#f0ad4e";
         runFormOORABtn.style.color = "#fff";
         runFormOORABtn.style.border = "none";
-        runFormOORABtn.style.borderRadius = "6px";
-        runFormOORABtn.style.padding = "8px";
+        runFormOORABtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        runFormOORABtn.style.padding = scale(BUTTON_PADDING_PX);
+        runFormOORABtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         runFormOORABtn.style.cursor = "pointer";
         runFormOORABtn.style.fontWeight = "500";
         runFormOORABtn.style.transition = "background 0.2s";
-        runFormOORABtn.style.whiteSpace = "normal";
-        runFormOORABtn.style.wordWrap = "break-word";
-        runFormOORABtn.style.wordBreak = "break-word";
-        runFormOORABtn.style.overflow = "hidden";
-        runFormOORABtn.style.textOverflow = "ellipsis";
-        runFormOORABtn.onmouseenter = function() { this.style.background = "#ec971f"; };
-        runFormOORABtn.onmouseleave = function() { this.style.background = "#f0ad4e"; };
+        runFormOORABtn.onmouseenter = () => { runFormOORABtn.style.background = "#ec971f"; };
+        runFormOORABtn.onmouseleave = () => { runFormOORABtn.style.background = "#f0ad4e"; };
         var runFormIRBtn = document.createElement("button");
         runFormIRBtn.textContent = "Run Form (In Range)";
         runFormIRBtn.style.background = "#f0ad4e";
         runFormIRBtn.style.color = "#fff";
         runFormIRBtn.style.border = "none";
-        runFormIRBtn.style.borderRadius = "6px";
-        runFormIRBtn.style.padding = "8px";
+        runFormIRBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        runFormIRBtn.style.padding = scale(BUTTON_PADDING_PX);
+        runFormIRBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         runFormIRBtn.style.cursor = "pointer";
         runFormIRBtn.style.fontWeight = "500";
         runFormIRBtn.style.transition = "background 0.2s";
-        runFormIRBtn.style.whiteSpace = "normal";
-        runFormIRBtn.style.wordWrap = "break-word";
-        runFormIRBtn.style.wordBreak = "break-word";
-        runFormIRBtn.style.overflow = "hidden";
-        runFormIRBtn.style.textOverflow = "ellipsis";
-        runFormIRBtn.onmouseenter = function() { this.style.background = "#ec971f"; };
-        runFormIRBtn.onmouseleave = function() { this.style.background = "#f0ad4e"; };
+        runFormIRBtn.onmouseenter = () => { runFormIRBtn.style.background = "#ec971f"; };
+        runFormIRBtn.onmouseleave = () => { runFormIRBtn.style.background = "#f0ad4e"; };
         var parseMethodBtn = document.createElement("button");
         parseMethodBtn.textContent = "Item Method Forms";
         parseMethodBtn.style.background = "#4a90e2";
         parseMethodBtn.style.color = "#fff";
         parseMethodBtn.style.border = "none";
-        parseMethodBtn.style.borderRadius = "6px";
-        parseMethodBtn.style.padding = "8px";
+        parseMethodBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        parseMethodBtn.style.padding = scale(BUTTON_PADDING_PX);
+        parseMethodBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         parseMethodBtn.style.cursor = "pointer";
-        parseMethodBtn.style.whiteSpace = "normal";
-        parseMethodBtn.style.wordWrap = "break-word";
-        parseMethodBtn.style.wordBreak = "break-word";
-        parseMethodBtn.style.overflow = "hidden";
-        parseMethodBtn.style.textOverflow = "ellipsis";
-        parseMethodBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
-        parseMethodBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+        parseMethodBtn.onmouseenter = () => { parseMethodBtn.style.background = "#58a1f5"; };
+        parseMethodBtn.onmouseleave = () => { parseMethodBtn.style.background = "#4a90e2"; };
         var pauseBtn = document.createElement("button");
         pauseBtn.textContent = isPaused() ? "Resume" : "Pause";
         pauseBtn.style.background = "#6c757d";
         pauseBtn.style.color = "#fff";
         pauseBtn.style.border = "none";
-        pauseBtn.style.borderRadius = "6px";
-        pauseBtn.style.padding = "8px";
+        pauseBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        pauseBtn.style.padding = scale(BUTTON_PADDING_PX);
+        pauseBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         pauseBtn.style.cursor = "pointer";
         pauseBtn.style.fontWeight = "500";
         pauseBtn.style.transition = "background 0.2s";
-        pauseBtn.style.whiteSpace = "normal";
-        pauseBtn.style.wordWrap = "break-word";
-        pauseBtn.style.wordBreak = "break-word";
-        pauseBtn.style.overflow = "hidden";
-        pauseBtn.style.textOverflow = "ellipsis";
-        pauseBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
-        pauseBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
+        pauseBtn.onmouseenter = () => { pauseBtn.style.background = "#5a6268"; };
+        pauseBtn.onmouseleave = () => { pauseBtn.style.background = "#6c757d"; };
 
         var clearLogsBtn = document.createElement("button");
         clearLogsBtn.textContent = "Clear Logs";
         clearLogsBtn.style.background = "#6c757d";
         clearLogsBtn.style.color = "#fff";
         clearLogsBtn.style.border = "none";
-        clearLogsBtn.style.borderRadius = "6px";
-        clearLogsBtn.style.padding = "8px";
+        clearLogsBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        clearLogsBtn.style.padding = scale(BUTTON_PADDING_PX);
+        clearLogsBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         clearLogsBtn.style.cursor = "pointer";
         clearLogsBtn.style.fontWeight = "500";
         clearLogsBtn.style.transition = "background 0.2s";
-        clearLogsBtn.style.whiteSpace = "normal";
-        clearLogsBtn.style.wordWrap = "break-word";
-        clearLogsBtn.style.wordBreak = "break-word";
-        clearLogsBtn.style.overflow = "hidden";
-        clearLogsBtn.style.textOverflow = "ellipsis";
-        clearLogsBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
-        clearLogsBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
+        clearLogsBtn.onmouseenter = () => { clearLogsBtn.style.background = "#5a6268"; };
+        clearLogsBtn.onmouseleave = () => { clearLogsBtn.style.background = "#6c757d"; };
 
         var toggleLogsBtn = document.createElement("button");
         var logVisible = getLogVisible();
@@ -16500,122 +16385,94 @@
         toggleLogsBtn.style.background = "#6c757d";
         toggleLogsBtn.style.color = "#fff";
         toggleLogsBtn.style.border = "none";
-        toggleLogsBtn.style.borderRadius = "6px";
-        toggleLogsBtn.style.padding = "8px";
+        toggleLogsBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        toggleLogsBtn.style.padding = scale(BUTTON_PADDING_PX);
+        toggleLogsBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         toggleLogsBtn.style.cursor = "pointer";
         toggleLogsBtn.style.fontWeight = "500";
         toggleLogsBtn.style.transition = "background 0.2s";
-        toggleLogsBtn.style.whiteSpace = "normal";
-        toggleLogsBtn.style.wordWrap = "break-word";
-        toggleLogsBtn.style.wordBreak = "break-word";
-        toggleLogsBtn.style.overflow = "hidden";
-        toggleLogsBtn.style.textOverflow = "ellipsis";
-        toggleLogsBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
-        toggleLogsBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
+        toggleLogsBtn.onmouseenter = () => { toggleLogsBtn.style.background = "#5a6268"; };
+        toggleLogsBtn.onmouseleave = () => { toggleLogsBtn.style.background = "#6c757d"; };
 
         var runLockSamplePathsBtn = document.createElement("button");
         runLockSamplePathsBtn.textContent = "Lock Sample Paths";
         runLockSamplePathsBtn.style.background = "#4a90e2";
         runLockSamplePathsBtn.style.color = "#fff";
         runLockSamplePathsBtn.style.border = "none";
-        runLockSamplePathsBtn.style.borderRadius = "6px";
-        runLockSamplePathsBtn.style.padding = "8px";
+        runLockSamplePathsBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        runLockSamplePathsBtn.style.padding = scale(BUTTON_PADDING_PX);
+        runLockSamplePathsBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         runLockSamplePathsBtn.style.cursor = "pointer";
         runLockSamplePathsBtn.style.fontWeight = "500";
         runLockSamplePathsBtn.style.transition = "background 0.2s";
-        runLockSamplePathsBtn.style.whiteSpace = "normal";
-        runLockSamplePathsBtn.style.wordWrap = "break-word";
-        runLockSamplePathsBtn.style.wordBreak = "break-word";
-        runLockSamplePathsBtn.style.overflow = "hidden";
-        runLockSamplePathsBtn.style.textOverflow = "ellipsis";
-        runLockSamplePathsBtn.onmouseenter = function() { this.style.background = "#357abd"; };
-        runLockSamplePathsBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+        runLockSamplePathsBtn.onmouseenter = () => { runLockSamplePathsBtn.style.background = "#357abd"; };
+        runLockSamplePathsBtn.onmouseleave = () => { runLockSamplePathsBtn.style.background = "#4a90e2"; };
 
         var importEligBtn = document.createElement("button");
         importEligBtn.textContent = "Import I/E";
         importEligBtn.style.background = "#38dae6";
         importEligBtn.style.color = "#fff";
         importEligBtn.style.border = "none";
-        importEligBtn.style.borderRadius = "6px";
-        importEligBtn.style.padding = "8px";
+        importEligBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        importEligBtn.style.padding = scale(BUTTON_PADDING_PX);
+        importEligBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         importEligBtn.style.cursor = "pointer";
         importEligBtn.style.fontWeight = "500";
         importEligBtn.style.transition = "background 0.2s";
-        importEligBtn.style.whiteSpace = "normal";
-        importEligBtn.style.wordWrap = "break-word";
-        importEligBtn.style.wordBreak = "break-word";
-        importEligBtn.style.overflow = "hidden";
-        importEligBtn.style.textOverflow = "ellipsis";
-        importEligBtn.onmouseenter = function() { this.style.background = "#2bb9c4"; };
-        importEligBtn.onmouseleave = function() { this.style.background = "#38dae6"; };
+        importEligBtn.onmouseenter = () => { importEligBtn.style.background = "#2bb9c4"; };
+        importEligBtn.onmouseleave = () => { importEligBtn.style.background = "#38dae6"; };
 
         var findFormBtn = document.createElement("button");
         findFormBtn.textContent = "Find Form";
         findFormBtn.style.background = "#4a90e2";
         findFormBtn.style.color = "#fff";
         findFormBtn.style.border = "none";
-        findFormBtn.style.borderRadius = "6px";
-        findFormBtn.style.padding = "8px";
+        findFormBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        findFormBtn.style.padding = scale(BUTTON_PADDING_PX);
+        findFormBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         findFormBtn.style.cursor = "pointer";
-        findFormBtn.style.whiteSpace = "normal";
-        findFormBtn.style.wordWrap = "break-word";
-        findFormBtn.style.wordBreak = "break-word";
-        findFormBtn.style.overflow = "hidden";
-        findFormBtn.style.textOverflow = "ellipsis";
-        findFormBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
-        findFormBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+        findFormBtn.onmouseenter = () => { findFormBtn.style.background = "#58a1f5"; };
+        findFormBtn.onmouseleave = () => { findFormBtn.style.background = "#4a90e2"; };
 
         var findStudyEventsBtn = document.createElement("button");
         findStudyEventsBtn.textContent = "Find Study Events";
         findStudyEventsBtn.style.background = "#4a90e2";
         findStudyEventsBtn.style.color = "#fff";
         findStudyEventsBtn.style.border = "none";
-        findStudyEventsBtn.style.borderRadius = "6px";
-        findStudyEventsBtn.style.padding = "8px";
+        findStudyEventsBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        findStudyEventsBtn.style.padding = scale(BUTTON_PADDING_PX);
+        findStudyEventsBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         findStudyEventsBtn.style.cursor = "pointer";
-        findStudyEventsBtn.style.whiteSpace = "normal";
-        findStudyEventsBtn.style.wordWrap = "break-word";
-        findStudyEventsBtn.style.wordBreak = "break-word";
-        findStudyEventsBtn.style.overflow = "hidden";
-        findStudyEventsBtn.style.textOverflow = "ellipsis";
-        findStudyEventsBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
-        findStudyEventsBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+        findStudyEventsBtn.onmouseenter = () => { findStudyEventsBtn.style.background = "#58a1f5"; };
+        findStudyEventsBtn.onmouseleave = () => { findStudyEventsBtn.style.background = "#4a90e2"; };
 
         var clearMappingBtn = document.createElement("button");
         clearMappingBtn.textContent = "Clear Mapping";
         clearMappingBtn.style.background = "#38dae6";
         clearMappingBtn.style.color = "#fff";
         clearMappingBtn.style.border = "none";
-        clearMappingBtn.style.borderRadius = "6px";
-        clearMappingBtn.style.padding = "8px";
+        clearMappingBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        clearMappingBtn.style.padding = scale(BUTTON_PADDING_PX);
+        clearMappingBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         clearMappingBtn.style.cursor = "pointer";
         clearMappingBtn.style.fontWeight = "500";
         clearMappingBtn.style.transition = "background 0.2s";
-        clearMappingBtn.style.whiteSpace = "normal";
-        clearMappingBtn.style.wordWrap = "break-word";
-        clearMappingBtn.style.wordBreak = "break-word";
-        clearMappingBtn.style.overflow = "hidden";
-        clearMappingBtn.style.textOverflow = "ellipsis";
-        clearMappingBtn.onmouseenter = function() { this.style.background = "#2bb9c4"; };
-        clearMappingBtn.onmouseleave = function() { this.style.background = "#38dae6"; };
+        clearMappingBtn.onmouseenter = () => { clearMappingBtn.style.background = "#2bb9c4"; };
+        clearMappingBtn.onmouseleave = () => { clearMappingBtn.style.background = "#38dae6"; };
 
         var collectAllBtn = document.createElement("button");
         collectAllBtn.textContent = "Collect All";
         collectAllBtn.style.background = "#f0ad4e";
         collectAllBtn.style.color = "#fff";
         collectAllBtn.style.border = "none";
-        collectAllBtn.style.borderRadius = "6px";
-        collectAllBtn.style.padding = "8px";
+        collectAllBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        collectAllBtn.style.padding = scale(BUTTON_PADDING_PX);
+        collectAllBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         collectAllBtn.style.cursor = "pointer";
         collectAllBtn.style.fontWeight = "500";
         collectAllBtn.style.transition = "background 0.2s";
-        collectAllBtn.style.whiteSpace = "normal";
-        collectAllBtn.style.wordWrap = "break-word";
-        collectAllBtn.style.wordBreak = "break-word";
-        collectAllBtn.style.overflow = "hidden";
-        collectAllBtn.style.textOverflow = "ellipsis";
-        collectAllBtn.onmouseenter = function() { this.style.background = "#ec971f"; };
-        collectAllBtn.onmouseleave = function() { this.style.background = "#f0ad4e"; };
+        collectAllBtn.onmouseenter = () => { collectAllBtn.style.background = "#ec971f"; };
+        collectAllBtn.onmouseleave = () => { collectAllBtn.style.background = "#f0ad4e"; };
 
         btnRow.appendChild(runPlansBtn);
         btnRow.appendChild(runLockSamplePathsBtn);
@@ -16652,25 +16509,64 @@
 
         bodyContainer.appendChild(btnRow);
         var status = document.createElement("div");
-        status.style.marginTop = "10px";
+        status.style.marginTop = scale(STATUS_MARGIN_TOP_PX);
         status.style.background = "#1a1a1a";
         status.style.border = "1px solid #333";
-        status.style.borderRadius = "6px";
-        status.style.padding = "6px";
-        status.style.fontSize = "13px";
+        status.style.borderRadius = scale(STATUS_BORDER_RADIUS_PX);
+        status.style.padding = scale(STATUS_PADDING_PX);
+        status.style.fontSize = scale(STATUS_FONT_SIZE_PX);
         status.style.whiteSpace = "pre-wrap";
         status.textContent = "Ready";
         bodyContainer.appendChild(status);
+
+
+        // UI Scale Control
+        var scaleControl = document.createElement("div");
+        scaleControl.style.marginTop = scale(STATUS_MARGIN_TOP_PX);
+        scaleControl.style.background = "#1a1a1a";
+        scaleControl.style.border = "1px solid #333";
+        scaleControl.style.borderRadius = scale(STATUS_BORDER_RADIUS_PX);
+        scaleControl.style.padding = scale(STATUS_PADDING_PX);
+        scaleControl.style.fontSize = scale(STATUS_FONT_SIZE_PX);
+
+        var scaleLabel = document.createElement("div");
+        scaleLabel.textContent = "UI Scale: " + Math.round(UI_SCALE * 100) + "%";
+        scaleLabel.style.marginBottom = "4px";
+        scaleLabel.style.color = "#fff";
+
+        var scaleSlider = document.createElement("input");
+        scaleSlider.type = "range";
+        scaleSlider.min = "50";
+        scaleSlider.max = "100";
+        scaleSlider.value = String(UI_SCALE * 100);
+        scaleSlider.step = "10";
+        scaleSlider.style.width = "100%";
+        scaleSlider.style.cursor = "pointer";
+
+        scaleSlider.addEventListener("input", function() {
+            var newScale = parseFloat(this.value) / 100;
+            updateUIScale(newScale);
+            scaleLabel.textContent = "UI Scale: " + Math.round(newScale * 100) + "%";
+            status.textContent = "UI Scale updated to " + Math.round(newScale * 100) + "% - Refresh to see changes";
+        });
+
+        scaleSlider.addEventListener("change", function() {
+            log("UI Scale changed to " + Math.round(UI_SCALE * 100) + "%");
+        });
+
+        scaleControl.appendChild(scaleLabel);
+        scaleControl.appendChild(scaleSlider);
+        bodyContainer.appendChild(scaleControl);
         var logBox = document.createElement("div");
         logBox.id = LOG_ID;
-        logBox.style.marginTop = "8px";
-        logBox.style.height = "220px";
+        logBox.style.marginTop = scale(LOG_MARGIN_TOP_PX);
+        logBox.style.height = scale(LOG_HEIGHT_PX);
         logBox.style.overflowY = "auto";
         logBox.style.background = "#141414";
         logBox.style.border = "1px solid #333";
-        logBox.style.borderRadius = "6px";
-        logBox.style.padding = "6px";
-        logBox.style.fontSize = "12px";
+        logBox.style.borderRadius = scale(LOG_BORDER_RADIUS_PX);
+        logBox.style.padding = scale(LOG_PADDING_PX);
+        logBox.style.fontSize = scale(LOG_FONT_SIZE_PX);
         logBox.style.color = "#00000";
         logBox.style.whiteSpace = "pre-wrap";
         logBox.style.wordBreak = "break-word";
