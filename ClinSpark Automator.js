@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.8.2
+// @version     1.8.3
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -159,6 +159,1594 @@
     var STORAGE_SUBJECT_ELIG_AUTO_TAB = "activityPlanState.subjectElig.autoTab";
     var SUBJECT_ELIG_SUBJECTS_LIST_URL = "https://cenexel.clinspark.com/secure/study/subjects/list";
     var SUBJECT_ELIG_POPUP = null;
+
+    // Methods Library Configuration
+    var METHODS_INDEX_URL = "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/index.json";
+    var METHODS_CACHE_KEY = "activityPlanState.methodsLibrary.cache";
+    var METHODS_CACHE_EXPIRY_MS = 1000 * 60 * 60; // 1 hour
+    var METHODS_PRELOAD_BODIES = false;
+    var METHODS_BODY_CACHE = {};
+    var METHODS_LIBRARY_MODAL_REF = null;
+    var STORAGE_METHODS_FAVORITES = "activityPlanState.methodsLibrary.favorites";
+    var STORAGE_METHODS_RECENTS = "activityPlanState.methodsLibrary.recents";
+    var STORAGE_METHODS_PINS = "activityPlanState.methodsLibrary.pins";
+    var STORAGE_METHODS_LAST_SEARCH = "activityPlanState.methodsLibrary.lastSearch";
+    var STORAGE_METHODS_LAST_TAG = "activityPlanState.methodsLibrary.lastTag";
+    var STORAGE_METHODS_LAST_METHOD = "activityPlanState.methodsLibrary.lastMethod";
+    var STORAGE_METHODS_SORT_ORDER = "activityPlanState.methodsLibrary.sortOrder";
+    var MAX_RECENTS = 10;
+    var MAX_PINS = 5;
+
+    //==========================
+    // PARSE STUDY EVENT FEATURE
+    //==========================
+    // This section contains functions for parsing study events from the study library.
+    // It extracts study event names and generates formatted output for coding use.
+    //==========================
+
+    var PARSE_STUDY_EVENT_IGNORE_KEYWORDS = [
+        "subject", "screening", "ae/cm", "ae", "cm", "unscheduled", "early term",
+        "early termination", "medication", "concomitant", "concommitant", "protocol",
+        "adverse", "event"
+    ];
+
+    function isStudyEventPage() {
+        var url = location.href.toLowerCase();
+        var match1 = url.indexOf("cenexel.clinspark.com/secure/crfdesign/studylibrary/list/studyevent") !== -1;
+        var match2 = url.indexOf("cenexeltest.clinspark.com/secure/crfdesign/studylibrary/list/studyevent") !== -1;
+        return match1 || match2;
+    }
+
+    function parseStudyEventShouldIgnore(name) {
+        var lower = name.toLowerCase();
+        for (var i = 0; i < PARSE_STUDY_EVENT_IGNORE_KEYWORDS.length; i++) {
+            if (lower.indexOf(PARSE_STUDY_EVENT_IGNORE_KEYWORDS[i]) !== -1) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function parseStudyEventExtractDayNumber(name) {
+        var normalized = name.replace(/\s+/g, " ").trim();
+        var rangeMatch = normalized.match(/\b(?:day|d)\s*(-?\d+)\s*(?:-|to)\s*(?:day|d)?\s*(-?\d+)/i);
+        if (rangeMatch) {
+            var n1 = parseInt(rangeMatch[1], 10);
+            var n2 = parseInt(rangeMatch[2], 10);
+            if (n1 > n2) { var tmp = n1; n1 = n2; n2 = tmp; }
+            return { type: "range", min: n1, max: n2, mid: Math.round((n1 + n2) / 2) };
+        }
+        var singleMatch = normalized.match(/\b(?:day|d)\s*(-?\d+)\b/i);
+        if (singleMatch) {
+            var num = parseInt(singleMatch[1], 10);
+            return { type: "single", value: num };
+        }
+        return null;
+    }
+
+    function parseStudyEventExtractGroupLabel(name) {
+        var match = name.match(/^\s*(\([^)]+\)|\[[^\]]+\])\s*/);
+        if (match) {
+            return match[1].trim();
+        }
+        return null;
+    }
+
+    function parseStudyEventExtractAffix(name) {
+        var normalized = name.replace(/\s+/g, " ").trim();
+        var dayMatch = normalized.match(/\b(?:day|d)\s*-?\d+(?:\s*(?:-|to)\s*(?:day|d)?\s*-?\d+)?\s*/gi);
+        if (!dayMatch || dayMatch.length === 0) {
+            return { baseName: name, affix: null };
+        }
+        var lastDayMatch = dayMatch[dayMatch.length - 1];
+        var lastIdx = normalized.toLowerCase().lastIndexOf(lastDayMatch.toLowerCase());
+        var afterDay = normalized.substring(lastIdx + lastDayMatch.length).trim();
+        afterDay = afterDay.replace(/^[\)\]]+/, "").trim();
+        if (afterDay.length > 0 && !/^\d/.test(afterDay)) {
+            var baseName = normalized.substring(0, lastIdx + lastDayMatch.length).trim();
+            return { baseName: baseName, affix: afterDay };
+        }
+        return { baseName: name, affix: null };
+    }
+
+    function parseStudyEventGetBaseName(name, affixChecked) {
+        if (!affixChecked) {
+            return name;
+        }
+        var result = parseStudyEventExtractAffix(name);
+        return result.baseName;
+    }
+
+    function parseStudyEventCollectFromTable() {
+        var tbody = document.getElementById("sortableTable");
+        if (!tbody) {
+            log("[ParseStudyEvent] sortableTable not found");
+            return [];
+        }
+        var rows = tbody.querySelectorAll("tr[id^='se_']");
+        var events = [];
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var rowId = row.id;
+            if (rowId === "listTableNoRecordId") continue;
+            var anchor = row.querySelector("td.dragHandle a");
+            if (anchor) {
+                var rawName = anchor.textContent || "";
+                var name = rawName.replace(/\s+/g, " ").trim();
+                if (name.length > 0) {
+                    events.push({ name: name, originalName: rawName.trim() });
+                    log("[ParseStudyEvent] Collected: \"" + name + "\"");
+                }
+            }
+        }
+        return events;
+    }
+
+    function parseStudyEventGenerateColumn1(events) {
+        var lines = [];
+        for (var i = 0; i < events.length; i++) {
+            lines.push("\"" + events[i].name + "\"");
+        }
+        return lines.join(",\n");
+    }
+
+    function parseStudyEventFindScreeningEvent(events) {
+        for (var i = 0; i < events.length; i++) {
+            var lower = events[i].name.toLowerCase();
+            if (lower.indexOf("screen") !== -1 || lower.indexOf("scrn") !== -1) {
+                return events[i].name;
+            }
+        }
+        return null;
+    }
+
+    function parseStudyEventFindSubjectEvent(events) {
+        for (var i = 0; i < events.length; i++) {
+            var lower = events[i].name.toLowerCase();
+            if (lower.indexOf("subject") !== -1) {
+                return events[i].name;
+            }
+        }
+        return null;
+    }
+
+    function parseStudyEventGenerateColumn2(events, affixChecked, groupChecked) {
+        var lines = [];
+        var screeningEvent = parseStudyEventFindScreeningEvent(events);
+        var subjectEvent = parseStudyEventFindSubjectEvent(events);
+        var fallbackForNeg1 = screeningEvent || subjectEvent || null;
+
+        var processedEvents = [];
+        for (var i = 0; i < events.length; i++) {
+            var ev = events[i];
+            var dayInfo = parseStudyEventExtractDayNumber(ev.name);
+            var groupLabel = groupChecked ? parseStudyEventExtractGroupLabel(ev.name) : null;
+            var affixInfo = parseStudyEventExtractAffix(ev.name);
+            var baseName = affixChecked ? affixInfo.baseName : ev.name;
+            var hasAffix = affixChecked && affixInfo.affix !== null && affixInfo.affix.length > 0;
+            processedEvents.push({
+                name: ev.name,
+                baseName: baseName,
+                dayInfo: dayInfo,
+                dayValue: dayInfo ? (dayInfo.type === "single" ? dayInfo.value : dayInfo.max) : null,
+                groupLabel: groupLabel,
+                hasAffix: hasAffix,
+                index: i
+            });
+        }
+
+        for (var i = 0; i < processedEvents.length; i++) {
+            var current = processedEvents[i];
+
+            if (parseStudyEventShouldIgnore(current.name)) {
+                log("[ParseStudyEvent] Column2 skip (ignore keyword): \"" + current.name + "\"");
+                continue;
+            }
+
+            if (current.dayInfo === null) {
+                log("[ParseStudyEvent] Column2 skip (no day number): \"" + current.name + "\"");
+                continue;
+            }
+
+            var mappedTo = null;
+            var currentDay = current.dayValue;
+
+            if (currentDay === -1) {
+                mappedTo = fallbackForNeg1;
+                log("[ParseStudyEvent] Column2 \"" + current.name + "\" mapped to Screening/Subject: \"" + mappedTo + "\"");
+            } else {
+                if (affixChecked && current.hasAffix) {
+                    for (var j = i - 1; j >= 0; j--) {
+                        var prev = processedEvents[j];
+                        if (parseStudyEventShouldIgnore(prev.name)) continue;
+                        if (groupChecked && prev.groupLabel !== current.groupLabel) continue;
+                        if (!prev.hasAffix && prev.dayValue !== null) {
+                            mappedTo = prev.name;
+                            log("[ParseStudyEvent] Column2 \"" + current.name + "\" (affixed) mapped to non-affixed: \"" + mappedTo + "\"");
+                            break;
+                        }
+                    }
+                }
+
+                if (!mappedTo) {
+                    var targetDay = currentDay - 1;
+                    var closestPrev = null;
+                    var closestDiff = Infinity;
+
+                    for (var j = i - 1; j >= 0; j--) {
+                        var prev = processedEvents[j];
+                        if (parseStudyEventShouldIgnore(prev.name)) continue;
+                        if (groupChecked && prev.groupLabel !== current.groupLabel) continue;
+                        if (prev.dayValue === null) continue;
+                        if (affixChecked && prev.hasAffix) continue;
+
+                        if (prev.dayValue === targetDay) {
+                            mappedTo = prev.name;
+                            log("[ParseStudyEvent] Column2 \"" + current.name + "\" mapped to N-1: \"" + mappedTo + "\"");
+                            break;
+                        }
+
+                        if (prev.dayValue < currentDay) {
+                            var diff = currentDay - prev.dayValue;
+                            if (diff < closestDiff) {
+                                closestDiff = diff;
+                                closestPrev = prev;
+                            }
+                        }
+                    }
+
+                    if (!mappedTo && closestPrev) {
+                        mappedTo = closestPrev.name;
+                        log("[ParseStudyEvent] Column2 \"" + current.name + "\" mapped to closest previous: \"" + mappedTo + "\"");
+                    }
+
+                    if (!mappedTo && groupChecked && current.groupLabel) {
+                        for (var j = i - 1; j >= 0; j--) {
+                            var prev = processedEvents[j];
+                            if (parseStudyEventShouldIgnore(prev.name)) continue;
+                            if (prev.dayValue === null) continue;
+                            if (affixChecked && prev.hasAffix) continue;
+                            if (prev.dayValue < currentDay) {
+                                mappedTo = prev.name;
+                                log("[ParseStudyEvent] Column2 \"" + current.name + "\" (group fallback) mapped to: \"" + mappedTo + "\"");
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (mappedTo) {
+                lines.push("\"" + current.name + "\" : \"" + mappedTo + "\"");
+            }
+        }
+
+        return lines.join(",\n");
+    }
+
+    function parseStudyEventGenerateColumn3(events) {
+        var lines = [];
+        for (var i = 0; i < events.length; i++) {
+            var ev = events[i];
+            var dayInfo = parseStudyEventExtractDayNumber(ev.name);
+
+            if (!dayInfo) {
+                log("[ParseStudyEvent] Column3 skip (no day): \"" + ev.name + "\"");
+                continue;
+            }
+
+            var outputValue;
+            if (dayInfo.type === "range") {
+                outputValue = dayInfo.mid;
+                log("[ParseStudyEvent] Column3 \"" + ev.name + "\" range mid: " + outputValue);
+            } else {
+                outputValue = dayInfo.value - 1;
+                log("[ParseStudyEvent] Column3 \"" + ev.name + "\" day-1: " + outputValue);
+            }
+
+            lines.push("\"" + ev.name + "\" : " + outputValue);
+        }
+        return lines.join(",\n");
+    }
+
+    function parseStudyEventCopyToClipboard(text) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function() {
+                log("[ParseStudyEvent] Copied to clipboard");
+            }).catch(function(err) {
+                log("[ParseStudyEvent] Clipboard error: " + err);
+            });
+        } else {
+            var ta = document.createElement("textarea");
+            ta.value = text;
+            ta.style.position = "fixed";
+            ta.style.left = "-9999px";
+            document.body.appendChild(ta);
+            ta.select();
+            try {
+                document.execCommand("copy");
+                log("[ParseStudyEvent] Copied to clipboard (fallback)");
+            } catch (err) {
+                log("[ParseStudyEvent] Copy failed: " + err);
+            }
+            document.body.removeChild(ta);
+        }
+    }
+
+    function parseStudyEventCreateResultsUI(events, affixChecked, groupChecked) {
+        var container = document.createElement("div");
+        container.style.display = "flex";
+        container.style.flexDirection = "column";
+        container.style.gap = "16px";
+        container.style.height = "100%";
+
+        var countDiv = document.createElement("div");
+        countDiv.style.textAlign = "center";
+        countDiv.style.fontSize = "16px";
+        countDiv.style.fontWeight = "600";
+        countDiv.style.color = "#9df";
+        countDiv.style.padding = "8px";
+        countDiv.style.background = "#1a1a1a";
+        countDiv.style.borderRadius = "6px";
+        countDiv.textContent = "Collected " + events.length + " events";
+        container.appendChild(countDiv);
+
+        var optionsDiv = document.createElement("div");
+        optionsDiv.style.textAlign = "center";
+        optionsDiv.style.fontSize = "12px";
+        optionsDiv.style.color = "#888";
+        optionsDiv.textContent = "Options: Affix=" + (affixChecked ? "Yes" : "No") + ", Group=" + (groupChecked ? "Yes" : "No");
+        container.appendChild(optionsDiv);
+
+        var columnsContainer = document.createElement("div");
+        columnsContainer.style.display = "grid";
+        columnsContainer.style.gridTemplateColumns = "1fr 1fr 1fr";
+        columnsContainer.style.gap = "12px";
+        columnsContainer.style.flex = "1";
+        columnsContainer.style.minHeight = "0";
+        columnsContainer.style.overflow = "hidden";
+
+        var col1Data = parseStudyEventGenerateColumn1(events);
+        var col2Data = parseStudyEventGenerateColumn2(events, affixChecked, groupChecked);
+        var col3Data = parseStudyEventGenerateColumn3(events);
+
+        function createColumn(title, data) {
+            var col = document.createElement("div");
+            col.style.display = "flex";
+            col.style.flexDirection = "column";
+            col.style.gap = "8px";
+            col.style.minHeight = "0";
+            col.style.overflow = "hidden";
+
+            var header = document.createElement("div");
+            header.style.display = "flex";
+            header.style.justifyContent = "space-between";
+            header.style.alignItems = "center";
+            header.style.padding = "6px 8px";
+            header.style.background = "#2a2a2a";
+            header.style.borderRadius = "4px";
+
+            var titleEl = document.createElement("span");
+            titleEl.style.fontWeight = "600";
+            titleEl.style.fontSize = "13px";
+            titleEl.textContent = title;
+
+            var copyBtn = document.createElement("button");
+            copyBtn.textContent = "Copy";
+            copyBtn.style.background = "#28a745";
+            copyBtn.style.color = "#fff";
+            copyBtn.style.border = "none";
+            copyBtn.style.borderRadius = "4px";
+            copyBtn.style.padding = "4px 10px";
+            copyBtn.style.cursor = "pointer";
+            copyBtn.style.fontSize = "12px";
+            copyBtn.style.fontWeight = "500";
+            copyBtn.addEventListener("mouseenter", function() { this.style.background = "#218838"; });
+            copyBtn.addEventListener("mouseleave", function() { this.style.background = "#28a745"; });
+            copyBtn.addEventListener("click", function() {
+                parseStudyEventCopyToClipboard(data);
+                var origText = copyBtn.textContent;
+                copyBtn.textContent = "Copied!";
+                copyBtn.style.background = "#17a2b8";
+                setTimeout(function() {
+                    copyBtn.textContent = origText;
+                    copyBtn.style.background = "#28a745";
+                }, 1500);
+            });
+
+            header.appendChild(titleEl);
+            header.appendChild(copyBtn);
+            col.appendChild(header);
+
+            var content = document.createElement("div");
+            content.style.flex = "1";
+            content.style.overflow = "auto";
+            content.style.background = "#1a1a1a";
+            content.style.border = "1px solid #333";
+            content.style.borderRadius = "4px";
+            content.style.padding = "8px";
+            content.style.fontSize = "12px";
+            content.style.fontFamily = "monospace";
+            content.style.whiteSpace = "pre-wrap";
+            content.style.wordBreak = "break-word";
+            content.style.color = "#e0e0e0";
+            content.textContent = data;
+
+            col.appendChild(content);
+            return col;
+        }
+
+        columnsContainer.appendChild(createColumn("Study Event List", col1Data));
+        columnsContainer.appendChild(createColumn("Previous Event Mapping", col2Data));
+        columnsContainer.appendChild(createColumn("Day-1 Mapping", col3Data));
+
+        container.appendChild(columnsContainer);
+
+        return container;
+    }
+
+    function APS_ParseStudyEvent() {
+        log("[ParseStudyEvent] Starting...");
+        log("[ParseStudyEvent] URL check: " + location.href);
+
+        if (!isStudyEventPage()) {
+            log("[ParseStudyEvent] Not on study event page");
+            showWrongPagePopup("Parse Study Event", "cenexel.clinspark.com/.../studyevent or cenexeltest.clinspark.com/.../studyevent", location.pathname);
+            return;
+        }
+
+        log("[ParseStudyEvent] On valid study event page, showing options");
+
+        var optionsContainer = document.createElement("div");
+        optionsContainer.style.display = "flex";
+        optionsContainer.style.flexDirection = "column";
+        optionsContainer.style.gap = "20px";
+        optionsContainer.style.padding = "12px";
+
+        var checkboxesDiv = document.createElement("div");
+        checkboxesDiv.style.display = "flex";
+        checkboxesDiv.style.flexDirection = "column";
+        checkboxesDiv.style.gap = "16px";
+
+        function createCheckboxRow(labelText, description) {
+            var row = document.createElement("label");
+            row.style.display = "flex";
+            row.style.alignItems = "flex-start";
+            row.style.gap = "12px";
+            row.style.cursor = "pointer";
+            row.style.padding = "12px";
+            row.style.background = "#1a1a1a";
+            row.style.borderRadius = "8px";
+            row.style.border = "1px solid #333";
+            row.style.transition = "border-color 0.2s";
+            row.addEventListener("mouseenter", function() { row.style.borderColor = "#555"; });
+            row.addEventListener("mouseleave", function() { row.style.borderColor = "#333"; });
+
+            var checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.style.width = "18px";
+            checkbox.style.height = "18px";
+            checkbox.style.marginTop = "2px";
+            checkbox.style.cursor = "pointer";
+            checkbox.style.accentColor = "#17a2b8";
+
+            var textDiv = document.createElement("div");
+            textDiv.style.display = "flex";
+            textDiv.style.flexDirection = "column";
+            textDiv.style.gap = "4px";
+
+            var labelEl = document.createElement("span");
+            labelEl.style.fontWeight = "600";
+            labelEl.style.fontSize = "14px";
+            labelEl.textContent = labelText;
+
+            var descEl = document.createElement("span");
+            descEl.style.fontSize = "12px";
+            descEl.style.color = "#888";
+            descEl.textContent = description;
+
+            textDiv.appendChild(labelEl);
+            textDiv.appendChild(descEl);
+            row.appendChild(checkbox);
+            row.appendChild(textDiv);
+
+            return { row: row, checkbox: checkbox };
+        }
+
+        var affixCheckbox = createCheckboxRow("Affix", "Map affixed events (Predose, 1.5Hr, etc.) to previous non-affixed event");
+        var groupCheckbox = createCheckboxRow("Group", "Map events within the same group label (e.g., (Sched B)) separately");
+
+        checkboxesDiv.appendChild(affixCheckbox.row);
+        checkboxesDiv.appendChild(groupCheckbox.row);
+        optionsContainer.appendChild(checkboxesDiv);
+
+        var confirmBtn = document.createElement("button");
+        confirmBtn.textContent = "Confirm";
+        confirmBtn.style.background = "#17a2b8";
+        confirmBtn.style.color = "#fff";
+        confirmBtn.style.border = "none";
+        confirmBtn.style.borderRadius = "8px";
+        confirmBtn.style.padding = "14px 24px";
+        confirmBtn.style.cursor = "pointer";
+        confirmBtn.style.fontSize = "16px";
+        confirmBtn.style.fontWeight = "600";
+        confirmBtn.style.transition = "background 0.2s";
+        confirmBtn.addEventListener("mouseenter", function() { confirmBtn.style.background = "#138496"; });
+        confirmBtn.addEventListener("mouseleave", function() { confirmBtn.style.background = "#17a2b8"; });
+
+        optionsContainer.appendChild(confirmBtn);
+
+        var popup = createPopup({
+            title: "Parse Study Event - Options",
+            content: optionsContainer,
+            width: "480px",
+            height: "auto"
+        });
+
+        confirmBtn.addEventListener("click", async function() {
+            var affixChecked = affixCheckbox.checkbox.checked;
+            var groupChecked = groupCheckbox.checkbox.checked;
+
+            log("[ParseStudyEvent] Options chosen: Affix=" + affixChecked + ", Group=" + groupChecked);
+
+            var loadingContainer = document.createElement("div");
+            loadingContainer.style.display = "flex";
+            loadingContainer.style.flexDirection = "column";
+            loadingContainer.style.alignItems = "center";
+            loadingContainer.style.gap = "20px";
+            loadingContainer.style.padding = "40px 20px";
+
+            var spinner = document.createElement("div");
+            spinner.style.width = "48px";
+            spinner.style.height = "48px";
+            spinner.style.border = "4px solid #333";
+            spinner.style.borderTop = "4px solid #17a2b8";
+            spinner.style.borderRadius = "50%";
+            spinner.style.animation = "parseStudyEventSpin 1s linear infinite";
+
+            var style = document.createElement("style");
+            style.textContent = "@keyframes parseStudyEventSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }";
+            document.head.appendChild(style);
+
+            var statusText = document.createElement("div");
+            statusText.style.fontSize = "16px";
+            statusText.style.fontWeight = "500";
+            statusText.style.color = "#9df";
+            statusText.textContent = "Scanning table...";
+
+            var progressText = document.createElement("div");
+            progressText.style.fontSize = "13px";
+            progressText.style.color = "#888";
+            progressText.textContent = "Collecting study events from sortableTable";
+
+            loadingContainer.appendChild(spinner);
+            loadingContainer.appendChild(statusText);
+            loadingContainer.appendChild(progressText);
+
+            popup.setContent(loadingContainer);
+
+            await sleep(300);
+
+            log("[ParseStudyEvent] Searching for sortableTable");
+            var events = parseStudyEventCollectFromTable();
+
+            if (events.length === 0) {
+                log("[ParseStudyEvent] No events found");
+                statusText.textContent = "No study events found";
+                statusText.style.color = "#f66";
+                spinner.style.display = "none";
+                progressText.textContent = "Make sure the table has data loaded";
+                return;
+            }
+
+            log("[ParseStudyEvent] Found " + events.length + " events, generating output");
+            statusText.textContent = "Processing " + events.length + " events...";
+
+            await sleep(200);
+
+            var resultsUI = parseStudyEventCreateResultsUI(events, affixChecked, groupChecked);
+            popup.setContent(resultsUI);
+
+            popup.element.style.width = "1000px";
+            popup.element.style.height = "600px";
+            popup.element.style.maxWidth = "95%";
+            popup.element.style.maxHeight = "85%";
+
+            var rect = popup.element.getBoundingClientRect();
+            popup.element.style.left = (window.innerWidth / 2) + "px";
+            popup.element.style.top = (window.innerHeight / 2) + "px";
+            popup.element.style.transform = "translate(-50%, -50%)";
+
+            log("[ParseStudyEvent] Results displayed, collected " + events.length + " events");
+        });
+    }
+
+
+    //==========================
+    // METHODS LIBRARY FEATURE
+    //==========================
+
+    function getMethodsCache() {
+        try {
+            var raw = localStorage.getItem(METHODS_CACHE_KEY);
+            if (!raw) return null;
+            var cache = JSON.parse(raw);
+            if (!cache || !cache.data || !cache.timestamp) return null;
+            var age = Date.now() - cache.timestamp;
+            if (age > METHODS_CACHE_EXPIRY_MS) {
+                localStorage.removeItem(METHODS_CACHE_KEY);
+                return null;
+            }
+            return cache.data;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function setMethodsCache(data) {
+        try {
+            var cache = { data: data, timestamp: Date.now() };
+            localStorage.setItem(METHODS_CACHE_KEY, JSON.stringify(cache));
+        } catch (e) {
+            log("Methods Library: cache write error - " + String(e));
+        }
+    }
+
+    async function fetchMethodsIndex(forceRefresh) {
+        if (!forceRefresh) {
+            var cached = getMethodsCache();
+            if (cached) {
+                log("Methods Library: using cached index (" + cached.length + " methods)");
+                return { success: true, data: cached };
+            }
+        }
+        log("Methods Library: fetching index from " + METHODS_INDEX_URL);
+        try {
+            var response = await fetch(METHODS_INDEX_URL, { cache: forceRefresh ? "no-store" : "default" });
+            if (!response.ok) {
+                return { success: false, error: "HTTP " + response.status + ": " + response.statusText };
+            }
+            var data = await response.json();
+            if (!Array.isArray(data)) {
+                return { success: false, error: "Invalid index format (expected array)" };
+            }
+            setMethodsCache(data);
+            log("Methods Library: fetched " + data.length + " methods");
+            return { success: true, data: data };
+        } catch (e) {
+            log("Methods Library: fetch error - " + String(e));
+            return { success: false, error: String(e) };
+        }
+    }
+
+    async function fetchMethodBody(url) {
+        if (METHODS_BODY_CACHE[url]) {
+            return { success: true, body: METHODS_BODY_CACHE[url] };
+        }
+
+        // Convert relative or GitHub blob URLs to raw.githubusercontent.com format
+        var fetchUrl = url;
+        if (url.indexOf("github.com") !== -1 && url.indexOf("raw.githubusercontent.com") === -1) {
+            // Convert github.com/user/repo/blob/branch/path to raw.githubusercontent.com/user/repo/branch/path
+            fetchUrl = url.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/");
+        } else if (url.indexOf("http") !== 0) {
+            // Handle relative paths - prepend the base GitHub raw URL
+            var baseUrl = "https://raw.githubusercontent.com/vctruong100/Automator/main/";
+            fetchUrl = baseUrl + url.replace(/^\/+/, "");
+        }
+
+        try {
+            var response = await fetch(fetchUrl);
+            if (!response.ok) {
+                return { success: false, error: "HTTP " + response.status + " for " + fetchUrl };
+            }
+            var text = await response.text();
+            METHODS_BODY_CACHE[url] = text;
+            return { success: true, body: text };
+        } catch (e) {
+            return { success: false, error: String(e) };
+        }
+    }
+
+    function buildTagList(methods) {
+        var tagSet = {};
+        for (var i = 0; i < methods.length; i++) {
+            var tags = methods[i].tags || [];
+            for (var j = 0; j < tags.length; j++) {
+                tagSet[tags[j]] = true;
+            }
+        }
+        return Object.keys(tagSet).sort();
+    }
+
+    function scoreMethod(method, query, searchBody, bodyText) {
+        if (!query || query.trim().length === 0) return 100;
+        var q = query.toLowerCase().trim();
+        var score = 0;
+        var title = (method.title || "").toLowerCase();
+        var id = (method.id || "").toLowerCase();
+        var tags = (method.tags || []).map(function(t) { return t.toLowerCase(); });
+
+        if (title.indexOf(q) !== -1) {
+            score += 50;
+            if (title.indexOf(q) === 0) score += 20;
+        }
+        if (id.indexOf(q) !== -1) {
+            score += 30;
+            if (id === q) score += 20;
+        }
+        for (var i = 0; i < tags.length; i++) {
+            if (tags[i].indexOf(q) !== -1) {
+                score += 20;
+                break;
+            }
+        }
+        if (searchBody && bodyText) {
+            var body = bodyText.toLowerCase();
+            if (body.indexOf(q) !== -1) {
+                score += 10;
+            }
+        }
+        return score;
+    }
+
+        function filterAndSortMethods(methods, query, tagFilter, searchBody, bodiesMap, sortOrder, favorites, pins) {
+        var results = [];
+        for (var i = 0; i < methods.length; i++) {
+            var m = methods[i];
+            if (tagFilter && tagFilter !== "all") {
+                var tags = m.tags || [];
+                var hasTag = false;
+                for (var j = 0; j < tags.length; j++) {
+                    if (tags[j] === tagFilter) {
+                        hasTag = true;
+                        break;
+                    }
+                }
+                if (!hasTag) continue;
+            }
+            var bodyText = bodiesMap[m.url] || "";
+            var score = scoreMethod(m, query, searchBody, bodyText);
+            if (query && query.trim().length > 0 && score === 0) continue;
+            results.push({ method: m, score: score });
+        }
+        
+        results.sort(function(a, b) {
+            // Pinned items always come first
+            var isPinA = pins.indexOf(a.method.id) !== -1;
+            var isPinB = pins.indexOf(b.method.id) !== -1;
+            if (isPinA && !isPinB) return -1;
+            if (!isPinA && isPinB) return 1;
+            
+            // Then sort by selected order
+            if (sortOrder === "title") {
+                var titleA = (a.method.title || "").toLowerCase();
+                var titleB = (b.method.title || "").toLowerCase();
+                if (titleA < titleB) return -1;
+                if (titleA > titleB) return 1;
+                return 0;
+            } else if (sortOrder === "updated") {
+                var dateA = a.method.updated || "";
+                var dateB = b.method.updated || "";
+                if (dateB < dateA) return -1;
+                if (dateB > dateA) return 1;
+                return 0;
+            } else {
+                // Relevance (default)
+                if (b.score !== a.score) return b.score - a.score;
+                var titleA = (a.method.title || "").toLowerCase();
+                var titleB = (b.method.title || "").toLowerCase();
+                if (titleA < titleB) return -1;
+                if (titleA > titleB) return 1;
+                return 0;
+            }
+        });
+        return results.map(function(r) { return r.method; });
+    }
+
+    function openMethodsLibraryModal() {
+        if (METHODS_LIBRARY_MODAL_REF && document.body.contains(METHODS_LIBRARY_MODAL_REF)) {
+            METHODS_LIBRARY_MODAL_REF.focus();
+            return;
+        }
+
+        var allMethods = [];
+        var allTags = [];
+        var selectedMethod = null;
+        var currentBodyText = "";
+
+        var overlay = document.createElement("div");
+        overlay.style.position = "fixed";
+        overlay.style.top = "0";
+        overlay.style.left = "0";
+        overlay.style.width = "100%";
+        overlay.style.height = "100%";
+        overlay.style.background = "rgba(0,0,0,0.6)";
+        overlay.style.zIndex = "999997";
+
+        var modal = document.createElement("div");
+        modal.setAttribute("role", "dialog");
+        modal.setAttribute("aria-modal", "true");
+        modal.setAttribute("aria-label", "ClinSpark Methods Library");
+        modal.tabIndex = -1;
+        modal.style.position = "fixed";
+        modal.style.top = "50%";
+        modal.style.left = "50%";
+        modal.style.transform = "translate(-50%, -50%)";
+        modal.style.width = "900px";
+        modal.style.maxWidth = "95vw";
+        modal.style.height = "600px";
+        modal.style.maxHeight = "90vh";
+        modal.style.background = "#1a1a1a";
+        modal.style.color = "#fff";
+        modal.style.border = "1px solid #444";
+        modal.style.borderRadius = "10px";
+        modal.style.boxShadow = "0 8px 32px rgba(0,0,0,0.5)";
+        modal.style.display = "flex";
+        modal.style.flexDirection = "column";
+        modal.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
+        modal.style.fontSize = "14px";
+        modal.style.zIndex = "999998";
+        modal.style.outline = "none";
+
+        METHODS_LIBRARY_MODAL_REF = modal;
+
+        var header = document.createElement("div");
+        header.style.display = "flex";
+        header.style.alignItems = "center";
+        header.style.justifyContent = "space-between";
+        header.style.padding = "12px 16px";
+        header.style.borderBottom = "1px solid #333";
+        header.style.cursor = "move";
+        header.style.userSelect = "none";
+
+        var titleEl = document.createElement("div");
+        titleEl.textContent = "ClinSpark Methods Library";
+        titleEl.style.fontWeight = "600";
+        titleEl.style.fontSize = "16px";
+        header.appendChild(titleEl);
+
+        var closeBtn = document.createElement("button");
+        closeBtn.textContent = "✕";
+        closeBtn.setAttribute("aria-label", "Close");
+        closeBtn.style.background = "transparent";
+        closeBtn.style.color = "#fff";
+        closeBtn.style.border = "none";
+        closeBtn.style.fontSize = "18px";
+        closeBtn.style.cursor = "pointer";
+        closeBtn.style.padding = "4px 8px";
+        closeBtn.style.borderRadius = "4px";
+        closeBtn.onmouseenter = function() { closeBtn.style.background = "#333"; };
+        closeBtn.onmouseleave = function() { closeBtn.style.background = "transparent"; };
+        header.appendChild(closeBtn);
+        modal.appendChild(header);
+
+        var toolbar = document.createElement("div");
+        toolbar.style.display = "flex";
+        toolbar.style.alignItems = "center";
+        toolbar.style.gap = "10px";
+        toolbar.style.padding = "10px 16px";
+        toolbar.style.borderBottom = "1px solid #333";
+        toolbar.style.flexWrap = "wrap";
+
+        var searchInput = document.createElement("input");
+        searchInput.type = "text";
+        searchInput.placeholder = "Search methods...";
+        searchInput.setAttribute("aria-label", "Search methods");
+        searchInput.style.flex = "1";
+        searchInput.style.minWidth = "150px";
+        searchInput.style.padding = "8px 12px";
+        searchInput.style.background = "#2a2a2a";
+        searchInput.style.border = "1px solid #444";
+        searchInput.style.borderRadius = "6px";
+        searchInput.style.color = "#fff";
+        searchInput.style.fontSize = "14px";
+        searchInput.style.outline = "none";
+        searchInput.onfocus = function() { searchInput.style.borderColor = "#5b43c7"; };
+        searchInput.onblur = function() { searchInput.style.borderColor = "#444"; };
+        toolbar.appendChild(searchInput);
+
+        var tagSelect = document.createElement("select");
+        tagSelect.setAttribute("aria-label", "Filter by tag");
+        tagSelect.style.padding = "8px 12px";
+        tagSelect.style.background = "#2a2a2a";
+        tagSelect.style.border = "1px solid #444";
+        tagSelect.style.borderRadius = "6px";
+        tagSelect.style.color = "#fff";
+        tagSelect.style.fontSize = "14px";
+        tagSelect.style.cursor = "pointer";
+        toolbar.appendChild(tagSelect);
+
+        var sortSelect = document.createElement("select");
+        sortSelect.setAttribute("aria-label", "Sort order");
+        sortSelect.style.padding = "8px 12px";
+        sortSelect.style.background = "#2a2a2a";
+        sortSelect.style.border = "1px solid #444";
+        sortSelect.style.borderRadius = "6px";
+        sortSelect.style.color = "#fff";
+        sortSelect.style.fontSize = "14px";
+        sortSelect.style.cursor = "pointer";
+        var sortOpts = [
+            { value: "relevance", text: "Sort: Relevance" },
+            { value: "title", text: "Sort: Title" },
+            { value: "updated", text: "Sort: Updated" }
+        ];
+        for (var i = 0; i < sortOpts.length; i++) {
+            var opt = document.createElement("option");
+            opt.value = sortOpts[i].value;
+            opt.textContent = sortOpts[i].text;
+            sortSelect.appendChild(opt);
+        }
+        toolbar.appendChild(sortSelect);
+
+        var searchBodyLabel = document.createElement("label");
+        searchBodyLabel.style.display = "flex";
+        searchBodyLabel.style.alignItems = "center";
+        searchBodyLabel.style.gap = "6px";
+        searchBodyLabel.style.cursor = "pointer";
+        searchBodyLabel.style.fontSize = "13px";
+        searchBodyLabel.style.color = "#aaa";
+        var searchBodyCheckbox = document.createElement("input");
+        searchBodyCheckbox.type = "checkbox";
+        searchBodyCheckbox.setAttribute("aria-label", "Search in body content");
+        searchBodyLabel.appendChild(searchBodyCheckbox);
+        searchBodyLabel.appendChild(document.createTextNode("Search body"));
+        toolbar.appendChild(searchBodyLabel);
+
+        var favoritesLabel = document.createElement("label");
+        favoritesLabel.style.display = "flex";
+        favoritesLabel.style.alignItems = "center";
+        favoritesLabel.style.gap = "6px";
+        favoritesLabel.style.cursor = "pointer";
+        favoritesLabel.style.fontSize = "13px";
+        favoritesLabel.style.color = "#aaa";
+        var favoritesCheckbox = document.createElement("input");
+        favoritesCheckbox.type = "checkbox";
+        favoritesCheckbox.setAttribute("aria-label", "Show only favorites");
+        favoritesLabel.appendChild(favoritesCheckbox);
+        favoritesLabel.appendChild(document.createTextNode("★ Favorites"));
+        toolbar.appendChild(favoritesLabel);
+
+        var toolbarBtns = document.createElement("div");
+        toolbarBtns.style.display = "flex";
+        toolbarBtns.style.gap = "8px";
+
+        function createToolbarBtn(text, ariaLabel) {
+            var btn = document.createElement("button");
+            btn.textContent = text;
+            btn.setAttribute("aria-label", ariaLabel);
+            btn.style.padding = "8px 14px";
+            btn.style.background = "#333";
+            btn.style.color = "#fff";
+            btn.style.border = "1px solid #444";
+            btn.style.borderRadius = "6px";
+            btn.style.cursor = "pointer";
+            btn.style.fontSize = "13px";
+            btn.style.fontWeight = "500";
+            btn.style.transition = "background 0.15s";
+            btn.onmouseenter = function() { btn.style.background = "#444"; };
+            btn.onmouseleave = function() { btn.style.background = "#333"; };
+            return btn;
+        }
+
+        var copyBtn = createToolbarBtn("Copy", "Copy method code to clipboard");
+        var refreshBtn = createToolbarBtn("Refresh", "Refresh methods index");
+        toolbarBtns.appendChild(copyBtn);
+        toolbarBtns.appendChild(refreshBtn);
+        toolbar.appendChild(toolbarBtns);
+        modal.appendChild(toolbar);
+
+        var mainContent = document.createElement("div");
+        mainContent.style.display = "flex";
+        mainContent.style.flex = "1";
+        mainContent.style.overflow = "hidden";
+
+        var listPane = document.createElement("div");
+        listPane.style.width = "280px";
+        listPane.style.minWidth = "200px";
+        listPane.style.borderRight = "1px solid #333";
+        listPane.style.overflowY = "auto";
+        listPane.style.background = "#1a1a1a";
+        listPane.setAttribute("role", "listbox");
+        listPane.setAttribute("aria-label", "Methods list");
+
+        var previewPane = document.createElement("div");
+        previewPane.style.flex = "1";
+        previewPane.style.display = "flex";
+        previewPane.style.flexDirection = "column";
+        previewPane.style.overflow = "hidden";
+        previewPane.style.background = "#111";
+
+        var previewHeader = document.createElement("div");
+        previewHeader.style.padding = "12px 16px";
+        previewHeader.style.borderBottom = "1px solid #333";
+        previewHeader.style.background = "#1a1a1a";
+
+        var previewTitle = document.createElement("div");
+        previewTitle.style.fontWeight = "600";
+        previewTitle.style.fontSize = "15px";
+        previewTitle.style.marginBottom = "4px";
+        previewTitle.textContent = "Select a method";
+        previewHeader.appendChild(previewTitle);
+
+        var previewMeta = document.createElement("div");
+        previewMeta.style.fontSize = "12px";
+        previewMeta.style.color = "#888";
+        previewHeader.appendChild(previewMeta);
+
+        var previewBody = document.createElement("pre");
+        previewBody.style.flex = "1";
+        previewBody.style.margin = "0";
+        previewBody.style.padding = "16px";
+        previewBody.style.overflowY = "auto";
+        previewBody.style.background = "#0d0d0d";
+        previewBody.style.fontSize = "13px";
+        previewBody.style.fontFamily = "Consolas, Monaco, 'Courier New', monospace";
+        previewBody.style.whiteSpace = "pre-wrap";
+        previewBody.style.wordBreak = "break-word";
+        previewBody.style.color = "#e0e0e0";
+        previewBody.style.lineHeight = "1.5";
+
+        previewPane.appendChild(previewHeader);
+        previewPane.appendChild(previewBody);
+        mainContent.appendChild(listPane);
+        mainContent.appendChild(previewPane);
+        modal.appendChild(mainContent);
+
+        var statusBar = document.createElement("div");
+        statusBar.style.padding = "8px 16px";
+        statusBar.style.borderTop = "1px solid #333";
+        statusBar.style.fontSize = "12px";
+        statusBar.style.color = "#888";
+        statusBar.style.background = "#1a1a1a";
+        statusBar.textContent = "Loading...";
+        modal.appendChild(statusBar);
+
+        function updateStatus(msg, isError) {
+            statusBar.textContent = msg;
+            statusBar.style.color = isError ? "#e74c3c" : "#888";
+        }
+
+        function populateTagSelect() {
+            tagSelect.innerHTML = "";
+            var allOpt = document.createElement("option");
+            allOpt.value = "all";
+            allOpt.textContent = "All tags";
+            tagSelect.appendChild(allOpt);
+            for (var i = 0; i < allTags.length; i++) {
+                var opt = document.createElement("option");
+                opt.value = allTags[i];
+                opt.textContent = allTags[i];
+                tagSelect.appendChild(opt);
+            }
+        }
+
+                function renderList(methods) {
+            listPane.innerHTML = "";
+            if (methods.length === 0) {
+                var empty = document.createElement("div");
+                empty.style.padding = "20px";
+                empty.style.color = "#666";
+                empty.style.textAlign = "center";
+                empty.textContent = "No methods found";
+                listPane.appendChild(empty);
+                return;
+            }
+            
+            var favorites = getFavorites();
+            var recents = getRecents();
+            var pins = getPins();
+            
+            for (var i = 0; i < methods.length; i++) {
+                (function(m, idx) {
+                    var item = document.createElement("div");
+                    item.setAttribute("role", "option");
+                    item.setAttribute("aria-selected", "false");
+                    item.setAttribute("data-method-id", m.id);
+                    item.tabIndex = 0;
+                    item.style.padding = "10px 14px";
+                    item.style.borderBottom = "1px solid #2a2a2a";
+                    item.style.cursor = "pointer";
+                    item.style.transition = "background 0.1s";
+                    item.style.position = "relative";
+
+                    var itemId = document.createElement("div");
+                    itemId.style.fontSize = "11px";
+                    itemId.style.color = "#5b43c7";
+                    itemId.style.marginBottom = "2px";
+                    itemId.textContent = m.id || "";
+                    item.appendChild(itemId);
+
+                    var itemTitle = document.createElement("div");
+                    itemTitle.style.fontWeight = "500";
+                    itemTitle.style.fontSize = "13px";
+                    itemTitle.textContent = m.title || "(Untitled)";
+                    item.appendChild(itemTitle);
+
+                    if (m.tags && m.tags.length > 0) {
+                        var itemTags = document.createElement("div");
+                        itemTags.style.fontSize = "11px";
+                        itemTags.style.color = "#666";
+                        itemTags.style.marginTop = "4px";
+                        itemTags.textContent = m.tags.join(", ");
+                        item.appendChild(itemTags);
+                    }
+                    
+                    // Badges container
+                    var badges = document.createElement("div");
+                    badges.style.display = "flex";
+                    badges.style.gap = "4px";
+                    badges.style.marginTop = "4px";
+                    badges.style.fontSize = "10px";
+                    
+                    var isFav = favorites.indexOf(m.id) !== -1;
+                    var isRecent = recents.indexOf(m.id) !== -1;
+                    var isPinned = pins.indexOf(m.id) !== -1;
+                    
+                    if (isPinned) {
+                        var pinBadge = document.createElement("span");
+                        pinBadge.textContent = "📌 Pinned";
+                        pinBadge.style.color = "#f39c12";
+                        badges.appendChild(pinBadge);
+                    }
+                    if (isFav) {
+                        var favBadge = document.createElement("span");
+                        favBadge.textContent = "★ Favorite";
+                        favBadge.style.color = "#ffd700";
+                        badges.appendChild(favBadge);
+                    }
+                    if (isRecent && !isPinned) {
+                        var recentBadge = document.createElement("span");
+                        recentBadge.textContent = "🕒 Recent";
+                        recentBadge.style.color = "#888";
+                        badges.appendChild(recentBadge);
+                    }
+                    
+                    if (badges.children.length > 0) {
+                        item.appendChild(badges);
+                    }
+                    
+                    // Action buttons (show on hover)
+                    var actions = document.createElement("div");
+                    actions.style.position = "absolute";
+                    actions.style.top = "8px";
+                    actions.style.right = "8px";
+                    actions.style.display = "none";
+                    actions.style.gap = "4px";
+                    
+                    var favBtn = document.createElement("button");
+                    favBtn.textContent = isFav ? "★" : "☆";
+                    favBtn.title = isFav ? "Remove from favorites" : "Add to favorites";
+                    favBtn.style.background = "transparent";
+                    favBtn.style.border = "none";
+                    favBtn.style.color = isFav ? "#ffd700" : "#888";
+                    favBtn.style.fontSize = "16px";
+                    favBtn.style.cursor = "pointer";
+                    favBtn.style.padding = "2px 6px";
+                    favBtn.onclick = function(e) {
+                        e.stopPropagation();
+                        toggleFavorite(m.id);
+                        doSearch();
+                    };
+                    actions.appendChild(favBtn);
+                    
+                    var pinBtn = document.createElement("button");
+                    pinBtn.textContent = isPinned ? "📌" : "📍";
+                    pinBtn.title = isPinned ? "Unpin" : "Pin to top";
+                    pinBtn.style.background = "transparent";
+                    pinBtn.style.border = "none";
+                    pinBtn.style.color = isPinned ? "#f39c12" : "#888";
+                    pinBtn.style.fontSize = "14px";
+                    pinBtn.style.cursor = "pointer";
+                    pinBtn.style.padding = "2px 6px";
+                    pinBtn.onclick = function(e) {
+                        e.stopPropagation();
+                        var result = togglePin(m.id);
+                        if (!result.success) {
+                            updateStatus(result.message, true);
+                            setTimeout(function() { doSearch(); }, 2000);
+                        } else {
+                            doSearch();
+                        }
+                    };
+                    actions.appendChild(pinBtn);
+                    
+                    item.appendChild(actions);
+
+                    item.onmouseenter = function() {
+                        if (selectedMethod !== m) item.style.background = "#252525";
+                        actions.style.display = "flex";
+                    };
+                    item.onmouseleave = function() {
+                        if (selectedMethod !== m) item.style.background = "transparent";
+                        actions.style.display = "none";
+                    };
+                    item.onclick = function() { selectMethod(m, item); };
+                    item.onkeydown = function(e) {
+                        if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            selectMethod(m, item);
+                        }
+                    };
+
+                    listPane.appendChild(item);
+                })(methods[i], i);
+            }
+        }
+
+        async function selectMethod(m, itemEl) {
+            selectedMethod = m;
+            currentBodyText = "";
+            
+            // Track as recent and save as last method
+            addRecent(m.id);
+            saveLastMethod(m.id);
+
+            var items = listPane.querySelectorAll("[role='option']");
+            for (var i = 0; i < items.length; i++) {
+                items[i].setAttribute("aria-selected", "false");
+                items[i].style.background = "transparent";
+            }
+            if (itemEl) {
+                itemEl.setAttribute("aria-selected", "true");
+                itemEl.style.background = "#2a2a2a";
+                itemEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
+            }
+
+            previewTitle.textContent = (m.id || "") + " — " + (m.title || "(Untitled)");
+            var metaParts = [];
+            if (m.tags && m.tags.length > 0) metaParts.push("Tags: " + m.tags.join(", "));
+            if (m.updated) metaParts.push("Updated: " + m.updated);
+            previewMeta.textContent = metaParts.join("  •  ");
+
+            previewBody.textContent = "Loading...";
+
+            if (m.url) {
+                var result = await fetchMethodBody(m.url);
+                if (result.success) {
+                    currentBodyText = result.body;
+                    previewBody.textContent = result.body;
+                } else {
+                    previewBody.textContent = "Error loading method: " + result.error;
+                }
+            } else {
+                previewBody.textContent = "(No URL specified)";
+            }
+        }
+
+        function doSearch() {
+            var query = searchInput.value;
+            var tagFilter = tagSelect.value;
+            var searchBody = searchBodyCheckbox.checked;
+            var sortOrder = sortSelect.value;
+            var showOnlyFavorites = favoritesCheckbox.checked;
+            
+            // Save session state
+            saveLastSearch(query);
+            saveLastTag(tagFilter);
+            saveSortOrder(sortOrder);
+            
+            var favorites = getFavorites();
+            var pins = getPins();
+            
+            var methodsToFilter = allMethods;
+            if (showOnlyFavorites) {
+                methodsToFilter = allMethods.filter(function(m) {
+                    return favorites.indexOf(m.id) !== -1;
+                });
+            }
+            
+            var filtered = filterAndSortMethods(methodsToFilter, query, tagFilter, searchBody, METHODS_BODY_CACHE, sortOrder, favorites, pins);
+            renderList(filtered);
+            updateStatus(filtered.length + " of " + allMethods.length + " methods");
+        }
+
+            async function loadIndex(forceRefresh) {
+            updateStatus("Loading methods index...");
+            var result = await fetchMethodsIndex(forceRefresh);
+            if (!result.success) {
+                updateStatus("Error: " + result.error, true);
+                renderList([]);
+                return;
+            }
+            allMethods = result.data;
+            allTags = buildTagList(allMethods);
+            populateTagSelect();
+
+            if (METHODS_PRELOAD_BODIES) {
+                updateStatus("Preloading method bodies...");
+                for (var i = 0; i < allMethods.length; i++) {
+                    if (allMethods[i].url) {
+                        await fetchMethodBody(allMethods[i].url);
+                    }
+                }
+            }
+            
+            searchInput.value = getLastSearch();
+            tagSelect.value = getLastTag();
+            sortSelect.value = getSortOrder();
+
+            doSearch();
+        }
+
+        searchInput.oninput = doSearch;
+        tagSelect.onchange = doSearch;
+        searchBodyCheckbox.onchange = doSearch;
+        sortSelect.onchange = doSearch;
+        favoritesCheckbox.onchange = doSearch;
+        
+        refreshBtn.onclick = function() {
+            METHODS_BODY_CACHE = {};
+            loadIndex(true);
+        };
+
+        copyBtn.onclick = async function() {
+            if (!currentBodyText) {
+                updateStatus("No method selected to copy", true);
+                return;
+            }
+            try {
+                await navigator.clipboard.writeText(currentBodyText);
+                updateStatus("Copied to clipboard!");
+                setTimeout(function() {
+                    doSearch();
+                }, 1500);
+            } catch (e) {
+                updateStatus("Copy failed: " + String(e), true);
+            }
+        };
+
+        function closeModal() {
+            overlay.remove();
+            modal.remove();
+            METHODS_LIBRARY_MODAL_REF = null;
+            document.removeEventListener("keydown", keyHandler);
+        }
+
+        closeBtn.onclick = closeModal;
+        overlay.onclick = closeModal;
+
+        function keyHandler(e) {
+            if (e.key === "Escape") {
+                closeModal();
+                return;
+            }
+            
+            // Enter key when search box is focused - select first result
+            if (e.key === "Enter" && document.activeElement === searchInput) {
+                var firstItem = listPane.querySelector("[role='option']");
+                if (firstItem) {
+                    var methodId = firstItem.getAttribute("data-method-id");
+                    var method = allMethods.find(function(m) { return m.id === methodId; });
+                    if (method) {
+                        selectMethod(method, firstItem);
+                    }
+                }
+                return;
+            }
+            
+            // Arrow Up/Down navigation in list
+            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                var items = Array.from(listPane.querySelectorAll("[role='option']"));
+                if (items.length === 0) return;
+                
+                var currentIndex = -1;
+                for (var i = 0; i < items.length; i++) {
+                    if (items[i].getAttribute("aria-selected") === "true") {
+                        currentIndex = i;
+                        break;
+                    }
+                }
+                
+                var nextIndex;
+                if (e.key === "ArrowDown") {
+                    nextIndex = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
+                } else {
+                    nextIndex = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
+                }
+                
+                var nextItem = items[nextIndex];
+                var methodId = nextItem.getAttribute("data-method-id");
+                var method = allMethods.find(function(m) { return m.id === methodId; });
+                if (method) {
+                    selectMethod(method, nextItem);
+                }
+                e.preventDefault();
+                return;
+            }
+            
+            // Tab cycling
+            if (e.key === "Tab") {
+                var focusable = modal.querySelectorAll('button, input, select, [tabindex]:not([tabindex="-1"])');
+                if (focusable.length === 0) return;
+                var first = focusable[0];
+                var last = focusable[focusable.length - 1];
+                if (e.shiftKey && document.activeElement === first) {
+                    e.preventDefault();
+                    last.focus();
+                } else if (!e.shiftKey && document.activeElement === last) {
+                    e.preventDefault();
+                    first.focus();
+                }
+            }
+        }
+        document.addEventListener("keydown", keyHandler);
+
+        var isDragging = false;
+        var dragStartX = 0, dragStartY = 0, modalStartX = 0, modalStartY = 0;
+
+        header.onmousedown = function(e) {
+            if (e.target === closeBtn) return;
+            isDragging = true;
+            var rect = modal.getBoundingClientRect();
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
+            modalStartX = rect.left;
+            modalStartY = rect.top;
+            modal.style.transform = "none";
+            e.preventDefault();
+        };
+
+        document.addEventListener("mousemove", function(e) {
+            if (!isDragging) return;
+            var dx = e.clientX - dragStartX;
+            var dy = e.clientY - dragStartY;
+            modal.style.left = (modalStartX + dx) + "px";
+            modal.style.top = (modalStartY + dy) + "px";
+        });
+
+        document.addEventListener("mouseup", function() {
+            isDragging = false;
+        });
+
+        document.body.appendChild(overlay);
+        document.body.appendChild(modal);
+        modal.focus();
+        searchInput.focus();
+
+        loadIndex(false);
+        log("Methods Library: modal opened");
+    }
+
+        function getFavorites() {
+        try {
+            var raw = localStorage.getItem(STORAGE_METHODS_FAVORITES);
+            if (!raw) return [];
+            return JSON.parse(raw);
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function saveFavorites(favs) {
+        try {
+            localStorage.setItem(STORAGE_METHODS_FAVORITES, JSON.stringify(favs));
+        } catch (e) {}
+    }
+
+    function toggleFavorite(methodId) {
+        var favs = getFavorites();
+        var idx = favs.indexOf(methodId);
+        if (idx !== -1) {
+            favs.splice(idx, 1);
+        } else {
+            favs.push(methodId);
+        }
+        saveFavorites(favs);
+        return favs;
+    }
+
+    function getRecents() {
+        try {
+            var raw = localStorage.getItem(STORAGE_METHODS_RECENTS);
+            if (!raw) return [];
+            return JSON.parse(raw);
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function addRecent(methodId) {
+        var recents = getRecents();
+        var idx = recents.indexOf(methodId);
+        if (idx !== -1) {
+            recents.splice(idx, 1);
+        }
+        recents.unshift(methodId);
+        if (recents.length > MAX_RECENTS) {
+            recents = recents.slice(0, MAX_RECENTS);
+        }
+        try {
+            localStorage.setItem(STORAGE_METHODS_RECENTS, JSON.stringify(recents));
+        } catch (e) {}
+    }
+
+    function getPins() {
+        try {
+            var raw = localStorage.getItem(STORAGE_METHODS_PINS);
+            if (!raw) return [];
+            return JSON.parse(raw);
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function savePins(pins) {
+        try {
+            localStorage.setItem(STORAGE_METHODS_PINS, JSON.stringify(pins));
+        } catch (e) {}
+    }
+
+    function togglePin(methodId) {
+        var pins = getPins();
+        var idx = pins.indexOf(methodId);
+        if (idx !== -1) {
+            pins.splice(idx, 1);
+        } else {
+            if (pins.length >= MAX_PINS) {
+                return { success: false, message: "Maximum " + MAX_PINS + " pins allowed" };
+            }
+            pins.push(methodId);
+        }
+        savePins(pins);
+        return { success: true, pins: pins };
+    }
+
+    function getLastSearch() {
+        try {
+            return localStorage.getItem(STORAGE_METHODS_LAST_SEARCH) || "";
+        } catch (e) {
+            return "";
+        }
+    }
+
+    function saveLastSearch(query) {
+        try {
+            localStorage.setItem(STORAGE_METHODS_LAST_SEARCH, query);
+        } catch (e) {}
+    }
+
+    function getLastTag() {
+        try {
+            return localStorage.getItem(STORAGE_METHODS_LAST_TAG) || "all";
+        } catch (e) {
+            return "all";
+        }
+    }
+
+    function saveLastTag(tag) {
+        try {
+            localStorage.setItem(STORAGE_METHODS_LAST_TAG, tag);
+        } catch (e) {}
+    }
+
+    function getLastMethod() {
+        try {
+            return localStorage.getItem(STORAGE_METHODS_LAST_METHOD) || "";
+        } catch (e) {
+            return "";
+        }
+    }
+
+    function saveLastMethod(methodId) {
+        try {
+            localStorage.setItem(STORAGE_METHODS_LAST_METHOD, methodId);
+        } catch (e) {}
+    }
+
+    function getSortOrder() {
+        try {
+            return localStorage.getItem(STORAGE_METHODS_SORT_ORDER) || "relevance";
+        } catch (e) {
+            return "relevance";
+        }
+    }
+
+    function saveSortOrder(order) {
+        try {
+            localStorage.setItem(STORAGE_METHODS_SORT_ORDER, order);
+        } catch (e) {}
+    }
 
 
     function clearLogs() {
@@ -1816,13 +3404,8 @@
     async function runSABuilder() {
         // Check if on correct page
         if (!isOnSABuilderPage()) {
-            var errorPopup = createPopup({
-                title: "Scheduled Activities Builder",
-                content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;font-size:16px;margin-bottom:16px;">⚠️ Wrong Page</p><p>You must be on the Activity Plans Show page to use this feature.</p><p style="margin-top:12px;font-size:12px;color:#888;">Required URL: ' + SA_BUILDER_TARGET_URL + '</p></div>',
-                width: "450px",
-                height: "auto"
-            });
             log("SA Builder: wrong page - " + location.href);
+            showWrongPagePopup("Scheduled Activities Builder", SA_BUILDER_TARGET_URL, location.pathname);
             return;
         }
 
@@ -6613,14 +8196,8 @@
         var path = location.pathname;
 
         if (path !== "/secure/crfdesign/studylibrary/eligibility/list") {
-            log("ImportElig: not on eligibility list page; redirecting");
-
-            try {
-                localStorage.setItem(STORAGE_ELIG_IMPORT_PENDING_POPUP, "1");
-            } catch (e) {
-            }
-
-            location.href = ELIGIBILITY_LIST_URL;
+            log("ImportElig: not on eligibility list page; showing warning popup");
+            showWrongPagePopup("Import I/E", "/secure/crfdesign/studylibrary/eligibility/list", path);
             return;
         }
 
@@ -8358,12 +9935,100 @@
 
         document.body.appendChild(popup);
 
-        popup.close = function () {
-            document.removeEventListener("keydown", keyHandler, true);
-            popup.remove();
+        return {
+            element: popup,
+            close: function () {
+                if (onClose) {
+                    try {
+                        onClose();
+                    } catch (e) {
+                        log("Popup onClose error: " + String(e));
+                    }
+                }
+                document.removeEventListener("keydown", keyHandler, true);
+                popup.remove();
+            },
+            setContent: function (newContent) {
+                bodyContainer.innerHTML = "";
+                if (typeof newContent === "string") {
+                    bodyContainer.innerHTML = newContent;
+                } else if (newContent && newContent.nodeType === 1) {
+                    bodyContainer.appendChild(newContent);
+                }
+            }
         };
+    }
 
-        return popup;
+        function showWrongPagePopup(featureName, requiredPage, currentPath) {
+        // Create warning popup content
+        var warningContainer = document.createElement("div");
+        warningContainer.style.padding = "20px";
+        warningContainer.style.textAlign = "center";
+        
+        var warningIcon = document.createElement("div");
+        warningIcon.innerHTML = "⚠️";
+        warningIcon.style.fontSize = "48px";
+        warningIcon.style.marginBottom = "15px";
+        
+        var warningTitle = document.createElement("div");
+        warningTitle.textContent = "Wrong Page Detected";
+        warningTitle.style.fontSize = "18px";
+        warningTitle.style.fontWeight = "bold";
+        warningTitle.style.marginBottom = "10px";
+        warningTitle.style.color = "#ff6b6b";
+        
+        var warningMessage = document.createElement("div");
+        warningMessage.textContent = "You must be on the " + featureName + " page to use this feature.";
+        warningMessage.style.marginBottom = "8px";
+        warningMessage.style.lineHeight = "1.4";
+        
+        var currentPage = document.createElement("div");
+        currentPage.textContent = "Current page: " + currentPath;
+        currentPage.style.fontSize = "12px";
+        currentPage.style.color = "#999";
+        currentPage.style.marginBottom = "8px";
+        
+        var correctPage = document.createElement("div");
+        correctPage.textContent = "Required page: " + requiredPage;
+        correctPage.style.fontSize = "12px";
+        correctPage.style.color = "#999";
+        correctPage.style.marginBottom = "20px";
+        
+        var okButton = document.createElement("button");
+        okButton.textContent = "OK";
+        okButton.style.background = "#5b43c7";
+        okButton.style.color = "#fff";
+        okButton.style.border = "none";
+        okButton.style.borderRadius = "4px";
+        okButton.style.padding = "8px 24px";
+        okButton.style.cursor = "pointer";
+        okButton.style.fontSize = "14px";
+        okButton.onmouseenter = function() { this.style.background = "#4a35a6"; };
+        okButton.onmouseleave = function() { this.style.background = "#5b43c7"; };
+        
+        warningContainer.appendChild(warningIcon);
+        warningContainer.appendChild(warningTitle);
+        warningContainer.appendChild(warningMessage);
+        warningContainer.appendChild(currentPage);
+        warningContainer.appendChild(correctPage);
+        warningContainer.appendChild(okButton);
+
+        var warningPopup = createPopup({
+            title: featureName + " - Page Warning",
+            content: warningContainer,
+            width: "400px",
+            height: "auto",
+            onClose: function () {
+                log(featureName + ": warning popup closed");
+            }
+        });
+
+        okButton.addEventListener("click", function () {
+            warningPopup.close();
+            log(featureName + ": warning popup acknowledged by user");
+        });
+
+        return warningPopup;
     }
 
     function addButtonToPanel(label, handler) {
@@ -8578,6 +10243,21 @@
         parseMethodBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         parseMethodBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
+        var searchMethodsBtn = document.createElement("button");
+        searchMethodsBtn.textContent = "Search Methods";
+        searchMethodsBtn.style.background = "#5b43c7";
+        searchMethodsBtn.style.color = "#fff";
+        searchMethodsBtn.style.border = "none";
+        searchMethodsBtn.style.borderRadius = "6px";
+        searchMethodsBtn.style.padding = "8px";
+        searchMethodsBtn.style.cursor = "pointer";
+        searchMethodsBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
+        searchMethodsBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
+        searchMethodsBtn.addEventListener("click", function() {
+            log("[SearchMethods] Button clicked");
+            openMethodsLibraryModal();
+        });
+
         var toggleLogsBtn = document.createElement("button");
         var logVisible = getLogVisible();
         toggleLogsBtn.textContent = logVisible ? "Hide Logs" : "Show Logs";
@@ -8593,15 +10273,31 @@
 
         var importEligBtn = document.createElement("button");
         importEligBtn.textContent = "Import I/E";
-        importEligBtn.style.background = "#4a90e2";
+        importEligBtn.style.background = "#5b43c7";
         importEligBtn.style.color = "#fff";
         importEligBtn.style.border = "none";
         importEligBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
         importEligBtn.style.padding = scale(BUTTON_PADDING_PX);
         importEligBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         importEligBtn.style.cursor = "pointer";
-        importEligBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
-        importEligBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+        importEligBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
+        importEligBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
+
+        var parseStudyEventBtn = document.createElement("button");
+        parseStudyEventBtn.textContent = "Parse Study Event";
+        parseStudyEventBtn.style.background = "#4a90e2";
+        parseStudyEventBtn.style.color = "#fff";
+        parseStudyEventBtn.style.border = "none";
+        parseStudyEventBtn.style.borderRadius = "6px";
+        parseStudyEventBtn.style.padding = "8px";
+        parseStudyEventBtn.style.cursor = "pointer";
+        parseStudyEventBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
+        parseStudyEventBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+        parseStudyEventBtn.addEventListener("click", function() {
+            log("[ParseStudyEvent] Button clicked");
+            APS_ParseStudyEvent();
+        });
+
 
         var clearLogsBtn = document.createElement("button");
         clearLogsBtn.textContent = "Clear Logs";
@@ -8619,6 +10315,7 @@
 
         btnRow.appendChild(runBarcodeBtn);
         btnRow.appendChild(saBuilderBtn);
+        btnRow.appendChild(searchMethodsBtn);
         btnRow.appendChild(importEligBtn);
         btnRow.appendChild(findAeBtn);
         btnRow.appendChild(findFormBtn);
@@ -8626,6 +10323,7 @@
         btnRow.appendChild(parseMethodBtn);
         btnRow.appendChild(openEligBtn);
         btnRow.appendChild(subjectEligBtn);
+        btnRow.appendChild(parseStudyEventBtn);
         btnRow.appendChild(pauseBtn);
         btnRow.appendChild(clearLogsBtn);
         btnRow.appendChild(toggleLogsBtn);
