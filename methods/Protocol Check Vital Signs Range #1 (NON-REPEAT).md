@@ -1,13 +1,16 @@
 const sysItems = [
-    "SYS"
+    "SYS",
+    "SYS (1 of 3)",
 ];
 
 const diaItems = [
-    "DIA"
+    "DIA",
+    "DIA (1 of 3)",
 ];
 
 const hrItems = [
-    "HR"
+    "HR",
+    "HR (1 of 3)",
 ]
 
 const rrItems = [
@@ -56,8 +59,10 @@ if (!sys || sys === null || !dia || dia == null || !hr || hr == null || !temp ||
 
 // OOR
 if (
-    sys > sys_max_range || 
+    sys > sys_max_range ||
+    sys < sys_min_range ||
     dia > dia_max_range ||
+    dia < dia_min_range ||
     hr > hr_max_range ||
     hr < hr_min_range ||
     temp > temp_max_range ||
@@ -66,8 +71,10 @@ if (
     rr < rr_min_range
 ) return attachedItemCodeList[3]; // Out of Normal Range
 else if ( // IR
-    sys <= sys_max_range || 
+    sys <= sys_max_range ||
+    sys >= sys_min_range ||
     dia <= dia_max_range ||
+    dia >= dia_min_range ||
     hr <= hr_max_range ||
     hr >= hr_min_range ||
     temp <= temp_max_range ||

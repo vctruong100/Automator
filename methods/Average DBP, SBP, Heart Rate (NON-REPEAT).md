@@ -3,7 +3,10 @@ const dbpItems = [
     "SCRN_Diastolic BP",
     "DIA", 
     "Repeat DIA (2 of 3)",
-    "Repeat DIA (3 of 3)"
+    "Repeat DIA (3 of 3)",
+    "DIA (1 of 3)",
+    "DIA (2 of 3)",
+    "DIA (3 of 3)",
 ];
 
 const dbpAttachedItem = [
@@ -16,8 +19,9 @@ const sysItem = [
     "SCRN_Systolic BP", 
     "ET Threshold SBP",
     "SYS", 
-    "Repeat SYS (2 of 3)",
-    "Repeat SYS (3 of 3)"
+    "SYS (1 of 3)",
+    "SYS (2 of 3)",
+    "SYS (3 of 3)",
 ];
 
 const sysAttachedItem = [
@@ -25,6 +29,15 @@ const sysAttachedItem = [
     "🧮 SYS_AVERAGE:",
 ];
 
+const hrItem = [
+    "HR (1 of 3)",
+    "HR (2 of 3)",
+    "HR (3 of 3)"
+]
+
+const hrAttachedItem = [
+    "🧮 HR AVERAGE:"
+]
 var item = itemJson.item;
 const sigfig = itemJson.item.significantDigits;
 var maxCount = 0; 
@@ -41,7 +54,10 @@ if (dbpAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, d
     avg = calculateAverage(list, sigfig);
     if (list.length == maxCount) return (avg).toFixed(sigfig);
 }
-
+if (hrAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, hrItem, hrAttachedItem)) {
+    avg = calculateAverage(list, sigfig);
+    if (list.length == maxCount) return (avg).toFixed(sigfig);
+}
 return null;
 
 function log() {
@@ -51,7 +67,7 @@ function log() {
     logger("Average: " + avg);
 }
 
-function populateList(form, targetItem, list) {
+function populateList(form, targetItem, attachedItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
     var count = 0;

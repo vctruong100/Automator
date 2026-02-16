@@ -1,64 +1,26 @@
-const currentStudyEvent = formJson.form.studyEventName;
-const item = itemJson.item;
-const sigfig = itemJson.item.significantDigits;
-
-const heightitemList = [
-    "BM_HT", 
-    "BM_HT_Visit 2",
-    "BMI_HEIGHT",
-    "BMI_HEIGHT #1", 
-    "BMI_HEIGHT #2"
-];
-const weightitemList = [
-    "BM_WT #1", 
-    "BM_WT #2",
-    "BMI_WEIGHT",
+const itemList = [
     "BMI_WEIGHT #1", 
     "BMI_WEIGHT #2"
 ];
 
-var bmi = 0;
+const sigfig = itemJson.item.significantDigits;
+var maxCount = 0; 
+var list = [];
+var avg = 0;
 
-var htmaxCount = 2; 
-var htlist = [];
-var htavg = 0;
+list = populateList(formJson, itemList, list);
 
-var wtmaxCount = 2;
-var wtlist = [];
-var wtavg = 0;
-
-htlist = populateList(formJson, heightitemList, htmaxCount);
-htavg = calculateAverage(htlist, sigfig);
-
-wtlist = populateList(formJson, weightitemList, wtmaxCount);
-wtavg = calculateAverage(wtlist, sigfig);
-
-logger(htavg);
-logger(wtavg);
-
-if (htlist.length !== htmaxCount && wtlist.length !== wtmaxCount) return null;
-
-var heightMtr = htavg / 100;
-
-var factor = Math.pow(10, sigfig);
-bmi = Math.round((wtavg / (heightMtr * heightMtr)) * factor) / factor;
-
-log();
-
-if (bmi) return bmi.toFixed(sigfig);
-
+avg = calculateAverage(list, sigfig);
+logger("List: " + list);
+logger("List length: " + list.length)
+logger("Max count: " + maxCount);
+logger("Average: " + avg)
+if (list.length === maxCount) return (avg).toFixed(sigfig);
 return null;
 
-function log() {
-    logger("Height in meter: " + heightMtr)
-    logger("Factor: " + factor);
-    logger("BMI: " + bmi);
-}
-
-function populateList(form, targetItem, maxCount) {
+function populateList(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    var list = [];
     var count = 0;
 	if (!itemGroups || itemGroups.length < 1) return null;
     

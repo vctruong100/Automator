@@ -1,14 +1,17 @@
 const sysItems = [
+    "SYS (2 of 3)",
     "Repeat SYS (2 of 3)",
     "Repeat SYS",
 ];
 
 const diaItems = [
+    "DIA (2 of 3)",
     "Repeat DIA (2 of 3)",
     "Repeat DIA",
 ];
 
 const hrItems = [
+    "HR (2 of 3)",
     "Repeat HR (2 of 3)",
     "HR (60 - 100 bpm)",
     "Repeat HR",
@@ -49,16 +52,20 @@ log();
 if (!sys || sys === null || !dia || dia == null || !hr || hr == null || !temp || temp == null) return attachedItemCodeList[0]
 // OOR
 if (
-    sys > sys_max_range || 
+    sys > sys_max_range ||
+    sys < sys_min_range ||
     dia > dia_max_range ||
+    dia < dia_min_range ||
     hr > hr_max_range ||
     hr < hr_min_range ||
     temp > temp_max_range ||
     temp < temp_min_range
 ) return attachedItemCodeList[2]; // Out of Protocol Range
 else if ( // IR
-    sys <= sys_max_range || 
+    sys <= sys_max_range ||
+    sys >= sys_min_range || 
     dia <= dia_max_range ||
+    dia >= dia_min_range ||
     hr <= hr_max_range ||
     hr >= hr_min_range ||
     temp <= temp_max_range ||
