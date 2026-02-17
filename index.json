@@ -351,23 +351,30 @@
   },
   {
     "id": "M-051",
-    "title": "Edit Check Difference between Collected Time and Vital Supine Time (NON-REPEAT)",
+    "title": "Edit Check VITALS Difference between Collected Time and Supine Time (NON-REPEAT)",
     "tags": ["Supine", "Vital", "Difference"],
-    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Difference%20between%20Collected%20Time%20and%20Vital%20Supine%20Time%20(NON-REPEAT).md",
-    "updated": "2026-02-16"
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20VITALS%20Difference%20between%20Collected%20Time%20and%20Supine%20Time%20(NON-REPEAT).md",
+    "updated": "2026-02-17"
   },
   {
     "id": "M-052",
-    "title": "Edit Check Difference between Collected Time and Vital Supine Time (REPEAT)",
+    "title": "Edit Check VITALS Difference between Collected Time and Supine Time (REPEAT)",
     "tags": ["Supine", "Vital", "Difference"],
-    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Difference%20between%20Collected%20Time%20and%20Vital%20Supine%20Time%20(REPEAT).md",
-    "updated": "2026-02-16"
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20VITALS%20Difference%20between%20Collected%20Time%20and%20Supine%20Time%20(REPEAT).md",
+    "updated": "2026-02-17"
   },
   {
     "id": "M-053",
-    "title": "Edit Check Difference between Collected Time and ECG Supine Time",
+    "title": "Edit Check ECG Difference between Collected Time and Supine Time (REPEAT)",
     "tags": ["Supine", "ECG", "Difference"],
-    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Difference%20between%20Collected%20Time%20and%20ECG%20Supine%20Time.md",
-    "updated": "2026-02-16"
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20ECG%20Difference%20between%20Collected%20Time%20and%20Supine%20Time%20(REPEAT).md",
+    "updated": "2026-02-17"
+  },
+  {
+    "id": "M-054",
+    "title": "Edit Check ECG Difference between Collected Time and Supine Time (NON-REPEAT)",
+    "tags": ["Supine", "ECG", "Difference"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20ECG%20Difference%20between%20Collected%20Time%20and%20Supine%20Time%20(NON-REPEAT).md",
+    "updated": "2026-02-17"
   }
 ]

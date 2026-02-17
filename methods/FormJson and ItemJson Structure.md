@@ -149,3 +149,12 @@ subject.volunteer.site.volunteerEnrollmentConfirmationStatement: null
     }
 }
 
+Data type format:
+datetime: 2026-02-05T15:32:12
+partial datetime: 2026-02-17T08:40:21
+partial date: 2026-02-17
+partial time: 08:40:21
+incomplete datetime: 2026-02-17
+incomplete time: 08:40:22
+time: 08:40:22
+date: 2026-02-17
