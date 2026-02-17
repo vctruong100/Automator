@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.8.5
+// @version     1.8.6
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -159,23 +159,6 @@
     var STORAGE_SUBJECT_ELIG_AUTO_TAB = "activityPlanState.subjectElig.autoTab";
     var SUBJECT_ELIG_SUBJECTS_LIST_URL = "https://cenexel.clinspark.com/secure/study/subjects/list";
     var SUBJECT_ELIG_POPUP = null;
-
-    // Methods Library Configuration
-    var METHODS_INDEX_URL = "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/index.json";
-    var METHODS_CACHE_KEY = "activityPlanState.methodsLibrary.cache";
-    var METHODS_CACHE_EXPIRY_MS = 1000 * 60 * 60; // 1 hour
-    var METHODS_PRELOAD_BODIES = false;
-    var METHODS_BODY_CACHE = {};
-    var METHODS_LIBRARY_MODAL_REF = null;
-    var STORAGE_METHODS_FAVORITES = "activityPlanState.methodsLibrary.favorites";
-    var STORAGE_METHODS_RECENTS = "activityPlanState.methodsLibrary.recents";
-    var STORAGE_METHODS_PINS = "activityPlanState.methodsLibrary.pins";
-    var STORAGE_METHODS_LAST_SEARCH = "activityPlanState.methodsLibrary.lastSearch";
-    var STORAGE_METHODS_LAST_TAG = "activityPlanState.methodsLibrary.lastTag";
-    var STORAGE_METHODS_LAST_METHOD = "activityPlanState.methodsLibrary.lastMethod";
-    var STORAGE_METHODS_SORT_ORDER = "activityPlanState.methodsLibrary.sortOrder";
-    var MAX_RECENTS = 10;
-    var MAX_PINS = 5;
 
     //=========================
     // SETTING FEATURE
@@ -966,6 +949,23 @@
     //==========================
     // METHODS LIBRARY FEATURE
     //==========================
+
+    // Methods Library Configuration
+    var METHODS_INDEX_URL = "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/index.json";
+    var METHODS_CACHE_KEY = "activityPlanState.methodsLibrary.cache";
+    var METHODS_CACHE_EXPIRY_MS = 1000 * 60 * 60; // 1 hour
+    var METHODS_PRELOAD_BODIES = false;
+    var METHODS_BODY_CACHE = {};
+    var METHODS_LIBRARY_MODAL_REF = null;
+    var STORAGE_METHODS_FAVORITES = "activityPlanState.methodsLibrary.favorites";
+    var STORAGE_METHODS_RECENTS = "activityPlanState.methodsLibrary.recents";
+    var STORAGE_METHODS_PINS = "activityPlanState.methodsLibrary.pins";
+    var STORAGE_METHODS_LAST_SEARCH = "activityPlanState.methodsLibrary.lastSearch";
+    var STORAGE_METHODS_LAST_TAG = "activityPlanState.methodsLibrary.lastTag";
+    var STORAGE_METHODS_LAST_METHOD = "activityPlanState.methodsLibrary.lastMethod";
+    var STORAGE_METHODS_SORT_ORDER = "activityPlanState.methodsLibrary.sortOrder";
+    var MAX_RECENTS = 10;
+    var MAX_PINS = 5;
 
     function getMethodsCache() {
         try {
@@ -1949,7 +1949,9 @@
         } catch (e) {}
     }
 
-
+    //========================================
+    // UI Scaling
+    //========================================
     function clearLogs() {
         try {
             localStorage.removeItem("activityPlanState.logs");

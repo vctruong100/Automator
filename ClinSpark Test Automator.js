@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.2.5
+// @version 3.2.6
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -188,6 +188,1009 @@
 
 
     
+    //==========================
+    // METHODS LIBRARY FEATURE
+    //==========================
+    // Methods Library Configuration
+    
+    var METHODS_INDEX_URL = "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/index.json";
+    var METHODS_CACHE_KEY = "activityPlanState.methodsLibrary.cache";
+    var METHODS_CACHE_EXPIRY_MS = 1000 * 60 * 60; // 1 hour
+    var METHODS_PRELOAD_BODIES = false;
+    var METHODS_BODY_CACHE = {};
+    var METHODS_LIBRARY_MODAL_REF = null;
+    var STORAGE_METHODS_FAVORITES = "activityPlanState.methodsLibrary.favorites";
+    var STORAGE_METHODS_RECENTS = "activityPlanState.methodsLibrary.recents";
+    var STORAGE_METHODS_PINS = "activityPlanState.methodsLibrary.pins";
+    var STORAGE_METHODS_LAST_SEARCH = "activityPlanState.methodsLibrary.lastSearch";
+    var STORAGE_METHODS_LAST_TAG = "activityPlanState.methodsLibrary.lastTag";
+    var STORAGE_METHODS_LAST_METHOD = "activityPlanState.methodsLibrary.lastMethod";
+    var STORAGE_METHODS_SORT_ORDER = "activityPlanState.methodsLibrary.sortOrder";
+    var MAX_RECENTS = 10;
+    var MAX_PINS = 5;
+
+    function getMethodsCache() {
+        try {
+            var raw = localStorage.getItem(METHODS_CACHE_KEY);
+            if (!raw) return null;
+            var cache = JSON.parse(raw);
+            if (!cache || !cache.data || !cache.timestamp) return null;
+            var age = Date.now() - cache.timestamp;
+            if (age > METHODS_CACHE_EXPIRY_MS) {
+                localStorage.removeItem(METHODS_CACHE_KEY);
+                return null;
+            }
+            return cache.data;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function setMethodsCache(data) {
+        try {
+            var cache = { data: data, timestamp: Date.now() };
+            localStorage.setItem(METHODS_CACHE_KEY, JSON.stringify(cache));
+        } catch (e) {
+            log("Methods Library: cache write error - " + String(e));
+        }
+    }
+
+    async function fetchMethodsIndex(forceRefresh) {
+        if (!forceRefresh) {
+            var cached = getMethodsCache();
+            if (cached) {
+                log("Methods Library: using cached index (" + cached.length + " methods)");
+                return { success: true, data: cached };
+            }
+        }
+        log("Methods Library: fetching index from " + METHODS_INDEX_URL);
+        try {
+            var response = await fetch(METHODS_INDEX_URL, { cache: forceRefresh ? "no-store" : "default" });
+            if (!response.ok) {
+                return { success: false, error: "HTTP " + response.status + ": " + response.statusText };
+            }
+            var data = await response.json();
+            if (!Array.isArray(data)) {
+                return { success: false, error: "Invalid index format (expected array)" };
+            }
+            setMethodsCache(data);
+            log("Methods Library: fetched " + data.length + " methods");
+            return { success: true, data: data };
+        } catch (e) {
+            log("Methods Library: fetch error - " + String(e));
+            return { success: false, error: String(e) };
+        }
+    }
+
+    async function fetchMethodBody(url) {
+        if (METHODS_BODY_CACHE[url]) {
+            return { success: true, body: METHODS_BODY_CACHE[url] };
+        }
+
+        // Convert relative or GitHub blob URLs to raw.githubusercontent.com format
+        var fetchUrl = url;
+        if (url.indexOf("github.com") !== -1 && url.indexOf("raw.githubusercontent.com") === -1) {
+            // Convert github.com/user/repo/blob/branch/path to raw.githubusercontent.com/user/repo/branch/path
+            fetchUrl = url.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/");
+        } else if (url.indexOf("http") !== 0) {
+            // Handle relative paths - prepend the base GitHub raw URL
+            var baseUrl = "https://raw.githubusercontent.com/vctruong100/Automator/main/";
+            fetchUrl = baseUrl + url.replace(/^\/+/, "");
+        }
+
+        try {
+            var response = await fetch(fetchUrl);
+            if (!response.ok) {
+                return { success: false, error: "HTTP " + response.status + " for " + fetchUrl };
+            }
+            var text = await response.text();
+            METHODS_BODY_CACHE[url] = text;
+            return { success: true, body: text };
+        } catch (e) {
+            return { success: false, error: String(e) };
+        }
+    }
+
+    function buildTagList(methods) {
+        var tagSet = {};
+        for (var i = 0; i < methods.length; i++) {
+            var tags = methods[i].tags || [];
+            for (var j = 0; j < tags.length; j++) {
+                tagSet[tags[j]] = true;
+            }
+        }
+        return Object.keys(tagSet).sort();
+    }
+
+    function scoreMethod(method, query, searchBody, bodyText) {
+        if (!query || query.trim().length === 0) return 100;
+        var q = query.toLowerCase().trim();
+        var score = 0;
+        var title = (method.title || "").toLowerCase();
+        var id = (method.id || "").toLowerCase();
+        var tags = (method.tags || []).map(function(t) { return t.toLowerCase(); });
+
+        if (title.indexOf(q) !== -1) {
+            score += 50;
+            if (title.indexOf(q) === 0) score += 20;
+        }
+        if (id.indexOf(q) !== -1) {
+            score += 30;
+            if (id === q) score += 20;
+        }
+        for (var i = 0; i < tags.length; i++) {
+            if (tags[i].indexOf(q) !== -1) {
+                score += 20;
+                break;
+            }
+        }
+        if (searchBody && bodyText) {
+            var body = bodyText.toLowerCase();
+            if (body.indexOf(q) !== -1) {
+                score += 10;
+            }
+        }
+        return score;
+    }
+
+        function filterAndSortMethods(methods, query, tagFilter, searchBody, bodiesMap, sortOrder, favorites, pins) {
+        var results = [];
+        for (var i = 0; i < methods.length; i++) {
+            var m = methods[i];
+            if (tagFilter && tagFilter !== "all") {
+                var tags = m.tags || [];
+                var hasTag = false;
+                for (var j = 0; j < tags.length; j++) {
+                    if (tags[j] === tagFilter) {
+                        hasTag = true;
+                        break;
+                    }
+                }
+                if (!hasTag) continue;
+            }
+            var bodyText = bodiesMap[m.url] || "";
+            var score = scoreMethod(m, query, searchBody, bodyText);
+            if (query && query.trim().length > 0 && score === 0) continue;
+            results.push({ method: m, score: score });
+        }
+        
+        results.sort(function(a, b) {
+            // Pinned items always come first
+            var isPinA = pins.indexOf(a.method.id) !== -1;
+            var isPinB = pins.indexOf(b.method.id) !== -1;
+            if (isPinA && !isPinB) return -1;
+            if (!isPinA && isPinB) return 1;
+            
+            // Then sort by selected order
+            if (sortOrder === "title") {
+                var titleA = (a.method.title || "").toLowerCase();
+                var titleB = (b.method.title || "").toLowerCase();
+                if (titleA < titleB) return -1;
+                if (titleA > titleB) return 1;
+                return 0;
+            } else if (sortOrder === "updated") {
+                var dateA = a.method.updated || "";
+                var dateB = b.method.updated || "";
+                if (dateB < dateA) return -1;
+                if (dateB > dateA) return 1;
+                return 0;
+            } else {
+                // Relevance (default)
+                if (b.score !== a.score) return b.score - a.score;
+                var titleA = (a.method.title || "").toLowerCase();
+                var titleB = (b.method.title || "").toLowerCase();
+                if (titleA < titleB) return -1;
+                if (titleA > titleB) return 1;
+                return 0;
+            }
+        });
+        return results.map(function(r) { return r.method; });
+    }
+
+    function openMethodsLibraryModal() {
+        if (METHODS_LIBRARY_MODAL_REF && document.body.contains(METHODS_LIBRARY_MODAL_REF)) {
+            METHODS_LIBRARY_MODAL_REF.focus();
+            return;
+        }
+
+        var allMethods = [];
+        var allTags = [];
+        var selectedMethod = null;
+        var currentBodyText = "";
+
+        var overlay = document.createElement("div");
+        overlay.style.position = "fixed";
+        overlay.style.top = "0";
+        overlay.style.left = "0";
+        overlay.style.width = "100%";
+        overlay.style.height = "100%";
+        overlay.style.background = "rgba(0,0,0,0.6)";
+        overlay.style.zIndex = "999997";
+
+        var modal = document.createElement("div");
+        modal.setAttribute("role", "dialog");
+        modal.setAttribute("aria-modal", "true");
+        modal.setAttribute("aria-label", "ClinSpark Methods Library");
+        modal.tabIndex = -1;
+        modal.style.position = "fixed";
+        modal.style.top = "50%";
+        modal.style.left = "50%";
+        modal.style.transform = "translate(-50%, -50%)";
+        modal.style.width = "900px";
+        modal.style.maxWidth = "95vw";
+        modal.style.height = "600px";
+        modal.style.maxHeight = "90vh";
+        modal.style.background = "#1a1a1a";
+        modal.style.color = "#fff";
+        modal.style.border = "1px solid #444";
+        modal.style.borderRadius = "10px";
+        modal.style.boxShadow = "0 8px 32px rgba(0,0,0,0.5)";
+        modal.style.display = "flex";
+        modal.style.flexDirection = "column";
+        modal.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
+        modal.style.fontSize = "14px";
+        modal.style.zIndex = "999998";
+        modal.style.outline = "none";
+
+        METHODS_LIBRARY_MODAL_REF = modal;
+
+        var header = document.createElement("div");
+        header.style.display = "flex";
+        header.style.alignItems = "center";
+        header.style.justifyContent = "space-between";
+        header.style.padding = "12px 16px";
+        header.style.borderBottom = "1px solid #333";
+        header.style.cursor = "move";
+        header.style.userSelect = "none";
+
+        var titleEl = document.createElement("div");
+        titleEl.textContent = "ClinSpark Methods Library";
+        titleEl.style.fontWeight = "600";
+        titleEl.style.fontSize = "16px";
+        header.appendChild(titleEl);
+
+        var closeBtn = document.createElement("button");
+        closeBtn.textContent = "✕";
+        closeBtn.setAttribute("aria-label", "Close");
+        closeBtn.style.background = "transparent";
+        closeBtn.style.color = "#fff";
+        closeBtn.style.border = "none";
+        closeBtn.style.fontSize = "18px";
+        closeBtn.style.cursor = "pointer";
+        closeBtn.style.padding = "4px 8px";
+        closeBtn.style.borderRadius = "4px";
+        closeBtn.onmouseenter = function() { closeBtn.style.background = "#333"; };
+        closeBtn.onmouseleave = function() { closeBtn.style.background = "transparent"; };
+        header.appendChild(closeBtn);
+        modal.appendChild(header);
+
+        var toolbar = document.createElement("div");
+        toolbar.style.display = "flex";
+        toolbar.style.alignItems = "center";
+        toolbar.style.gap = "10px";
+        toolbar.style.padding = "10px 16px";
+        toolbar.style.borderBottom = "1px solid #333";
+        toolbar.style.flexWrap = "wrap";
+
+        var searchInput = document.createElement("input");
+        searchInput.type = "text";
+        searchInput.placeholder = "Search methods...";
+        searchInput.setAttribute("aria-label", "Search methods");
+        searchInput.style.flex = "1";
+        searchInput.style.minWidth = "150px";
+        searchInput.style.padding = "8px 12px";
+        searchInput.style.background = "#2a2a2a";
+        searchInput.style.border = "1px solid #444";
+        searchInput.style.borderRadius = "6px";
+        searchInput.style.color = "#fff";
+        searchInput.style.fontSize = "14px";
+        searchInput.style.outline = "none";
+        searchInput.onfocus = function() { searchInput.style.borderColor = "#5b43c7"; };
+        searchInput.onblur = function() { searchInput.style.borderColor = "#444"; };
+        toolbar.appendChild(searchInput);
+
+        var tagSelect = document.createElement("select");
+        tagSelect.setAttribute("aria-label", "Filter by tag");
+        tagSelect.style.padding = "8px 12px";
+        tagSelect.style.background = "#2a2a2a";
+        tagSelect.style.border = "1px solid #444";
+        tagSelect.style.borderRadius = "6px";
+        tagSelect.style.color = "#fff";
+        tagSelect.style.fontSize = "14px";
+        tagSelect.style.cursor = "pointer";
+        toolbar.appendChild(tagSelect);
+
+        var sortSelect = document.createElement("select");
+        sortSelect.setAttribute("aria-label", "Sort order");
+        sortSelect.style.padding = "8px 12px";
+        sortSelect.style.background = "#2a2a2a";
+        sortSelect.style.border = "1px solid #444";
+        sortSelect.style.borderRadius = "6px";
+        sortSelect.style.color = "#fff";
+        sortSelect.style.fontSize = "14px";
+        sortSelect.style.cursor = "pointer";
+        var sortOpts = [
+            { value: "relevance", text: "Sort: Relevance" },
+            { value: "title", text: "Sort: Title" },
+            { value: "updated", text: "Sort: Updated" }
+        ];
+        for (var i = 0; i < sortOpts.length; i++) {
+            var opt = document.createElement("option");
+            opt.value = sortOpts[i].value;
+            opt.textContent = sortOpts[i].text;
+            sortSelect.appendChild(opt);
+        }
+        toolbar.appendChild(sortSelect);
+
+        var searchBodyLabel = document.createElement("label");
+        searchBodyLabel.style.display = "flex";
+        searchBodyLabel.style.alignItems = "center";
+        searchBodyLabel.style.gap = "6px";
+        searchBodyLabel.style.cursor = "pointer";
+        searchBodyLabel.style.fontSize = "13px";
+        searchBodyLabel.style.color = "#aaa";
+        var searchBodyCheckbox = document.createElement("input");
+        searchBodyCheckbox.type = "checkbox";
+        searchBodyCheckbox.setAttribute("aria-label", "Search in body content");
+        searchBodyLabel.appendChild(searchBodyCheckbox);
+        searchBodyLabel.appendChild(document.createTextNode("Search body"));
+        toolbar.appendChild(searchBodyLabel);
+
+        var favoritesLabel = document.createElement("label");
+        favoritesLabel.style.display = "flex";
+        favoritesLabel.style.alignItems = "center";
+        favoritesLabel.style.gap = "6px";
+        favoritesLabel.style.cursor = "pointer";
+        favoritesLabel.style.fontSize = "13px";
+        favoritesLabel.style.color = "#aaa";
+        var favoritesCheckbox = document.createElement("input");
+        favoritesCheckbox.type = "checkbox";
+        favoritesCheckbox.setAttribute("aria-label", "Show only favorites");
+        favoritesLabel.appendChild(favoritesCheckbox);
+        favoritesLabel.appendChild(document.createTextNode("★ Favorites"));
+        toolbar.appendChild(favoritesLabel);
+
+        var toolbarBtns = document.createElement("div");
+        toolbarBtns.style.display = "flex";
+        toolbarBtns.style.gap = "8px";
+
+        function createToolbarBtn(text, ariaLabel) {
+            var btn = document.createElement("button");
+            btn.textContent = text;
+            btn.setAttribute("aria-label", ariaLabel);
+            btn.style.padding = "8px 14px";
+            btn.style.background = "#333";
+            btn.style.color = "#fff";
+            btn.style.border = "1px solid #444";
+            btn.style.borderRadius = "6px";
+            btn.style.cursor = "pointer";
+            btn.style.fontSize = "13px";
+            btn.style.fontWeight = "500";
+            btn.style.transition = "background 0.15s";
+            btn.onmouseenter = function() { btn.style.background = "#444"; };
+            btn.onmouseleave = function() { btn.style.background = "#333"; };
+            return btn;
+        }
+
+        var copyBtn = createToolbarBtn("Copy", "Copy method code to clipboard");
+        var refreshBtn = createToolbarBtn("Refresh", "Refresh methods index");
+        toolbarBtns.appendChild(copyBtn);
+        toolbarBtns.appendChild(refreshBtn);
+        toolbar.appendChild(toolbarBtns);
+        modal.appendChild(toolbar);
+
+        var mainContent = document.createElement("div");
+        mainContent.style.display = "flex";
+        mainContent.style.flex = "1";
+        mainContent.style.overflow = "hidden";
+
+        var listPane = document.createElement("div");
+        listPane.style.width = "280px";
+        listPane.style.minWidth = "200px";
+        listPane.style.borderRight = "1px solid #333";
+        listPane.style.overflowY = "auto";
+        listPane.style.background = "#1a1a1a";
+        listPane.setAttribute("role", "listbox");
+        listPane.setAttribute("aria-label", "Methods list");
+
+        var previewPane = document.createElement("div");
+        previewPane.style.flex = "1";
+        previewPane.style.display = "flex";
+        previewPane.style.flexDirection = "column";
+        previewPane.style.overflow = "hidden";
+        previewPane.style.background = "#111";
+
+        var previewHeader = document.createElement("div");
+        previewHeader.style.padding = "12px 16px";
+        previewHeader.style.borderBottom = "1px solid #333";
+        previewHeader.style.background = "#1a1a1a";
+
+        var previewTitle = document.createElement("div");
+        previewTitle.style.fontWeight = "600";
+        previewTitle.style.fontSize = "15px";
+        previewTitle.style.marginBottom = "4px";
+        previewTitle.textContent = "Select a method";
+        previewHeader.appendChild(previewTitle);
+
+        var previewMeta = document.createElement("div");
+        previewMeta.style.fontSize = "12px";
+        previewMeta.style.color = "#888";
+        previewHeader.appendChild(previewMeta);
+
+        var previewBody = document.createElement("pre");
+        previewBody.style.flex = "1";
+        previewBody.style.margin = "0";
+        previewBody.style.padding = "16px";
+        previewBody.style.overflowY = "auto";
+        previewBody.style.background = "#0d0d0d";
+        previewBody.style.fontSize = "13px";
+        previewBody.style.fontFamily = "Consolas, Monaco, 'Courier New', monospace";
+        previewBody.style.whiteSpace = "pre-wrap";
+        previewBody.style.wordBreak = "break-word";
+        previewBody.style.color = "#e0e0e0";
+        previewBody.style.lineHeight = "1.5";
+
+        previewPane.appendChild(previewHeader);
+        previewPane.appendChild(previewBody);
+        mainContent.appendChild(listPane);
+        mainContent.appendChild(previewPane);
+        modal.appendChild(mainContent);
+
+        var statusBar = document.createElement("div");
+        statusBar.style.padding = "8px 16px";
+        statusBar.style.borderTop = "1px solid #333";
+        statusBar.style.fontSize = "12px";
+        statusBar.style.color = "#888";
+        statusBar.style.background = "#1a1a1a";
+        statusBar.textContent = "Loading...";
+        modal.appendChild(statusBar);
+
+        function updateStatus(msg, isError) {
+            statusBar.textContent = msg;
+            statusBar.style.color = isError ? "#e74c3c" : "#888";
+        }
+
+        function populateTagSelect() {
+            tagSelect.innerHTML = "";
+            var allOpt = document.createElement("option");
+            allOpt.value = "all";
+            allOpt.textContent = "All tags";
+            tagSelect.appendChild(allOpt);
+            for (var i = 0; i < allTags.length; i++) {
+                var opt = document.createElement("option");
+                opt.value = allTags[i];
+                opt.textContent = allTags[i];
+                tagSelect.appendChild(opt);
+            }
+        }
+
+                function renderList(methods) {
+            listPane.innerHTML = "";
+            if (methods.length === 0) {
+                var empty = document.createElement("div");
+                empty.style.padding = "20px";
+                empty.style.color = "#666";
+                empty.style.textAlign = "center";
+                empty.textContent = "No methods found";
+                listPane.appendChild(empty);
+                return;
+            }
+            
+            var favorites = getFavorites();
+            var recents = getRecents();
+            var pins = getPins();
+            
+            for (var i = 0; i < methods.length; i++) {
+                (function(m, idx) {
+                    var item = document.createElement("div");
+                    item.setAttribute("role", "option");
+                    item.setAttribute("aria-selected", "false");
+                    item.setAttribute("data-method-id", m.id);
+                    item.tabIndex = 0;
+                    item.style.padding = "10px 14px";
+                    item.style.borderBottom = "1px solid #2a2a2a";
+                    item.style.cursor = "pointer";
+                    item.style.transition = "background 0.1s";
+                    item.style.position = "relative";
+
+                    var itemId = document.createElement("div");
+                    itemId.style.fontSize = "11px";
+                    itemId.style.color = "#5b43c7";
+                    itemId.style.marginBottom = "2px";
+                    itemId.textContent = m.id || "";
+                    item.appendChild(itemId);
+
+                    var itemTitle = document.createElement("div");
+                    itemTitle.style.fontWeight = "500";
+                    itemTitle.style.fontSize = "13px";
+                    itemTitle.textContent = m.title || "(Untitled)";
+                    item.appendChild(itemTitle);
+
+                    if (m.tags && m.tags.length > 0) {
+                        var itemTags = document.createElement("div");
+                        itemTags.style.fontSize = "11px";
+                        itemTags.style.color = "#666";
+                        itemTags.style.marginTop = "4px";
+                        itemTags.textContent = m.tags.join(", ");
+                        item.appendChild(itemTags);
+                    }
+                    
+                    // Badges container
+                    var badges = document.createElement("div");
+                    badges.style.display = "flex";
+                    badges.style.gap = "4px";
+                    badges.style.marginTop = "4px";
+                    badges.style.fontSize = "10px";
+                    
+                    var isFav = favorites.indexOf(m.id) !== -1;
+                    var isRecent = recents.indexOf(m.id) !== -1;
+                    var isPinned = pins.indexOf(m.id) !== -1;
+                    
+                    if (isPinned) {
+                        var pinBadge = document.createElement("span");
+                        pinBadge.textContent = "📌 Pinned";
+                        pinBadge.style.color = "#f39c12";
+                        badges.appendChild(pinBadge);
+                    }
+                    if (isFav) {
+                        var favBadge = document.createElement("span");
+                        favBadge.textContent = "★ Favorite";
+                        favBadge.style.color = "#ffd700";
+                        badges.appendChild(favBadge);
+                    }
+                    if (isRecent && !isPinned) {
+                        var recentBadge = document.createElement("span");
+                        recentBadge.textContent = "🕒 Recent";
+                        recentBadge.style.color = "#888";
+                        badges.appendChild(recentBadge);
+                    }
+                    
+                    if (badges.children.length > 0) {
+                        item.appendChild(badges);
+                    }
+                    
+                    // Action buttons (show on hover)
+                    var actions = document.createElement("div");
+                    actions.style.position = "absolute";
+                    actions.style.top = "8px";
+                    actions.style.right = "8px";
+                    actions.style.display = "none";
+                    actions.style.gap = "4px";
+                    
+                    var favBtn = document.createElement("button");
+                    favBtn.textContent = isFav ? "★" : "☆";
+                    favBtn.title = isFav ? "Remove from favorites" : "Add to favorites";
+                    favBtn.style.background = "transparent";
+                    favBtn.style.border = "none";
+                    favBtn.style.color = isFav ? "#ffd700" : "#888";
+                    favBtn.style.fontSize = "16px";
+                    favBtn.style.cursor = "pointer";
+                    favBtn.style.padding = "2px 6px";
+                    favBtn.onclick = function(e) {
+                        e.stopPropagation();
+                        toggleFavorite(m.id);
+                        doSearch();
+                    };
+                    actions.appendChild(favBtn);
+                    
+                    var pinBtn = document.createElement("button");
+                    pinBtn.textContent = isPinned ? "📌" : "📍";
+                    pinBtn.title = isPinned ? "Unpin" : "Pin to top";
+                    pinBtn.style.background = "transparent";
+                    pinBtn.style.border = "none";
+                    pinBtn.style.color = isPinned ? "#f39c12" : "#888";
+                    pinBtn.style.fontSize = "14px";
+                    pinBtn.style.cursor = "pointer";
+                    pinBtn.style.padding = "2px 6px";
+                    pinBtn.onclick = function(e) {
+                        e.stopPropagation();
+                        var result = togglePin(m.id);
+                        if (!result.success) {
+                            updateStatus(result.message, true);
+                            setTimeout(function() { doSearch(); }, 2000);
+                        } else {
+                            doSearch();
+                        }
+                    };
+                    actions.appendChild(pinBtn);
+                    
+                    item.appendChild(actions);
+
+                    item.onmouseenter = function() {
+                        if (selectedMethod !== m) item.style.background = "#252525";
+                        actions.style.display = "flex";
+                    };
+                    item.onmouseleave = function() {
+                        if (selectedMethod !== m) item.style.background = "transparent";
+                        actions.style.display = "none";
+                    };
+                    item.onclick = function() { selectMethod(m, item); };
+                    item.onkeydown = function(e) {
+                        if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            selectMethod(m, item);
+                        }
+                    };
+
+                    listPane.appendChild(item);
+                })(methods[i], i);
+            }
+        }
+
+        async function selectMethod(m, itemEl) {
+            selectedMethod = m;
+            currentBodyText = "";
+            
+            // Track as recent and save as last method
+            addRecent(m.id);
+            saveLastMethod(m.id);
+
+            var items = listPane.querySelectorAll("[role='option']");
+            for (var i = 0; i < items.length; i++) {
+                items[i].setAttribute("aria-selected", "false");
+                items[i].style.background = "transparent";
+            }
+            if (itemEl) {
+                itemEl.setAttribute("aria-selected", "true");
+                itemEl.style.background = "#2a2a2a";
+                itemEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
+            }
+
+            previewTitle.textContent = (m.id || "") + " — " + (m.title || "(Untitled)");
+            var metaParts = [];
+            if (m.tags && m.tags.length > 0) metaParts.push("Tags: " + m.tags.join(", "));
+            if (m.updated) metaParts.push("Updated: " + m.updated);
+            previewMeta.textContent = metaParts.join("  •  ");
+
+            previewBody.textContent = "Loading...";
+
+            if (m.url) {
+                var result = await fetchMethodBody(m.url);
+                if (result.success) {
+                    currentBodyText = result.body;
+                    previewBody.textContent = result.body;
+                } else {
+                    previewBody.textContent = "Error loading method: " + result.error;
+                }
+            } else {
+                previewBody.textContent = "(No URL specified)";
+            }
+        }
+
+        function doSearch() {
+            var query = searchInput.value;
+            var tagFilter = tagSelect.value;
+            var searchBody = searchBodyCheckbox.checked;
+            var sortOrder = sortSelect.value;
+            var showOnlyFavorites = favoritesCheckbox.checked;
+            
+            // Save session state
+            saveLastSearch(query);
+            saveLastTag(tagFilter);
+            saveSortOrder(sortOrder);
+            
+            var favorites = getFavorites();
+            var pins = getPins();
+            
+            var methodsToFilter = allMethods;
+            if (showOnlyFavorites) {
+                methodsToFilter = allMethods.filter(function(m) {
+                    return favorites.indexOf(m.id) !== -1;
+                });
+            }
+            
+            var filtered = filterAndSortMethods(methodsToFilter, query, tagFilter, searchBody, METHODS_BODY_CACHE, sortOrder, favorites, pins);
+            renderList(filtered);
+            updateStatus(filtered.length + " of " + allMethods.length + " methods");
+        }
+
+            async function loadIndex(forceRefresh) {
+            updateStatus("Loading methods index...");
+            var result = await fetchMethodsIndex(forceRefresh);
+            if (!result.success) {
+                updateStatus("Error: " + result.error, true);
+                renderList([]);
+                return;
+            }
+            allMethods = result.data;
+            allTags = buildTagList(allMethods);
+            populateTagSelect();
+
+            if (METHODS_PRELOAD_BODIES) {
+                updateStatus("Preloading method bodies...");
+                for (var i = 0; i < allMethods.length; i++) {
+                    if (allMethods[i].url) {
+                        await fetchMethodBody(allMethods[i].url);
+                    }
+                }
+            }
+            
+            searchInput.value = getLastSearch();
+            tagSelect.value = getLastTag();
+            sortSelect.value = getSortOrder();
+
+            doSearch();
+        }
+
+        searchInput.oninput = doSearch;
+        tagSelect.onchange = doSearch;
+        searchBodyCheckbox.onchange = doSearch;
+        sortSelect.onchange = doSearch;
+        favoritesCheckbox.onchange = doSearch;
+        
+        refreshBtn.onclick = function() {
+            METHODS_BODY_CACHE = {};
+            loadIndex(true);
+        };
+
+        copyBtn.onclick = async function() {
+            if (!currentBodyText) {
+                updateStatus("No method selected to copy", true);
+                return;
+            }
+            try {
+                await navigator.clipboard.writeText(currentBodyText);
+                updateStatus("Copied to clipboard!");
+                setTimeout(function() {
+                    doSearch();
+                }, 1500);
+            } catch (e) {
+                updateStatus("Copy failed: " + String(e), true);
+            }
+        };
+
+        function closeModal() {
+            overlay.remove();
+            modal.remove();
+            METHODS_LIBRARY_MODAL_REF = null;
+            document.removeEventListener("keydown", keyHandler);
+        }
+
+        closeBtn.onclick = closeModal;
+        overlay.onclick = closeModal;
+
+        function keyHandler(e) {
+            if (e.key === "Escape") {
+                closeModal();
+                return;
+            }
+            
+            // Enter key when search box is focused - select first result
+            if (e.key === "Enter" && document.activeElement === searchInput) {
+                var firstItem = listPane.querySelector("[role='option']");
+                if (firstItem) {
+                    var methodId = firstItem.getAttribute("data-method-id");
+                    var method = allMethods.find(function(m) { return m.id === methodId; });
+                    if (method) {
+                        selectMethod(method, firstItem);
+                    }
+                }
+                return;
+            }
+            
+            // Arrow Up/Down navigation in list
+            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                var items = Array.from(listPane.querySelectorAll("[role='option']"));
+                if (items.length === 0) return;
+                
+                var currentIndex = -1;
+                for (var i = 0; i < items.length; i++) {
+                    if (items[i].getAttribute("aria-selected") === "true") {
+                        currentIndex = i;
+                        break;
+                    }
+                }
+                
+                var nextIndex;
+                if (e.key === "ArrowDown") {
+                    nextIndex = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
+                } else {
+                    nextIndex = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
+                }
+                
+                var nextItem = items[nextIndex];
+                var methodId = nextItem.getAttribute("data-method-id");
+                var method = allMethods.find(function(m) { return m.id === methodId; });
+                if (method) {
+                    selectMethod(method, nextItem);
+                }
+                e.preventDefault();
+                return;
+            }
+            
+            // Tab cycling
+            if (e.key === "Tab") {
+                var focusable = modal.querySelectorAll('button, input, select, [tabindex]:not([tabindex="-1"])');
+                if (focusable.length === 0) return;
+                var first = focusable[0];
+                var last = focusable[focusable.length - 1];
+                if (e.shiftKey && document.activeElement === first) {
+                    e.preventDefault();
+                    last.focus();
+                } else if (!e.shiftKey && document.activeElement === last) {
+                    e.preventDefault();
+                    first.focus();
+                }
+            }
+        }
+        document.addEventListener("keydown", keyHandler);
+
+        var isDragging = false;
+        var dragStartX = 0, dragStartY = 0, modalStartX = 0, modalStartY = 0;
+
+        header.onmousedown = function(e) {
+            if (e.target === closeBtn) return;
+            isDragging = true;
+            var rect = modal.getBoundingClientRect();
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
+            modalStartX = rect.left;
+            modalStartY = rect.top;
+            modal.style.transform = "none";
+            e.preventDefault();
+        };
+
+        document.addEventListener("mousemove", function(e) {
+            if (!isDragging) return;
+            var dx = e.clientX - dragStartX;
+            var dy = e.clientY - dragStartY;
+            modal.style.left = (modalStartX + dx) + "px";
+            modal.style.top = (modalStartY + dy) + "px";
+        });
+
+        document.addEventListener("mouseup", function() {
+            isDragging = false;
+        });
+
+        document.body.appendChild(overlay);
+        document.body.appendChild(modal);
+        modal.focus();
+        searchInput.focus();
+
+        loadIndex(false);
+        log("Methods Library: modal opened");
+    }
+
+        function getFavorites() {
+        try {
+            var raw = localStorage.getItem(STORAGE_METHODS_FAVORITES);
+            if (!raw) return [];
+            return JSON.parse(raw);
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function saveFavorites(favs) {
+        try {
+            localStorage.setItem(STORAGE_METHODS_FAVORITES, JSON.stringify(favs));
+        } catch (e) {}
+    }
+
+    function toggleFavorite(methodId) {
+        var favs = getFavorites();
+        var idx = favs.indexOf(methodId);
+        if (idx !== -1) {
+            favs.splice(idx, 1);
+        } else {
+            favs.push(methodId);
+        }
+        saveFavorites(favs);
+        return favs;
+    }
+
+    function getRecents() {
+        try {
+            var raw = localStorage.getItem(STORAGE_METHODS_RECENTS);
+            if (!raw) return [];
+            return JSON.parse(raw);
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function addRecent(methodId) {
+        var recents = getRecents();
+        var idx = recents.indexOf(methodId);
+        if (idx !== -1) {
+            recents.splice(idx, 1);
+        }
+        recents.unshift(methodId);
+        if (recents.length > MAX_RECENTS) {
+            recents = recents.slice(0, MAX_RECENTS);
+        }
+        try {
+            localStorage.setItem(STORAGE_METHODS_RECENTS, JSON.stringify(recents));
+        } catch (e) {}
+    }
+
+    function getPins() {
+        try {
+            var raw = localStorage.getItem(STORAGE_METHODS_PINS);
+            if (!raw) return [];
+            return JSON.parse(raw);
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function savePins(pins) {
+        try {
+            localStorage.setItem(STORAGE_METHODS_PINS, JSON.stringify(pins));
+        } catch (e) {}
+    }
+
+    function togglePin(methodId) {
+        var pins = getPins();
+        var idx = pins.indexOf(methodId);
+        if (idx !== -1) {
+            pins.splice(idx, 1);
+        } else {
+            if (pins.length >= MAX_PINS) {
+                return { success: false, message: "Maximum " + MAX_PINS + " pins allowed" };
+            }
+            pins.push(methodId);
+        }
+        savePins(pins);
+        return { success: true, pins: pins };
+    }
+
+    function getLastSearch() {
+        try {
+            return localStorage.getItem(STORAGE_METHODS_LAST_SEARCH) || "";
+        } catch (e) {
+            return "";
+        }
+    }
+
+    function saveLastSearch(query) {
+        try {
+            localStorage.setItem(STORAGE_METHODS_LAST_SEARCH, query);
+        } catch (e) {}
+    }
+
+    function getLastTag() {
+        try {
+            return localStorage.getItem(STORAGE_METHODS_LAST_TAG) || "all";
+        } catch (e) {
+            return "all";
+        }
+    }
+
+    function saveLastTag(tag) {
+        try {
+            localStorage.setItem(STORAGE_METHODS_LAST_TAG, tag);
+        } catch (e) {}
+    }
+
+    function getLastMethod() {
+        try {
+            return localStorage.getItem(STORAGE_METHODS_LAST_METHOD) || "";
+        } catch (e) {
+            return "";
+        }
+    }
+
+    function saveLastMethod(methodId) {
+        try {
+            localStorage.setItem(STORAGE_METHODS_LAST_METHOD, methodId);
+        } catch (e) {}
+    }
+
+    function getSortOrder() {
+        try {
+            return localStorage.getItem(STORAGE_METHODS_SORT_ORDER) || "relevance";
+        } catch (e) {
+            return "relevance";
+        }
+    }
+
+    function saveSortOrder(order) {
+        try {
+            localStorage.setItem(STORAGE_METHODS_SORT_ORDER, order);
+        } catch (e) {}
+    }
+
     //=========================
     // SETTING FEATURE
     //=========================
@@ -235,6 +1238,7 @@
             "Import Cohort Subjects",
             "Run Barcode",
             "Add Existing Subject",
+            "Search Methods",
             "Scheduled Activities Builder",
             "Run Form (OOR) Below Range",
             "Run Form (OOR) Above Range",
@@ -16583,6 +17587,22 @@
         parseMethodBtn.style.cursor = "pointer";
         parseMethodBtn.onmouseenter = () => { parseMethodBtn.style.background = "#58a1f5"; };
         parseMethodBtn.onmouseleave = () => { parseMethodBtn.style.background = "#4a90e2"; };
+        
+        var searchMethodsBtn = document.createElement("button");
+        searchMethodsBtn.textContent = "Search Methods";
+        searchMethodsBtn.style.background = "#5b43c7";
+        searchMethodsBtn.style.color = "#fff";
+        searchMethodsBtn.style.border = "none";
+        searchMethodsBtn.style.borderRadius = "6px";
+        searchMethodsBtn.style.padding = "8px";
+        searchMethodsBtn.style.cursor = "pointer";
+        searchMethodsBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
+        searchMethodsBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
+        searchMethodsBtn.addEventListener("click", function() {
+            log("[SearchMethods] Button clicked");
+            openMethodsLibraryModal();
+        });
+        
         var pauseBtn = document.createElement("button");
         pauseBtn.textContent = isPaused() ? "Resume" : "Pause";
         pauseBtn.style.background = "#6c757d";
@@ -16716,6 +17736,7 @@
             { el: runNonScrnBtn, label: "Import Cohort Subjects" },
             { el: runBarcodeBtn, label: "Run Barcode" },
             { el: addExistingSubjectBtn, label: "Add Existing Subject" },
+            { el: searchMethodsBtn, label: "Search Methods" },
             { el: saBuilderBtn, label: "Scheduled Activities Builder" },
             { el: runFormOORBtn, label: "Run Form (OOR) Below Range" },
             { el: runFormOORABtn, label: "Run Form (OOR) Above Range" },
@@ -16737,6 +17758,7 @@
                 btnRow.appendChild(btnItem.el);
             }
         }
+        
         runLockSamplePathsBtn.addEventListener("click", function () {
             try {
                 localStorage.setItem(STORAGE_RUN_LOCK_SAMPLE_PATHS, "1");
