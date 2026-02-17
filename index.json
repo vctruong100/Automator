@@ -348,5 +348,12 @@
     "tags": ["BMI", "Weight", "Average"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20Weight.md",
     "updated": "2026-02-16"
+  },
+  {
+    "id": "M-051",
+    "title": "Edit Check Difference between Collected Time and Supine Time",
+    "tags": ["Supine", "ECG", "Difference"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Difference%20Between%20Collected%20Time%20and%20Supine%20Time.md",
+    "updated": "2026-02-16"
   }
 ]

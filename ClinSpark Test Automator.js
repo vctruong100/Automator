@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.2.4
+// @version 3.2.5
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -185,6 +185,217 @@
 
     var CLEAR_MAPPING_CANCELED = false;
     var CLEAR_MAPPING_PAUSE = false;
+
+
+    
+    //=========================
+    // SETTING FEATURE
+    //=========================
+    // This section contains functions for setting up the extension.
+    // It includes functions for loading and saving settings, as well as
+    // functions for updating the UI based on the current settings.
+    //=========================
+    var STORAGE_BUTTON_VISIBILITY = "activityPlanState.buttonVisibility";
+    var SETTINGS_POPUP_REF = null;
+    function getButtonVisibility() {
+        try {
+            var raw = localStorage.getItem(STORAGE_BUTTON_VISIBILITY);
+            if (raw) {
+                return JSON.parse(raw);
+            }
+        } catch (e) {}
+        return null;
+    }
+
+    function setButtonVisibility(visibilityMap) {
+        try {
+            localStorage.setItem(STORAGE_BUTTON_VISIBILITY, JSON.stringify(visibilityMap));
+        } catch (e) {}
+    }
+
+    function isButtonVisible(label) {
+        var visibility = getButtonVisibility();
+        if (!visibility) {
+            return true;
+        }
+        if (visibility.hasOwnProperty(label)) {
+            return visibility[label];
+        }
+        return true;
+    }
+
+    function openSettingsPopup() {
+        var buttonLabels = [
+            "Lock Activity Plans",
+            "Lock Sample Paths",
+            "Update Study Status",
+            "Add Cohort Subjects",
+            "Run ICF Consent",
+            "Run Button (1-5)",
+            "Import Cohort Subjects",
+            "Run Barcode",
+            "Add Existing Subject",
+            "Scheduled Activities Builder",
+            "Run Form (OOR) Below Range",
+            "Run Form (OOR) Above Range",
+            "Run Form (IR) In Range",
+            "Collect All",
+            "Import I/E",
+            "Clear Mapping",
+            "Item Method Forms",
+            "Find Form",
+            "Find Study Events",
+            "Pause",
+            "Clear Logs",
+            "Hide Logs"
+        ];
+
+        var currentVisibility = getButtonVisibility() || {};
+
+        var container = document.createElement("div");
+        container.style.display = "flex";
+        container.style.flexDirection = "column";
+        container.style.gap = "8px";
+        container.style.minWidth = "280px";
+
+        var description = document.createElement("div");
+        description.textContent = "Select which buttons to display in the panel:";
+        description.style.fontSize = "13px";
+        description.style.color = "#aaa";
+        description.style.marginBottom = "12px";
+        container.appendChild(description);
+
+        var checkboxContainer = document.createElement("div");
+        checkboxContainer.style.display = "flex";
+        checkboxContainer.style.flexDirection = "column";
+        checkboxContainer.style.gap = "6px";
+        checkboxContainer.style.maxHeight = "320px";
+        checkboxContainer.style.overflowY = "auto";
+        checkboxContainer.style.paddingRight = "8px";
+
+        var checkboxes = [];
+
+        for (var i = 0; i < buttonLabels.length; i++) {
+            var label = buttonLabels[i];
+            var isChecked = currentVisibility.hasOwnProperty(label) ? currentVisibility[label] : true;
+
+            var row = document.createElement("label");
+            row.style.display = "flex";
+            row.style.alignItems = "center";
+            row.style.gap = "10px";
+            row.style.padding = "8px 12px";
+            row.style.background = "#1a1a1a";
+            row.style.borderRadius = "6px";
+            row.style.cursor = "pointer";
+            row.style.transition = "background 0.15s";
+            row.onmouseenter = function() { this.style.background = "#252525"; };
+            row.onmouseleave = function() { this.style.background = "#1a1a1a"; };
+
+            var checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.checked = isChecked;
+            checkbox.style.width = "18px";
+            checkbox.style.height = "18px";
+            checkbox.style.cursor = "pointer";
+            checkbox.style.accentColor = "#5b43c7";
+            checkbox.dataset.label = label;
+
+            var labelText = document.createElement("span");
+            labelText.textContent = label;
+            labelText.style.fontSize = "14px";
+            labelText.style.color = "#fff";
+
+            row.appendChild(checkbox);
+            row.appendChild(labelText);
+            checkboxContainer.appendChild(row);
+            checkboxes.push(checkbox);
+        }
+
+        container.appendChild(checkboxContainer);
+
+        var buttonRow = document.createElement("div");
+        buttonRow.style.display = "flex";
+        buttonRow.style.gap = "10px";
+        buttonRow.style.marginTop = "16px";
+        buttonRow.style.justifyContent = "flex-end";
+
+        var selectAllBtn = document.createElement("button");
+        selectAllBtn.textContent = "Select All";
+        selectAllBtn.style.background = "#333";
+        selectAllBtn.style.color = "#fff";
+        selectAllBtn.style.border = "none";
+        selectAllBtn.style.borderRadius = "6px";
+        selectAllBtn.style.padding = "8px 16px";
+        selectAllBtn.style.cursor = "pointer";
+        selectAllBtn.style.fontSize = "13px";
+        selectAllBtn.onmouseenter = function() { this.style.background = "#444"; };
+        selectAllBtn.onmouseleave = function() { this.style.background = "#333"; };
+        selectAllBtn.addEventListener("click", function() {
+            for (var j = 0; j < checkboxes.length; j++) {
+                checkboxes[j].checked = true;
+            }
+        });
+
+        var deselectAllBtn = document.createElement("button");
+        deselectAllBtn.textContent = "Deselect All";
+        deselectAllBtn.style.background = "#333";
+        deselectAllBtn.style.color = "#fff";
+        deselectAllBtn.style.border = "none";
+        deselectAllBtn.style.borderRadius = "6px";
+        deselectAllBtn.style.padding = "8px 16px";
+        deselectAllBtn.style.cursor = "pointer";
+        deselectAllBtn.style.fontSize = "13px";
+        deselectAllBtn.onmouseenter = function() { this.style.background = "#444"; };
+        deselectAllBtn.onmouseleave = function() { this.style.background = "#333"; };
+        deselectAllBtn.addEventListener("click", function() {
+            for (var j = 0; j < checkboxes.length; j++) {
+                checkboxes[j].checked = false;
+            }
+        });
+
+        var saveBtn = document.createElement("button");
+        saveBtn.textContent = "Save & Refresh";
+        saveBtn.style.background = "#5b43c7";
+        saveBtn.style.color = "#fff";
+        saveBtn.style.border = "none";
+        saveBtn.style.borderRadius = "6px";
+        saveBtn.style.padding = "10px 20px";
+        saveBtn.style.cursor = "pointer";
+        saveBtn.style.fontSize = "14px";
+        saveBtn.style.fontWeight = "600";
+        saveBtn.onmouseenter = function() { this.style.background = "#4a35a6"; };
+        saveBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
+
+        buttonRow.appendChild(selectAllBtn);
+        buttonRow.appendChild(deselectAllBtn);
+        buttonRow.appendChild(saveBtn);
+        container.appendChild(buttonRow);
+
+        var settingsPopup = createPopup({
+            title: "Settings",
+            content: container,
+            width: "360px",
+            height: "auto",
+            maxHeight: "80%"
+        });
+        var originalClose = settingsPopup.close;
+        settingsPopup.close = function() {
+            SETTINGS_POPUP_REF = null;
+            originalClose();
+        };
+        saveBtn.addEventListener("click", function() {
+            var newVisibility = {};
+            for (var j = 0; j < checkboxes.length; j++) {
+                var cb = checkboxes[j];
+                newVisibility[cb.dataset.label] = cb.checked;
+            }
+            setButtonVisibility(newVisibility);
+            log("Settings: Button visibility saved");
+            settingsPopup.close();
+            location.reload();
+        });
+        return settingsPopup;
+    }
 
     // =========================
     // UI SCALING FEATURE
@@ -16160,8 +16371,34 @@
         closeBtn.style.color = "#fff";
         closeBtn.style.border = "none";
         closeBtn.style.cursor = "pointer";
+
+        var settingsBtn = document.createElement("button");
+        settingsBtn.textContent = "⚙";
+        settingsBtn.title = "Settings";
+        settingsBtn.style.background = "transparent";
+        settingsBtn.style.color = "#fff";
+        settingsBtn.style.border = "none";
+        settingsBtn.style.cursor = "pointer";
+        settingsBtn.style.fontSize = scale(16);
+        settingsBtn.style.padding = "4px 6px";
+        settingsBtn.style.borderRadius = "4px";
+        settingsBtn.style.display = "flex";
+        settingsBtn.style.alignItems = "center";
+        settingsBtn.style.justifyContent = "center";
+        settingsBtn.addEventListener("click", function() {
+            log("Settings: Button clicked");
+            if (SETTINGS_POPUP_REF) {
+                log("Settings: Closing existing popup");
+                SETTINGS_POPUP_REF.close();
+                SETTINGS_POPUP_REF = null;
+            } else {
+                SETTINGS_POPUP_REF = openSettingsPopup();
+            }
+        });
+        rightControls.appendChild(settingsBtn);
         rightControls.appendChild(collapseBtn);
         rightControls.appendChild(closeBtn);
+
         headerBar.appendChild(rightControls);
         panel.appendChild(headerBar);
         var bodyContainer = document.createElement("div");
@@ -16469,29 +16706,37 @@
         collectAllBtn.onmouseenter = () => { collectAllBtn.style.background = "#ec971f"; };
         collectAllBtn.onmouseleave = () => { collectAllBtn.style.background = "#f0ad4e"; };
 
-        btnRow.appendChild(runPlansBtn);
-        btnRow.appendChild(runLockSamplePathsBtn);
-        btnRow.appendChild(runStudyBtn);
-        btnRow.appendChild(runAddCohortBtn);
-        btnRow.appendChild(runConsentBtn);
-        btnRow.appendChild(runAllBtn);
-        btnRow.appendChild(runNonScrnBtn);
-        btnRow.appendChild(runBarcodeBtn);
-        btnRow.appendChild(addExistingSubjectBtn);
-        btnRow.appendChild(saBuilderBtn);
-        btnRow.appendChild(runFormOORBtn);
-        btnRow.appendChild(runFormOORABtn);
-        btnRow.appendChild(runFormIRBtn);
-        btnRow.appendChild(collectAllBtn);
-        btnRow.appendChild(importEligBtn);
-        btnRow.appendChild(clearMappingBtn);
-        btnRow.appendChild(parseMethodBtn);
-        btnRow.appendChild(findFormBtn);
-        btnRow.appendChild(findStudyEventsBtn);
-        btnRow.appendChild(pauseBtn);
-        btnRow.appendChild(clearLogsBtn);
-        btnRow.appendChild(toggleLogsBtn);
+        var panelButtons = [
+            { el: runPlansBtn, label: "Lock Activity Plans" },
+            { el: runLockSamplePathsBtn, label: "Lock Sample Paths" },
+            { el: runStudyBtn, label: "Update Study Status" },
+            { el: runAddCohortBtn, label: "Add Cohort Subjects" },
+            { el: runConsentBtn, label: "Run ICF Consent" },
+            { el: runAllBtn, label: "Run Button (1-5)" },
+            { el: runNonScrnBtn, label: "Import Cohort Subjects" },
+            { el: runBarcodeBtn, label: "Run Barcode" },
+            { el: addExistingSubjectBtn, label: "Add Existing Subject" },
+            { el: saBuilderBtn, label: "Scheduled Activities Builder" },
+            { el: runFormOORBtn, label: "Run Form (OOR) Below Range" },
+            { el: runFormOORABtn, label: "Run Form (OOR) Above Range" },
+            { el: runFormIRBtn, label: "Run Form (IR) In Range" },
+            { el: collectAllBtn, label: "Collect All" },
+            { el: importEligBtn, label: "Import I/E" },
+            { el: clearMappingBtn, label: "Clear Mapping" },
+            { el: parseMethodBtn, label: "Item Method Forms" },
+            { el: findFormBtn, label: "Find Form" },
+            { el: findStudyEventsBtn, label: "Find Study Events" },
+            { el: pauseBtn, label: "Pause" },
+            { el: clearLogsBtn, label: "Clear Logs" },
+            { el: toggleLogsBtn, label: "Hide Logs" }
+        ];
 
+        for (var bi = 0; bi < panelButtons.length; bi++) {
+            var btnItem = panelButtons[bi];
+            if (isButtonVisible(btnItem.label)) {
+                btnRow.appendChild(btnItem.el);
+            }
+        }
         runLockSamplePathsBtn.addEventListener("click", function () {
             try {
                 localStorage.setItem(STORAGE_RUN_LOCK_SAMPLE_PATHS, "1");
