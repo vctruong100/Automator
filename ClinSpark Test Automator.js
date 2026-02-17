@@ -90,6 +90,7 @@
     var LOCK_ACTIVITY_PLANS_POPUP_REF = null;
 
     const STORAGE_PANEL_HIDDEN = "activityPlanState.panel.hidden";
+    const STORAGE_PANEL_HOTKEY = "activityPlanState.panel.hotkey";
     const PANEL_TOGGLE_KEY = "F2";
     const ELIGIBILITY_LIST_URL = "https://cenexeltest.clinspark.com/secure/crfdesign/studylibrary/eligibility/list";
     const STORAGE_ELIG_IMPORTED = "activityPlanState.eligibility.importedItems";
@@ -1216,6 +1217,28 @@
         } catch (e) {}
     }
 
+    function getPanelHotkey() {
+        try {
+            var saved = localStorage.getItem(STORAGE_PANEL_HOTKEY);
+            if (saved) {
+                return saved;
+            }
+        } catch (err) {
+            log("Error reading hotkey from localStorage: " + String(err));
+        }
+        return "F2";
+    }
+
+    function setPanelHotkey(hotkey) {
+        try {
+            localStorage.setItem(STORAGE_PANEL_HOTKEY, hotkey);
+            return true;
+        } catch (err) {
+            log("Error saving hotkey to localStorage: " + String(err));
+            return false;
+        }
+    }
+
     function isButtonVisible(label) {
         var visibility = getButtonVisibility();
         if (!visibility) {
@@ -1317,7 +1340,112 @@
 
         container.appendChild(checkboxContainer);
 
+        // Hotkey Configuration Section
+        var hotkeySection = document.createElement("div");
+        hotkeySection.style.marginTop = "20px";
+        hotkeySection.style.paddingTop = "20px";
+        hotkeySection.style.borderTop = "1px solid #333";
+
+        var hotkeyLabel = document.createElement("div");
+        hotkeyLabel.textContent = "Panel Toggle Hotkey:";
+        hotkeyLabel.style.fontSize = "13px";
+        hotkeyLabel.style.color = "#aaa";
+        hotkeyLabel.style.marginBottom = "8px";
+        hotkeySection.appendChild(hotkeyLabel);
+
+        var hotkeyInputRow = document.createElement("div");
+        hotkeyInputRow.style.display = "flex";
+        hotkeyInputRow.style.gap = "10px";
+        hotkeyInputRow.style.alignItems = "center";
+
+        var hotkeyInput = document.createElement("input");
+        hotkeyInput.type = "text";
+        hotkeyInput.value = getPanelHotkey();
+        hotkeyInput.placeholder = "Press a key...";
+        hotkeyInput.style.flex = "1";
+        hotkeyInput.style.padding = "10px 12px";
+        hotkeyInput.style.background = "#2a2a2a";
+        hotkeyInput.style.border = "1px solid #444";
+        hotkeyInput.style.borderRadius = "6px";
+        hotkeyInput.style.color = "#fff";
+        hotkeyInput.style.fontSize = "14px";
+        hotkeyInput.style.outline = "none";
+        hotkeyInput.style.fontFamily = "monospace";
+        hotkeyInput.style.cursor = "pointer";
+
+        hotkeyInput.addEventListener("focus", function() {
+            this.style.borderColor = "#5b43c7";
+        });
+
+        hotkeyInput.addEventListener("blur", function() {
+            this.style.borderColor = "#333";
+        });
+
+        hotkeyInput.addEventListener("keydown", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            var key = e.key;
+            var code = e.code;
+            var displayKey = key;
+            
+            // Handle special keys
+            if (key.length === 1 && key.match(/[a-z]/i)) {
+                displayKey = key.toUpperCase();
+            } else if (code && code.startsWith("Key")) {
+                displayKey = code.substring(3);
+            } else if (code && code.startsWith("Digit")) {
+                displayKey = code.substring(5);
+            } else if (key === " ") {
+                displayKey = "Space";
+            } else if (key.startsWith("F") && key.length <= 3) {
+                displayKey = key.toUpperCase();
+            } else if (key === "Escape") {
+                displayKey = "Escape";
+            } else if (key === "Enter") {
+                displayKey = "Enter";
+            } else if (key === "Tab") {
+                displayKey = "Tab";
+            } else if (key === "Backspace") {
+                displayKey = "Backspace";
+            } else if (code) {
+                displayKey = code;
+            }
+            
+            this.value = displayKey;
+        });
+
+        var hotkeyResetBtn = document.createElement("button");
+        hotkeyResetBtn.textContent = "Reset";
+        hotkeyResetBtn.style.background = "#333";
+        hotkeyResetBtn.style.color = "#fff";
+        hotkeyResetBtn.style.border = "none";
+        hotkeyResetBtn.style.borderRadius = "6px";
+        hotkeyResetBtn.style.padding = "10px 16px";
+        hotkeyResetBtn.style.cursor = "pointer";
+        hotkeyResetBtn.style.fontSize = "13px";
+        hotkeyResetBtn.onmouseenter = function() { this.style.background = "#444"; };
+        hotkeyResetBtn.onmouseleave = function() { this.style.background = "#333"; };
+        hotkeyResetBtn.addEventListener("click", function() {
+            hotkeyInput.value = "F2";
+        });
+
+        hotkeyInputRow.appendChild(hotkeyInput);
+        hotkeyInputRow.appendChild(hotkeyResetBtn);
+        hotkeySection.appendChild(hotkeyInputRow);
+
+        var hotkeyHint = document.createElement("div");
+        hotkeyHint.textContent = "Click the input field and press any key to set a new hotkey";
+        hotkeyHint.style.fontSize = "11px";
+        hotkeyHint.style.color = "#666";
+        hotkeyHint.style.marginTop = "6px";
+        hotkeyHint.style.fontStyle = "italic";
+        hotkeySection.appendChild(hotkeyHint);
+
+        container.appendChild(hotkeySection);
+
         var buttonRow = document.createElement("div");
+
         buttonRow.style.display = "flex";
         buttonRow.style.gap = "10px";
         buttonRow.style.marginTop = "16px";
@@ -1394,6 +1522,13 @@
                 newVisibility[cb.dataset.label] = cb.checked;
             }
             setButtonVisibility(newVisibility);
+            
+            var newHotkey = hotkeyInput.value.trim();
+            if (newHotkey) {
+                setPanelHotkey(newHotkey);
+                log("Settings: Hotkey saved as " + newHotkey);
+            }
+            
             log("Settings: Button visibility saved");
             settingsPopup.close();
             location.reload();
@@ -10794,9 +10929,12 @@
             var mode = getRunMode();
             if (mode === "all") {
                 await sleep(1000);
-                log("processLockSamplePathsPage: continuing to Study Show for ALL mode");
-                updateRunAllPopupStatus("Running Update Study Status");
-                location.href = STUDY_SHOW_URL + "?autoupdate=1";
+                log("processLockSamplePathsPage: continuing to Study Metadata for eligibility lock");
+                updateRunAllPopupStatus("Locking Eligibility");
+                try {
+                    localStorage.setItem(STORAGE_CHECK_ELIG_LOCK, "1");
+                } catch (e) {}
+                location.href = STUDY_METADATA_URL + "?autoeliglock=1";
             }
             return;
         }
@@ -10935,9 +11073,12 @@
                 LOCK_SAMPLE_PATHS_POPUP_REF.close();
             }
             LOCK_SAMPLE_PATHS_POPUP_REF = null;
-            log("processLockSamplePathsPage: continuing to Study Show for ALL mode");
-            updateRunAllPopupStatus("Running Update Study Status");
-            location.href = STUDY_SHOW_URL + "?autoupdate=1";
+            log("processLockSamplePathsPage: continuing to Study Metadata for eligibility lock");
+            updateRunAllPopupStatus("Locking Eligibility");
+            try {
+                localStorage.setItem(STORAGE_CHECK_ELIG_LOCK, "1");
+            } catch (e) {}
+            location.href = STUDY_METADATA_URL + "?autoeliglock=1";
         }
     }
 
@@ -14743,9 +14884,6 @@
             if (cancelBtn) {
                 if (mode === "all") {
                     setContinueEpoch();
-                    try {
-                        localStorage.setItem(STORAGE_CHECK_ELIG_LOCK, "1");
-                    } catch (e3) {}
                 } else {
                     try {
                         localStorage.setItem(STORAGE_CHECK_ELIG_LOCK, "1");
@@ -14776,9 +14914,6 @@
         }
         if (mode === "all") {
             setContinueEpoch();
-            try {
-                localStorage.setItem(STORAGE_CHECK_ELIG_LOCK, "1");
-            } catch (e5) {}
         } else {
             try {
                 localStorage.setItem(STORAGE_CHECK_ELIG_LOCK, "1");
@@ -15954,6 +16089,104 @@
         log("CollectAll: data cleared");
     }
 
+    
+    // Process eligibility form page to perform the lock action
+    async function processEligibilityFormPageForLocking() {
+        if (isPaused()) {
+            log("Paused; skipping eligibility form locking");
+            return;
+        }
+        var autoLock = getQueryParam("autolock");
+        var mode = getRunMode();
+        
+        // Check if lock was just completed (after page refresh from save)
+        var lockCompleted = null;
+        try {
+            lockCompleted = localStorage.getItem("eligibilityLockCompleted");
+        } catch (e) {}
+        
+        if (lockCompleted === "1") {
+            try {
+                localStorage.removeItem("eligibilityLockCompleted");
+                localStorage.removeItem(STORAGE_CHECK_ELIG_LOCK);
+            } catch (e) {}
+            
+            log("Eligibility lock completed; continuing to Update Study Status");
+            if (mode === "study") {
+                clearRunMode();
+                log("Ending Study Update");
+                return;
+            }
+            updateRunAllPopupStatus("Running Update Study Status");
+            location.href = STUDY_SHOW_URL + "?autoupdate=1";
+            return;
+        }
+        
+        if (autoLock !== "1") {
+            return;
+        }
+        
+        log("Eligibility form page: attempting to lock");
+        
+        // Find and click the Action button in breadcrumb
+        var actionBtn = await waitForSelector('button.btn.btn-default.btn-sm.dropdown-toggle[data-toggle="dropdown"]', 5000);
+        if (!actionBtn) {
+            log("Action button not found; cannot lock eligibility");
+            if (mode === "study") {
+                clearRunMode();
+                return;
+            }
+            log("Continuing to Update Study Status without lock");
+            updateRunAllPopupStatus("Running Update Study Status");
+            location.href = STUDY_SHOW_URL + "?autoupdate=1";
+            return;
+        }
+        
+        actionBtn.click();
+        log("Action button clicked");
+        await sleep(500);
+        
+        // Find and click the Lock link in dropdown
+        var lockLink = await waitForSelector('a[href*="/secure/crfdesign/studylibrary/locking/form/"][data-toggle="modal"]', 3000);
+        if (!lockLink) {
+            log("Lock link not found in dropdown; cannot lock eligibility");
+            if (mode === "study") {
+                clearRunMode();
+                return;
+            }
+            log("Continuing to Update Study Status without lock");
+            updateRunAllPopupStatus("Running Update Study Status");
+            location.href = STUDY_SHOW_URL + "?autoupdate=1";
+            return;
+        }
+        
+        lockLink.click();
+        log("Lock link clicked; waiting for modal");
+        await sleep(1000);
+        
+        // Wait for modal and find Save button
+        var saveBtn = await waitForSelector('button#actionButton.btn.green', 5000);
+        if (!saveBtn) {
+            log("Save button not found in modal; cannot complete lock");
+            if (mode === "study") {
+                clearRunMode();
+                return;
+            }
+            log("Continuing to Update Study Status without lock");
+            updateRunAllPopupStatus("Running Update Study Status");
+            location.href = STUDY_SHOW_URL + "?autoupdate=1";
+            return;
+        }
+        
+        // Set flag before clicking save (page will refresh after save)
+        try {
+            localStorage.setItem("eligibilityLockCompleted", "1");
+        } catch (e) {}
+        
+        saveBtn.click();
+        log("Save button clicked; eligibility lock initiated (page will refresh)");
+    }
+    
     // Find and navigate to eligibility locking form when required.
     async function processStudyMetadataPageForEligibilityLock() {
         if (isPaused()) {
@@ -16003,11 +16236,12 @@
                 log("Eligibility already locked; ending Study Update");
                 return;
             }
-            setContinueEpoch();
-            log("Eligibility locked; continuing ALL to Study Show");
-            location.href = "/secure/administration/studies/show";
+            log("Eligibility locked; continuing to Update Study Status");
+            updateRunAllPopupStatus("Running Update Study Status");
+            location.href = STUDY_SHOW_URL + "?autoupdate=1";
             return;
         }
+        log("Eligibility not locked; navigating to eligibility form to lock it");
         var href = target.getAttribute("href") + "";
         if (href.length === 0) {
             if (mode === "study") {
@@ -16015,8 +16249,9 @@
                 log("Eligibility href missing; ending Study Update");
                 return;
             }
-            log("Eligibility href missing; continuing ALL to Study Show");
-            location.href = "/secure/administration/studies/show";
+            log("Eligibility href missing; continuing to Update Study Status");
+            updateRunAllPopupStatus("Running Update Study Status");
+            location.href = STUDY_SHOW_URL + "?autoupdate=1";
             return;
         }
         var url = location.origin + href;
@@ -16773,7 +17008,13 @@
         }
         return false;
     }
-
+    
+    // Detect if current path is an eligibility form page
+    function isEligibilityFormPage() {
+        var path = location.pathname;
+        var ok = path.indexOf("/secure/crfdesign/studylibrary/show/form/") !== -1;
+        return ok;
+    }
     //==========================
     // SHARED GUI AND PANEL FUNCTIONS
     //==========================
@@ -17260,22 +17501,42 @@
 
     function keyMatchesToggle(e) {
         var n = normalizeKeyForMatch(e);
+        var savedHotkey = getPanelHotkey();
         var match = false;
-        if (n.key && n.key.toUpperCase() === PANEL_TOGGLE_KEY.toUpperCase()) {
+        
+        if (n.key && n.key.toUpperCase() === savedHotkey.toUpperCase()) {
             match = true;
-        } else {
-            if (n.code && n.code.toUpperCase() === PANEL_TOGGLE_KEY.toUpperCase()) {
+        } else if (n.code && n.code.toUpperCase() === savedHotkey.toUpperCase()) {
+            match = true;
+        } else if (typeof n.keyCode === "number") {
+            // Fallback for F-keys using keyCode
+            if (savedHotkey.toUpperCase() === "F2" && n.keyCode === 113) {
                 match = true;
-            } else {
-                if (typeof n.keyCode === "number") {
-                    if (PANEL_TOGGLE_KEY.toUpperCase() === "F2") {
-                        if (n.keyCode === 113) {
-                            match = true;
-                        }
-                    }
-                }
+            } else if (savedHotkey.toUpperCase() === "F1" && n.keyCode === 112) {
+                match = true;
+            } else if (savedHotkey.toUpperCase() === "F3" && n.keyCode === 114) {
+                match = true;
+            } else if (savedHotkey.toUpperCase() === "F4" && n.keyCode === 115) {
+                match = true;
+            } else if (savedHotkey.toUpperCase() === "F5" && n.keyCode === 116) {
+                match = true;
+            } else if (savedHotkey.toUpperCase() === "F6" && n.keyCode === 117) {
+                match = true;
+            } else if (savedHotkey.toUpperCase() === "F7" && n.keyCode === 118) {
+                match = true;
+            } else if (savedHotkey.toUpperCase() === "F8" && n.keyCode === 119) {
+                match = true;
+            } else if (savedHotkey.toUpperCase() === "F9" && n.keyCode === 120) {
+                match = true;
+            } else if (savedHotkey.toUpperCase() === "F10" && n.keyCode === 121) {
+                match = true;
+            } else if (savedHotkey.toUpperCase() === "F11" && n.keyCode === 122) {
+                match = true;
+            } else if (savedHotkey.toUpperCase() === "F12" && n.keyCode === 123) {
+                match = true;
             }
         }
+        
         return match;
     }
 
@@ -17295,7 +17556,7 @@
         document.addEventListener("keydown", handler, true);
         window.addEventListener("keydown", handler, true);
         window.__APS_HOTKEY_BOUND = true;
-        log("Hotkey: bound for " + String(PANEL_TOGGLE_KEY));
+        log("Hotkey: bound for " + String(getPanelHotkey()));
     }
 
 
@@ -18208,6 +18469,92 @@
                 pauseBtn.textContent = "Resume";
                 status.textContent = "Paused";
                 log("Paused");
+                
+                // Update all active popup statuses to show "Paused"
+                if (RUN_ALL_POPUP_REF && RUN_ALL_POPUP_REF.element) {
+                    try {
+                        var runAllStatusDiv = RUN_ALL_POPUP_REF.element.querySelector("#runAllStatus");
+                        if (runAllStatusDiv) {
+                            runAllStatusDiv.textContent = "⏸ Paused";
+                            runAllStatusDiv.style.color = "#ffa500";
+                        }
+                        var runAllLoading = RUN_ALL_POPUP_REF.element.querySelector("#runAllLoading");
+                        if (runAllLoading) {
+                            runAllLoading.textContent = "";
+                        }
+                    } catch (e) {}
+                }
+                
+                if (LOCK_SAMPLE_PATHS_POPUP_REF && LOCK_SAMPLE_PATHS_POPUP_REF.element) {
+                    try {
+                        var lockStatusDiv = LOCK_SAMPLE_PATHS_POPUP_REF.element.querySelector("#lockSamplePathsStatus");
+                        if (lockStatusDiv) {
+                            lockStatusDiv.textContent = "⏸ Paused";
+                            lockStatusDiv.style.color = "#ffa500";
+                        }
+                        var lockLoading = LOCK_SAMPLE_PATHS_POPUP_REF.element.querySelector("#lockSamplePathsLoading");
+                        if (lockLoading) {
+                            lockLoading.textContent = "";
+                        }
+                    } catch (e) {}
+                }
+                
+                if (IMPORT_ELIG_POPUP_REF && IMPORT_ELIG_POPUP_REF.element) {
+                    try {
+                        var eligStatusDiv = IMPORT_ELIG_POPUP_REF.element.querySelector("#importEligStatus");
+                        if (eligStatusDiv) {
+                            eligStatusDiv.textContent = "⏸ Paused";
+                            eligStatusDiv.style.color = "#ffa500";
+                        }
+                        var eligLoading = IMPORT_ELIG_POPUP_REF.element.querySelector("#importEligLoading");
+                        if (eligLoading) {
+                            eligLoading.textContent = "";
+                        }
+                    } catch (e) {}
+                }
+                
+                if (IMPORT_COHORT_POPUP_REF && IMPORT_COHORT_POPUP_REF.element) {
+                    try {
+                        var cohortStatusDiv = IMPORT_COHORT_POPUP_REF.element.querySelector("#importCohortStatus");
+                        if (cohortStatusDiv) {
+                            cohortStatusDiv.textContent = "⏸ Paused";
+                            cohortStatusDiv.style.color = "#ffa500";
+                        }
+                        var cohortLoading = IMPORT_COHORT_POPUP_REF.element.querySelector("#importCohortLoading");
+                        if (cohortLoading) {
+                            cohortLoading.textContent = "";
+                        }
+                    } catch (e) {}
+                }
+                
+                if (COLLECT_ALL_POPUP_REF && COLLECT_ALL_POPUP_REF.element) {
+                    try {
+                        var collectStatusDiv = COLLECT_ALL_POPUP_REF.element.querySelector("#collectAllStatus");
+                        if (collectStatusDiv) {
+                            collectStatusDiv.textContent = "⏸ Paused";
+                            collectStatusDiv.style.color = "#ffa500";
+                        }
+                        var collectLoading = COLLECT_ALL_POPUP_REF.element.querySelector("#collectAllLoading");
+                        if (collectLoading) {
+                            collectLoading.textContent = "";
+                        }
+                    } catch (e) {}
+                }
+                
+                if (CLEAR_MAPPING_POPUP_REF && CLEAR_MAPPING_POPUP_REF.element) {
+                    try {
+                        var clearStatusDiv = CLEAR_MAPPING_POPUP_REF.element.querySelector("#clearMappingStatus");
+                        if (clearStatusDiv) {
+                            clearStatusDiv.textContent = "⏸ Paused";
+                            clearStatusDiv.style.color = "#ffa500";
+                        }
+                        var clearLoading = CLEAR_MAPPING_POPUP_REF.element.querySelector("#clearMappingLoading");
+                        if (clearLoading) {
+                            clearLoading.textContent = "";
+                        }
+                    } catch (e) {}
+                }
+                
                 clearAllRunState();
                 COLLECT_ALL_CANCELLED = true;
                 SA_BUILDER_PAUSE = true;
@@ -18626,6 +18973,11 @@
         var onMetadata = isStudyMetadataPage();
         if (onMetadata) {
             processStudyMetadataPageForEligibilityLock();
+            return;
+        }
+        var onEligibilityForm = isEligibilityFormPage();
+        if (onEligibilityForm) {
+            processEligibilityFormPageForLocking();
             return;
         }
         var onSubjectsList = isSubjectsListPage();

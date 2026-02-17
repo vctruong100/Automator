@@ -122,6 +122,7 @@
 
 
     const STORAGE_PANEL_HIDDEN = "activityPlanState.panel.hidden";
+    const STORAGE_PANEL_HOTKEY = "activityPlanState.panel.hotkey";
     const PANEL_TOGGLE_KEY = "F2";
     const RUNMODE_CLEAR_MAPPING = "clearMapping";
 
@@ -169,6 +170,29 @@
     //=========================
     var STORAGE_BUTTON_VISIBILITY = "activityPlanState.buttonVisibility";
     var SETTINGS_POPUP_REF = null;
+
+    function getPanelHotkey() {
+        try {
+            var saved = localStorage.getItem(STORAGE_PANEL_HOTKEY);
+            if (saved) {
+                return saved;
+            }
+        } catch (err) {
+            log("Error reading hotkey from localStorage: " + String(err));
+        }
+        return "F2";
+    }
+
+    function setPanelHotkey(hotkey) {
+        try {
+            localStorage.setItem(STORAGE_PANEL_HOTKEY, hotkey);
+            return true;
+        } catch (err) {
+            log("Error saving hotkey to localStorage: " + String(err));
+            return false;
+        }
+    }
+
     function getButtonVisibility() {
         try {
             var raw = localStorage.getItem(STORAGE_BUTTON_VISIBILITY);
@@ -277,6 +301,117 @@
 
         container.appendChild(checkboxContainer);
 
+        // Hotkey Configuration Section
+        var hotkeySection = document.createElement("div");
+        hotkeySection.style.marginTop = "20px";
+        hotkeySection.style.paddingTop = "20px";
+        hotkeySection.style.borderTop = "1px solid #333";
+
+        var hotkeyLabel = document.createElement("div");
+        hotkeyLabel.textContent = "Panel Toggle Hotkey:";
+        hotkeyLabel.style.fontSize = "13px";
+        hotkeyLabel.style.color = "#aaa";
+        hotkeyLabel.style.marginBottom = "8px";
+        hotkeySection.appendChild(hotkeyLabel);
+
+        var hotkeyInputRow = document.createElement("div");
+        hotkeyInputRow.style.display = "flex";
+        hotkeyInputRow.style.gap = "10px";
+        hotkeyInputRow.style.alignItems = "center";
+
+        var hotkeyInput = document.createElement("input");
+        hotkeyInput.type = "text";
+        hotkeyInput.value = getPanelHotkey();
+        hotkeyInput.placeholder = "Press a key...";
+        hotkeyInput.style.flex = "1";
+        hotkeyInput.style.padding = "10px 12px";
+        hotkeyInput.style.background = "#2a2a2a";
+        hotkeyInput.style.border = "1px solid #444";
+        hotkeyInput.style.borderRadius = "6px";
+        hotkeyInput.style.color = "#fff";
+        hotkeyInput.style.fontSize = "14px";
+        hotkeyInput.style.outline = "none";
+        hotkeyInput.style.fontFamily = "monospace";
+        hotkeyInput.style.cursor = "pointer";
+
+        hotkeyInput.addEventListener("focus", function() {
+            this.style.borderColor = "#5b43c7";
+        });
+
+        hotkeyInput.addEventListener("blur", function() {
+            this.style.borderColor = "#333";
+        });
+
+        hotkeyInput.addEventListener("keydown", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            var key = e.key;
+            var code = e.code;
+            var displayKey = key;
+            
+            // Handle special keys
+            if (key.length === 1 && key.match(/[a-z]/i)) {
+                displayKey = key.toUpperCase();
+            } else if (code && code.startsWith("Key")) {
+                displayKey = code.substring(3);
+            } else if (code && code.startsWith("Digit")) {
+                displayKey = code.substring(5);
+            } else if (key === " ") {
+                displayKey = "Space";
+            } else if (key.startsWith("F") && key.length <= 3) {
+                displayKey = key.toUpperCase();
+            } else if (key === "Escape") {
+                displayKey = "Escape";
+            } else if (key === "Enter") {
+                displayKey = "Enter";
+            } else if (key === "Tab") {
+                displayKey = "Tab";
+            } else if (key === "Backspace") {
+                displayKey = "Backspace";
+            } else if (code) {
+                displayKey = code;
+            }
+            
+            this.value = displayKey;
+            return false;
+        });
+
+        // Prevent typing but allow key capture for hotkey capture
+        hotkeyInput.addEventListener("keypress", function(e) {
+            e.preventDefault();
+            return false;
+        });
+
+        var hotkeyResetBtn = document.createElement("button");
+        hotkeyResetBtn.textContent = "Reset";
+        hotkeyResetBtn.style.background = "#333";
+        hotkeyResetBtn.style.color = "#fff";
+        hotkeyResetBtn.style.border = "none";
+        hotkeyResetBtn.style.borderRadius = "6px";
+        hotkeyResetBtn.style.padding = "10px 16px";
+        hotkeyResetBtn.style.cursor = "pointer";
+        hotkeyResetBtn.style.fontSize = "13px";
+        hotkeyResetBtn.onmouseenter = function() { this.style.background = "#444"; };
+        hotkeyResetBtn.onmouseleave = function() { this.style.background = "#333"; };
+        hotkeyResetBtn.addEventListener("click", function() {
+            hotkeyInput.value = "F2";
+        });
+
+        hotkeyInputRow.appendChild(hotkeyInput);
+        hotkeyInputRow.appendChild(hotkeyResetBtn);
+        hotkeySection.appendChild(hotkeyInputRow);
+
+        var hotkeyHint = document.createElement("div");
+        hotkeyHint.textContent = "Click the input field and press any key to set a new hotkey";
+        hotkeyHint.style.fontSize = "11px";
+        hotkeyHint.style.color = "#666";
+        hotkeyHint.style.marginTop = "6px";
+        hotkeyHint.style.fontStyle = "italic";
+        hotkeySection.appendChild(hotkeyHint);
+
+        container.appendChild(hotkeySection);
+
         var buttonRow = document.createElement("div");
         buttonRow.style.display = "flex";
         buttonRow.style.gap = "10px";
@@ -348,16 +483,23 @@
             originalClose();
         };
         saveBtn.addEventListener("click", function() {
-            var newVisibility = {};
-            for (var j = 0; j < checkboxes.length; j++) {
-                var cb = checkboxes[j];
-                newVisibility[cb.dataset.label] = cb.checked;
-            }
-            setButtonVisibility(newVisibility);
-            log("Settings: Button visibility saved");
-            settingsPopup.close();
-            location.reload();
-        });
+        var newVisibility = {};
+        for (var j = 0; j < checkboxes.length; j++) {
+            var cb = checkboxes[j];
+            newVisibility[cb.dataset.label] = cb.checked;
+        }
+        setButtonVisibility(newVisibility);
+        
+        var newHotkey = hotkeyInput.value.trim();
+        if (newHotkey) {
+            setPanelHotkey(newHotkey);
+            log("Settings: Hotkey saved as " + newHotkey);
+        }
+        
+        log("Settings: Button visibility saved");
+        settingsPopup.close();
+        location.reload();
+    });
         return settingsPopup;
     }
 
@@ -4772,22 +4914,42 @@
 
     function keyMatchesToggle(e) {
         var n = normalizeKeyForMatch(e);
+        var savedHotkey = getPanelHotkey();
         var match = false;
-        if (n.key && n.key.toUpperCase() === PANEL_TOGGLE_KEY.toUpperCase()) {
+        
+        if (n.key && n.key.toUpperCase() === savedHotkey.toUpperCase()) {
             match = true;
-        } else {
-            if (n.code && n.code.toUpperCase() === PANEL_TOGGLE_KEY.toUpperCase()) {
+        } else if (n.code && n.code.toUpperCase() === savedHotkey.toUpperCase()) {
+            match = true;
+        } else if (typeof n.keyCode === "number") {
+            // Fallback for F-keys using keyCode
+            if (savedHotkey.toUpperCase() === "F2" && n.keyCode === 113) {
                 match = true;
-            } else {
-                if (typeof n.keyCode === "number") {
-                    if (PANEL_TOGGLE_KEY.toUpperCase() === "F2") {
-                        if (n.keyCode === 113) {
-                            match = true;
-                        }
-                    }
-                }
+            } else if (savedHotkey.toUpperCase() === "F1" && n.keyCode === 112) {
+                match = true;
+            } else if (savedHotkey.toUpperCase() === "F3" && n.keyCode === 114) {
+                match = true;
+            } else if (savedHotkey.toUpperCase() === "F4" && n.keyCode === 115) {
+                match = true;
+            } else if (savedHotkey.toUpperCase() === "F5" && n.keyCode === 116) {
+                match = true;
+            } else if (savedHotkey.toUpperCase() === "F6" && n.keyCode === 117) {
+                match = true;
+            } else if (savedHotkey.toUpperCase() === "F7" && n.keyCode === 118) {
+                match = true;
+            } else if (savedHotkey.toUpperCase() === "F8" && n.keyCode === 119) {
+                match = true;
+            } else if (savedHotkey.toUpperCase() === "F9" && n.keyCode === 120) {
+                match = true;
+            } else if (savedHotkey.toUpperCase() === "F10" && n.keyCode === 121) {
+                match = true;
+            } else if (savedHotkey.toUpperCase() === "F11" && n.keyCode === 122) {
+                match = true;
+            } else if (savedHotkey.toUpperCase() === "F12" && n.keyCode === 123) {
+                match = true;
             }
         }
+        
         return match;
     }
 
@@ -4807,7 +4969,7 @@
         document.addEventListener("keydown", handler, true);
         window.addEventListener("keydown", handler, true);
         window.__APS_HOTKEY_BOUND = true;
-        log("Hotkey: bound for " + String(PANEL_TOGGLE_KEY));
+        log("Hotkey: bound for " + String(getPanelHotkey()));
     }
 
 
