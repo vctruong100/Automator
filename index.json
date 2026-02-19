@@ -376,5 +376,12 @@
     "tags": ["Supine", "ECG", "Difference"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20ECG%20Difference%20between%20Collected%20Time%20and%20Supine%20Time%20(NON-REPEAT).md",
     "updated": "2026-02-17"
+  },
+  {
+    "id": "M-055",
+    "title": "Weight (Screening)",
+    "tags": ["Weight", "Screening"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Weight%20(Screening).md",
+    "updated": "2026-02-18"
   }
 ]

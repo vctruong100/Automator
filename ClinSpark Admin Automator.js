@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Admin Automator
 // @namespace vinh.activity.plan.state
-// @version 1.1.0
+// @version 1.1.2
 // @description
 // @match https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/heads/main/ClinSpark%20Basic%20Automator.js
@@ -11,7 +11,6 @@
 // @grant GM.openInTab
 // @grant GM_openInTab
 // @grant GM.xmlHttpRequest
-// @ts-check
 // ==/UserScript==
 
 (function () {
@@ -105,6 +104,14 @@
 
     var FORM_NO_MATCH_TITLE = "Find Form";
     var FORM_NO_MATCH_MESSAGE = "No form is found.";
+
+    // Parse Deviation Feature
+    var STORAGE_PARSE_DEVIATION_RUNNING = "activityPlanState.parseDeviation.running";
+    var STORAGE_PARSE_DEVIATION_KEYWORDS = "activityPlanState.parseDeviation.keywords";
+    var STORAGE_PARSE_DEVIATION_RESULTS = "activityPlanState.parseDeviation.results";
+    var PARSE_DEVIATION_DATA_LIST_URL = "https://cenexel.clinspark.com/secure/study/data/list";
+    var PARSE_DEVIATION_POPUP_REF = null;
+    var PARSE_DEVIATION_CANCELED = false;
 
     var BARCODE_BG_TAB = null;
     const RUNMODE_CLEAR_MAPPING = "clearMapping";
@@ -2420,6 +2427,17 @@
                 e.preventDefault();
                 e.stopPropagation();
             }
+            if (e.key === "`" || e.key === "~") {
+                if (PARSE_DEVIATION_POPUP_REF && document.body.contains(PARSE_DEVIATION_POPUP_REF.element)) {
+                    log("Hotkey: Closing Parse Deviation popup via backtick");
+                    PARSE_DEVIATION_POPUP_REF.close();
+                } else {
+                    log("Hotkey: Opening Parse Deviation popup via backtick");
+                    APS_ParseDeviation();
+                }
+                e.preventDefault();
+                e.stopPropagation();
+            }
         }
         document.addEventListener("keydown", handler, true);
         window.addEventListener("keydown", handler, true);
@@ -3568,7 +3586,6 @@
                     badges.style.display = "flex";
                     badges.style.gap = "4px";
                     badges.style.marginTop = "4px";
-                    badges.style.fontSize = "10px";
                     
                     var isFav = favorites.indexOf(m.id) !== -1;
                     var isRecent = recents.indexOf(m.id) !== -1;
@@ -4040,12 +4057,1049 @@
     }
 
     //==========================
+    // PARSE DEVIATION FEATURE
+    //==========================
+    // This section contains all functions related to the Parse Deviation feature.
+    // This feature automates extracting deviation form data from the study data list
+    // and formatting it for Excel output.
+    //==========================
+
+    function APS_ParseDeviation() {
+        log("[ParseDeviation] Starting...");
+
+        var popupContainer = document.createElement("div");
+        popupContainer.style.display = "flex";
+        popupContainer.style.flexDirection = "column";
+        popupContainer.style.gap = "16px";
+
+        var instructionText = document.createElement("div");
+        instructionText.style.fontSize = "14px";
+        instructionText.style.color = "#ccc";
+        instructionText.style.marginBottom = "8px";
+        instructionText.innerHTML = "Enter subject number(s) to search for deviation forms.<br>" +
+            "<span style='font-size:12px;color:#888;'>Separate multiple subjects with commas or newlines.</span>";
+        popupContainer.appendChild(instructionText);
+
+        var textArea = document.createElement("textarea");
+        textArea.style.width = "100%";
+        textArea.style.height = "120px";
+        textArea.style.background = "#1a1a1a";
+        textArea.style.color = "#fff";
+        textArea.style.border = "1px solid #444";
+        textArea.style.borderRadius = "6px";
+        textArea.style.padding = "10px";
+        textArea.style.fontSize = "14px";
+        textArea.style.fontFamily = "monospace";
+        textArea.style.resize = "vertical";
+        textArea.style.boxSizing = "border-box";
+        textArea.placeholder = "Example:\n4-002, 4-005\n0043\n0000700004";
+        popupContainer.appendChild(textArea);
+
+        var buttonsRow = document.createElement("div");
+        buttonsRow.style.display = "flex";
+        buttonsRow.style.gap = "12px";
+        buttonsRow.style.justifyContent = "flex-end";
+
+        var clearAllBtn = document.createElement("button");
+        clearAllBtn.textContent = "Clear All";
+        clearAllBtn.style.background = "#6c757d";
+        clearAllBtn.style.color = "#fff";
+        clearAllBtn.style.border = "none";
+        clearAllBtn.style.borderRadius = "6px";
+        clearAllBtn.style.padding = "10px 20px";
+        clearAllBtn.style.cursor = "pointer";
+        clearAllBtn.style.fontSize = "14px";
+        clearAllBtn.style.fontWeight = "500";
+        clearAllBtn.style.transition = "background 0.2s";
+        clearAllBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
+        clearAllBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
+
+        var confirmBtn = document.createElement("button");
+        confirmBtn.textContent = "Confirm";
+        confirmBtn.style.background = "#dc3545";
+        confirmBtn.style.color = "#fff";
+        confirmBtn.style.border = "none";
+        confirmBtn.style.borderRadius = "6px";
+        confirmBtn.style.padding = "10px 20px";
+        confirmBtn.style.cursor = "pointer";
+        confirmBtn.style.fontSize = "14px";
+        confirmBtn.style.fontWeight = "500";
+        confirmBtn.style.transition = "background 0.2s";
+        confirmBtn.disabled = true;
+        confirmBtn.style.opacity = "0.5";
+
+        function updateConfirmState() {
+            var val = textArea.value.trim();
+            if (val.length > 0) {
+                confirmBtn.disabled = false;
+                confirmBtn.style.opacity = "1";
+                confirmBtn.style.cursor = "pointer";
+            } else {
+                confirmBtn.disabled = true;
+                confirmBtn.style.opacity = "0.5";
+                confirmBtn.style.cursor = "not-allowed";
+            }
+        }
+
+        textArea.addEventListener("input", updateConfirmState);
+
+        confirmBtn.onmouseenter = function() {
+            if (!confirmBtn.disabled) this.style.background = "#c82333";
+        };
+        confirmBtn.onmouseleave = function() {
+            if (!confirmBtn.disabled) this.style.background = "#dc3545";
+        };
+
+        buttonsRow.appendChild(clearAllBtn);
+        buttonsRow.appendChild(confirmBtn);
+        popupContainer.appendChild(buttonsRow);
+
+        var popup = createPopup({
+            title: "Parse Deviation",
+            content: popupContainer,
+            width: "450px",
+            height: "auto",
+            onClose: function() {
+                log("[ParseDeviation] Cancelled by user (close button)");
+                PARSE_DEVIATION_CANCELED = true;
+            }
+        });
+
+        PARSE_DEVIATION_POPUP_REF = popup;
+
+        clearAllBtn.addEventListener("click", function() {
+            var confirmClear = confirm("Are you sure you want to clear all input?");
+            if (confirmClear) {
+                textArea.value = "";
+                updateConfirmState();
+                log("[ParseDeviation] Input cleared");
+            }
+        });
+
+        confirmBtn.addEventListener("click", async function() {
+            var rawInput = textArea.value;
+            var keywords = parseDeviationParseKeywords(rawInput);
+
+            if (keywords.length === 0) {
+                log("[ParseDeviation] No valid keywords found");
+                return;
+            }
+
+            log("[ParseDeviation] Keywords: " + keywords.join(", "));
+
+            var loadingContainer = document.createElement("div");
+            loadingContainer.style.display = "flex";
+            loadingContainer.style.flexDirection = "column";
+            loadingContainer.style.alignItems = "center";
+            loadingContainer.style.gap = "20px";
+            loadingContainer.style.padding = "40px 20px";
+
+            var spinner = document.createElement("div");
+            spinner.style.width = "48px";
+            spinner.style.height = "48px";
+            spinner.style.border = "4px solid #333";
+            spinner.style.borderTop = "4px solid #dc3545";
+            spinner.style.borderRadius = "50%";
+            spinner.style.animation = "parseDeviationSpin 1s linear infinite";
+
+            var style = document.createElement("style");
+            style.textContent = "@keyframes parseDeviationSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }";
+            document.head.appendChild(style);
+
+            var statusText = document.createElement("div");
+            statusText.style.fontSize = "16px";
+            statusText.style.fontWeight = "500";
+            statusText.style.color = "#f99";
+            statusText.textContent = "Navigating to data list...";
+
+            var progressText = document.createElement("div");
+            progressText.style.fontSize = "13px";
+            progressText.style.color = "#888";
+            progressText.textContent = "Please wait...";
+
+            loadingContainer.appendChild(spinner);
+            loadingContainer.appendChild(statusText);
+            loadingContainer.appendChild(progressText);
+
+            popup.setContent(loadingContainer);
+
+            try {
+                localStorage.setItem(STORAGE_PARSE_DEVIATION_KEYWORDS, JSON.stringify(keywords));
+                localStorage.setItem(STORAGE_PARSE_DEVIATION_RUNNING, "true");
+            } catch (e) {}
+
+            await sleep(500);
+
+            if (location.href.indexOf("/secure/study/data/list") === -1) {
+                statusText.textContent = "Navigating to data list page...";
+                progressText.textContent = "Will continue processing after page loads";
+                await sleep(500);
+                location.href = PARSE_DEVIATION_DATA_LIST_URL;
+                return;
+            }
+
+            await parseDeviationProcessPage(popup, statusText, progressText, spinner, keywords);
+        });
+    }
+
+    function parseDeviationParseKeywords(rawInput) {
+        var keywords = [];
+        var lines = rawInput.split(/[\n\r]+/);
+        for (var i = 0; i < lines.length; i++) {
+            var parts = lines[i].split(",");
+            for (var j = 0; j < parts.length; j++) {
+                var kw = parts[j].trim();
+                if (kw.length > 0) {
+                    keywords.push(kw);
+                }
+            }
+        }
+        return keywords;
+    }
+
+    async function parseDeviationProcessPage(popup, statusText, progressText, spinner, keywords) {
+        log("[ParseDeviation] Processing data list page");
+
+        statusText.textContent = "Selecting deviation forms...";
+        progressText.textContent = "Resetting form selections";
+
+        await sleep(500);
+
+        var formSelect = document.querySelector("select[name='formIds']");
+        if (!formSelect) {
+            log("[ParseDeviation] Form select not found");
+            statusText.textContent = "Error: Form select not found";
+            statusText.style.color = "#f66";
+            spinner.style.display = "none";
+            return;
+        }
+
+        var allFormOpts = formSelect.querySelectorAll("option");
+        for (var fi = 0; fi < allFormOpts.length; fi++) {
+            allFormOpts[fi].selected = false;
+        }
+        var formClearEvt = new Event("change", { bubbles: true });
+        formSelect.dispatchEvent(formClearEvt);
+
+        var formSelect2Container = document.querySelector("#s2id_formIds");
+        if (formSelect2Container) {
+            var formSelect2Choices = formSelect2Container.querySelectorAll(".select2-search-choice");
+            for (var fci = 0; fci < formSelect2Choices.length; fci++) {
+                var formCloseBtn = formSelect2Choices[fci].querySelector(".select2-search-choice-close");
+                if (formCloseBtn) formCloseBtn.click();
+            }
+        }
+
+        await sleep(300);
+        log("[ParseDeviation] Cleared existing form selections");
+        progressText.textContent = "Scanning form options";
+
+        var formOptions = formSelect.querySelectorAll("option");
+        var deviationKeywords = ["dev", "dpn", "deviation"];
+        var selectedFormCount = 0;
+
+        for (var i = 0; i < formOptions.length; i++) {
+            var opt = formOptions[i];
+            var optText = (opt.textContent || "").toLowerCase();
+            for (var k = 0; k < deviationKeywords.length; k++) {
+                if (optText.indexOf(deviationKeywords[k]) !== -1) {
+                    opt.selected = true;
+                    selectedFormCount++;
+                    log("[ParseDeviation] Selected form: " + opt.textContent);
+                    break;
+                }
+            }
+        }
+
+        if (selectedFormCount === 0) {
+            log("[ParseDeviation] No deviation forms found");
+            statusText.textContent = "No deviation forms found";
+            statusText.style.color = "#f66";
+            spinner.style.display = "none";
+            progressText.textContent = "Could not find forms matching: dev, DPN, Deviation, PD";
+            return;
+        }
+
+        var evt = new Event("change", { bubbles: true });
+        formSelect.dispatchEvent(evt);
+
+        log("[ParseDeviation] Selected " + selectedFormCount + " deviation form(s)");
+        progressText.textContent = "Selected " + selectedFormCount + " form(s)";
+
+        await sleep(500);
+
+        statusText.textContent = "Selecting subjects...";
+        progressText.textContent = "Resetting subject selections";
+
+        var subjectSelect = document.querySelector("select[name='subjectIds']");
+        if (!subjectSelect) {
+            log("[ParseDeviation] Subject select not found");
+            statusText.textContent = "Error: Subject select not found";
+            statusText.style.color = "#f66";
+            spinner.style.display = "none";
+            return;
+        }
+
+        var allSubjectOpts = subjectSelect.querySelectorAll("option");
+        for (var ci = 0; ci < allSubjectOpts.length; ci++) {
+            allSubjectOpts[ci].selected = false;
+        }
+        var clearEvt = new Event("change", { bubbles: true });
+        subjectSelect.dispatchEvent(clearEvt);
+
+        var select2Container = document.querySelector("#s2id_subjectIds");
+        if (select2Container) {
+            var select2Choices = select2Container.querySelectorAll(".select2-search-choice");
+            for (var sci = 0; sci < select2Choices.length; sci++) {
+                var closeBtn = select2Choices[sci].querySelector(".select2-search-choice-close");
+                if (closeBtn) closeBtn.click();
+            }
+        }
+
+        await sleep(300);
+        log("[ParseDeviation] Cleared existing subject selections");
+        progressText.textContent = "Matching subjects to keywords";
+
+        var subjectOptions = subjectSelect.querySelectorAll("option");
+        var selectedSubjectCount = 0;
+
+        for (var si = 0; si < subjectOptions.length; si++) {
+            var subOpt = subjectOptions[si];
+            var subText = (subOpt.textContent || "").trim();
+            for (var ki = 0; ki < keywords.length; ki++) {
+            if (subText.toLowerCase().indexOf(keywords[ki].toLowerCase()) !== -1) {
+                    subOpt.selected = true;
+                    selectedSubjectCount++;
+                    log("[ParseDeviation] Selected subject: " + subText);
+                    break;
+                }
+            }
+        }
+
+        if (selectedSubjectCount === 0) {
+            log("[ParseDeviation] No matching subjects found");
+            statusText.textContent = "No matching subjects found";
+            statusText.style.color = "#f66";
+            spinner.style.display = "none";
+            progressText.textContent = "Keywords: " + keywords.join(", ");
+            return;
+        }
+
+        var subEvt = new Event("change", { bubbles: true });
+        subjectSelect.dispatchEvent(subEvt);
+
+        log("[ParseDeviation] Selected " + selectedSubjectCount + " subject(s)");
+        progressText.textContent = "Selected " + selectedSubjectCount + " subject(s)";
+
+        await sleep(500);
+
+        statusText.textContent = "Searching...";
+        progressText.textContent = "Clicking search button";
+
+        var searchBtn = document.querySelector("button#dataSearchButton");
+        if (!searchBtn) {
+            searchBtn = document.querySelector("button[id='dataSearchButton']");
+        }
+        if (!searchBtn) {
+            log("[ParseDeviation] Search button not found");
+            statusText.textContent = "Error: Search button not found";
+            statusText.style.color = "#f66";
+            spinner.style.display = "none";
+            return;
+        }
+
+        searchBtn.click();
+        log("[ParseDeviation] Search button clicked");
+
+        statusText.textContent = "Waiting for results...";
+        progressText.textContent = "Loading data...";
+
+        await parseDeviationWaitForResults(5000);
+
+        await sleep(3000);
+
+        statusText.textContent = "Parsing deviation table...";
+        progressText.textContent = "Extracting data from rows";
+
+        var allResults = [];
+        var pageNum = 1;
+        var hasMorePages = true;
+
+        while (hasMorePages) {
+            if (PARSE_DEVIATION_CANCELED) {
+                log("[ParseDeviation] Process canceled by user");
+                return;
+            }
+
+            log("[ParseDeviation] Parsing page " + pageNum);
+            progressText.textContent = "Parsing page " + pageNum + "...";
+
+            var pageResults = await parseDeviationParseTable();
+            allResults = allResults.concat(pageResults);
+
+            log("[ParseDeviation] Found " + pageResults.length + " items on page " + pageNum);
+
+            if (PARSE_DEVIATION_CANCELED) {
+                log("[ParseDeviation] Process canceled by user");
+                return;
+            }
+
+            var nextPage = parseDeviationGetNextPage();
+            if (nextPage) {
+                nextPage.click();
+                await sleep(1500);
+                pageNum++;
+            } else {
+                hasMorePages = false;
+            }
+        }
+
+        log("[ParseDeviation] Total results: " + allResults.length);
+
+        statusText.textContent = "Fetching subject initials...";
+        progressText.textContent = "Processing " + allResults.length + " deviation(s)";
+
+        for (var ri = 0; ri < allResults.length; ri++) {
+            if (PARSE_DEVIATION_CANCELED) {
+                log("[ParseDeviation] Process canceled by user");
+                return;
+            }
+
+            if (!allResults[ri].initials || allResults[ri].initials.length === 0) {
+                var initials = await parseDeviationFetchInitials(allResults[ri].subjectLink);
+                allResults[ri].initials = initials;
+            }
+        }
+
+        try {
+            localStorage.removeItem(STORAGE_PARSE_DEVIATION_RUNNING);
+            localStorage.removeItem(STORAGE_PARSE_DEVIATION_KEYWORDS);
+        } catch (e) {}
+
+        parseDeviationShowResults(popup, allResults);
+    }
+
+    async function parseDeviationWaitForResults(timeoutMs) {
+        var start = Date.now();
+        while (Date.now() - start < timeoutMs) {
+            var tbody = document.querySelector("tbody#studyDataTableBody");
+            if (tbody) {
+                var rows = tbody.querySelectorAll("tr");
+                if (rows.length > 0) {
+                    log("[ParseDeviation] Results loaded: " + rows.length + " rows");
+                    return true;
+                }
+            }
+            await sleep(300);
+        }
+        log("[ParseDeviation] Timeout waiting for results");
+        return false;
+    }
+
+    async function parseDeviationParseTable() {
+        var results = [];
+        var tbody = document.querySelector("tbody#studyDataTableBody");
+        if (!tbody) {
+            log("[ParseDeviation] Table body not found");
+            return results;
+        }
+
+        var rows = tbody.querySelectorAll("tr");
+        log("[ParseDeviation] Parsing " + rows.length + " rows");
+
+        var currentForm = null;
+        var currentSubject = "";
+        var seenLabelsForForm = {};
+
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var cells = row.querySelectorAll("td");
+            if (cells.length < 5) continue;
+
+            var statusCell = cells[2];
+            var canceledIcon = statusCell.querySelector('span.tooltips[data-original-title="Form Canceled"]');
+            if (canceledIcon) {
+                log("[ParseDeviation] Row " + i + ": Skipping canceled form");
+                continue;
+            }
+
+            var subjectCell = cells[1];
+            var subjectLink = subjectCell.querySelector("a");
+            var subjectNumber = "";
+            var subjectHref = "";
+
+            if (subjectLink) {
+                subjectNumber = (subjectLink.textContent || "").trim();
+                subjectHref = subjectLink.getAttribute("href") || "";
+            }
+
+            log("[ParseDeviation] Row " + i + ": Subject = '" + subjectNumber + "'");
+
+            var dataCell = cells[4];
+            var miniTables = dataCell.querySelectorAll("tbody");
+            log("[ParseDeviation] Row " + i + ": Found " + miniTables.length + " mini-tables (item groups)");
+
+            for (var ti = 0; ti < miniTables.length; ti++) {
+                var miniRows = miniTables[ti].querySelectorAll("tr");
+                var itemGroupData = {};
+
+                for (var mi = 0; mi < miniRows.length; mi++) {
+                    var miniCells = miniRows[mi].querySelectorAll("td");
+                    if (miniCells.length < 2) continue;
+
+                    var labelCell = miniCells[0];
+                    var valueCell = miniCells[1];
+
+                    var label = (labelCell.textContent || "").trim().toLowerCase();
+                    var valueEl = valueCell.querySelector("span.novalue");
+                    var value = "";
+                    if (valueEl) {
+                        value = "";
+                    } else {
+                        value = (valueCell.textContent || "").trim();
+                    }
+
+                    itemGroupData[label] = value;
+                }
+
+                log("[ParseDeviation] Item group " + ti + " data: " + JSON.stringify(itemGroupData));
+
+                var isNewForm = false;
+                if (subjectNumber !== currentSubject) {
+                    log("[ParseDeviation] NEW FORM: Subject changed from '" + currentSubject + "' to '" + subjectNumber + "'");
+                    isNewForm = true;
+                } else {
+                    for (var key in itemGroupData) {
+                        if (key.indexOf("date of deviation") !== -1 && seenLabelsForForm[key]) {
+                            var newDateVal = itemGroupData[key];
+                            log("[ParseDeviation] Checking date of deviation: '" + newDateVal + "' (seen before: " + seenLabelsForForm[key] + ")");
+                            if (newDateVal && newDateVal.length > 0 && newDateVal !== "-") {
+                                log("[ParseDeviation] NEW FORM: Date of deviation has non-empty value");
+                                isNewForm = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (isNewForm && currentForm) {
+                    log("[ParseDeviation] Pushing completed form to results");
+                    currentForm.actionTakenCombined = currentForm.actionTaken.join("; ");
+                    delete currentForm.actionTaken;
+                    results.push(currentForm);
+                    currentForm = null;
+                    seenLabelsForForm = {};
+                }
+
+                if (!currentForm) {
+                    log("[ParseDeviation] Creating new form for subject '" + subjectNumber + "'");
+                    currentForm = {
+                        subjectNumber: subjectNumber,
+                        subjectLink: subjectHref,
+                        dateOfDeviation: "",
+                        studyVisitDay: "",
+                        dateDiscovered: "",
+                        deviationExplanation: "",
+                        severity: "",
+                        reportable: "",
+                        initials: "",
+                        category: "",
+                        actionTaken: []
+                    };
+                    currentSubject = subjectNumber;
+                }
+
+                for (var key in itemGroupData) {
+                    var val = itemGroupData[key];
+                    if (val && val.length > 0 && val !== "-") {
+                        seenLabelsForForm[key] = true;
+
+                        if (key.indexOf("date of deviation") !== -1) {
+                            if (!currentForm.dateOfDeviation || currentForm.dateOfDeviation === "-") currentForm.dateOfDeviation = val;
+                        } else if (key.indexOf("study visit day") !== -1) {
+                            if (!currentForm.studyVisitDay || currentForm.studyVisitDay === "-") currentForm.studyVisitDay = val;
+                        } else if (key.indexOf("date discovered") !== -1) {
+                            if (!currentForm.dateDiscovered || currentForm.dateDiscovered === "-") currentForm.dateDiscovered = val;
+                        } else if (key.indexOf("description") !== -1 || key.indexOf("explanation") !== -1) {
+                            if (!currentForm.deviationExplanation || currentForm.deviationExplanation === "-") currentForm.deviationExplanation = val;
+                        } else if (key.indexOf("severity") !== -1) {
+                            if (!currentForm.severity || currentForm.severity === "-") currentForm.severity = val;
+                        } else if (key.indexOf("reportable") !== -1) {
+                            if (!currentForm.reportable || currentForm.reportable === "-") currentForm.reportable = val;
+                        } else if (key.indexOf("initial") !== -1) {
+                            if (!currentForm.initials || currentForm.initials === "-") currentForm.initials = val;
+                        } else if (key.indexOf("category") !== -1) {
+                            if (!currentForm.category || currentForm.category === "-") currentForm.category = val;
+                        } else if (key.indexOf("corrective") !== -1 || key.indexOf("preventative") !== -1 || key.indexOf("preventive") !== -1) {
+                            currentForm.actionTaken.push(val);
+                        }
+                    }
+                }
+                log("[ParseDeviation] Current form state: " + JSON.stringify(currentForm));
+            }
+        }
+
+        if (currentForm) {
+            log("[ParseDeviation] Pushing final form to results");
+            currentForm.actionTakenCombined = currentForm.actionTaken.join("; ");
+            delete currentForm.actionTaken;
+            results.push(currentForm);
+        }
+
+        log("[ParseDeviation] Total forms created: " + results.length);
+        return results;
+    }
+
+    function parseDeviationGetNextPage() {
+        var pager = document.querySelector("p#pagerButtons");
+        if (!pager) {
+            var pagerAlt = document.querySelector("#pagerButtons");
+            if (pagerAlt) pager = pagerAlt;
+        }
+        if (!pager) return null;
+
+        var currentDisabled = pager.querySelector("li.disabled a, li.active a");
+        if (!currentDisabled) return null;
+
+        var currentLi = currentDisabled.closest("li");
+        if (!currentLi) return null;
+
+        var nextLi = currentLi.nextElementSibling;
+        while (nextLi) {
+            var dataLp = nextLi.getAttribute("data-lp");
+            if (dataLp && !nextLi.classList.contains("disabled")) {
+                var nextLink = nextLi.querySelector("a");
+                if (nextLink) {
+                    return nextLink;
+                }
+            }
+            nextLi = nextLi.nextElementSibling;
+        }
+
+        return null;
+    }
+
+    async function parseDeviationFetchInitials(subjectHref) {
+        if (!subjectHref || subjectHref.length === 0) {
+            return "";
+        }
+
+        try {
+            var fullUrl = location.origin + subjectHref;
+            log("[ParseDeviation] Fetching initials from: " + fullUrl);
+
+            return new Promise(function(resolve) {
+                var iframe = document.createElement("iframe");
+                iframe.style.position = "fixed";
+                iframe.style.top = "-9999px";
+                iframe.style.left = "-9999px";
+                iframe.style.width = "1px";
+                iframe.style.height = "1px";
+                iframe.style.visibility = "hidden";
+
+                var timeoutId = setTimeout(function() {
+                    if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+                    resolve("");
+                }, 10000);
+
+                iframe.onload = function() {
+                    try {
+                        var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                        var volunteerLink = iframeDoc.querySelector("a[href*='/secure/volunteers/manage/show/']");
+                        if (volunteerLink) {
+                            var linkText = (volunteerLink.textContent || "").trim();
+                            var parts = linkText.split(",");
+                            if (parts.length >= 3) {
+                                var initials = parts[2].trim();
+                                log("[ParseDeviation] Found initials: " + initials);
+                                clearTimeout(timeoutId);
+                                if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+                                resolve(initials);
+                                return;
+                            }
+                        }
+                        clearTimeout(timeoutId);
+                        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+                        resolve("");
+                    } catch (e) {
+                        clearTimeout(timeoutId);
+                        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+                        resolve("");
+                    }
+                };
+
+                iframe.onerror = function() {
+                    clearTimeout(timeoutId);
+                    if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+                    resolve("");
+                };
+
+                document.body.appendChild(iframe);
+                iframe.src = fullUrl;
+            });
+        } catch (e) {
+            log("[ParseDeviation] Error fetching initials: " + e);
+            return "";
+        }
+    }
+
+    function parseDeviationFormatDate(dateStr) {
+        if (!dateStr || dateStr.length === 0) return "";
+
+        var months = {
+            "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+            "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12
+        };
+
+        var match = dateStr.match(/(\d{1,2})\s*([A-Za-z]{3})\s*(\d{4})/);
+        if (match) {
+            var day = parseInt(match[1], 10);
+            var monthStr = match[2].toLowerCase();
+            var year = parseInt(match[3], 10);
+            var month = months[monthStr] || 1;
+            return month + "/" + day + "/" + year;
+        }
+
+        return dateStr;
+    }
+
+    function parseDeviationFormatVisitDay(visitDayStr) {
+        if (!visitDayStr || visitDayStr.length === 0) return "";
+
+        var match = visitDayStr.match(/[Dd]ay\s*(\d+)/i);
+        if (match) {
+            return "D" + match[1];
+        }
+
+        var numMatch = visitDayStr.match(/^(\d+)$/);
+        if (numMatch) {
+            return "D" + numMatch[1];
+        }
+
+        return visitDayStr;
+    }
+
+    function parseDeviationSanitizeValue(val) {
+        if (!val) return "";
+        return String(val).replace(/[\t\r\n]+/g, " ").trim();
+    }
+
+    function parseDeviationFormatSubjectNumber(subjectStr) {
+        if (!subjectStr) return "";
+        var parts = subjectStr.split("/");
+        if (parts.length >= 2) {
+            var middle = parts[1].trim();
+            if (/[a-zA-Z]/.test(middle)) {
+                var allNumbers = middle.match(/\d+(?:-\d+)?/g);
+                if (allNumbers) {
+                    for (var i = 0; i < allNumbers.length; i++) {
+                        var numWithoutDash = allNumbers[i].replace(/-/g, "");
+                        if (numWithoutDash.length > 3) {
+                            return allNumbers[i];
+                        }
+                    }
+                }
+                return parts[0].trim();
+            }
+            return middle;
+        }
+        return subjectStr.trim();
+    }
+
+    function parseDeviationFormatActionTaken(actionStr) {
+        if (!actionStr) return "";
+        return actionStr.replace(/;\s*/g, " ");
+    }
+
+    function parseDeviationFormatSeverity(severityStr) {
+        if (!severityStr) return "";
+        if (severityStr.toLowerCase().indexOf("minor") !== -1) {
+            return "Minor";
+        }
+        return severityStr;
+    }
+
+    function parseDeviationFormatReportable(reportableStr) {
+        if (!reportableStr) return "";
+        var lower = reportableStr.toLowerCase();
+        if (lower.indexOf("not") !== -1 || lower.indexOf("no") !== -1) {
+            return "No";
+        }
+        return "Yes";
+    }
+
+    function parseDeviationFormatRow(item) {
+        var TAB = "\t";
+
+        var colA = "=IFERROR(INDEX(A:A,ROW()-1)+1,1)";
+        var colB = "ACT";
+        var colC = "";
+        var colD = "";
+        var colE = parseDeviationSanitizeValue(parseDeviationFormatSubjectNumber(item.subjectNumber));
+        var colF = parseDeviationSanitizeValue(parseDeviationFormatVisitDay(item.studyVisitDay));
+        var colG = "";
+        var colH = parseDeviationSanitizeValue(parseDeviationFormatDate(item.dateOfDeviation));
+        var colI = parseDeviationSanitizeValue(parseDeviationFormatDate(item.dateDiscovered));
+        var colJ = parseDeviationSanitizeValue(item.initials);
+        var colK = parseDeviationSanitizeValue(item.deviationExplanation);
+        var colL = parseDeviationSanitizeValue(parseDeviationFormatActionTaken(item.actionTakenCombined));
+        var colM = "";
+        var colN = parseDeviationSanitizeValue(item.category);
+        var colO = "";
+        var colP = "";
+        var colQ = "";
+        var colR = "";
+        var colS = "";
+        var colT = parseDeviationSanitizeValue(parseDeviationFormatSeverity(item.severity));
+        var colU = parseDeviationSanitizeValue(parseDeviationFormatReportable(item.reportable));
+
+        var row = colA + TAB + colB + TAB + colC + TAB + colD + TAB +
+                  colE + TAB + colF + TAB + colG + TAB + colH + TAB +
+                  colI + TAB + colJ + TAB + colK + TAB + colL + TAB +
+                  colM + TAB + colN + TAB + colO + TAB + colP + TAB +
+                  colQ + TAB + colR + TAB + colS + TAB + colT + TAB + colU;
+
+        return row;
+    }
+
+    function parseDeviationShowResults(popup, results) {
+        log("[ParseDeviation] Displaying " + results.length + " results");
+
+        var container = document.createElement("div");
+        container.style.display = "flex";
+        container.style.flexDirection = "column";
+        container.style.gap = "12px";
+        container.style.maxHeight = "500px";
+        container.style.overflowY = "auto";
+
+        var headerDiv = document.createElement("div");
+        headerDiv.style.display = "flex";
+        headerDiv.style.justifyContent = "space-between";
+        headerDiv.style.alignItems = "center";
+        headerDiv.style.marginBottom = "8px";
+        headerDiv.style.padding = "8px";
+        headerDiv.style.background = "#1a1a1a";
+        headerDiv.style.borderRadius = "6px";
+
+        var countText = document.createElement("div");
+        countText.style.fontSize = "14px";
+        countText.style.fontWeight = "600";
+        countText.textContent = "Found " + results.length + " deviation(s)";
+        headerDiv.appendChild(countText);
+
+        var copyAllBtn = document.createElement("button");
+        copyAllBtn.textContent = "Copy All";
+        copyAllBtn.style.background = "#dc3545";
+        copyAllBtn.style.color = "#fff";
+        copyAllBtn.style.border = "none";
+        copyAllBtn.style.borderRadius = "4px";
+        copyAllBtn.style.padding = "6px 12px";
+        copyAllBtn.style.cursor = "pointer";
+        copyAllBtn.style.fontSize = "12px";
+        copyAllBtn.style.fontWeight = "500";
+        copyAllBtn.onmouseenter = function() { this.style.background = "#c82333"; };
+        copyAllBtn.onmouseleave = function() { this.style.background = "#dc3545"; };
+        copyAllBtn.addEventListener("click", function() {
+            var allRows = [];
+            for (var i = 0; i < results.length; i++) {
+                allRows.push(parseDeviationFormatRow(results[i]));
+            }
+            var allText = allRows.join("\n");
+            navigator.clipboard.writeText(allText).then(function() {
+                copyAllBtn.textContent = "Copied!";
+                setTimeout(function() { copyAllBtn.textContent = "Copy All"; }, 1500);
+            });
+        });
+        headerDiv.appendChild(copyAllBtn);
+
+        container.appendChild(headerDiv);
+
+        if (results.length === 0) {
+            var noResults = document.createElement("div");
+            noResults.style.textAlign = "center";
+            noResults.style.padding = "40px";
+            noResults.style.color = "#888";
+            noResults.textContent = "No deviation data found.";
+            container.appendChild(noResults);
+        } else {
+            for (var i = 0; i < results.length; i++) {
+                var item = results[i];
+                var rowDiv = document.createElement("div");
+                rowDiv.style.display = "flex";
+                rowDiv.style.flexDirection = "column";
+                rowDiv.style.gap = "8px";
+                rowDiv.style.padding = "12px";
+                rowDiv.style.background = "#1a1a1a";
+                rowDiv.style.borderRadius = "6px";
+                rowDiv.style.border = "1px solid #333";
+
+                var rowHeader = document.createElement("div");
+                rowHeader.style.display = "flex";
+                rowHeader.style.justifyContent = "space-between";
+                rowHeader.style.alignItems = "center";
+
+                var subjectInfo = document.createElement("div");
+                subjectInfo.style.fontWeight = "600";
+                subjectInfo.style.fontSize = "14px";
+                subjectInfo.textContent = item.subjectNumber || "Unknown Subject";
+                rowHeader.appendChild(subjectInfo);
+
+                var copyBtn = document.createElement("button");
+                copyBtn.textContent = "Copy";
+                copyBtn.style.background = "#28a745";
+                copyBtn.style.color = "#fff";
+                copyBtn.style.border = "none";
+                copyBtn.style.borderRadius = "4px";
+                copyBtn.style.padding = "4px 10px";
+                copyBtn.style.cursor = "pointer";
+                copyBtn.style.fontSize = "12px";
+                copyBtn.style.fontWeight = "500";
+                copyBtn.onmouseenter = function() { this.style.background = "#218838"; };
+                copyBtn.onmouseleave = function() { this.style.background = "#28a745"; };
+
+                (function(btn, itemData) {
+                    btn.addEventListener("click", function() {
+                        var formattedRow = parseDeviationFormatRow(itemData);
+                        navigator.clipboard.writeText(formattedRow).then(function() {
+                            btn.textContent = "Copied!";
+                            setTimeout(function() { btn.textContent = "Copy"; }, 1500);
+                        });
+                    });
+                })(copyBtn, item);
+
+                rowHeader.appendChild(copyBtn);
+                rowDiv.appendChild(rowHeader);
+
+                var detailsGrid = document.createElement("div");
+                detailsGrid.style.display = "grid";
+                detailsGrid.style.gridTemplateColumns = "1fr 1fr";
+                detailsGrid.style.gap = "6px";
+                detailsGrid.style.fontSize = "12px";
+
+                function addDetail(label, value) {
+                    var detailItem = document.createElement("div");
+                    detailItem.innerHTML = "<span style='color:#888;'>" + label + ":</span> " +
+                        "<span style='color:#fff;'>" + (value || "-") + "</span>";
+                    detailsGrid.appendChild(detailItem);
+                }
+
+                addDetail("Visit Day", parseDeviationFormatVisitDay(item.studyVisitDay));
+                addDetail("Date of Deviation", parseDeviationFormatDate(item.dateOfDeviation));
+                addDetail("Date Discovered", parseDeviationFormatDate(item.dateDiscovered));
+                addDetail("Initials", item.initials);
+                addDetail("Severity", item.severity);
+                addDetail("Reportable", item.reportable);
+
+                rowDiv.appendChild(detailsGrid);
+
+                if (item.deviationExplanation) {
+                    var explanationDiv = document.createElement("div");
+                    explanationDiv.style.fontSize = "12px";
+                    explanationDiv.style.color = "#ccc";
+                    explanationDiv.style.marginTop = "4px";
+                    explanationDiv.style.padding = "8px";
+                    explanationDiv.style.background = "#222";
+                    explanationDiv.style.borderRadius = "4px";
+                    explanationDiv.style.maxHeight = "60px";
+                    explanationDiv.style.overflowY = "auto";
+                    explanationDiv.textContent = item.deviationExplanation;
+                    rowDiv.appendChild(explanationDiv);
+                }
+
+                container.appendChild(rowDiv);
+            }
+        }
+
+        popup.setContent(container);
+        popup.element.style.width = "600px";
+        popup.element.style.height = "auto";
+        popup.element.style.maxHeight = "80%";
+
+        var rect = popup.element.getBoundingClientRect();
+        popup.element.style.left = (window.innerWidth / 2) + "px";
+        popup.element.style.top = (window.innerHeight / 2) + "px";
+        popup.element.style.transform = "translate(-50%, -50%)";
+    }
+
+    function parseDeviationCheckOnPageLoad() {
+        var isRunning = false;
+        try {
+            isRunning = localStorage.getItem(STORAGE_PARSE_DEVIATION_RUNNING) === "true";
+        } catch (e) {}
+
+        if (!isRunning) return;
+
+        if (location.href.indexOf("/secure/study/data/list") === -1) return;
+
+        var keywords = [];
+        try {
+            var raw = localStorage.getItem(STORAGE_PARSE_DEVIATION_KEYWORDS);
+            if (raw) keywords = JSON.parse(raw);
+        } catch (e) {}
+
+        if (keywords.length === 0) {
+            try { localStorage.removeItem(STORAGE_PARSE_DEVIATION_RUNNING); } catch (e) {}
+            return;
+        }
+
+        log("[ParseDeviation] Resuming after page load with keywords: " + keywords.join(", "));
+
+        var popupContainer = document.createElement("div");
+        popupContainer.style.display = "flex";
+        popupContainer.style.flexDirection = "column";
+        popupContainer.style.alignItems = "center";
+        popupContainer.style.gap = "20px";
+        popupContainer.style.padding = "40px 20px";
+
+        var spinner = document.createElement("div");
+        spinner.style.width = "48px";
+        spinner.style.height = "48px";
+        spinner.style.border = "4px solid #333";
+        spinner.style.borderTop = "4px solid #dc3545";
+        spinner.style.borderRadius = "50%";
+        spinner.style.animation = "parseDeviationSpin 1s linear infinite";
+
+        var style = document.createElement("style");
+        style.textContent = "@keyframes parseDeviationSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }";
+        document.head.appendChild(style);
+
+        var statusText = document.createElement("div");
+        statusText.style.fontSize = "16px";
+        statusText.style.fontWeight = "500";
+        statusText.style.color = "#f99";
+        statusText.textContent = "Resuming Parse Deviation...";
+
+        var progressText = document.createElement("div");
+        progressText.style.fontSize = "13px";
+        progressText.style.color = "#888";
+        progressText.textContent = "Please wait...";
+
+        popupContainer.appendChild(spinner);
+        popupContainer.appendChild(statusText);
+        popupContainer.appendChild(progressText);
+
+        var popup = createPopup({
+            title: "Parse Deviation",
+            content: popupContainer,
+            width: "450px",
+            height: "auto"
+        });
+
+        PARSE_DEVIATION_POPUP_REF = popup;
+
+        setTimeout(async function() {
+            await parseDeviationProcessPage(popup, statusText, progressText, spinner, keywords);
+        }, 1000);
+    }
+
+    //==========================
     // MAKE PANEL FUNCTIONS
     //==========================
     // This section contains functions used to create and manage the panel UI.
     // These functions are used to create the panel UI and manage its state.
     //==========================
     function makePanel() {
+        // ... (rest of the code remains the same)
         var prior = document.getElementById(PANEL_ID);
         if (prior) {
             return prior;
@@ -4087,7 +5141,7 @@
         var leftSpacer = document.createElement("div");
         leftSpacer.style.width = "32px";
         var title = document.createElement("div");
-        title.textContent = "ClinSpark Admin Automator";
+        title.textContent = "Admin Automator";
         title.style.fontWeight = "600";
         title.style.textAlign = "center";
         title.style.justifySelf = "center";
@@ -4213,12 +5267,30 @@
             openMethodsLibraryModal();
         });
 
-        btnRow.appendChild(runBarcodeBtn);
-        btnRow.appendChild(pauseBtn);
-        btnRow.appendChild(clearLogsBtn);
-        btnRow.appendChild(toggleLogsBtn);
-        btnRow.appendChild(parseStudyEventBtn);
-        btnRow.appendChild(searchMethodsBtn);
+        var parseDeviationBtn = document.createElement("button");
+        parseDeviationBtn.textContent = "Parse Deviation";
+        parseDeviationBtn.style.background = "#4a90e2";
+        parseDeviationBtn.style.color = "#fff";
+        parseDeviationBtn.style.border = "none";
+        parseDeviationBtn.style.borderRadius = "6px";
+        parseDeviationBtn.style.padding = "8px";
+        parseDeviationBtn.style.cursor = "pointer";
+        parseDeviationBtn.style.fontWeight = "500";
+        parseDeviationBtn.style.transition = "background 0.2s";
+        parseDeviationBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
+        parseDeviationBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+        parseDeviationBtn.addEventListener("click", function() {
+            log("[ParseDeviation] Button clicked");
+            APS_ParseDeviation();
+        });
+
+        // btnRow.appendChild(runBarcodeBtn);
+        // btnRow.appendChild(pauseBtn);
+        // btnRow.appendChild(clearLogsBtn);
+        // btnRow.appendChild(toggleLogsBtn);
+        // btnRow.appendChild(parseStudyEventBtn);
+        // btnRow.appendChild(searchMethodsBtn);
+        btnRow.appendChild(parseDeviationBtn);
 
         bodyContainer.appendChild(btnRow);
         var status = document.createElement("div");
@@ -4230,7 +5302,7 @@
         status.style.fontSize = "13px";
         status.style.whiteSpace = "pre-wrap";
         status.textContent = "Ready";
-        bodyContainer.appendChild(status);
+        //  bodyContainer.appendChild(status);
         var logBox = document.createElement("div");
         logBox.id = LOG_ID;
         logBox.style.marginTop = "8px";
@@ -4248,7 +5320,7 @@
         if (!logVisible) {
             logBox.style.display = "none";
         }
-        bodyContainer.appendChild(logBox);
+        // bodyContainer.appendChild(logBox);
         try {
             var rawLogs = localStorage.getItem("activityPlanState.logs");
             if (rawLogs) {
@@ -4444,6 +5516,9 @@
 
         // Recreate popups if needed
         recreatePopupsIfNeeded();
+
+        // Check for Parse Deviation continuation after page navigation
+        parseDeviationCheckOnPageLoad();
 
         if (isPaused()) {
             log("Paused; automation halted");
