@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.8.7
+// @version     1.8.8
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -174,6 +174,7 @@
     var STORAGE_PARSE_DEVIATION_RUNNING = "activityPlanState.parseDeviation.running";
     var STORAGE_PARSE_DEVIATION_KEYWORDS = "activityPlanState.parseDeviation.keywords";
     var STORAGE_PARSE_DEVIATION_RESULTS = "activityPlanState.parseDeviation.results";
+    var STORAGE_PARSE_DEVIATION_TIMESTAMP = "activityPlanState.parseDeviation.timestamp";
     var PARSE_DEVIATION_DATA_LIST_URL = "https://cenexel.clinspark.com/secure/study/data/list";
     var PARSE_DEVIATION_POPUP_REF = null;
     var PARSE_DEVIATION_CANCELED = false;
@@ -340,6 +341,7 @@
             try {
                 localStorage.setItem(STORAGE_PARSE_DEVIATION_KEYWORDS, JSON.stringify(keywords));
                 localStorage.setItem(STORAGE_PARSE_DEVIATION_RUNNING, "true");
+                localStorage.setItem(STORAGE_PARSE_DEVIATION_TIMESTAMP, String(Date.now()));
             } catch (e) {}
 
             await sleep(500);
@@ -1145,6 +1147,27 @@
 
         if (location.href.indexOf("/secure/study/data/list") === -1) return;
 
+        // Check timestamp to prevent auto-run on casual navigation
+        var timestamp = 0;
+        try {
+            var tsRaw = localStorage.getItem(STORAGE_PARSE_DEVIATION_TIMESTAMP);
+            if (tsRaw) timestamp = parseInt(tsRaw, 10);
+        } catch (e) {}
+
+        var now = Date.now();
+        var elapsed = now - timestamp;
+        var maxAge = 10000; // 10 seconds
+
+        if (elapsed > maxAge || timestamp === 0) {
+            log("[ParseDeviation] Timestamp expired or missing (elapsed=" + elapsed + "ms), skipping auto-resume");
+            try {
+                localStorage.removeItem(STORAGE_PARSE_DEVIATION_RUNNING);
+                localStorage.removeItem(STORAGE_PARSE_DEVIATION_KEYWORDS);
+                localStorage.removeItem(STORAGE_PARSE_DEVIATION_TIMESTAMP);
+            } catch (e) {}
+            return;
+        }
+
         var keywords = [];
         try {
             var raw = localStorage.getItem(STORAGE_PARSE_DEVIATION_KEYWORDS);
@@ -1152,10 +1175,12 @@
         } catch (e) {}
 
         if (keywords.length === 0) {
-            try { localStorage.removeItem(STORAGE_PARSE_DEVIATION_RUNNING); } catch (e) {}
+            try {
+                localStorage.removeItem(STORAGE_PARSE_DEVIATION_RUNNING);
+                localStorage.removeItem(STORAGE_PARSE_DEVIATION_TIMESTAMP);
+            } catch (e) {}
             return;
         }
-
         log("[ParseDeviation] Resuming after page load with keywords: " + keywords.join(", "));
 
         var popupContainer = document.createElement("div");
