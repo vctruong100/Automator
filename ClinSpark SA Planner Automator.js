@@ -376,6 +376,42 @@
         errorDiv.id = "archiveUpdateError";
         container.appendChild(errorDiv);
 
+        // Reason inputs section
+        var reasonsContainer = document.createElement("div");
+        reasonsContainer.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:12px 0;";
+
+        // Archive Reason
+        var archiveReasonContainer = document.createElement("div");
+        archiveReasonContainer.style.cssText = "display:flex;flex-direction:column;gap:6px;";
+        var archiveReasonLabel = document.createElement("label");
+        archiveReasonLabel.textContent = "Archive Reason";
+        archiveReasonLabel.style.cssText = "font-size:13px;font-weight:600;color:#ccc;";
+        var archiveReasonInput = document.createElement("input");
+        archiveReasonInput.type = "text";
+        archiveReasonInput.value = "Old version";
+        archiveReasonInput.id = "archiveUpdateArchiveReason";
+        archiveReasonInput.style.cssText = "padding:10px;border-radius:6px;border:1px solid #444;background:#222;color:#fff;font-size:13px;";
+        archiveReasonContainer.appendChild(archiveReasonLabel);
+        archiveReasonContainer.appendChild(archiveReasonInput);
+
+        // Visibility Reason
+        var visibilityReasonContainer = document.createElement("div");
+        visibilityReasonContainer.style.cssText = "display:flex;flex-direction:column;gap:6px;";
+        var visibilityReasonLabel = document.createElement("label");
+        visibilityReasonLabel.textContent = "Visibility Reason";
+        visibilityReasonLabel.style.cssText = "font-size:13px;font-weight:600;color:#ccc;";
+        var visibilityReasonInput = document.createElement("input");
+        visibilityReasonInput.type = "text";
+        visibilityReasonInput.value = "Add visibility condition";
+        visibilityReasonInput.id = "archiveUpdateVisibilityReason";
+        visibilityReasonInput.style.cssText = "padding:10px;border-radius:6px;border:1px solid #444;background:#222;color:#fff;font-size:13px;";
+        visibilityReasonContainer.appendChild(visibilityReasonLabel);
+        visibilityReasonContainer.appendChild(visibilityReasonInput);
+
+        reasonsContainer.appendChild(archiveReasonContainer);
+        reasonsContainer.appendChild(visibilityReasonContainer);
+        container.appendChild(reasonsContainer);
+
         // Button row
         var buttonRow = document.createElement("div");
         buttonRow.style.cssText = "display:flex;justify-content:center;gap:16px;padding-top:8px;";
@@ -576,7 +612,12 @@
 
         // Return container with confirm handler
         container.getSelection = function() {
-            return { source: selectedSource, target: selectedTarget };
+            return { 
+                source: selectedSource, 
+                target: selectedTarget,
+                archiveReason: archiveReasonInput.value,
+                visibilityReason: visibilityReasonInput.value
+            };
         };
         container.confirmBtn = confirmBtn;
         container.sourceFormsMap = sourceFormsMap;
@@ -717,7 +758,11 @@
             offsetDays: "",
             offsetHours: "",
             offsetMinutes: "",
-            offsetSeconds: ""
+            offsetSeconds: "",
+            enforceDataCollectionOrder: false,
+            disableCollectionTime: false,
+            formOffsetSeconds: "",
+            collectionRoleRestriction: ""
         };
 
         await sleep(500);
@@ -770,6 +815,48 @@
 
             var secondsEl = document.querySelector("input[name='offset.seconds']");
             if (secondsEl) props.offsetSeconds = secondsEl.value || "";
+        }
+
+        // Enforce Data Collection Order - check the parent span's class for "checked" status
+        var enforceSpan = document.querySelector("#uniform-enforceDataCollectionOrder span");
+        if (enforceSpan) {
+            props.enforceDataCollectionOrder = enforceSpan.className.indexOf("checked") !== -1;
+            log("Archive/Update Forms: collected enforceDataCollectionOrder=" + props.enforceDataCollectionOrder + " (span class='" + enforceSpan.className + "')");
+        } else {
+            // Fallback: try direct checkbox
+            var enforceEl = document.getElementById("enforceDataCollectionOrder");
+            if (enforceEl) {
+                props.enforceDataCollectionOrder = enforceEl.checked;
+                log("Archive/Update Forms: collected enforceDataCollectionOrder=" + props.enforceDataCollectionOrder + " (direct checkbox)");
+            }
+        }
+
+        // Disable Collection Time - check the parent span's class for "checked" status
+        var disableCollectionSpan = document.querySelector("#uniform-disableCollectionTime span");
+        if (disableCollectionSpan) {
+            props.disableCollectionTime = disableCollectionSpan.className.indexOf("checked") !== -1;
+            log("Archive/Update Forms: collected disableCollectionTime=" + props.disableCollectionTime + " (span class='" + disableCollectionSpan.className + "')");
+        } else {
+            // Fallback: try direct checkbox
+            var disableCollectionEl = document.getElementById("disableCollectionTime");
+            if (disableCollectionEl) {
+                props.disableCollectionTime = disableCollectionEl.checked;
+                log("Archive/Update Forms: collected disableCollectionTime=" + props.disableCollectionTime + " (direct checkbox)");
+            }
+        }
+
+        // Timepoint Offset (Form Offset Seconds)
+        var formOffsetEl = document.getElementById("formOffsetSeconds");
+        if (formOffsetEl) {
+            props.formOffsetSeconds = formOffsetEl.value || "";
+            log("Archive/Update Forms: collected formOffsetSeconds='" + props.formOffsetSeconds + "'");
+        }
+
+        // Collection Role Restriction
+        var collectionRoleSpan = document.querySelector("#s2id_dataCollectionApplicationUserRole .select2-chosen");
+        if (collectionRoleSpan) {
+            props.collectionRoleRestriction = normalizeSAText(collectionRoleSpan.textContent);
+            log("Archive/Update Forms: collected collectionRoleRestriction='" + props.collectionRoleRestriction + "'");
         }
 
         return props;
@@ -940,6 +1027,54 @@
         } else {
             log("Archive/Update Forms: Skipping time offset values (Reference Activity checked)");
         }
+        // Enforce Data Collection Order
+        if (props.enforceDataCollectionOrder) {
+            var enforceEl = document.querySelector("#uniform-enforceDataCollectionOrder span input#enforceDataCollectionOrder.checkbox");
+            if (!enforceEl) {
+                enforceEl = document.getElementById("enforceDataCollectionOrder");
+            }
+            if (enforceEl && !enforceEl.checked) {
+                enforceEl.click();
+                log("Archive/Update Forms: Enforce Data Collection Order checkbox checked");
+                await sleep(200);
+            }
+        }
+
+        // Disable Collection Time
+        var disableCollectionEl = document.querySelector("#uniform-disableCollectionTime span input#disableCollectionTime.checkbox");
+        if (!disableCollectionEl) {
+            disableCollectionEl = document.getElementById("disableCollectionTime");
+        }
+        if (disableCollectionEl && !disableCollectionEl.disabled) {
+            if (props.disableCollectionTime && !disableCollectionEl.checked) {
+                disableCollectionEl.click();
+                log("Archive/Update Forms: Disable Collection Time checkbox checked");
+                await sleep(200);
+            } else if (!props.disableCollectionTime && disableCollectionEl.checked) {
+                disableCollectionEl.click();
+                log("Archive/Update Forms: Disable Collection Time checkbox unchecked");
+                await sleep(200);
+            }
+        }
+
+        // Timepoint Offset (Form Offset Seconds)
+        var formOffsetEl = document.getElementById("formOffsetSeconds");
+        if (formOffsetEl && !formOffsetEl.disabled) {
+            formOffsetEl.value = props.formOffsetSeconds || "0";
+            formOffsetEl.dispatchEvent(new Event("input", { bubbles: true }));
+            log("Archive/Update Forms: Timepoint Offset set to '" + (props.formOffsetSeconds || "0") + "' seconds");
+        }
+
+        // Collection Role Restriction
+        if (props.collectionRoleRestriction) {
+            var roleSet = await setSelect2ValueByText("dataCollectionApplicationUserRole", props.collectionRoleRestriction);
+            if (roleSet) {
+                log("Archive/Update Forms: Collection Role Restriction set to '" + props.collectionRoleRestriction + "'");
+            } else {
+                log("Archive/Update Forms: Failed to set Collection Role Restriction to '" + props.collectionRoleRestriction + "'");
+            }
+            await sleep(300);
+        }
     }
 
     // Wait for Select2 options to change/load
@@ -966,34 +1101,41 @@
     }
 
     // Set Select2 value by text matching
-    async function setSelect2ValueByText(selectId, targetText) {
+        async function setSelect2ValueByText(selectId, targetText) {
         var sel = document.getElementById(selectId);
         if (!sel) {
             log("Archive/Update Forms: select " + selectId + " not found");
             return false;
         }
 
-        var normalizedTarget = normalizeText(targetText);
+        // Use specialized normalization for visibility fields
+        var isVisibilityField = selectId.indexOf("visible") === 0;
+        var normalizedTarget = isVisibilityField ? normalizeVisibilityText(targetText) : normalizeText(targetText);
         var opts = sel.querySelectorAll("option");
         var matchValue = null;
 
+        // First pass: exact match
         for (var i = 0; i < opts.length; i++) {
             var opt = opts[i];
             var optText = normalizeSAText(opt.textContent);
-            var optNorm = normalizeText(optText);
+            var optNorm = isVisibilityField ? normalizeVisibilityText(optText) : normalizeText(optText);
+            
             if (optNorm === normalizedTarget || optText === targetText) {
                 matchValue = opt.value;
+                log("Archive/Update Forms: exact match found for " + targetText + " -> " + optText);
                 break;
             }
         }
 
-        // Fuzzy match if exact not found
+        // Second pass: fuzzy match if exact not found
         if (!matchValue) {
             for (var j = 0; j < opts.length; j++) {
                 var opt2 = opts[j];
-                var optText2 = normalizeText(opt2.textContent);
+                var optText2 = isVisibilityField ? normalizeVisibilityText(opt2.textContent) : normalizeText(opt2.textContent);
+                
                 if (optText2.indexOf(normalizedTarget) !== -1 || normalizedTarget.indexOf(optText2) !== -1) {
                     matchValue = opt2.value;
+                    log("Archive/Update Forms: fuzzy match found for " + targetText + " -> " + opt2.textContent);
                     break;
                 }
             }
@@ -1069,7 +1211,7 @@
     }
 
     // Main Archive/Update Forms execution
-    async function executeArchiveUpdateForms(sourceFormKey, targetFormValue, sourceFormsMap, targetFormsArray) {
+    async function executeArchiveUpdateForms(sourceFormKey, targetFormValue, sourceFormsMap, targetFormsArray, archiveReason, visibilityReason) {
         var sourceForm = sourceFormsMap[sourceFormKey];
 
         // Find target form from array by value
@@ -1202,16 +1344,23 @@
                 // Step 2: Collect visibility if hidden
                 var visibilityProps = null;
                 if (editProps && editProps.hidden) {
+                    log("Archive/Update Forms: Step 2 - attempting to collect visibility properties");
                     await sleep(500);
                     row = findRowInDOM(occ.segmentText, occ.eventText, occ.formText);
                     if (row) {
-                        await clickRowActionDropdown(row);
-                        var visLink = row.querySelector('a[href*="visibility"]');
+                        // Find visibility link directly in the row
+                        var visLink = row.querySelector('a[href*="visiblecondition"]');
+                        if (!visLink) {
+                            visLink = row.querySelector('a[href*="visibility"]');
+                        }
+                        log("Archive/Update Forms: Step 2 - visibility link found=" + !!visLink);
                         if (visLink) {
                             visLink.click();
                             var visModal = await waitForSAModal(10000);
+                            log("Archive/Update Forms: Step 2 - visibility modal opened=" + !!visModal);
                             if (visModal) {
                                 visibilityProps = await collectVisibilityModalProperties();
+                                log("Archive/Update Forms: Step 2 - collected visibilityProps=" + JSON.stringify(visibilityProps));
                                 var visCancelBtn = visModal.querySelector("button[data-dismiss='modal'], .btn-default, .close");
                                 if (visCancelBtn) {
                                     visCancelBtn.click();
@@ -1219,8 +1368,14 @@
                                     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
                                 }
                                 await waitForSAModalClose(5000);
+                            } else {
+                                log("Archive/Update Forms: Step 2 - visibility modal did not open");
                             }
+                        } else {
+                            log("Archive/Update Forms: Step 2 - visibility link not found in row");
                         }
+                    } else {
+                        log("Archive/Update Forms: Step 2 - could not re-find row");
                     }
                 }
 
@@ -1244,7 +1399,7 @@
                                 // Set reason for change
                                 var reasonEl = document.getElementById("reasonForChange");
                                 if (reasonEl) {
-                                    reasonEl.value = "Update form";
+                                    reasonEl.value = archiveReason || "Old version";
                                     reasonEl.dispatchEvent(new Event("change", { bubbles: true }));
                                 }
                                 // Click Save
@@ -1321,53 +1476,125 @@
                 if (ARCHIVE_UPDATE_FORMS_CANCELLED) break;
 
                 // Step 5: Set visibility if source was hidden
+                log("Archive/Update Forms: Step 5 check - editProps.hidden=" + (editProps && editProps.hidden) + ", visibilityProps=" + !!visibilityProps);
                 if (editProps && editProps.hidden && visibilityProps) {
+                    log("Archive/Update Forms: Step 5 - attempting to set visibility on new row");
                     // Find the newly added row
                     var newRow = findRowInDOM(occ.segmentText, occ.eventText, targetForm.text);
                     if (newRow) {
-                        await clickRowActionDropdown(newRow);
-                        var newVisLink = newRow.querySelector('a[href*="visibility"]');
+                        log("Archive/Update Forms: Step 5 - new row found");
+                        // Find visibility link directly in the row
+                        var newVisLink = newRow.querySelector('a[href*="visiblecondition"]');
+                        if (!newVisLink) {
+                            newVisLink = newRow.querySelector('a[href*="visibility"]');
+                        }
+                        log("Archive/Update Forms: Step 5 - visibility link found=" + !!newVisLink);
                         if (newVisLink) {
                             newVisLink.click();
                             var newVisModal = await waitForSAModal(10000);
+                            log("Archive/Update Forms: Step 5 - visibility modal opened=" + !!newVisModal);
                             if (newVisModal) {
                                 await sleep(500);
 
-                                // Set visibility fields
+                                // Set visibility fields one at a time with delays
+                                var visSuccess = true;
+                                
+                                // 1. Activity Plan
                                 if (visibilityProps.activityPlan) {
-                                    await setSelect2ValueByText("visibleActivityPlan", visibilityProps.activityPlan);
-                                    await waitForSelect2OptionsChange("visibleScheduledActivity", 3000);
+                                    log("Archive/Update Forms: Step 5 - setting Activity Plan: " + visibilityProps.activityPlan);
+                                    var apSet = await setSelect2ValueByText("visibleActivityPlan", visibilityProps.activityPlan);
+                                    if (!apSet) {
+                                        log("Archive/Update Forms: Step 5 - failed to set Activity Plan");
+                                        visSuccess = false;
+                                    } else {
+                                        await sleep(500);
+                                        await waitForSelect2OptionsChange("visibleScheduledActivity", 3000);
+                                        await sleep(500);
+                                    }
                                 }
-                                if (visibilityProps.scheduledActivity) {
-                                    await setSelect2ValueByText("visibleScheduledActivity", visibilityProps.scheduledActivity);
-                                    await waitForSelect2OptionsChange("visibleItemRef", 3000);
+                                
+                                // 2. Scheduled Activity
+                                if (visSuccess && visibilityProps.scheduledActivity) {
+                                    log("Archive/Update Forms: Step 5 - setting Scheduled Activity: " + visibilityProps.scheduledActivity);
+                                    var saSet = false;
+                                    for (var retry = 0; retry < 3; retry++) {
+                                        saSet = await setSelect2ValueByText("visibleScheduledActivity", visibilityProps.scheduledActivity);
+                                        if (saSet) break;
+                                        log("Archive/Update Forms: Step 5 - retry " + (retry + 1) + " for Scheduled Activity");
+                                        await sleep(1000);
+                                    }
+                                    if (!saSet) {
+                                        log("Archive/Update Forms: Step 5 - failed to set Scheduled Activity after retries");
+                                        visSuccess = false;
+                                    } else {
+                                        await sleep(500);
+                                        await waitForSelect2OptionsChange("visibleItemRef", 3000);
+                                        await sleep(500);
+                                    }
                                 }
-                                if (visibilityProps.item) {
-                                    await setSelect2ValueByText("visibleItemRef", visibilityProps.item);
-                                    await waitForSelect2OptionsChange("visibleCodeListItem", 3000);
+                                
+                                // 3. Item
+                                if (visSuccess && visibilityProps.item) {
+                                    log("Archive/Update Forms: Step 5 - setting Item: " + visibilityProps.item);
+                                    var itemSet = false;
+                                    for (var retry = 0; retry < 3; retry++) {
+                                        itemSet = await setSelect2ValueByText("visibleItemRef", visibilityProps.item);
+                                        if (itemSet) break;
+                                        log("Archive/Update Forms: Step 5 - retry " + (retry + 1) + " for Item");
+                                        await sleep(1000);
+                                    }
+                                    if (!itemSet) {
+                                        log("Archive/Update Forms: Step 5 - failed to set Item after retries");
+                                        visSuccess = false;
+                                    } else {
+                                        await sleep(500);
+                                        await waitForSelect2OptionsChange("visibleCodeListItem", 3000);
+                                        await sleep(500);
+                                    }
                                 }
-                                if (visibilityProps.itemValue) {
-                                    await setSelect2ValueByText("visibleCodeListItem", visibilityProps.itemValue);
+                                
+                                // 4. Item Value
+                                if (visSuccess && visibilityProps.itemValue) {
+                                    log("Archive/Update Forms: Step 5 - setting Item Value: " + visibilityProps.itemValue);
+                                    var ivSet = false;
+                                    for (var retry = 0; retry < 3; retry++) {
+                                        ivSet = await setSelect2ValueByText("visibleCodeListItem", visibilityProps.itemValue);
+                                        if (ivSet) break;
+                                        log("Archive/Update Forms: Step 5 - retry " + (retry + 1) + " for Item Value");
+                                        await sleep(1000);
+                                    }
+                                    if (!ivSet) {
+                                        log("Archive/Update Forms: Step 5 - failed to set Item Value after retries");
+                                        visSuccess = false;
+                                    } else {
+                                        await sleep(500);
+                                    }
                                 }
 
                                 // Set reason for change
                                 var visReasonEl = document.getElementById("reasonForChange");
                                 if (visReasonEl) {
-                                    visReasonEl.value = "Add visibility condition";
+                                    visReasonEl.value = visibilityReason || "Add visibility condition";
                                     visReasonEl.dispatchEvent(new Event("change", { bubbles: true }));
                                 }
 
                                 // Save visibility
                                 var visSaveBtn = document.getElementById("actionButton");
                                 if (visSaveBtn) {
+                                    log("Archive/Update Forms: Step 5 - clicking Save button");
                                     visSaveBtn.click();
                                     await waitForSAModalClose(10000);
                                 }
                                 await sleep(500);
+                                log("Archive/Update Forms: Step 5 - visibility set successfully");
+                            } else {
+                                log("Archive/Update Forms: Step 5 - visibility modal did not open");
                             }
+                        } else {
+                            log("Archive/Update Forms: Step 5 - visibility link not found in new row");
                         }
                     } else {
-                        log("Archive/Update Forms: could not find newly added row to set visibility");
+                        log("Archive/Update Forms: Step 5 - could not find newly added row to set visibility");
                     }
                 }
 
@@ -1538,7 +1765,7 @@
                 return;
             }
 
-            log("Archive/Update Forms: confirmed - source=" + selection.source + " target=" + selection.target);
+            log("Archive/Update Forms: confirmed - source=" + selection.source + " target=" + selection.target + " archiveReason='" + selection.archiveReason + "' visibilityReason='" + selection.visibilityReason + "'");
 
             // Close selection popup (but don't cancel)
             if (ARCHIVE_UPDATE_FORMS_POPUP_REF) {
@@ -1549,7 +1776,7 @@
             }
 
             // Execute the replacement
-            await executeArchiveUpdateForms(selection.source, selection.target, guiContent.sourceFormsMap, guiContent.targetFormsArray);
+            await executeArchiveUpdateForms(selection.source, selection.target, guiContent.sourceFormsMap, guiContent.targetFormsArray, selection.archiveReason, selection.visibilityReason);
         });
 
         log("Archive/Update Forms: selection GUI displayed");
@@ -2551,6 +2778,37 @@
         s = s.replace(/\s+/g, "");
         s = s.replace(/[\-\_\(\)\[\]]/g, "");
         return s;
+    }
+
+    // Normalize text specifically for visibility condition matching
+    function normalizeVisibilityText(t) {
+        if (typeof t !== "string") {
+            return "";
+        }
+        var s = t.toLowerCase();
+        
+        // Remove time offsets like -00:05:00, +01:30:00, etc.
+        s = s.replace(/[\+\-]\d{2}:\d{2}:\d{2}/g, "");
+        
+        // Remove trailing occurrence numbers like (1), (2), etc.
+        s = s.replace(/\s*\(\d+\)\s*$/g, "");
+        
+        // Remove > symbol (used in collected data but not in options)
+        s = s.replace(/>/g, "");
+        
+        // Normalize spaces around = sign
+        s = s.replace(/\s*=\s*/g, "=");
+        
+        // Collapse multiple spaces
+        s = s.replace(/\s+/g, " ");
+        
+        // Remove all spaces for final comparison
+        s = s.replace(/\s/g, "");
+        
+        // Remove common punctuation
+        s = s.replace(/[\-\_\(\)\[\]]/g, "");
+        
+        return s.trim();
     }
 
     // Heuristic to determine if a label denotes a screening/Screening epoch/cohort.
