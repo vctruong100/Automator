@@ -2334,6 +2334,13 @@
     }
 
     function openMethodsLibraryModal() {
+        var bootstrapBackdrops = document.querySelectorAll('.modal-backdrop');
+        for (var i = 0; i < bootstrapBackdrops.length; i++) {
+            bootstrapBackdrops[i].style.display = 'none';
+        }
+
+        var openBootstrapModals = document.querySelectorAll('.modal.in, .modal.show');
+        
         if (METHODS_LIBRARY_MODAL_REF && document.body.contains(METHODS_LIBRARY_MODAL_REF)) {
             // Re-enable search input in case it got disabled
             var existingSearchInput = METHODS_LIBRARY_MODAL_REF.querySelector('input[type="text"]');
@@ -2865,10 +2872,23 @@
             // Ensure search input is focusable and editable
             searchInput.disabled = false;
             searchInput.readOnly = false;
+            searchInput.style.pointerEvents = 'auto';
+            searchInput.tabIndex = 0;
+
+            // Force focus after Bootstrap interference clears
             setTimeout(function() {
+                // Remove any lingering Bootstrap focus traps
+                var bootstrapBackdrops = document.querySelectorAll('.modal-backdrop');
+                for (var i = 0; i < bootstrapBackdrops.length; i++) {
+                    bootstrapBackdrops[i].style.display = 'none';
+                }
+                
                 searchInput.focus();
                 searchInput.select();
-            }, 100);
+                
+                // Force click to ensure it's interactive
+                searchInput.click();
+            }, 150);
 
             doSearch();
         }
@@ -2905,6 +2925,12 @@
             modal.remove();
             METHODS_LIBRARY_MODAL_REF = null;
             document.removeEventListener("keydown", keyHandler);
+            
+            // Restore Bootstrap modal backdrops
+            var bootstrapBackdrops = document.querySelectorAll('.modal-backdrop');
+            for (var i = 0; i < bootstrapBackdrops.length; i++) {
+                bootstrapBackdrops[i].style.display = 'block';
+            }
         }
 
         closeBtn.onclick = closeModal;
