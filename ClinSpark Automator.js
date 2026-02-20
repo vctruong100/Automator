@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.8.8
+// @version     1.8.9
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -143,7 +143,7 @@
     var PARSE_METHOD_COLLECTED_METHODS = [];
     var PARSE_METHOD_COLLECTED_FORMS = [];
 
-        // Cohort Eligibility Feature
+    // Cohort Eligibility Feature
     var STORAGE_COHORT_ELIG_DATA = "activityPlanState.cohortElig.data";
     var STORAGE_COHORT_ELIG_RUNNING = "activityPlanState.cohortElig.running";
     var STORAGE_COHORT_ELIG_AUTO_TAB = "activityPlanState.cohortElig.autoTab";
@@ -161,7 +161,7 @@
     var SUBJECT_ELIG_SUBJECTS_LIST_URL = "https://cenexel.clinspark.com/secure/study/subjects/list";
     var SUBJECT_ELIG_POPUP = null;
 
-    
+
     //==========================
     // PARSE DEVIATION FEATURE
     //==========================
@@ -483,7 +483,7 @@
             var subOpt = subjectOptions[si];
             var subText = (subOpt.textContent || "").trim();
             for (var ki = 0; ki < keywords.length; ki++) {
-            if (subText.toLowerCase().indexOf(keywords[ki].toLowerCase()) !== -1) {
+                if (subText.toLowerCase().indexOf(keywords[ki].toLowerCase()) !== -1) {
                     subOpt.selected = true;
                     selectedSubjectCount++;
                     log("[ParseDeviation] Selected subject: " + subText);
@@ -970,10 +970,10 @@
         var colU = parseDeviationSanitizeValue(parseDeviationFormatReportable(item.reportable));
 
         var row = colA + TAB + colB + TAB + colC + TAB + colD + TAB +
-                  colE + TAB + colF + TAB + colG + TAB + colH + TAB +
-                  colI + TAB + colJ + TAB + colK + TAB + colL + TAB +
-                  colM + TAB + colN + TAB + colO + TAB + colP + TAB +
-                  colQ + TAB + colR + TAB + colS + TAB + colT + TAB + colU;
+            colE + TAB + colF + TAB + colG + TAB + colH + TAB +
+            colI + TAB + colJ + TAB + colK + TAB + colL + TAB +
+            colM + TAB + colN + TAB + colO + TAB + colP + TAB +
+            colQ + TAB + colR + TAB + colS + TAB + colT + TAB + colU;
 
         return row;
     }
@@ -1416,11 +1416,11 @@
         hotkeyInput.addEventListener("keydown", function(e) {
             e.preventDefault();
             e.stopPropagation();
-            
+
             var key = e.key;
             var code = e.code;
             var displayKey = key;
-            
+
             // Handle special keys
             if (key.length === 1 && key.match(/[a-z]/i)) {
                 displayKey = key.toUpperCase();
@@ -1443,7 +1443,7 @@
             } else if (code) {
                 displayKey = code;
             }
-            
+
             this.value = displayKey;
             return false;
         });
@@ -1554,23 +1554,23 @@
             originalClose();
         };
         saveBtn.addEventListener("click", function() {
-        var newVisibility = {};
-        for (var j = 0; j < checkboxes.length; j++) {
-            var cb = checkboxes[j];
-            newVisibility[cb.dataset.label] = cb.checked;
-        }
-        setButtonVisibility(newVisibility);
-        
-        var newHotkey = hotkeyInput.value.trim();
-        if (newHotkey) {
-            setPanelHotkey(newHotkey);
-            log("Settings: Hotkey saved as " + newHotkey);
-        }
-        
-        log("Settings: Button visibility saved");
-        settingsPopup.close();
-        location.reload();
-    });
+            var newVisibility = {};
+            for (var j = 0; j < checkboxes.length; j++) {
+                var cb = checkboxes[j];
+                newVisibility[cb.dataset.label] = cb.checked;
+            }
+            setButtonVisibility(newVisibility);
+
+            var newHotkey = hotkeyInput.value.trim();
+            if (newHotkey) {
+                setPanelHotkey(newHotkey);
+                log("Settings: Hotkey saved as " + newHotkey);
+            }
+
+            log("Settings: Button visibility saved");
+            settingsPopup.close();
+            location.reload();
+        });
         return settingsPopup;
     }
 
@@ -2179,6 +2179,87 @@
     var STORAGE_METHODS_SORT_ORDER = "activityPlanState.methodsLibrary.sortOrder";
     var MAX_RECENTS = 10;
     var MAX_PINS = 5;
+    var BOOTSTRAP_FOCUS_NS = "focusin.bs.modal";
+
+    function disableBootstrapModalFocusTrap() {
+        try {
+            if (window.jQuery && window.jQuery(document)) {
+                log("Methods Library: disabling Bootstrap focus trap");
+                window.jQuery(document).off(BOOTSTRAP_FOCUS_NS);
+            }
+        } catch (e) {
+            log("Methods Library: error disabling focus trap - " + String(e));
+        }
+    }
+
+    function enableBootstrapModalFocusTrap() {
+        try {
+            // No direct re-bind because Bootstrap binds internally on show.
+            // We just log here; when the next Bootstrap modal opens, it will re-bind its handler.
+            log("Methods Library: focus trap will be restored by Bootstrap on next modal show");
+        } catch (e) {
+            log("Methods Library: error enabling focus trap - " + String(e));
+        }
+    }
+
+    function neutralizeAjaxModal() {
+        try {
+            var ajaxModal = document.getElementById("ajaxModal");
+            if (!ajaxModal) {
+                log("Methods Library: #ajaxModal not found to neutralize");
+                return;
+            }
+
+            ajaxModal.setAttribute("data-aps-neutralized", "1");
+            ajaxModal.style.pointerEvents = "none";
+            ajaxModal.style.visibility = "hidden";
+            ajaxModal.style.opacity = "0";
+            ajaxModal.setAttribute("aria-hidden", "true");
+
+            var modalOpenOnBody = document.body.classList.contains("modal-open");
+            if (modalOpenOnBody) {
+                document.body.classList.remove("modal-open");
+                log("Methods Library: removed modal-open from body");
+            }
+
+            log("Methods Library: #ajaxModal neutralized");
+        } catch (e) {
+            log("Methods Library: error neutralizing #ajaxModal - " + String(e));
+        }
+    }
+
+    function restoreAjaxModal() {
+        try {
+            var ajaxModal = document.getElementById("ajaxModal");
+            if (!ajaxModal) {
+                log("Methods Library: #ajaxModal not found to restore");
+                return;
+            }
+
+            var wasNeutralized = ajaxModal.getAttribute("data-aps-neutralized") === "1";
+            if (!wasNeutralized) {
+                log("Methods Library: #ajaxModal not previously neutralized; nothing to restore");
+                return;
+            }
+
+            ajaxModal.removeAttribute("data-aps-neutralized");
+            ajaxModal.style.pointerEvents = "";
+            ajaxModal.style.visibility = "";
+            ajaxModal.style.opacity = "";
+            ajaxModal.removeAttribute("aria-hidden");
+
+            // If the Bootstrap modal is still shown, body may need modal-open again
+            var stillShown = ajaxModal.classList.contains("in") || ajaxModal.classList.contains("show");
+            if (stillShown && !document.body.classList.contains("modal-open")) {
+                document.body.classList.add("modal-open");
+                log("Methods Library: restored modal-open on body");
+            }
+
+            log("Methods Library: #ajaxModal restored");
+        } catch (e) {
+            log("Methods Library: error restoring #ajaxModal - " + String(e));
+        }
+    }
 
     function getMethodsCache() {
         try {
@@ -2304,7 +2385,7 @@
         return score;
     }
 
-        function filterAndSortMethods(methods, query, tagFilter, searchBody, bodiesMap, sortOrder, favorites, pins) {
+    function filterAndSortMethods(methods, query, tagFilter, searchBody, bodiesMap, sortOrder, favorites, pins) {
         var results = [];
         for (var i = 0; i < methods.length; i++) {
             var m = methods[i];
@@ -2324,14 +2405,14 @@
             if (query && query.trim().length > 0 && score === 0) continue;
             results.push({ method: m, score: score });
         }
-        
+
         results.sort(function(a, b) {
             // Pinned items always come first
             var isPinA = pins.indexOf(a.method.id) !== -1;
             var isPinB = pins.indexOf(b.method.id) !== -1;
             if (isPinA && !isPinB) return -1;
             if (!isPinA && isPinB) return 1;
-            
+
             // Then sort by selected order
             if (sortOrder === "title") {
                 var titleA = (a.method.title || "").toLowerCase();
@@ -2365,9 +2446,13 @@
         }
 
         var openBootstrapModals = document.querySelectorAll('.modal.in, .modal.show');
-        
+
+        // >>> NEW: disable Bootstrap focus trap and neutralize #ajaxModal if present
+        disableBootstrapModalFocusTrap();
+        neutralizeAjaxModal();
+        // <<< NEW
+
         if (METHODS_LIBRARY_MODAL_REF && document.body.contains(METHODS_LIBRARY_MODAL_REF)) {
-            // Re-enable search input in case it got disabled
             var existingSearchInput = METHODS_LIBRARY_MODAL_REF.querySelector('input[type="text"]');
             if (existingSearchInput) {
                 existingSearchInput.disabled = false;
@@ -2416,7 +2501,6 @@
         modal.style.fontSize = "14px";
         modal.style.zIndex = "999998";
         modal.style.outline = "none";
-
         METHODS_LIBRARY_MODAL_REF = modal;
 
         var header = document.createElement("div");
@@ -2494,6 +2578,7 @@
         sortSelect.style.color = "#fff";
         sortSelect.style.fontSize = "14px";
         sortSelect.style.cursor = "pointer";
+
         var sortOpts = [
             { value: "relevance", text: "Sort: Relevance" },
             { value: "title", text: "Sort: Title" },
@@ -2562,6 +2647,7 @@
         toolbarBtns.appendChild(copyBtn);
         toolbarBtns.appendChild(refreshBtn);
         toolbar.appendChild(toolbarBtns);
+
         modal.appendChild(toolbar);
 
         var mainContent = document.createElement("div");
@@ -2649,7 +2735,7 @@
             }
         }
 
-                function renderList(methods) {
+        function renderList(methods) {
             listPane.innerHTML = "";
             if (methods.length === 0) {
                 var empty = document.createElement("div");
@@ -2660,11 +2746,11 @@
                 listPane.appendChild(empty);
                 return;
             }
-            
+
             var favorites = getFavorites();
             var recents = getRecents();
             var pins = getPins();
-            
+
             for (var i = 0; i < methods.length; i++) {
                 (function(m, idx) {
                     var item = document.createElement("div");
@@ -2699,18 +2785,17 @@
                         itemTags.textContent = m.tags.join(", ");
                         item.appendChild(itemTags);
                     }
-                    
-                    // Badges container
+
                     var badges = document.createElement("div");
                     badges.style.display = "flex";
                     badges.style.gap = "4px";
                     badges.style.marginTop = "4px";
                     badges.style.fontSize = "10px";
-                    
+
                     var isFav = favorites.indexOf(m.id) !== -1;
                     var isRecent = recents.indexOf(m.id) !== -1;
                     var isPinned = pins.indexOf(m.id) !== -1;
-                    
+
                     if (isPinned) {
                         var pinBadge = document.createElement("span");
                         pinBadge.textContent = "📌 Pinned";
@@ -2729,19 +2814,17 @@
                         recentBadge.style.color = "#888";
                         badges.appendChild(recentBadge);
                     }
-                    
                     if (badges.children.length > 0) {
                         item.appendChild(badges);
                     }
-                    
-                    // Action buttons (show on hover)
+
                     var actions = document.createElement("div");
                     actions.style.position = "absolute";
                     actions.style.top = "8px";
                     actions.style.right = "8px";
                     actions.style.display = "none";
                     actions.style.gap = "4px";
-                    
+
                     var favBtn = document.createElement("button");
                     favBtn.textContent = isFav ? "★" : "☆";
                     favBtn.title = isFav ? "Remove from favorites" : "Add to favorites";
@@ -2757,7 +2840,7 @@
                         doSearch();
                     };
                     actions.appendChild(favBtn);
-                    
+
                     var pinBtn = document.createElement("button");
                     pinBtn.textContent = isPinned ? "📌" : "📍";
                     pinBtn.title = isPinned ? "Unpin" : "Pin to top";
@@ -2778,17 +2861,22 @@
                         }
                     };
                     actions.appendChild(pinBtn);
-                    
+
                     item.appendChild(actions);
 
                     item.onmouseenter = function() {
-                        if (selectedMethod !== m) item.style.background = "#252525";
+                        if (selectedMethod !== m) {
+                            item.style.background = "#252525";
+                        }
                         actions.style.display = "flex";
                     };
                     item.onmouseleave = function() {
-                        if (selectedMethod !== m) item.style.background = "transparent";
+                        if (selectedMethod !== m) {
+                            item.style.background = "transparent";
+                        }
                         actions.style.display = "none";
                     };
+
                     item.onclick = function() { selectMethod(m, item); };
                     item.onkeydown = function(e) {
                         if (e.key === "Enter" || e.key === " ") {
@@ -2805,8 +2893,6 @@
         async function selectMethod(m, itemEl) {
             selectedMethod = m;
             currentBodyText = "";
-            
-            // Track as recent and save as last method
             addRecent(m.id);
             saveLastMethod(m.id);
 
@@ -2815,6 +2901,7 @@
                 items[i].setAttribute("aria-selected", "false");
                 items[i].style.background = "transparent";
             }
+
             if (itemEl) {
                 itemEl.setAttribute("aria-selected", "true");
                 itemEl.style.background = "#2a2a2a";
@@ -2822,11 +2909,15 @@
             }
 
             previewTitle.textContent = (m.id || "") + " — " + (m.title || "(Untitled)");
-            var metaParts = [];
-            if (m.tags && m.tags.length > 0) metaParts.push("Tags: " + m.tags.join(", "));
-            if (m.updated) metaParts.push("Updated: " + m.updated);
-            previewMeta.textContent = metaParts.join("  •  ");
 
+            var metaParts = [];
+            if (m.tags && m.tags.length > 0) {
+                metaParts.push("Tags: " + m.tags.join(", "));
+            }
+            if (m.updated) {
+                metaParts.push("Updated: " + m.updated);
+            }
+            previewMeta.textContent = metaParts.join(" • ");
             previewBody.textContent = "Loading...";
 
             if (m.url) {
@@ -2848,28 +2939,27 @@
             var searchBody = searchBodyCheckbox.checked;
             var sortOrder = sortSelect.value;
             var showOnlyFavorites = favoritesCheckbox.checked;
-            
-            // Save session state
+
             saveLastSearch(query);
             saveLastTag(tagFilter);
             saveSortOrder(sortOrder);
-            
+
             var favorites = getFavorites();
             var pins = getPins();
-            
             var methodsToFilter = allMethods;
+
             if (showOnlyFavorites) {
                 methodsToFilter = allMethods.filter(function(m) {
                     return favorites.indexOf(m.id) !== -1;
                 });
             }
-            
+
             var filtered = filterAndSortMethods(methodsToFilter, query, tagFilter, searchBody, METHODS_BODY_CACHE, sortOrder, favorites, pins);
             renderList(filtered);
             updateStatus(filtered.length + " of " + allMethods.length + " methods");
         }
 
-            async function loadIndex(forceRefresh) {
+        async function loadIndex(forceRefresh) {
             updateStatus("Loading methods index...");
             var result = await fetchMethodsIndex(forceRefresh);
             if (!result.success) {
@@ -2877,6 +2967,7 @@
                 renderList([]);
                 return;
             }
+
             allMethods = result.data;
             allTags = buildTagList(allMethods);
             populateTagSelect();
@@ -2889,29 +2980,23 @@
                     }
                 }
             }
-            
+
             searchInput.value = getLastSearch();
             tagSelect.value = getLastTag();
             sortSelect.value = getSortOrder();
 
-            // Ensure search input is focusable and editable
             searchInput.disabled = false;
             searchInput.readOnly = false;
             searchInput.style.pointerEvents = 'auto';
             searchInput.tabIndex = 0;
 
-            // Force focus after Bootstrap interference clears
             setTimeout(function() {
-                // Remove any lingering Bootstrap focus traps
                 var bootstrapBackdrops = document.querySelectorAll('.modal-backdrop');
                 for (var i = 0; i < bootstrapBackdrops.length; i++) {
                     bootstrapBackdrops[i].style.display = 'none';
                 }
-                
                 searchInput.focus();
                 searchInput.select();
-                
-                // Force click to ensure it's interactive
                 searchInput.click();
             }, 150);
 
@@ -2923,7 +3008,7 @@
         searchBodyCheckbox.onchange = doSearch;
         sortSelect.onchange = doSearch;
         favoritesCheckbox.onchange = doSearch;
-        
+
         refreshBtn.onclick = function() {
             METHODS_BODY_CACHE = {};
             loadIndex(true);
@@ -2950,8 +3035,12 @@
             modal.remove();
             METHODS_LIBRARY_MODAL_REF = null;
             document.removeEventListener("keydown", keyHandler);
-            
-            // Restore Bootstrap modal backdrops
+
+            // >>> NEW: restore neutralized modal and focus trap, then show backdrops again
+            restoreAjaxModal();
+            enableBootstrapModalFocusTrap();
+            // <<< NEW
+
             var bootstrapBackdrops = document.querySelectorAll('.modal-backdrop');
             for (var i = 0; i < bootstrapBackdrops.length; i++) {
                 bootstrapBackdrops[i].style.display = 'block';
@@ -2966,8 +3055,7 @@
                 closeModal();
                 return;
             }
-            
-            // Enter key when search box is focused - select first result
+
             if (e.key === "Enter" && document.activeElement === searchInput) {
                 var firstItem = listPane.querySelector("[role='option']");
                 if (firstItem) {
@@ -2979,12 +3067,13 @@
                 }
                 return;
             }
-            
-            // Arrow Up/Down navigation in list
+
             if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                 var items = Array.from(listPane.querySelectorAll("[role='option']"));
-                if (items.length === 0) return;
-                
+                if (items.length === 0) {
+                    return;
+                }
+
                 var currentIndex = -1;
                 for (var i = 0; i < items.length; i++) {
                     if (items[i].getAttribute("aria-selected") === "true") {
@@ -2992,14 +3081,22 @@
                         break;
                     }
                 }
-                
+
                 var nextIndex;
                 if (e.key === "ArrowDown") {
-                    nextIndex = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
+                    if (currentIndex < items.length - 1) {
+                        nextIndex = currentIndex + 1;
+                    } else {
+                        nextIndex = 0;
+                    }
                 } else {
-                    nextIndex = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
+                    if (currentIndex > 0) {
+                        nextIndex = currentIndex - 1;
+                    } else {
+                        nextIndex = items.length - 1;
+                    }
                 }
-                
+
                 var nextItem = items[nextIndex];
                 var methodId = nextItem.getAttribute("data-method-id");
                 var method = allMethods.find(function(m) { return m.id === methodId; });
@@ -3009,11 +3106,12 @@
                 e.preventDefault();
                 return;
             }
-            
-            // Tab cycling
+
             if (e.key === "Tab") {
                 var focusable = modal.querySelectorAll('button, input, select, [tabindex]:not([tabindex="-1"])');
-                if (focusable.length === 0) return;
+                if (focusable.length === 0) {
+                    return;
+                }
                 var first = focusable[0];
                 var last = focusable[focusable.length - 1];
                 if (e.shiftKey && document.activeElement === first) {
@@ -3025,13 +3123,16 @@
                 }
             }
         }
+
         document.addEventListener("keydown", keyHandler);
 
         var isDragging = false;
         var dragStartX = 0, dragStartY = 0, modalStartX = 0, modalStartY = 0;
 
         header.onmousedown = function(e) {
-            if (e.target === closeBtn) return;
+            if (e.target === closeBtn) {
+                return;
+            }
             isDragging = true;
             var rect = modal.getBoundingClientRect();
             dragStartX = e.clientX;
@@ -3043,7 +3144,9 @@
         };
 
         document.addEventListener("mousemove", function(e) {
-            if (!isDragging) return;
+            if (!isDragging) {
+                return;
+            }
             var dx = e.clientX - dragStartX;
             var dy = e.clientY - dragStartY;
             modal.style.left = (modalStartX + dx) + "px";
@@ -3063,7 +3166,7 @@
         log("Methods Library: modal opened");
     }
 
-        function getFavorites() {
+    function getFavorites() {
         try {
             var raw = localStorage.getItem(STORAGE_METHODS_FAVORITES);
             if (!raw) return [];
@@ -6028,7 +6131,7 @@
         var n = normalizeKeyForMatch(e);
         var savedHotkey = getPanelHotkey();
         var match = false;
-        
+
         if (n.key && n.key.toUpperCase() === savedHotkey.toUpperCase()) {
             match = true;
         } else if (n.code && n.code.toUpperCase() === savedHotkey.toUpperCase()) {
@@ -6061,7 +6164,7 @@
                 match = true;
             }
         }
-        
+
         return match;
     }
 
@@ -11447,41 +11550,41 @@
         };
     }
 
-        function showWrongPagePopup(featureName, requiredPage, currentPath) {
+    function showWrongPagePopup(featureName, requiredPage, currentPath) {
         // Create warning popup content
         var warningContainer = document.createElement("div");
         warningContainer.style.padding = "20px";
         warningContainer.style.textAlign = "center";
-        
+
         var warningIcon = document.createElement("div");
         warningIcon.innerHTML = "⚠️";
         warningIcon.style.fontSize = "48px";
         warningIcon.style.marginBottom = "15px";
-        
+
         var warningTitle = document.createElement("div");
         warningTitle.textContent = "Wrong Page Detected";
         warningTitle.style.fontSize = "18px";
         warningTitle.style.fontWeight = "bold";
         warningTitle.style.marginBottom = "10px";
         warningTitle.style.color = "#ff6b6b";
-        
+
         var warningMessage = document.createElement("div");
         warningMessage.textContent = "You must be on the " + featureName + " page to use this feature.";
         warningMessage.style.marginBottom = "8px";
         warningMessage.style.lineHeight = "1.4";
-        
+
         var currentPage = document.createElement("div");
         currentPage.textContent = "Current page: " + currentPath;
         currentPage.style.fontSize = "12px";
         currentPage.style.color = "#999";
         currentPage.style.marginBottom = "8px";
-        
+
         var correctPage = document.createElement("div");
         correctPage.textContent = "Required page: " + requiredPage;
         correctPage.style.fontSize = "12px";
         correctPage.style.color = "#999";
         correctPage.style.marginBottom = "20px";
-        
+
         var okButton = document.createElement("button");
         okButton.textContent = "OK";
         okButton.style.background = "#5b43c7";
@@ -11493,7 +11596,7 @@
         okButton.style.fontSize = "14px";
         okButton.onmouseenter = function() { this.style.background = "#4a35a6"; };
         okButton.onmouseleave = function() { this.style.background = "#5b43c7"; };
-        
+
         warningContainer.appendChild(warningIcon);
         warningContainer.appendChild(warningTitle);
         warningContainer.appendChild(warningMessage);
