@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Admin Automator
 // @namespace vinh.activity.plan.state
-// @version 1.1.3
+// @version 1.1.4
 // @description
 // @match https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/heads/main/ClinSpark%20Basic%20Automator.js
@@ -5533,7 +5533,7 @@
 
     // Initialize the panel, register APS_AddButton, and route to the appropriate processing function.
     function init() {
-        makePanel();
+        // makePanel();
         window.APS_AddButton = function (label, handler) {
             addButtonToPanel(label, handler);
         };

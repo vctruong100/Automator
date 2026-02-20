@@ -6180,7 +6180,7 @@
                 e.preventDefault();
                 e.stopPropagation();
             }
-            if (e.key === "`" || e.key === "~") {
+            if (e.key === "F4" || e.key === "F4") {
                 if (PARSE_DEVIATION_POPUP_REF && document.body.contains(PARSE_DEVIATION_POPUP_REF.element)) {
                     log("Hotkey: Closing Parse Deviation popup via backtick");
                     PARSE_DEVIATION_POPUP_REF.close();
