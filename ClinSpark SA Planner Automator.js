@@ -157,10 +157,6 @@
     // This feature allows copying forms from one study event to multiple other study events.
     // Users select source forms and target study events; the forms are created in each target event.
     //==========================
-
-    //==========================
-    // COPY FORMS TO STUDY EVENTS FEATURE
-    //==========================
     var STORAGE_COPY_FORMS_CANCELLED = "activityPlanState.copyFormsToEvents.cancelled";
     var COPY_FORMS_CANCELLED = false;
     var COPY_FORMS_POPUP_REF = null;
@@ -840,12 +836,6 @@
         log("Copy Forms: clicking Add button...");
         if (!clickAddSaButton()) {
             loadingPopup.close();
-            createPopup({
-                title: "Copy Forms - Error",
-                content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">Could not click the Add button.</div>',
-                width: "400px",
-                height: "auto"
-            });
             return;
         }
 
@@ -2161,38 +2151,47 @@
         return false;
     }
 
-    // Set Select2 value by text matching
-        async function setSelect2ValueByText(selectId, targetText) {
+    async function setSelect2ValueByText(selectId, targetText) {
         var sel = document.getElementById(selectId);
         if (!sel) {
             log("Archive/Update Forms: select " + selectId + " not found");
             return false;
         }
 
-        // Use specialized normalization for visibility fields
+        // Use specialized normalization for visibility fields only
         var isVisibilityField = selectId.indexOf("visible") === 0;
-        var normalizedTarget = isVisibilityField ? normalizeVisibilityText(targetText) : normalizeText(targetText);
+        
+        // For non-visibility fields, use normalizeSAText which preserves minus signs
+        // For visibility fields, continue using normalizeVisibilityText
+        var normalizedTarget = isVisibilityField 
+            ? normalizeVisibilityText(targetText) 
+            : normalizeSAText(targetText).toLowerCase();
+        
         var opts = sel.querySelectorAll("option");
         var matchValue = null;
 
-        // First pass: exact match
+        // First pass: exact match (strict comparison)
         for (var i = 0; i < opts.length; i++) {
             var opt = opts[i];
             var optText = normalizeSAText(opt.textContent);
-            var optNorm = isVisibilityField ? normalizeVisibilityText(optText) : normalizeText(optText);
+            var optNorm = isVisibilityField 
+                ? normalizeVisibilityText(optText) 
+                : optText.toLowerCase();
             
-            if (optNorm === normalizedTarget || optText === targetText) {
+            // Strict comparison - both normalized texts must match exactly
+            if (optNorm === normalizedTarget) {
                 matchValue = opt.value;
                 log("Archive/Update Forms: exact match found for " + targetText + " -> " + optText);
                 break;
             }
         }
 
-        // Second pass: fuzzy match if exact not found
-        if (!matchValue) {
+        // Second pass: fuzzy match if exact not found (only for visibility fields)
+        // For segment/studyEvent/form fields, do NOT use fuzzy matching to avoid Day 1 vs Day -1 issues
+        if (!matchValue && isVisibilityField) {
             for (var j = 0; j < opts.length; j++) {
                 var opt2 = opts[j];
-                var optText2 = isVisibilityField ? normalizeVisibilityText(opt2.textContent) : normalizeText(opt2.textContent);
+                var optText2 = normalizeVisibilityText(opt2.textContent);
                 
                 if (optText2.indexOf(normalizedTarget) !== -1 || normalizedTarget.indexOf(optText2) !== -1) {
                     matchValue = opt2.value;
@@ -2746,17 +2745,9 @@
             }
         }, 400);
 
-        // Click Add button to open modal
-        log("Archive/Update Forms: clicking Add button to collect forms...");
+        log("Copy Forms: clicking Add button...");
         if (!clickAddSaButton()) {
-            clearInterval(loadingInterval);
             loadingPopup.close();
-            createPopup({
-                title: "Archive/Update Forms - Error",
-                content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">Could not click the Add button.</div>',
-                width: "400px",
-                height: "auto"
-            });
             return;
         }
 
@@ -5253,18 +5244,30 @@
         return btn.hasAttribute("disabled");
     }
 
-    // Click the Add button
     function clickAddSaButton() {
         var btn = document.getElementById("addSaButton");
         if (!btn) {
             log("SA Builder: addSaButton not found for click");
             return false;
         }
+        
+        // Check if button is disabled
+        if (btn.disabled || btn.hasAttribute("disabled")) {
+            log("Copy Forms: Add button is disabled - stopping process");
+            createPopup({
+                title: "Copy Forms - Error",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">⚠️ Add Button Disabled</p><p>The Add button is currently disabled.</p><p style="margin-top:12px;font-size:13px;color:#888;">Please ensure all required fields are filled or permissions are correct, then try again.</p></div>',
+                width: "450px",
+                height: "auto"
+            });
+            return false;
+        }
+        
         btn.click();
         log("SA Builder: Add button clicked");
         return true;
     }
-
+    
     // Wait for modal to appear and be ready
     async function waitForSAModal(timeoutMs) {
         var start = Date.now();
@@ -6811,16 +6814,9 @@
             return;
         }
 
-        // Click Add button to open modal
+        log("Copy Forms: clicking Add button...");
         if (!clickAddSaButton()) {
-            clearInterval(loadingInterval);
             loadingPopup.close();
-            createPopup({
-                title: "Scheduled Activities Builder",
-                content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;">Failed to find or click the Add button.</p></div>',
-                width: "350px",
-                height: "auto"
-            });
             return;
         }
 

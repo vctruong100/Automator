@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.2.8
+// @version 3.2.9
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -11,7 +11,6 @@
 // @grant GM.openInTab
 // @grant GM_openInTab
 // @grant GM.xmlHttpRequest
-// @ts-check
 // ==/UserScript==
 
 (function () {
@@ -187,6 +186,1056 @@
     var CLEAR_MAPPING_CANCELED = false;
     var CLEAR_MAPPING_PAUSE = false;
 
+    //==========================
+    // COPY FORMS TO STUDY EVENTS FEATURE
+    //==========================
+    // This feature allows copying forms from one study event to multiple other study events.
+    // Users select source forms and target study events; the forms are created in each target event.
+    //==========================
+    var STORAGE_COPY_FORMS_CANCELLED = "activityPlanState.copyFormsToEvents.cancelled";
+    var COPY_FORMS_CANCELLED = false;
+    var COPY_FORMS_POPUP_REF = null;
+    var COPY_FORMS_PROGRESS_REF = null;
+    var COPY_FORMS_EXISTING_MAP = {};
+
+    // Check if on correct page for Copy Forms
+    function isOnCopyFormsPage() {
+        return location.href.indexOf("https://cenexeltest.clinspark.com/secure/crfdesign/activityplans/show/") === 0;
+    }
+
+    // Build hierarchical structure from rows: Segment -> StudyEvent -> Forms
+    function buildHierarchicalFormMap(rows) {
+        var hierarchy = {};
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var segKey = row.segmentText;
+            var evKey = row.eventText;
+            var formKey = row.formText;
+
+            if (!hierarchy[segKey]) {
+                hierarchy[segKey] = {
+                    segmentText: row.segmentText,
+                    segmentValue: row.segmentValue,
+                    studyEvents: {}
+                };
+            }
+
+            if (!hierarchy[segKey].studyEvents[evKey]) {
+                hierarchy[segKey].studyEvents[evKey] = {
+                    eventText: row.eventText,
+                    eventValue: row.eventValue,
+                    forms: []
+                };
+            }
+
+            hierarchy[segKey].studyEvents[evKey].forms.push({
+                formText: row.formText,
+                formValue: row.formValue,
+                formKey: row.formKey,
+                rowKey: row.rowKey,
+                segmentText: row.segmentText,
+                segmentValue: row.segmentValue,
+                eventText: row.eventText,
+                eventValue: row.eventValue,
+                isArchived: row.isArchived
+            });
+        }
+        return hierarchy;
+    }
+
+    // Build existing forms map for duplicate detection
+    function buildExistingFormsMap(rows) {
+        var map = {};
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var key = normalizeSAText(row.segmentText) + "|" + normalizeSAText(row.eventText) + "|" + normalizeSAText(row.formText);
+            map[key] = true;
+        }
+        return map;
+    }
+
+    // Check if form already exists
+    function formExistsInMap(segmentText, eventText, formText, existingMap) {
+        var key = normalizeSAText(segmentText) + "|" + normalizeSAText(eventText) + "|" + normalizeSAText(formText);
+        return !!existingMap[key];
+    }
+
+    // Create the Copy Forms to Study Events GUI
+    function createCopyFormsGUI(hierarchy, studyEventsArray) {
+        var selectedForms = {};
+        var selectedStudyEvents = {};
+        var currentSelectedStudyEvent = null;
+
+        var container = document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;height:100%;min-height:550px;gap:12px;";
+
+        // Header row with labels
+        var headerRow = document.createElement("div");
+        headerRow.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:16px;";
+
+        var leftHeader = document.createElement("div");
+        leftHeader.style.cssText = "display:flex;flex-direction:column;gap:8px;";
+        var leftLabel = document.createElement("div");
+        leftLabel.textContent = "Source Forms (select forms to copy)";
+        leftLabel.style.cssText = "font-weight:600;font-size:14px;color:#17a2b8;";
+        var leftSearch = document.createElement("input");
+        leftSearch.type = "text";
+        leftSearch.placeholder = "Search forms...";
+        leftSearch.style.cssText = "padding:10px;border-radius:6px;border:1px solid #444;background:#222;color:#fff;font-size:14px;";
+        leftHeader.appendChild(leftLabel);
+        leftHeader.appendChild(leftSearch);
+
+        var rightHeader = document.createElement("div");
+        rightHeader.style.cssText = "display:flex;flex-direction:column;gap:8px;";
+        var rightLabel = document.createElement("div");
+        rightLabel.textContent = "Target Study Events (select destinations)";
+        rightLabel.style.cssText = "font-weight:600;font-size:14px;color:#51cf66;";
+        var rightSearch = document.createElement("input");
+        rightSearch.type = "text";
+        rightSearch.placeholder = "Search study events...";
+        rightSearch.style.cssText = "padding:10px;border-radius:6px;border:1px solid #444;background:#222;color:#fff;font-size:14px;";
+        rightHeader.appendChild(rightLabel);
+        rightHeader.appendChild(rightSearch);
+
+        headerRow.appendChild(leftHeader);
+        headerRow.appendChild(rightHeader);
+        container.appendChild(headerRow);
+
+        // Panels row
+        var panelsRow = document.createElement("div");
+        panelsRow.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:16px;flex:1;overflow:hidden;";
+
+        var leftPanel = document.createElement("div");
+        leftPanel.style.cssText = "border:2px solid #17a2b8;border-radius:8px;background:#1a1a1a;overflow-y:auto;padding:8px;";
+        leftPanel.id = "copyFormsLeftPanel";
+
+        var rightPanel = document.createElement("div");
+        rightPanel.style.cssText = "border:2px solid #51cf66;border-radius:8px;background:#1a1a1a;overflow-y:auto;padding:8px;";
+        rightPanel.id = "copyFormsRightPanel";
+
+        panelsRow.appendChild(leftPanel);
+        panelsRow.appendChild(rightPanel);
+        container.appendChild(panelsRow);
+
+        // Selection info area
+        var selectionInfo = document.createElement("div");
+        selectionInfo.id = "copyFormsSelectionInfo";
+        selectionInfo.style.cssText = "background:#222;border-radius:6px;padding:10px;font-size:13px;color:#888;text-align:center;";
+        selectionInfo.textContent = "Select forms on the left and study events on the right to continue";
+        container.appendChild(selectionInfo);
+
+        // Button row with Clear All buttons
+        var clearRow = document.createElement("div");
+        clearRow.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:16px;";
+
+        var leftClearBtn = document.createElement("button");
+        leftClearBtn.textContent = "Clear Left Selection";
+        leftClearBtn.style.cssText = "padding:8px 16px;border-radius:6px;border:none;background:#6c757d;color:#fff;font-size:13px;cursor:pointer;";
+        leftClearBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
+        leftClearBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
+
+        var rightClearBtn = document.createElement("button");
+        rightClearBtn.textContent = "Clear Right Selection";
+        rightClearBtn.style.cssText = "padding:8px 16px;border-radius:6px;border:none;background:#6c757d;color:#fff;font-size:13px;cursor:pointer;";
+        rightClearBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
+        rightClearBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
+
+        clearRow.appendChild(leftClearBtn);
+        clearRow.appendChild(rightClearBtn);
+        container.appendChild(clearRow);
+
+        // Error message area
+        var errorDiv = document.createElement("div");
+        errorDiv.style.cssText = "color:#ff6b6b;text-align:center;font-size:14px;min-height:20px;";
+        errorDiv.id = "copyFormsError";
+        container.appendChild(errorDiv);
+
+        // Main button row
+        var buttonRow = document.createElement("div");
+        buttonRow.style.cssText = "display:flex;justify-content:center;gap:16px;padding-top:8px;";
+
+        var continueBtn = document.createElement("button");
+        continueBtn.textContent = "Continue";
+        continueBtn.disabled = true;
+        continueBtn.style.cssText = "padding:12px 32px;border-radius:6px;border:none;background:#28a745;color:#fff;font-size:14px;font-weight:600;cursor:pointer;opacity:0.5;";
+
+        var cancelBtn = document.createElement("button");
+        cancelBtn.textContent = "Cancel";
+        cancelBtn.style.cssText = "padding:12px 32px;border-radius:6px;border:none;background:#dc3545;color:#fff;font-size:14px;font-weight:600;cursor:pointer;";
+        cancelBtn.onmouseenter = function() { this.style.background = "#c82333"; };
+        cancelBtn.onmouseleave = function() { this.style.background = "#dc3545"; };
+
+        buttonRow.appendChild(continueBtn);
+        buttonRow.appendChild(cancelBtn);
+        container.appendChild(buttonRow);
+
+        // Render left panel (hierarchical forms)
+        function renderLeftPanel(searchVal) {
+            leftPanel.innerHTML = "";
+            var filter = (searchVal || "").toLowerCase();
+
+            for (var segKey in hierarchy) {
+                if (!hierarchy.hasOwnProperty(segKey)) continue;
+                var segment = hierarchy[segKey];
+
+                var segmentDiv = document.createElement("div");
+                segmentDiv.style.cssText = "margin-bottom:12px;";
+
+                var segmentHeader = document.createElement("div");
+                segmentHeader.style.cssText = "font-weight:600;font-size:14px;color:#ffc107;padding:8px;background:#2a2a2a;border-radius:6px 6px 0 0;border:1px solid #444;border-bottom:none;";
+                segmentHeader.textContent = "📁 " + segment.segmentText;
+                segmentDiv.appendChild(segmentHeader);
+
+                var eventsContainer = document.createElement("div");
+                eventsContainer.style.cssText = "border:1px solid #444;border-radius:0 0 6px 6px;background:#1e1e1e;";
+
+                var hasVisibleContent = false;
+
+                for (var evKey in segment.studyEvents) {
+                    if (!segment.studyEvents.hasOwnProperty(evKey)) continue;
+                    var studyEvent = segment.studyEvents[evKey];
+
+                    var eventDiv = document.createElement("div");
+                    eventDiv.style.cssText = "padding:8px;border-bottom:1px solid #333;";
+
+                    var eventHeader = document.createElement("div");
+                    eventHeader.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px;background:#252525;border-radius:4px;margin-bottom:6px;";
+
+                    var eventCheckbox = document.createElement("input");
+                    eventCheckbox.type = "checkbox";
+                    eventCheckbox.style.cssText = "width:16px;height:16px;cursor:pointer;accent-color:#17a2b8;";
+                    eventCheckbox.dataset.segment = segment.segmentText;
+                    eventCheckbox.dataset.event = studyEvent.eventText;
+
+                    var eventLabel = document.createElement("span");
+                    eventLabel.style.cssText = "font-weight:500;color:#17a2b8;font-size:13px;flex:1;";
+                    eventLabel.textContent = "📅 " + studyEvent.eventText;
+
+                    var eventCount = document.createElement("span");
+                    eventCount.style.cssText = "font-size:11px;color:#888;background:#333;padding:2px 6px;border-radius:10px;";
+                    eventCount.textContent = studyEvent.forms.length + " forms";
+
+                    eventHeader.appendChild(eventCheckbox);
+                    eventHeader.appendChild(eventLabel);
+                    eventHeader.appendChild(eventCount);
+                    eventDiv.appendChild(eventHeader);
+
+                    var formsContainer = document.createElement("div");
+                    formsContainer.style.cssText = "padding-left:24px;";
+
+                    var visibleForms = 0;
+                    for (var f = 0; f < studyEvent.forms.length; f++) {
+                        var form = studyEvent.forms[f];
+                        if (filter && form.formText.toLowerCase().indexOf(filter) === -1) continue;
+                        visibleForms++;
+
+                        var formItem = document.createElement("div");
+                        formItem.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 8px;margin:4px 0;border:1px solid #333;border-radius:4px;background:#252525;cursor:pointer;transition:all 0.2s;";
+                        formItem.dataset.formKey = form.rowKey;
+                        formItem.dataset.segment = form.segmentText;
+                        formItem.dataset.event = form.eventText;
+                        formItem.dataset.form = form.formText;
+
+                        var formCheckbox = document.createElement("input");
+                        formCheckbox.type = "checkbox";
+                        formCheckbox.style.cssText = "width:14px;height:14px;cursor:pointer;accent-color:#17a2b8;";
+                        formCheckbox.checked = !!selectedForms[form.rowKey];
+
+                        var formLabel = document.createElement("div");
+                        formLabel.style.cssText = "flex:1;";
+
+                        var formName = document.createElement("div");
+                        formName.style.cssText = "font-size:13px;color:#fff;";
+                        formName.textContent = "📄 " + form.formText;
+
+                        var formPath = document.createElement("div");
+                        formPath.style.cssText = "font-size:10px;color:#666;margin-top:2px;";
+                        formPath.textContent = form.segmentText + " → " + form.eventText + " → " + form.formText;
+
+                        formLabel.appendChild(formName);
+                        formLabel.appendChild(formPath);
+                        formItem.appendChild(formCheckbox);
+                        formItem.appendChild(formLabel);
+
+                        if (selectedForms[form.rowKey]) {
+                            formItem.style.background = "#1a3d3d";
+                            formItem.style.border = "1px solid #17a2b8";
+                        }
+
+                        (function(formData, checkbox, item) {
+                            var toggleForm = function() {
+                                if (selectedForms[formData.rowKey]) {
+                                    delete selectedForms[formData.rowKey];
+                                    checkbox.checked = false;
+                                    item.style.background = "#252525";
+                                    item.style.border = "1px solid #333";
+                                } else {
+                                    // Check if selecting from a different study event
+                                    if (currentSelectedStudyEvent && currentSelectedStudyEvent !== formData.eventText) {
+                                        errorDiv.textContent = "Cannot select forms from different study events. Clear selection first.";
+                                        return;
+                                    }
+                                    currentSelectedStudyEvent = formData.eventText;
+                                    selectedForms[formData.rowKey] = formData;
+                                    checkbox.checked = true;
+                                    item.style.background = "#1a3d3d";
+                                    item.style.border = "1px solid #17a2b8";
+                                    errorDiv.textContent = "";
+                                }
+                                updateSelectionInfo();
+                                validateSelection();
+                            };
+
+                            checkbox.addEventListener("change", function(e) {
+                                e.stopPropagation();
+                                toggleForm();
+                            });
+                            item.addEventListener("click", function(e) {
+                                if (e.target !== checkbox) {
+                                    toggleForm();
+                                }
+                            });
+                        })(form, formCheckbox, formItem);
+
+                        formsContainer.appendChild(formItem);
+                    }
+
+                    if (visibleForms > 0) {
+                        hasVisibleContent = true;
+                        eventDiv.appendChild(formsContainer);
+                        eventsContainer.appendChild(eventDiv);
+
+                        // Event checkbox handler (select all forms in event)
+                        (function(ev, checkbox, segment) {
+                            checkbox.addEventListener("change", function() {
+                                if (checkbox.checked) {
+                                    // Check if selecting from a different study event
+                                    if (currentSelectedStudyEvent && currentSelectedStudyEvent !== ev.eventText) {
+                                        errorDiv.textContent = "Cannot select forms from different study events. Clear selection first.";
+                                        checkbox.checked = false;
+                                        return;
+                                    }
+                                    currentSelectedStudyEvent = ev.eventText;
+                                    for (var i = 0; i < ev.forms.length; i++) {
+                                        selectedForms[ev.forms[i].rowKey] = ev.forms[i];
+                                    }
+                                    errorDiv.textContent = "";
+                                } else {
+                                    for (var j = 0; j < ev.forms.length; j++) {
+                                        delete selectedForms[ev.forms[j].rowKey];
+                                    }
+                                    if (Object.keys(selectedForms).length === 0) {
+                                        currentSelectedStudyEvent = null;
+                                    }
+                                }
+                                renderLeftPanel(leftSearch.value);
+                                updateSelectionInfo();
+                                validateSelection();
+                            });
+                        })(studyEvent, eventCheckbox, segment);
+                    }
+                }
+
+                if (hasVisibleContent) {
+                    segmentDiv.appendChild(eventsContainer);
+                    leftPanel.appendChild(segmentDiv);
+                }
+            }
+        }
+
+        // Render right panel (study events)
+        function renderRightPanel(searchVal) {
+            rightPanel.innerHTML = "";
+            var filter = (searchVal || "").toLowerCase();
+
+            for (var i = 0; i < studyEventsArray.length; i++) {
+                var ev = studyEventsArray[i];
+                if (filter && ev.text.toLowerCase().indexOf(filter) === -1) continue;
+
+                var item = document.createElement("div");
+                item.style.cssText = "display:flex;align-items:center;gap:10px;padding:10px;margin-bottom:6px;border:1px solid #333;border-radius:6px;background:#252525;cursor:pointer;transition:all 0.2s;";
+                item.dataset.eventValue = ev.value;
+                item.dataset.eventText = ev.text;
+
+                var checkbox = document.createElement("input");
+                checkbox.type = "checkbox";
+                checkbox.style.cssText = "width:16px;height:16px;cursor:pointer;accent-color:#51cf66;";
+                checkbox.checked = !!selectedStudyEvents[ev.value];
+
+                var label = document.createElement("div");
+                label.style.cssText = "flex:1;font-size:13px;";
+                label.textContent = ev.text;
+
+                item.appendChild(checkbox);
+                item.appendChild(label);
+
+                if (selectedStudyEvents[ev.value]) {
+                    item.style.background = "#1a3d1a";
+                    item.style.border = "1px solid #51cf66";
+                }
+
+                (function(evData, cb, itemEl) {
+                    var toggle = function() {
+                        if (selectedStudyEvents[evData.value]) {
+                            delete selectedStudyEvents[evData.value];
+                            cb.checked = false;
+                            itemEl.style.background = "#252525";
+                            itemEl.style.border = "1px solid #333";
+                        } else {
+                            selectedStudyEvents[evData.value] = evData;
+                            cb.checked = true;
+                            itemEl.style.background = "#1a3d1a";
+                            itemEl.style.border = "1px solid #51cf66";
+                        }
+                        updateSelectionInfo();
+                        validateSelection();
+                    };
+                    cb.addEventListener("change", function(e) {
+                        e.stopPropagation();
+                        toggle();
+                    });
+                    itemEl.addEventListener("click", function(e) {
+                        if (e.target !== cb) toggle();
+                    });
+                })(ev, checkbox, item);
+
+                rightPanel.appendChild(item);
+            }
+        }
+
+        function updateSelectionInfo() {
+            var formCount = Object.keys(selectedForms).length;
+            var eventCount = Object.keys(selectedStudyEvents).length;
+            var totalItems = formCount * eventCount;
+
+            if (formCount === 0 && eventCount === 0) {
+                selectionInfo.textContent = "Select forms on the left and study events on the right to continue";
+                selectionInfo.style.color = "#888";
+            } else if (formCount === 0) {
+                selectionInfo.textContent = eventCount + " study event(s) selected. Now select forms to copy.";
+                selectionInfo.style.color = "#ffc107";
+            } else if (eventCount === 0) {
+                selectionInfo.textContent = formCount + " form(s) selected from " + (currentSelectedStudyEvent || "?") + ". Now select target study events.";
+                selectionInfo.style.color = "#ffc107";
+            } else {
+                selectionInfo.innerHTML = "<span style='color:#51cf66;font-weight:600;'>" + formCount + " form(s)</span> will be copied to <span style='color:#17a2b8;font-weight:600;'>" + eventCount + " study event(s)</span> = <span style='color:#ffc107;font-weight:600;'>" + totalItems + " new item(s)</span>";
+            }
+        }
+
+        function validateSelection() {
+            var formCount = Object.keys(selectedForms).length;
+            var eventCount = Object.keys(selectedStudyEvents).length;
+            var valid = formCount > 0 && eventCount > 0;
+
+            continueBtn.disabled = !valid;
+            continueBtn.style.opacity = valid ? "1" : "0.5";
+            if (valid) {
+                continueBtn.onmouseenter = function() { this.style.background = "#218838"; };
+                continueBtn.onmouseleave = function() { this.style.background = "#28a745"; };
+            } else {
+                continueBtn.onmouseenter = null;
+                continueBtn.onmouseleave = null;
+            }
+        }
+
+        // Search handlers
+        var leftTimeout = null;
+        var rightTimeout = null;
+        leftSearch.addEventListener("input", function() {
+            clearTimeout(leftTimeout);
+            leftTimeout = setTimeout(function() {
+                renderLeftPanel(leftSearch.value);
+            }, 200);
+        });
+        rightSearch.addEventListener("input", function() {
+            clearTimeout(rightTimeout);
+            rightTimeout = setTimeout(function() {
+                renderRightPanel(rightSearch.value);
+            }, 200);
+        });
+
+        // Clear buttons
+        leftClearBtn.addEventListener("click", function() {
+            selectedForms = {};
+            currentSelectedStudyEvent = null;
+            errorDiv.textContent = "";
+            renderLeftPanel(leftSearch.value);
+            updateSelectionInfo();
+            validateSelection();
+        });
+        rightClearBtn.addEventListener("click", function() {
+            selectedStudyEvents = {};
+            renderRightPanel(rightSearch.value);
+            updateSelectionInfo();
+            validateSelection();
+        });
+
+        cancelBtn.addEventListener("click", function() {
+            if (COPY_FORMS_POPUP_REF) {
+                COPY_FORMS_POPUP_REF.close();
+                COPY_FORMS_POPUP_REF = null;
+            }
+        });
+
+        // Initial render
+        renderLeftPanel("");
+        renderRightPanel("");
+
+        // Return container with getters
+        container.getSelection = function() {
+            return {
+                forms: selectedForms,
+                studyEvents: selectedStudyEvents
+            };
+        };
+        container.continueBtn = continueBtn;
+
+        return container;
+    }
+
+    // Create progress popup for Copy Forms
+    function createCopyFormsProgressPopup(items) {
+        var container = document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;height:100%;min-height:450px;";
+
+        // Status header
+        var statusDiv = document.createElement("div");
+        statusDiv.id = "copyFormsStatus";
+        statusDiv.style.cssText = "text-align:center;font-size:16px;font-weight:600;padding:12px;background:#222;border-radius:6px;margin-bottom:12px;";
+        statusDiv.textContent = "Preparing... 0 of " + items.length;
+        container.appendChild(statusDiv);
+
+        // Progress bar
+        var progressBarOuter = document.createElement("div");
+        progressBarOuter.style.cssText = "width:100%;height:8px;background:#333;border-radius:4px;margin-bottom:16px;overflow:hidden;";
+        var progressBarInner = document.createElement("div");
+        progressBarInner.id = "copyFormsProgressBar";
+        progressBarInner.style.cssText = "width:0%;height:100%;background:#28a745;transition:width 0.3s;";
+        progressBarOuter.appendChild(progressBarInner);
+        container.appendChild(progressBarOuter);
+
+        // Items list
+        var listContainer = document.createElement("div");
+        listContainer.style.cssText = "flex:1;overflow-y:auto;border:1px solid #333;border-radius:6px;background:#1a1a1a;padding:8px;";
+        listContainer.id = "copyFormsItemsList";
+
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            var itemDiv = document.createElement("div");
+            itemDiv.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin-bottom:4px;border:1px solid #333;border-radius:4px;background:#252525;font-size:12px;";
+            itemDiv.id = "copyFormsItem_" + i;
+
+            var itemLabel = document.createElement("div");
+            itemLabel.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+            itemLabel.textContent = item.segmentText + " → " + item.targetEventText + " → " + item.formText;
+
+            var itemStatus = document.createElement("div");
+            itemStatus.style.cssText = "padding:2px 8px;border-radius:10px;font-size:11px;background:#444;color:#888;margin-left:8px;flex-shrink:0;";
+            itemStatus.textContent = "Incomplete";
+            itemStatus.className = "item-status";
+
+            itemDiv.appendChild(itemLabel);
+            itemDiv.appendChild(itemStatus);
+            listContainer.appendChild(itemDiv);
+        }
+        container.appendChild(listContainer);
+
+        // Summary area
+        var summaryDiv = document.createElement("div");
+        summaryDiv.id = "copyFormsSummary";
+        summaryDiv.style.cssText = "display:none;margin-top:12px;padding:12px;background:#222;border-radius:6px;text-align:center;";
+        container.appendChild(summaryDiv);
+
+        // Stop button
+        var stopRow = document.createElement("div");
+        stopRow.style.cssText = "display:flex;justify-content:center;padding-top:12px;";
+        var stopBtn = document.createElement("button");
+        stopBtn.textContent = "Stop and Close";
+        stopBtn.id = "copyFormsStopBtn";
+        stopBtn.style.cssText = "padding:10px 24px;border-radius:6px;border:none;background:#dc3545;color:#fff;font-size:14px;font-weight:500;cursor:pointer;";
+        stopBtn.onmouseenter = function() { this.style.background = "#c82333"; };
+        stopBtn.onmouseleave = function() { this.style.background = "#dc3545"; };
+        stopBtn.addEventListener("click", function() {
+            COPY_FORMS_CANCELLED = true;
+            stopBtn.disabled = true;
+            stopBtn.textContent = "Stopping...";
+            stopBtn.style.opacity = "0.5";
+            log("Copy Forms: stop requested by user");
+        });
+        stopRow.appendChild(stopBtn);
+        container.appendChild(stopRow);
+
+        // Helper methods
+        container.updateStatus = function(text) {
+            var el = document.getElementById("copyFormsStatus");
+            if (el) el.textContent = text;
+        };
+
+        container.updateProgress = function(current, total) {
+            var pct = total > 0 ? Math.round((current / total) * 100) : 0;
+            var bar = document.getElementById("copyFormsProgressBar");
+            if (bar) bar.style.width = pct + "%";
+            this.updateStatus("Processing " + current + " of " + total);
+        };
+
+        container.setItemStatus = function(index, status, color) {
+            var item = document.getElementById("copyFormsItem_" + index);
+            if (item) {
+                var statusEl = item.querySelector(".item-status");
+                if (statusEl) {
+                    statusEl.textContent = status;
+                    statusEl.style.background = color || "#444";
+                    statusEl.style.color = "#fff";
+                }
+            }
+        };
+
+        container.showSummary = function(total, success, duplicates, errors) {
+            var summaryEl = document.getElementById("copyFormsSummary");
+            if (summaryEl) {
+                summaryEl.style.display = "block";
+                summaryEl.innerHTML = '<div style="font-size:16px;font-weight:600;margin-bottom:8px;color:#51cf66;">✓ Completed</div>' +
+                    '<div>Total: ' + total + ' | Success: <span style="color:#51cf66;">' + success + '</span> | Duplicates: <span style="color:#ffc107;">' + duplicates + '</span> | Errors: <span style="color:#ff6b6b;">' + errors + '</span></div>';
+            }
+            var stopBtn = document.getElementById("copyFormsStopBtn");
+            if (stopBtn) {
+                stopBtn.textContent = "Close";
+                stopBtn.style.background = "#6c757d";
+                stopBtn.disabled = false;
+                stopBtn.style.opacity = "1";
+                stopBtn.onclick = function() {
+                    if (COPY_FORMS_PROGRESS_REF) {
+                        COPY_FORMS_PROGRESS_REF.close();
+                        COPY_FORMS_PROGRESS_REF = null;
+                    }
+                };
+            }
+        };
+
+        return container;
+    }
+
+    // Main entry point for Copy Forms to Study Events
+    async function runCopyFormsToStudyEvents() {
+        // Check if on correct page
+        if (!isOnCopyFormsPage()) {
+            createPopup({
+                title: "Copy Forms - Error",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">⚠️ Wrong Page</p><p>Navigate to the Activity Plans Show page first.</p><p style="margin-top:12px;font-size:12px;color:#888;">Required URL: https://cenexeltest.clinspark.com/secure/crfdesign/activityplans/show/{id}</p></div>',
+                width: "450px",
+                height: "auto"
+            });
+            log("Copy Forms: wrong page - " + location.href);
+            return;
+        }
+
+        // Show loading popup
+        var loadingPopup = createPopup({
+            title: "Copy Forms to Study Events",
+            content: '<div style="text-align:center;padding:30px;"><div class="copy-forms-spinner" style="width:40px;height:40px;border:4px solid #333;border-top:4px solid #17a2b8;border-radius:50%;margin:0 auto 16px;animation:copyFormsSpin 1s linear infinite;"></div><div style="font-size:16px;margin-bottom:8px;">Collecting data...</div><div id="copyFormsLoadingMsg" style="font-size:13px;color:#888;">Scanning table...</div></div><style>@keyframes copyFormsSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>',
+            width: "350px",
+            height: "auto"
+        });
+
+        function updateLoadingMsg(msg) {
+            var el = document.getElementById("copyFormsLoadingMsg");
+            if (el) el.textContent = msg;
+        }
+
+        // Step 1: Scan table and build maps
+        log("Copy Forms: scanning saTableBody...");
+        updateLoadingMsg("Scanning table...");
+        await sleep(500);
+
+        var rows = scanSATableForArchiveUpdate();
+        if (rows.length === 0) {
+            loadingPopup.close();
+            createPopup({
+                title: "Copy Forms - Error",
+                content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">No rows found in the Scheduled Activities table.</div>',
+                width: "400px",
+                height: "auto"
+            });
+            return;
+        }
+
+        log("Copy Forms: found " + rows.length + " rows, building hierarchy...");
+        var hierarchy = buildHierarchicalFormMap(rows);
+        COPY_FORMS_EXISTING_MAP = buildExistingFormsMap(rows);
+        log("Copy Forms: hierarchy built with " + Object.keys(hierarchy).length + " segments");
+
+        // Step 2: Open modal and collect study events
+        updateLoadingMsg("Opening modal to collect study events...");
+        await sleep(500);
+
+        log("Copy Forms: clicking Add button...");
+        if (!clickAddSaButton()) {
+            loadingPopup.close();
+            return;
+        }
+
+        // Wait for modal with retries
+        var modal = null;
+        for (var retry = 0; retry < 3; retry++) {
+            modal = await waitForSAModal(10000);
+            if (modal) break;
+            log("Copy Forms: modal not found, retry " + (retry + 1));
+            await sleep(1000);
+        }
+
+        if (!modal) {
+            loadingPopup.close();
+            createPopup({
+                title: "Copy Forms - Error",
+                content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">Modal did not appear within timeout.</div>',
+                width: "400px",
+                height: "auto"
+            });
+            return;
+        }
+
+        // Collect study events
+        updateLoadingMsg("Collecting study events...");
+        await openSelect2Dropdown("s2id_studyEvent");
+        await sleep(300);
+        await closeSelect2Dropdown();
+        var studyEvents = collectSelectOptions("studyEvent");
+        log("Copy Forms: collected " + studyEvents.length + " study events");
+
+        // Close modal
+        var closeBtn = modal.querySelector(".close, [data-dismiss='modal']");
+        if (closeBtn) {
+            closeBtn.click();
+        } else {
+            document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        }
+        await sleep(500);
+
+        loadingPopup.close();
+
+        if (studyEvents.length === 0) {
+            createPopup({
+                title: "Copy Forms - Error",
+                content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">No study events found in the modal dropdown.</div>',
+                width: "400px",
+                height: "auto"
+            });
+            return;
+        }
+
+        // Step 3: Show selection GUI
+        log("Copy Forms: displaying selection GUI...");
+        var guiContent = createCopyFormsGUI(hierarchy, studyEvents);
+
+        COPY_FORMS_POPUP_REF = createPopup({
+            title: "Copy Forms to Study Events",
+            content: guiContent,
+            width: "1000px",
+            maxWidth: "95%",
+            height: "80%",
+            maxHeight: "750px",
+            onClose: function() {
+                COPY_FORMS_POPUP_REF = null;
+            }
+        });
+
+        // Handle Continue button
+        guiContent.continueBtn.addEventListener("click", async function() {
+            var selection = guiContent.getSelection();
+            var formKeys = Object.keys(selection.forms);
+            var eventKeys = Object.keys(selection.studyEvents);
+
+            if (formKeys.length === 0 || eventKeys.length === 0) {
+                return;
+            }
+
+            log("Copy Forms: continuing with " + formKeys.length + " forms and " + eventKeys.length + " study events");
+
+            // Close selection popup
+            if (COPY_FORMS_POPUP_REF) {
+                var popupEl = COPY_FORMS_POPUP_REF.element;
+                if (popupEl) popupEl.remove();
+                COPY_FORMS_POPUP_REF = null;
+            }
+
+            // Execute the copy
+            await executeCopyForms(selection.forms, selection.studyEvents);
+        });
+    }
+
+    // Execute the copy forms operation
+    async function executeCopyForms(selectedForms, selectedStudyEvents) {
+        COPY_FORMS_CANCELLED = false;
+
+        // Build items list
+        var items = [];
+        var formKeys = Object.keys(selectedForms);
+        var eventKeys = Object.keys(selectedStudyEvents);
+
+        for (var e = 0; e < eventKeys.length; e++) {
+            var targetEvent = selectedStudyEvents[eventKeys[e]];
+            for (var f = 0; f < formKeys.length; f++) {
+                var sourceForm = selectedForms[formKeys[f]];
+                items.push({
+                    segmentText: sourceForm.segmentText,
+                    segmentValue: sourceForm.segmentValue,
+                    sourceEventText: sourceForm.eventText,
+                    sourceEventValue: sourceForm.eventValue,
+                    targetEventText: targetEvent.text,
+                    targetEventValue: targetEvent.value,
+                    formText: sourceForm.formText,
+                    formValue: sourceForm.formValue,
+                    formKey: sourceForm.formKey,
+                    rowKey: sourceForm.rowKey
+                });
+            }
+        }
+
+        log("Copy Forms: processing " + items.length + " items");
+        log("Copy Forms: items to add: " + JSON.stringify(items.map(function(it) {
+            return it.segmentText + " -> " + it.targetEventText + " -> " + it.formText;
+        })));
+
+        // Create progress popup
+        var progressContent = createCopyFormsProgressPopup(items);
+        COPY_FORMS_PROGRESS_REF = createPopup({
+            title: "Copy Forms - Processing",
+            content: progressContent,
+            width: "650px",
+            height: "75%",
+            maxHeight: "650px",
+            onClose: function() {
+                COPY_FORMS_CANCELLED = true;
+                COPY_FORMS_PROGRESS_REF = null;
+            }
+        });
+
+        var successCount = 0;
+        var duplicateCount = 0;
+        var errorCount = 0;
+
+        for (var i = 0; i < items.length; i++) {
+            if (COPY_FORMS_CANCELLED) {
+                log("Copy Forms: cancelled by user at item " + i);
+                break;
+            }
+
+            var item = items[i];
+            progressContent.updateProgress(i + 1, items.length);
+            progressContent.setItemStatus(i, "Processing...", "#17a2b8");
+
+            log("Copy Forms: processing item " + (i + 1) + "/" + items.length + ": " + item.segmentText + " -> " + item.targetEventText + " -> " + item.formText);
+
+            // Check for duplicates
+            if (formExistsInMap(item.segmentText, item.targetEventText, item.formText, COPY_FORMS_EXISTING_MAP)) {
+                log("Copy Forms: duplicate detected - " + item.segmentText + " -> " + item.targetEventText + " -> " + item.formText);
+                progressContent.setItemStatus(i, "Duplicate (Skipped)", "#ffc107");
+                duplicateCount++;
+                continue;
+            }
+
+            try {
+                // Step 1: Collect source properties
+                var sourceRow = findRowInDOM(item.segmentText, item.sourceEventText, item.formText);
+                var editProps = null;
+                var visibilityProps = null;
+
+                if (sourceRow) {
+                    var editLink = sourceRow.querySelector('a[href*="/update/scheduledactivity/"]');
+                    if (!editLink) editLink = sourceRow.querySelector('a[href*="editscheduledactivity"]');
+                    
+                    if (editLink) {
+                        log("Copy Forms: opening edit modal for source form...");
+                        editLink.click();
+                        var editModal = await waitForSAModal(10000);
+                        if (editModal) {
+                            editProps = await collectEditModalProperties();
+                            log("Copy Forms: collected properties - hidden=" + editProps.hidden);
+
+                            var cancelBtn = editModal.querySelector("button[data-dismiss='modal'], .btn-default, .close");
+                            if (cancelBtn) {
+                                cancelBtn.click();
+                            } else {
+                                document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+                            }
+                            await waitForSAModalClose(5000);
+                        }
+                    }
+
+                    // Collect visibility if hidden
+                    if (editProps && editProps.hidden) {
+                        await sleep(500);
+                        sourceRow = findRowInDOM(item.segmentText, item.sourceEventText, item.formText);
+                        if (sourceRow) {
+                            var visLink = sourceRow.querySelector('a[href*="visiblecondition"]');
+                            if (!visLink) visLink = sourceRow.querySelector('a[href*="visibility"]');
+                            
+                            if (visLink) {
+                                log("Copy Forms: collecting visibility properties...");
+                                visLink.click();
+                                var visModal = await waitForSAModal(10000);
+                                if (visModal) {
+                                    visibilityProps = await collectVisibilityModalProperties();
+                                    log("Copy Forms: collected visibility - " + JSON.stringify(visibilityProps));
+
+                                    var visCancelBtn = visModal.querySelector("button[data-dismiss='modal'], .btn-default, .close");
+                                    if (visCancelBtn) {
+                                        visCancelBtn.click();
+                                    } else {
+                                        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+                                    }
+                                    await waitForSAModalClose(5000);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (COPY_FORMS_CANCELLED) break;
+
+                // Step 2: Add new form
+                await sleep(500);
+                log("Copy Forms: clicking Add button...");
+                if (!clickAddSaButton()) {
+                    log("Copy Forms: could not click Add button");
+                    progressContent.setItemStatus(i, "Error (add)", "#dc3545");
+                    errorCount++;
+                    continue;
+                }
+
+                var addModal = await waitForSAModal(10000);
+                if (!addModal) {
+                    log("Copy Forms: add modal did not open");
+                    progressContent.setItemStatus(i, "Error (modal)", "#dc3545");
+                    errorCount++;
+                    continue;
+                }
+
+                // Select segment
+                log("Copy Forms: selecting segment - " + item.segmentText);
+                await setSelect2ValueByText("segment", item.segmentText);
+                await sleep(500);
+
+                // Select target study event
+                log("Copy Forms: selecting study event - " + item.targetEventText);
+                await setSelect2ValueByText("studyEvent", item.targetEventText);
+                await sleep(500);
+
+                // Select form
+                log("Copy Forms: selecting form - " + item.formText);
+                await setSelect2ValueByText("form", item.formText);
+                await sleep(500);
+
+                // Apply properties
+                if (editProps) {
+                    log("Copy Forms: applying properties...");
+                    await applyPropertiesToAddModal(editProps);
+                }
+
+                // Save
+                var saveBtn = document.getElementById("actionButton");
+                if (saveBtn) {
+                    log("Copy Forms: clicking Save...");
+                    saveBtn.click();
+                    var closed = await waitForSAModalClose(10000);
+                    if (!closed) {
+                        log("Copy Forms: modal did not close after save");
+                        progressContent.setItemStatus(i, "Error (save)", "#dc3545");
+                        errorCount++;
+                        continue;
+                    }
+                }
+
+                await sleep(1000);
+
+                if (COPY_FORMS_CANCELLED) break;
+
+                // Step 3: Set visibility if needed
+                if (editProps && editProps.hidden && visibilityProps) {
+                    log("Copy Forms: setting visibility on new row...");
+                    var newRow = findRowInDOM(item.segmentText, item.targetEventText, item.formText);
+                    if (newRow) {
+                        var newVisLink = newRow.querySelector('a[href*="visiblecondition"]');
+                        if (!newVisLink) newVisLink = newRow.querySelector('a[href*="visibility"]');
+
+                        if (newVisLink) {
+                            newVisLink.click();
+                            var newVisModal = await waitForSAModal(10000);
+                            if (newVisModal) {
+                                await sleep(500);
+
+                                // Set visibility fields
+                                if (visibilityProps.activityPlan) {
+                                    await setSelect2ValueByText("visibleActivityPlan", visibilityProps.activityPlan);
+                                    await sleep(500);
+                                    await waitForSelect2OptionsChange("visibleScheduledActivity", 3000);
+                                    await sleep(500);
+                                }
+                                if (visibilityProps.scheduledActivity) {
+                                    for (var retry = 0; retry < 3; retry++) {
+                                        if (await setSelect2ValueByText("visibleScheduledActivity", visibilityProps.scheduledActivity)) break;
+                                        await sleep(1000);
+                                    }
+                                    await sleep(500);
+                                    await waitForSelect2OptionsChange("visibleItemRef", 3000);
+                                    await sleep(500);
+                                }
+                                if (visibilityProps.item) {
+                                    for (var retry2 = 0; retry2 < 3; retry2++) {
+                                        if (await setSelect2ValueByText("visibleItemRef", visibilityProps.item)) break;
+                                        await sleep(1000);
+                                    }
+                                    await sleep(500);
+                                    await waitForSelect2OptionsChange("visibleCodeListItem", 3000);
+                                    await sleep(500);
+                                }
+                                if (visibilityProps.itemValue) {
+                                    for (var retry3 = 0; retry3 < 3; retry3++) {
+                                        if (await setSelect2ValueByText("visibleCodeListItem", visibilityProps.itemValue)) break;
+                                        await sleep(1000);
+                                    }
+                                    await sleep(500);
+                                }
+
+                                var visReasonEl = document.getElementById("reasonForChange");
+                                if (visReasonEl) {
+                                    visReasonEl.value = "Copied visibility from source";
+                                    visReasonEl.dispatchEvent(new Event("change", { bubbles: true }));
+                                }
+
+                                var visSaveBtn = document.getElementById("actionButton");
+                                if (visSaveBtn) {
+                                    visSaveBtn.click();
+                                    await waitForSAModalClose(10000);
+                                }
+                                await sleep(500);
+                            }
+                        }
+                    }
+                }
+
+                // Update existing map
+                var newKey = normalizeSAText(item.segmentText) + "|" + normalizeSAText(item.targetEventText) + "|" + normalizeSAText(item.formText);
+                COPY_FORMS_EXISTING_MAP[newKey] = true;
+
+                progressContent.setItemStatus(i, "Complete", "#28a745");
+                successCount++;
+                log("Copy Forms: item " + (i + 1) + " completed successfully");
+
+            } catch (err) {
+                log("Copy Forms: error processing item " + i + " - " + String(err));
+                progressContent.setItemStatus(i, "Error", "#dc3545");
+                errorCount++;
+            }
+
+            await sleep(500);
+        }
+
+        // Show summary
+        progressContent.updateStatus("Completed");
+        progressContent.showSummary(items.length, successCount, duplicateCount, errorCount);
+        log("Copy Forms: finished - success=" + successCount + " duplicates=" + duplicateCount + " errors=" + errorCount);
+    }
 
     //==========================
     // ARCHIVE/UPDATE FORMS FEATURE
@@ -1168,38 +2217,47 @@
         return false;
     }
 
-    // Set Select2 value by text matching
-        async function setSelect2ValueByText(selectId, targetText) {
+    async function setSelect2ValueByText(selectId, targetText) {
         var sel = document.getElementById(selectId);
         if (!sel) {
             log("Archive/Update Forms: select " + selectId + " not found");
             return false;
         }
 
-        // Use specialized normalization for visibility fields
+        // Use specialized normalization for visibility fields only
         var isVisibilityField = selectId.indexOf("visible") === 0;
-        var normalizedTarget = isVisibilityField ? normalizeVisibilityText(targetText) : normalizeText(targetText);
+        
+        // For non-visibility fields, use normalizeSAText which preserves minus signs
+        // For visibility fields, continue using normalizeVisibilityText
+        var normalizedTarget = isVisibilityField 
+            ? normalizeVisibilityText(targetText) 
+            : normalizeSAText(targetText).toLowerCase();
+        
         var opts = sel.querySelectorAll("option");
         var matchValue = null;
 
-        // First pass: exact match
+        // First pass: exact match (strict comparison)
         for (var i = 0; i < opts.length; i++) {
             var opt = opts[i];
             var optText = normalizeSAText(opt.textContent);
-            var optNorm = isVisibilityField ? normalizeVisibilityText(optText) : normalizeText(optText);
+            var optNorm = isVisibilityField 
+                ? normalizeVisibilityText(optText) 
+                : optText.toLowerCase();
             
-            if (optNorm === normalizedTarget || optText === targetText) {
+            // Strict comparison - both normalized texts must match exactly
+            if (optNorm === normalizedTarget) {
                 matchValue = opt.value;
                 log("Archive/Update Forms: exact match found for " + targetText + " -> " + optText);
                 break;
             }
         }
 
-        // Second pass: fuzzy match if exact not found
-        if (!matchValue) {
+        // Second pass: fuzzy match if exact not found (only for visibility fields)
+        // For segment/studyEvent/form fields, do NOT use fuzzy matching to avoid Day 1 vs Day -1 issues
+        if (!matchValue && isVisibilityField) {
             for (var j = 0; j < opts.length; j++) {
                 var opt2 = opts[j];
-                var optText2 = isVisibilityField ? normalizeVisibilityText(opt2.textContent) : normalizeText(opt2.textContent);
+                var optText2 = normalizeVisibilityText(opt2.textContent);
                 
                 if (optText2.indexOf(normalizedTarget) !== -1 || normalizedTarget.indexOf(optText2) !== -1) {
                     matchValue = opt2.value;
@@ -2932,6 +3990,7 @@
             "Import I/E",
             "Clear Mapping",
             "Archive/Update Forms",
+            "Copy Activity Forms",
             "Item Method Forms",
             "Find Form",
             "Find Study Events",
@@ -19545,6 +20604,25 @@
             await runArchiveUpdateForms();
         });
 
+        var copyFormsBtn = document.createElement("button");
+        copyFormsBtn.textContent = "Copy Activity Forms";
+        copyFormsBtn.style.background = "#38dae6";
+        copyFormsBtn.style.color = "#fff";
+        copyFormsBtn.style.border = "none";
+        copyFormsBtn.style.borderRadius = "6px";
+        copyFormsBtn.style.padding = "8px";
+        copyFormsBtn.style.cursor = "pointer";
+        copyFormsBtn.style.fontWeight = "500";
+        copyFormsBtn.style.transition = "background 0.2s";
+        copyFormsBtn.onmouseenter = function() { this.style.background = "#2bb9c4"; };
+        copyFormsBtn.onmouseleave = function() { this.style.background = "#38dae6"; };
+        copyFormsBtn.addEventListener("click", async function () {
+            COPY_FORMS_CANCELLED = false;
+            log("Copy Forms: button clicked");
+            await runCopyFormsToStudyEvents();
+        });
+        
+
         var pauseBtn = document.createElement("button");
         pauseBtn.textContent = isPaused() ? "Resume" : "Pause";
         pauseBtn.style.background = "#6c757d";
@@ -19687,6 +20765,7 @@
             { el: importEligBtn, label: "Import I/E" },
             { el: clearMappingBtn, label: "Clear Mapping" },
             { el: archiveUpdateFormsBtn, label: "Archive/Update Forms" },
+            { el: copyFormsBtn, label: "Copy Activity Forms"},
             { el: parseMethodBtn, label: "Item Method Forms" },
             { el: findFormBtn, label: "Find Form" },
             { el: findStudyEventsBtn, label: "Find Study Events" },

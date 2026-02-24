@@ -11,7 +11,6 @@
 // @grant       GM.openInTab
 // @grant       GM_openInTab
 // @grant       GM.xmlHttpRequest
-// @ts-check
 // ==/UserScript==
 
 (function () {
