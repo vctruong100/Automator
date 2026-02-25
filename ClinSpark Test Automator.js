@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.2.9
+// @version 3.3.0
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -201,6 +201,16 @@
     // Check if on correct page for Copy Forms
     function isOnCopyFormsPage() {
         return location.href.indexOf("https://cenexeltest.clinspark.com/secure/crfdesign/activityplans/show/") === 0;
+    }
+
+    // Rebuild scheduled activity with target study event
+    // e.g., "Day 1 Pre > REV_Review Questions" + "Day -1" => "Day -1 REV_Review Questions"
+    function rebuildScheduledActivityForTarget(sourceScheduledActivity, targetStudyEvent) {
+        if (!sourceScheduledActivity || !targetStudyEvent) return sourceScheduledActivity;
+        var parts = sourceScheduledActivity.split(">");
+        if (parts.length < 2) return sourceScheduledActivity;
+        var activityName = parts[parts.length - 1].trim();
+        return normalizeSAText(targetStudyEvent) + " " + activityName;
     }
 
     // Build hierarchical structure from rows: Segment -> StudyEvent -> Forms
@@ -1172,8 +1182,10 @@
                                     await sleep(500);
                                 }
                                 if (visibilityProps.scheduledActivity) {
+                                    var targetSA = rebuildScheduledActivityForTarget(visibilityProps.scheduledActivity, item.targetEventText);
+                                    log("Copy Forms: rebuilt scheduledActivity for target: " + targetSA);
                                     for (var retry = 0; retry < 3; retry++) {
-                                        if (await setSelect2ValueByText("visibleScheduledActivity", visibilityProps.scheduledActivity)) break;
+                                        if (await setSelect2ValueByText("visibleScheduledActivity", targetSA)) break;
                                         await sleep(1000);
                                     }
                                     await sleep(500);
@@ -2641,10 +2653,11 @@
                                 
                                 // 2. Scheduled Activity
                                 if (visSuccess && visibilityProps.scheduledActivity) {
-                                    log("Archive/Update Forms: Step 5 - setting Scheduled Activity: " + visibilityProps.scheduledActivity);
+                                    var targetSA = rebuildScheduledActivityForTarget(visibilityProps.scheduledActivity, occ.eventText);
+                                    log("Archive/Update Forms: Step 5 - setting Scheduled Activity: " + targetSA + " (rebuilt from: " + visibilityProps.scheduledActivity + ")");
                                     var saSet = false;
                                     for (var retry = 0; retry < 3; retry++) {
-                                        saSet = await setSelect2ValueByText("visibleScheduledActivity", visibilityProps.scheduledActivity);
+                                        saSet = await setSelect2ValueByText("visibleScheduledActivity", targetSA);
                                         if (saSet) break;
                                         log("Archive/Update Forms: Step 5 - retry " + (retry + 1) + " for Scheduled Activity");
                                         await sleep(1000);
