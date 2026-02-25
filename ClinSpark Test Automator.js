@@ -1053,7 +1053,7 @@
                 if (sourceRow) {
                     var editLink = sourceRow.querySelector('a[href*="/update/scheduledactivity/"]');
                     if (!editLink) editLink = sourceRow.querySelector('a[href*="editscheduledactivity"]');
-                    
+
                     if (editLink) {
                         log("Copy Forms: opening edit modal for source form...");
                         editLink.click();
@@ -1079,7 +1079,7 @@
                         if (sourceRow) {
                             var visLink = sourceRow.querySelector('a[href*="visiblecondition"]');
                             if (!visLink) visLink = sourceRow.querySelector('a[href*="visibility"]');
-                            
+
                             if (visLink) {
                                 log("Copy Forms: collecting visibility properties...");
                                 visLink.click();
@@ -1270,28 +1270,28 @@
             return "";
         }
         var s = t.toLowerCase();
-        
+
         // Remove time offsets like -00:05:00, +01:30:00, etc.
         s = s.replace(/[\+\-]\d{2}:\d{2}:\d{2}/g, "");
-        
+
         // Remove trailing occurrence numbers like (1), (2), etc.
         s = s.replace(/\s*\(\d+\)\s*$/g, "");
-        
+
         // Remove > symbol (used in collected data but not in options)
         s = s.replace(/>/g, "");
-        
+
         // Normalize spaces around = sign
         s = s.replace(/\s*=\s*/g, "=");
-        
+
         // Collapse multiple spaces
         s = s.replace(/\s+/g, " ");
-        
+
         // Remove all spaces for final comparison
         s = s.replace(/\s/g, "");
-        
+
         // Remove common punctuation
         s = s.replace(/[\-\_\(\)\[\]]/g, "");
-        
+
         return s.trim();
     }
 
@@ -1741,8 +1741,8 @@
 
         // Return container with confirm handler
         container.getSelection = function() {
-            return { 
-                source: selectedSource, 
+            return {
+                source: selectedSource,
                 target: selectedTarget,
                 archiveReason: archiveReasonInput.value,
                 visibilityReason: visibilityReasonInput.value
@@ -2238,13 +2238,13 @@
 
         // Use specialized normalization for visibility fields only
         var isVisibilityField = selectId.indexOf("visible") === 0;
-        
+
         // For non-visibility fields, use normalizeSAText which preserves minus signs
         // For visibility fields, continue using normalizeVisibilityText
-        var normalizedTarget = isVisibilityField 
-            ? normalizeVisibilityText(targetText) 
-            : normalizeSAText(targetText).toLowerCase();
-        
+        var normalizedTarget = isVisibilityField
+        ? normalizeVisibilityText(targetText)
+        : normalizeSAText(targetText).toLowerCase();
+
         var opts = sel.querySelectorAll("option");
         var matchValue = null;
 
@@ -2252,10 +2252,10 @@
         for (var i = 0; i < opts.length; i++) {
             var opt = opts[i];
             var optText = normalizeSAText(opt.textContent);
-            var optNorm = isVisibilityField 
-                ? normalizeVisibilityText(optText) 
-                : optText.toLowerCase();
-            
+            var optNorm = isVisibilityField
+            ? normalizeVisibilityText(optText)
+            : optText.toLowerCase();
+
             // Strict comparison - both normalized texts must match exactly
             if (optNorm === normalizedTarget) {
                 matchValue = opt.value;
@@ -2270,7 +2270,7 @@
             for (var j = 0; j < opts.length; j++) {
                 var opt2 = opts[j];
                 var optText2 = normalizeVisibilityText(opt2.textContent);
-                
+
                 if (optText2.indexOf(normalizedTarget) !== -1 || normalizedTarget.indexOf(optText2) !== -1) {
                     matchValue = opt2.value;
                     log("Archive/Update Forms: fuzzy match found for " + targetText + " -> " + opt2.textContent);
@@ -2636,7 +2636,7 @@
 
                                 // Set visibility fields one at a time with delays
                                 var visSuccess = true;
-                                
+
                                 // 1. Activity Plan
                                 if (visibilityProps.activityPlan) {
                                     log("Archive/Update Forms: Step 5 - setting Activity Plan: " + visibilityProps.activityPlan);
@@ -2650,7 +2650,7 @@
                                         await sleep(500);
                                     }
                                 }
-                                
+
                                 // 2. Scheduled Activity
                                 if (visSuccess && visibilityProps.scheduledActivity) {
                                     var targetSA = rebuildScheduledActivityForTarget(visibilityProps.scheduledActivity, occ.eventText);
@@ -2671,7 +2671,7 @@
                                         await sleep(500);
                                     }
                                 }
-                                
+
                                 // 3. Item
                                 if (visSuccess && visibilityProps.item) {
                                     log("Archive/Update Forms: Step 5 - setting Item: " + visibilityProps.item);
@@ -2691,7 +2691,7 @@
                                         await sleep(500);
                                     }
                                 }
-                                
+
                                 // 4. Item Value
                                 if (visSuccess && visibilityProps.itemValue) {
                                     log("Archive/Update Forms: Step 5 - setting Item Value: " + visibilityProps.itemValue);
@@ -2921,12 +2921,12 @@
         log("Archive/Update Forms: selection GUI displayed");
     }
 
-    
+
     //==========================
     // METHODS LIBRARY FEATURE
     //==========================
     // Methods Library Configuration
-    
+
     var METHODS_INDEX_URL = "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/index.json";
     var METHODS_CACHE_KEY = "activityPlanState.methodsLibrary.cache";
     var METHODS_CACHE_EXPIRY_MS = 1000 * 60 * 60; // 1 hour
@@ -3067,7 +3067,7 @@
         return score;
     }
 
-        function filterAndSortMethods(methods, query, tagFilter, searchBody, bodiesMap, sortOrder, favorites, pins) {
+    function filterAndSortMethods(methods, query, tagFilter, searchBody, bodiesMap, sortOrder, favorites, pins) {
         var results = [];
         for (var i = 0; i < methods.length; i++) {
             var m = methods[i];
@@ -3087,14 +3087,14 @@
             if (query && query.trim().length > 0 && score === 0) continue;
             results.push({ method: m, score: score });
         }
-        
+
         results.sort(function(a, b) {
             // Pinned items always come first
             var isPinA = pins.indexOf(a.method.id) !== -1;
             var isPinB = pins.indexOf(b.method.id) !== -1;
             if (isPinA && !isPinB) return -1;
             if (!isPinA && isPinB) return 1;
-            
+
             // Then sort by selected order
             if (sortOrder === "title") {
                 var titleA = (a.method.title || "").toLowerCase();
@@ -3398,7 +3398,7 @@
             }
         }
 
-                function renderList(methods) {
+        function renderList(methods) {
             listPane.innerHTML = "";
             if (methods.length === 0) {
                 var empty = document.createElement("div");
@@ -3409,11 +3409,11 @@
                 listPane.appendChild(empty);
                 return;
             }
-            
+
             var favorites = getFavorites();
             var recents = getRecents();
             var pins = getPins();
-            
+
             for (var i = 0; i < methods.length; i++) {
                 (function(m, idx) {
                     var item = document.createElement("div");
@@ -3448,18 +3448,18 @@
                         itemTags.textContent = m.tags.join(", ");
                         item.appendChild(itemTags);
                     }
-                    
+
                     // Badges container
                     var badges = document.createElement("div");
                     badges.style.display = "flex";
                     badges.style.gap = "4px";
                     badges.style.marginTop = "4px";
                     badges.style.fontSize = "10px";
-                    
+
                     var isFav = favorites.indexOf(m.id) !== -1;
                     var isRecent = recents.indexOf(m.id) !== -1;
                     var isPinned = pins.indexOf(m.id) !== -1;
-                    
+
                     if (isPinned) {
                         var pinBadge = document.createElement("span");
                         pinBadge.textContent = "📌 Pinned";
@@ -3478,11 +3478,11 @@
                         recentBadge.style.color = "#888";
                         badges.appendChild(recentBadge);
                     }
-                    
+
                     if (badges.children.length > 0) {
                         item.appendChild(badges);
                     }
-                    
+
                     // Action buttons (show on hover)
                     var actions = document.createElement("div");
                     actions.style.position = "absolute";
@@ -3490,7 +3490,7 @@
                     actions.style.right = "8px";
                     actions.style.display = "none";
                     actions.style.gap = "4px";
-                    
+
                     var favBtn = document.createElement("button");
                     favBtn.textContent = isFav ? "★" : "☆";
                     favBtn.title = isFav ? "Remove from favorites" : "Add to favorites";
@@ -3506,7 +3506,7 @@
                         doSearch();
                     };
                     actions.appendChild(favBtn);
-                    
+
                     var pinBtn = document.createElement("button");
                     pinBtn.textContent = isPinned ? "📌" : "📍";
                     pinBtn.title = isPinned ? "Unpin" : "Pin to top";
@@ -3527,7 +3527,7 @@
                         }
                     };
                     actions.appendChild(pinBtn);
-                    
+
                     item.appendChild(actions);
 
                     item.onmouseenter = function() {
@@ -3554,7 +3554,7 @@
         async function selectMethod(m, itemEl) {
             selectedMethod = m;
             currentBodyText = "";
-            
+
             // Track as recent and save as last method
             addRecent(m.id);
             saveLastMethod(m.id);
@@ -3597,28 +3597,28 @@
             var searchBody = searchBodyCheckbox.checked;
             var sortOrder = sortSelect.value;
             var showOnlyFavorites = favoritesCheckbox.checked;
-            
+
             // Save session state
             saveLastSearch(query);
             saveLastTag(tagFilter);
             saveSortOrder(sortOrder);
-            
+
             var favorites = getFavorites();
             var pins = getPins();
-            
+
             var methodsToFilter = allMethods;
             if (showOnlyFavorites) {
                 methodsToFilter = allMethods.filter(function(m) {
                     return favorites.indexOf(m.id) !== -1;
                 });
             }
-            
+
             var filtered = filterAndSortMethods(methodsToFilter, query, tagFilter, searchBody, METHODS_BODY_CACHE, sortOrder, favorites, pins);
             renderList(filtered);
             updateStatus(filtered.length + " of " + allMethods.length + " methods");
         }
 
-            async function loadIndex(forceRefresh) {
+        async function loadIndex(forceRefresh) {
             updateStatus("Loading methods index...");
             var result = await fetchMethodsIndex(forceRefresh);
             if (!result.success) {
@@ -3638,7 +3638,7 @@
                     }
                 }
             }
-            
+
             searchInput.value = getLastSearch();
             tagSelect.value = getLastTag();
             sortSelect.value = getSortOrder();
@@ -3651,7 +3651,7 @@
         searchBodyCheckbox.onchange = doSearch;
         sortSelect.onchange = doSearch;
         favoritesCheckbox.onchange = doSearch;
-        
+
         refreshBtn.onclick = function() {
             METHODS_BODY_CACHE = {};
             loadIndex(true);
@@ -3688,7 +3688,7 @@
                 closeModal();
                 return;
             }
-            
+
             // Enter key when search box is focused - select first result
             if (e.key === "Enter" && document.activeElement === searchInput) {
                 var firstItem = listPane.querySelector("[role='option']");
@@ -3701,12 +3701,12 @@
                 }
                 return;
             }
-            
+
             // Arrow Up/Down navigation in list
             if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                 var items = Array.from(listPane.querySelectorAll("[role='option']"));
                 if (items.length === 0) return;
-                
+
                 var currentIndex = -1;
                 for (var i = 0; i < items.length; i++) {
                     if (items[i].getAttribute("aria-selected") === "true") {
@@ -3714,14 +3714,14 @@
                         break;
                     }
                 }
-                
+
                 var nextIndex;
                 if (e.key === "ArrowDown") {
                     nextIndex = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
                 } else {
                     nextIndex = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
                 }
-                
+
                 var nextItem = items[nextIndex];
                 var methodId = nextItem.getAttribute("data-method-id");
                 var method = allMethods.find(function(m) { return m.id === methodId; });
@@ -3731,7 +3731,7 @@
                 e.preventDefault();
                 return;
             }
-            
+
             // Tab cycling
             if (e.key === "Tab") {
                 var focusable = modal.querySelectorAll('button, input, select, [tabindex]:not([tabindex="-1"])');
@@ -3785,7 +3785,7 @@
         log("Methods Library: modal opened");
     }
 
-        function getFavorites() {
+    function getFavorites() {
         try {
             var raw = localStorage.getItem(STORAGE_METHODS_FAVORITES);
             if (!raw) return [];
@@ -4119,11 +4119,11 @@
         hotkeyInput.addEventListener("keydown", function(e) {
             e.preventDefault();
             e.stopPropagation();
-            
+
             var key = e.key;
             var code = e.code;
             var displayKey = key;
-            
+
             // Handle special keys
             if (key.length === 1 && key.match(/[a-z]/i)) {
                 displayKey = key.toUpperCase();
@@ -4146,7 +4146,7 @@
             } else if (code) {
                 displayKey = code;
             }
-            
+
             this.value = displayKey;
         });
 
@@ -4257,13 +4257,13 @@
                 newVisibility[cb.dataset.label] = cb.checked;
             }
             setButtonVisibility(newVisibility);
-            
+
             var newHotkey = hotkeyInput.value.trim();
             if (newHotkey) {
                 setPanelHotkey(newHotkey);
                 log("Settings: Hotkey saved as " + newHotkey);
             }
-            
+
             log("Settings: Button visibility saved");
             settingsPopup.close();
             location.reload();
@@ -18824,7 +18824,7 @@
         log("CollectAll: data cleared");
     }
 
-    
+
     // Process eligibility form page to perform the lock action
     async function processEligibilityFormPageForLocking() {
         if (isPaused()) {
@@ -18833,19 +18833,19 @@
         }
         var autoLock = getQueryParam("autolock");
         var mode = getRunMode();
-        
+
         // Check if lock was just completed (after page refresh from save)
         var lockCompleted = null;
         try {
             lockCompleted = localStorage.getItem("eligibilityLockCompleted");
         } catch (e) {}
-        
+
         if (lockCompleted === "1") {
             try {
                 localStorage.removeItem("eligibilityLockCompleted");
                 localStorage.removeItem(STORAGE_CHECK_ELIG_LOCK);
             } catch (e) {}
-            
+
             log("Eligibility lock completed; continuing to Update Study Status");
             if (mode === "study") {
                 clearRunMode();
@@ -18856,13 +18856,13 @@
             location.href = STUDY_SHOW_URL + "?autoupdate=1";
             return;
         }
-        
+
         if (autoLock !== "1") {
             return;
         }
-        
+
         log("Eligibility form page: attempting to lock");
-        
+
         // Find and click the Action button in breadcrumb
         var actionBtn = await waitForSelector('button.btn.btn-default.btn-sm.dropdown-toggle[data-toggle="dropdown"]', 5000);
         if (!actionBtn) {
@@ -18876,11 +18876,11 @@
             location.href = STUDY_SHOW_URL + "?autoupdate=1";
             return;
         }
-        
+
         actionBtn.click();
         log("Action button clicked");
         await sleep(500);
-        
+
         // Find and click the Lock link in dropdown
         var lockLink = await waitForSelector('a[href*="/secure/crfdesign/studylibrary/locking/form/"][data-toggle="modal"]', 3000);
         if (!lockLink) {
@@ -18894,11 +18894,11 @@
             location.href = STUDY_SHOW_URL + "?autoupdate=1";
             return;
         }
-        
+
         lockLink.click();
         log("Lock link clicked; waiting for modal");
         await sleep(1000);
-        
+
         // Wait for modal and find Save button
         var saveBtn = await waitForSelector('button#actionButton.btn.green', 5000);
         if (!saveBtn) {
@@ -18912,16 +18912,16 @@
             location.href = STUDY_SHOW_URL + "?autoupdate=1";
             return;
         }
-        
+
         // Set flag before clicking save (page will refresh after save)
         try {
             localStorage.setItem("eligibilityLockCompleted", "1");
         } catch (e) {}
-        
+
         saveBtn.click();
         log("Save button clicked; eligibility lock initiated (page will refresh)");
     }
-    
+
     // Find and navigate to eligibility locking form when required.
     async function processStudyMetadataPageForEligibilityLock() {
         if (isPaused()) {
@@ -19743,7 +19743,7 @@
         }
         return false;
     }
-    
+
     // Detect if current path is an eligibility form page
     function isEligibilityFormPage() {
         var path = location.pathname;
@@ -20238,7 +20238,7 @@
         var n = normalizeKeyForMatch(e);
         var savedHotkey = getPanelHotkey();
         var match = false;
-        
+
         if (n.key && n.key.toUpperCase() === savedHotkey.toUpperCase()) {
             match = true;
         } else if (n.code && n.code.toUpperCase() === savedHotkey.toUpperCase()) {
@@ -20271,7 +20271,7 @@
                 match = true;
             }
         }
-        
+
         return match;
     }
 
@@ -20583,7 +20583,7 @@
         parseMethodBtn.style.cursor = "pointer";
         parseMethodBtn.onmouseenter = () => { parseMethodBtn.style.background = "#58a1f5"; };
         parseMethodBtn.onmouseleave = () => { parseMethodBtn.style.background = "#4a90e2"; };
-        
+
         var searchMethodsBtn = document.createElement("button");
         searchMethodsBtn.textContent = "Search Methods";
         searchMethodsBtn.style.background = "#5b43c7";
@@ -20598,7 +20598,7 @@
             log("[SearchMethods] Button clicked");
             openMethodsLibraryModal();
         });
-        
+
         var archiveUpdateFormsBtn = document.createElement("button");
         archiveUpdateFormsBtn.textContent = "Archive/Update Forms";
         archiveUpdateFormsBtn.style.background = "#38dae6";
@@ -20634,7 +20634,7 @@
             log("Copy Forms: button clicked");
             await runCopyFormsToStudyEvents();
         });
-        
+
 
         var pauseBtn = document.createElement("button");
         pauseBtn.textContent = isPaused() ? "Resume" : "Pause";
@@ -20793,7 +20793,7 @@
                 btnRow.appendChild(btnItem.el);
             }
         }
-        
+
         runLockSamplePathsBtn.addEventListener("click", function () {
             try {
                 localStorage.setItem(STORAGE_RUN_LOCK_SAMPLE_PATHS, "1");
@@ -21243,7 +21243,7 @@
                 pauseBtn.textContent = "Resume";
                 status.textContent = "Paused";
                 log("Paused");
-                
+
                 // Update all active popup statuses to show "Paused"
                 if (RUN_ALL_POPUP_REF && RUN_ALL_POPUP_REF.element) {
                     try {
@@ -21258,7 +21258,7 @@
                         }
                     } catch (e) {}
                 }
-                
+
                 if (LOCK_SAMPLE_PATHS_POPUP_REF && LOCK_SAMPLE_PATHS_POPUP_REF.element) {
                     try {
                         var lockStatusDiv = LOCK_SAMPLE_PATHS_POPUP_REF.element.querySelector("#lockSamplePathsStatus");
@@ -21272,7 +21272,7 @@
                         }
                     } catch (e) {}
                 }
-                
+
                 if (IMPORT_ELIG_POPUP_REF && IMPORT_ELIG_POPUP_REF.element) {
                     try {
                         var eligStatusDiv = IMPORT_ELIG_POPUP_REF.element.querySelector("#importEligStatus");
@@ -21286,7 +21286,7 @@
                         }
                     } catch (e) {}
                 }
-                
+
                 if (IMPORT_COHORT_POPUP_REF && IMPORT_COHORT_POPUP_REF.element) {
                     try {
                         var cohortStatusDiv = IMPORT_COHORT_POPUP_REF.element.querySelector("#importCohortStatus");
@@ -21300,7 +21300,7 @@
                         }
                     } catch (e) {}
                 }
-                
+
                 if (COLLECT_ALL_POPUP_REF && COLLECT_ALL_POPUP_REF.element) {
                     try {
                         var collectStatusDiv = COLLECT_ALL_POPUP_REF.element.querySelector("#collectAllStatus");
@@ -21314,7 +21314,7 @@
                         }
                     } catch (e) {}
                 }
-                
+
                 if (CLEAR_MAPPING_POPUP_REF && CLEAR_MAPPING_POPUP_REF.element) {
                     try {
                         var clearStatusDiv = CLEAR_MAPPING_POPUP_REF.element.querySelector("#clearMappingStatus");
@@ -21328,7 +21328,7 @@
                         }
                     } catch (e) {}
                 }
-                
+
                 clearAllRunState();
                 COLLECT_ALL_CANCELLED = true;
                 SA_BUILDER_PAUSE = true;
