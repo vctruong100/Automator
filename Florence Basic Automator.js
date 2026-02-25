@@ -16,6 +16,16 @@
 (function () {
 
     //==========================
+    // TRAINING ELOG FUNCTIONS
+    //==========================
+    // This section contains functions to handle Training ELogs feature.
+    // This includes a UI user input, parsing a list of names, and adding entries on webpages.
+    //==========================
+
+
+
+
+    //==========================
     // SHARED GUI AND PANEL FUNCTIONS
     //==========================
     // This section contains functions used by multiple features for panel management,
@@ -23,8 +33,8 @@
     // shared across all automation features and provide the common user interface.
     //==========================
 
-    let guiVisible = false;
-    let guiScale = 1;
+    let guiVisible = localStorage.getItem('florence-gui-visible') === 'true';
+     guiScale = parseFloat(localStorage.getItem('florence-gui-scale')) || 1;
     let isDragging = false;
     let dragOffsetX = 0;
     let dragOffsetY = 0;
@@ -166,37 +176,81 @@
 
         document.body.appendChild(modal);
     }
-    function makeDraggable(container, handle) {
+        function makeDraggable(container, handle) {
         let isDraggingModal = false;
         let offsetX = 0;
         let offsetY = 0;
+        let currentScale = 1;
 
         handle.style.cursor = 'move';
 
         handle.addEventListener('mousedown', function(e) {
             if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
             isDraggingModal = true;
+
+            const transform = container.style.transform;
+            if (transform && transform.includes('scale')) {
+                const match = transform.match(/scale\(([\d.]+)\)/);
+                if (match) {
+                    currentScale = parseFloat(match[1]);
+                }
+            } else {
+                currentScale = 1;
+            }
+
             const rect = container.getBoundingClientRect();
+            // Store the offset in screen coordinates (already accounts for scale)
             offsetX = e.clientX - rect.left;
             offsetY = e.clientY - rect.top;
+
             e.preventDefault();
         });
 
         document.addEventListener('mousemove', function(e) {
             if (!isDraggingModal) return;
-            const newX = e.clientX - offsetX;
-            const newY = e.clientY - offsetY;
+
+            // Calculate new position - offset is already in screen space
+            let newX = e.clientX - offsetX;
+            let newY = e.clientY - offsetY;
+
+            // Use getBoundingClientRect for actual visual dimensions (accounts for scale)
+            const rect = container.getBoundingClientRect();
+            const visualWidth = rect.width;
+            const visualHeight = rect.height;
+
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+
+            // Clamp to viewport using visual dimensions
+            if (newX < 0) {
+                newX = 0;
+            } else if (newX + visualWidth > viewportWidth) {
+                newX = viewportWidth - visualWidth;
+            }
+
+            if (newY < 0) {
+                newY = 0;
+            } else if (newY + visualHeight > viewportHeight) {
+                newY = viewportHeight - visualHeight;
+            }
+
             container.style.left = newX + 'px';
             container.style.top = newY + 'px';
             container.style.right = 'auto';
-            container.style.transform = 'none';
+
+            // Preserve scale transform
+            if (currentScale !== 1) {
+                container.style.transform = 'scale(' + currentScale + ')';
+                container.style.transformOrigin = 'top left';
+            } else {
+                container.style.transform = 'none';
+            }
         });
 
         document.addEventListener('mouseup', function() {
             isDraggingModal = false;
         });
     }
-
     function createGUI() {
         const guiContainer = document.createElement('div');
         guiContainer.id = 'florence-gui';
@@ -214,7 +268,7 @@
         display: none;
         flex-direction: column;
         overflow: hidden;
-        transform-origin: top right;
+        transform-origin: top left;
     `;
 
         const header = document.createElement('div');
@@ -341,9 +395,9 @@
     `;
 
         scaleSlider.oninput = (e) => {
-            guiScale = parseFloat(e.target.value);
-            scaleLabel.textContent = `Scale: ${guiScale.toFixed(2)}x`;
-            updateGUIScale();
+            const newScale = parseFloat(e.target.value);
+            localStorage.setItem('florence-gui-scale', newScale);
+            scaleLabel.textContent = `Scale: ${newScale.toFixed(2)}x (refresh to apply)`;
         };
 
         scaleContainer.appendChild(scaleLabel);
@@ -367,37 +421,10 @@
         guiContainer.appendChild(scaleContainer);
         guiContainer.appendChild(logBox);
 
-        header.addEventListener('mousedown', startDragging);
-        document.addEventListener('mousemove', drag);
-        document.addEventListener('mouseup', stopDragging);
-
-        function startDragging(e) {
-            isDragging = true;
-            dragOffsetX = e.clientX - guiContainer.offsetLeft;
-            dragOffsetY = e.clientY - guiContainer.offsetTop;
-            header.style.cursor = 'grabbing';
-        }
-
-        function drag(e) {
-            if (isDragging) {
-                const newX = e.clientX - dragOffsetX;
-                const newY = e.clientY - dragOffsetY;
-                const maxX = window.innerWidth - guiContainer.offsetWidth;
-                const maxY = window.innerHeight - guiContainer.offsetHeight;
-                guiContainer.style.left = Math.max(0, Math.min(newX, maxX)) + 'px';
-                guiContainer.style.top = Math.max(0, Math.min(newY, maxY)) + 'px';
-                guiContainer.style.right = 'auto';
-            }
-        }
-
-        function stopDragging() {
-            isDragging = false;
-            header.style.cursor = 'move';
-        }
-
         document.body.appendChild(guiContainer);
         makeDraggable(guiContainer, header);
         addLogMessage('Florence Automator GUI initialized', 'log');
+        updateGUIScale();
     }
 
     function updateLogBox() {
@@ -420,6 +447,7 @@
         if (!gui) return;
 
         gui.style.transform = `scale(${guiScale})`;
+        gui.style.transformOrigin = 'top left';
     }
 
     function toggleGUI() {
@@ -427,12 +455,15 @@
         if (!gui) {
             createGUI();
             setTimeout(() => {
-                document.getElementById('florence-gui').style.display = 'flex';
+                const guiElement = document.getElementById('florence-gui');
+                guiElement.style.display = 'flex';
                 guiVisible = true;
+                localStorage.setItem('florence-gui-visible', 'true');
             }, 100);
         } else {
             guiVisible = !guiVisible;
             gui.style.display = guiVisible ? 'flex' : 'none';
+            localStorage.setItem('florence-gui-visible', guiVisible.toString());
         }
     }
 
@@ -1955,5 +1986,8 @@
         document.addEventListener("DOMContentLoaded", init, { once: true });
     } else {
         init();
+    }
+    if (guiVisible) {
+        toggleGUI();
     }
 })();
