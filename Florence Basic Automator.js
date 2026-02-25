@@ -22,8 +22,665 @@
     // This includes a UI user input, parsing a list of names, and adding entries on webpages.
     //==========================
 
+    const ELOG_SELECTORS = {
+        mainTable: '.document-log-entries.document-log-entries__table',
+        gridTable: '.document-log-entries__grid-table[role="table"]',
+        row: 'log-entry-row[role="row"], .document-log-entries__grid-table__row[role="row"]',
+        cell: '[role="cell"]',
+        nameCellIndex: 3,
+        namePrimary: '.u-text-overflow-ellipsis',
+        nameFallback: '.test-logEntrySignature span'
+    };
 
+    const ELOG_TIMEOUTS = {
+        waitTableMs: 10000,
+        waitGridMs: 10000
+    };
 
+    const ELOG_CSS_CLASSNAMES = {
+        panelOverlay: 'elog-panel-overlay',
+        inputPanel: 'elog-input-panel',
+        progressPanel: 'elog-progress-panel',
+        warningPanel: 'elog-warning-panel',
+        subpanelLeft: 'elog-subpanel-left',
+        subpanelRight: 'elog-subpanel-right',
+        searchInput: 'elog-search-input',
+        listItem: 'elog-list-item',
+        statusPending: 'elog-status-pending',
+        statusFound: 'elog-status-found',
+        statusNotFound: 'elog-status-notfound',
+        statusDuplicate: 'elog-status-duplicate'
+    };
+
+    let elogState = {
+        isRunning: false,
+        observers: [],
+        timeouts: [],
+        intervals: [],
+        eventListeners: [],
+        parsedNames: [],
+        normalizedNames: new Map(),
+        scannedNames: [],
+        focusReturnElement: null,
+        abortController: null
+    };
+
+    function addELogStaffEntriesInit() {
+        addLogMessage('addELogStaffEntriesInit: starting feature', 'log');
+        elogState.focusReturnElement = document.getElementById('elog-staff-entries-btn');
+        elogState.abortController = new AbortController();
+        resetELogState();
+        const mainTable = document.querySelector(ELOG_SELECTORS.mainTable);
+        addLogMessage('addELogStaffEntriesInit: checking for main table selector', 'log');
+        if (!mainTable) {
+            addLogMessage('addELogStaffEntriesInit: main table not found, showing warning', 'warn');
+            showELogWarning();
+            return;
+        }
+        addLogMessage('addELogStaffEntriesInit: main table found, showing input panel', 'log');
+        showELogInputPanel();
+    }
+
+    function resetELogState() {
+        addLogMessage('resetELogState: resetting state', 'log');
+        elogState.isRunning = false;
+        elogState.parsedNames = [];
+        elogState.normalizedNames = new Map();
+        elogState.scannedNames = [];
+    }
+
+    function showELogWarning() {
+        addLogMessage('showELogWarning: creating warning popup', 'log');
+        const modal = document.createElement('div');
+        modal.className = ELOG_CSS_CLASSNAMES.warningPanel;
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 30000; display: flex; align-items: center; justify-content: center;';
+        const container = document.createElement('div');
+        container.style.cssText = 'background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); border-radius: 12px; padding: 24px; width: 450px; max-width: 90%; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); position: relative;';
+        container.setAttribute('role', 'alertdialog');
+        container.setAttribute('aria-modal', 'true');
+        container.setAttribute('aria-labelledby', 'elog-warning-title');
+        container.setAttribute('aria-describedby', 'elog-warning-message');
+        const header = document.createElement('div');
+        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;';
+        const title = document.createElement('h3');
+        title.id = 'elog-warning-title';
+        title.textContent = 'Document Log Not Found';
+        title.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600;';
+        const closeButton = document.createElement('button');
+        closeButton.innerHTML = '✕';
+        closeButton.setAttribute('aria-label', 'Close warning');
+        closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
+        closeButton.onmouseover = function() { closeButton.style.background = 'rgba(255, 255, 255, 0.3)'; };
+        closeButton.onmouseout = function() { closeButton.style.background = 'rgba(255, 255, 255, 0.2)'; };
+        const closeWarning = function() {
+            addLogMessage('showELogWarning: closing warning', 'log');
+            if (modal.parentNode) { document.body.removeChild(modal); }
+            stopELog();
+            if (elogState.focusReturnElement) { elogState.focusReturnElement.focus(); }
+        };
+        closeButton.onclick = closeWarning;
+        header.appendChild(title);
+        header.appendChild(closeButton);
+        const messageDiv = document.createElement('p');
+        messageDiv.id = 'elog-warning-message';
+        messageDiv.textContent = 'The current page does not contain the Document Log Entries table. Please navigate to a page with the Document Log Entries grid before using this feature.';
+        messageDiv.style.cssText = 'color: rgba(255, 255, 255, 0.9); margin: 0; font-size: 14px; line-height: 1.5;';
+        const okButton = document.createElement('button');
+        okButton.textContent = 'OK';
+        okButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: 2px solid rgba(255, 255, 255, 0.3); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.3s ease; margin-top: 20px; width: 100%;';
+        okButton.onmouseover = function() { okButton.style.background = 'rgba(255, 255, 255, 0.3)'; };
+        okButton.onmouseout = function() { okButton.style.background = 'rgba(255, 255, 255, 0.2)'; };
+        okButton.onclick = closeWarning;
+        const keyHandler = function(e) { if (e.key === 'Escape') { closeWarning(); } };
+        document.addEventListener('keydown', keyHandler);
+        elogState.eventListeners.push({ element: document, type: 'keydown', handler: keyHandler });
+        container.appendChild(header);
+        container.appendChild(messageDiv);
+        container.appendChild(okButton);
+        modal.appendChild(container);
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        modal.style.pointerEvents = 'none';
+        container.style.pointerEvents = 'auto';
+        makeDraggable(container, header);
+        document.body.appendChild(modal);
+        okButton.focus();
+        addLogMessage('showELogWarning: warning displayed', 'log');
+    }
+
+    function showELogInputPanel() {
+        addLogMessage('showELogInputPanel: creating input panel', 'log');
+        const modal = document.createElement('div');
+        modal.className = ELOG_CSS_CLASSNAMES.inputPanel;
+        modal.id = 'elog-input-modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 20000; display: flex; align-items: center; justify-content: center;';
+        const container = document.createElement('div');
+        container.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; width: 500px; max-width: 90%; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); position: relative;';
+        container.setAttribute('role', 'dialog');
+        container.setAttribute('aria-modal', 'true');
+        container.setAttribute('aria-labelledby', 'elog-input-title');
+        const header = document.createElement('div');
+        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;';
+        const title = document.createElement('h3');
+        title.id = 'elog-input-title';
+        title.textContent = 'Add ELog Staff Entries';
+        title.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600; letter-spacing: 0.2px;';
+        const closeButton = document.createElement('button');
+        closeButton.innerHTML = '✕';
+        closeButton.setAttribute('aria-label', 'Close panel');
+        closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
+        closeButton.onmouseover = function() { closeButton.style.background = 'rgba(255, 67, 54, 0.8)'; };
+        closeButton.onmouseout = function() { closeButton.style.background = 'rgba(255, 255, 255, 0.2)'; };
+        closeButton.onclick = function() {
+            addLogMessage('showELogInputPanel: closed by user', 'warn');
+            if (modal.parentNode) { document.body.removeChild(modal); }
+            stopELog();
+            if (elogState.focusReturnElement) { elogState.focusReturnElement.focus(); }
+        };
+        header.appendChild(title);
+        header.appendChild(closeButton);
+        const description = document.createElement('p');
+        description.textContent = 'Enter staff names to check against the Document Log. Separate names with commas or place each name on a new line.';
+        description.style.cssText = 'color: rgba(255, 255, 255, 0.9); margin: 0 0 12px 0; font-size: 14px; line-height: 1.4;';
+        const textarea = document.createElement('textarea');
+        textarea.id = 'elog-names-input';
+        textarea.placeholder = 'Name1, Name2, Name3\nor\nName1\nName2\nName3';
+        textarea.setAttribute('aria-label', 'Staff names input');
+        textarea.style.cssText = 'width: 100%; height: 160px; padding: 12px 14px; border: 2px solid rgba(255, 255, 255, 0.35); border-radius: 10px; background: rgba(255, 255, 255, 0.95); color: #1e293b; font-size: 14px; font-family: Segoe UI, Tahoma, Geneva, Verdana, sans-serif; resize: vertical; outline: none; transition: all 0.25s ease; box-shadow: 0 2px 0 rgba(0,0,0,0.04) inset; box-sizing: border-box;';
+        textarea.onfocus = function() { textarea.style.borderColor = '#8ea0ff'; textarea.style.boxShadow = '0 0 0 4px rgba(102, 126, 234, 0.25)'; };
+        textarea.onblur = function() { textarea.style.borderColor = 'rgba(255, 255, 255, 0.35)'; textarea.style.boxShadow = '0 2px 0 rgba(0,0,0,0.04) inset'; };
+        const confirmButton = document.createElement('button');
+        confirmButton.textContent = 'Confirm';
+        confirmButton.disabled = true;
+        confirmButton.style.cssText = 'background: linear-gradient(135deg, #28a745 0%, #20c997 100%); border: 2px solid rgba(255, 255, 255, 0.35); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; letter-spacing: 0.2px; transition: all 0.25s ease; opacity: 0.5;';
+        const updateConfirmState = function() {
+            const parsed = parseNamesInput(textarea.value);
+            if (parsed.length > 0) { confirmButton.disabled = false; confirmButton.style.opacity = '1'; confirmButton.style.cursor = 'pointer'; }
+            else { confirmButton.disabled = true; confirmButton.style.opacity = '0.5'; confirmButton.style.cursor = 'not-allowed'; }
+        };
+        textarea.oninput = updateConfirmState;
+        confirmButton.onmouseover = function() { if (!confirmButton.disabled) { confirmButton.style.background = 'linear-gradient(135deg, #218838 0%, #1ea085 100%)'; } };
+        confirmButton.onmouseout = function() { confirmButton.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)'; };
+        confirmButton.onclick = function() {
+            addLogMessage('showELogInputPanel: Confirm clicked', 'log');
+            const parsed = parseNamesInput(textarea.value);
+            if (parsed.length === 0) { addLogMessage('showELogInputPanel: no valid names parsed', 'warn'); return; }
+            elogState.parsedNames = parsed;
+            addLogMessage('showELogInputPanel: parsed ' + parsed.length + ' unique names', 'log');
+            if (modal.parentNode) { document.body.removeChild(modal); }
+            showELogProgressPanel();
+        };
+        const clearButton = document.createElement('button');
+        clearButton.textContent = 'Clear All';
+        clearButton.style.cssText = 'background: rgba(255, 255, 255, 0.18); border: 2px solid rgba(255, 255, 255, 0.35); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.25s ease; backdrop-filter: blur(2px);';
+        clearButton.onmouseover = function() { clearButton.style.background = 'rgba(255, 255, 255, 0.28)'; };
+        clearButton.onmouseout = function() { clearButton.style.background = 'rgba(255, 255, 255, 0.18)'; };
+        clearButton.onclick = function() {
+            addLogMessage('showELogInputPanel: Clear All clicked', 'log');
+            textarea.value = '';
+            elogState.parsedNames = [];
+            elogState.normalizedNames = new Map();
+            confirmButton.disabled = true;
+            confirmButton.style.opacity = '0.5';
+            confirmButton.style.cursor = 'not-allowed';
+        };
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.cssText = 'display: flex; gap: 12px; margin-top: 20px; justify-content: flex-end;';
+        buttonContainer.appendChild(clearButton);
+        buttonContainer.appendChild(confirmButton);
+        container.appendChild(header);
+        container.appendChild(description);
+        container.appendChild(textarea);
+        container.appendChild(buttonContainer);
+        modal.appendChild(container);
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        modal.style.pointerEvents = 'none';
+        container.style.pointerEvents = 'auto';
+        makeDraggable(container, header);
+        document.body.appendChild(modal);
+        textarea.focus();
+        addLogMessage('showELogInputPanel: input panel displayed', 'log');
+    }
+
+    function parseNamesInput(input) {
+        addLogMessage('parseNamesInput: parsing input', 'log');
+        if (!input || !input.trim()) { addLogMessage('parseNamesInput: empty input', 'warn'); return []; }
+        const results = [];
+        const seenNormalized = new Set();
+        elogState.normalizedNames = new Map();
+        const lines = input.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const parts = line.split(',');
+            for (let j = 0; j < parts.length; j++) {
+                let name = parts[j].trim();
+                name = name.replace(/,+$/, '').trim();
+                if (!name) { continue; }
+                const normalized = elogNormalizeName(name);
+                if (!normalized) { continue; }
+                if (seenNormalized.has(normalized)) { addLogMessage('parseNamesInput: duplicate detected (ignored): ' + name, 'log'); continue; }
+                seenNormalized.add(normalized);
+                elogState.normalizedNames.set(normalized, name);
+                results.push({ display: name, normalized: normalized, status: 'Pending' });
+            }
+        }
+        addLogMessage('parseNamesInput: parsed ' + results.length + ' unique names', 'log');
+        return results;
+    }
+
+    function elogNormalizeName(name) {
+        if (!name) { return ''; }
+        let normalized = name.trim();
+        normalized = normalized.replace(/\s+/g, ' ');
+        normalized = normalized.toLowerCase();
+        return normalized;
+    }
+
+    function showELogProgressPanel() {
+        addLogMessage('showELogProgressPanel: creating progress panel', 'log');
+        elogState.isRunning = true;
+        const modal = document.createElement('div');
+        modal.className = ELOG_CSS_CLASSNAMES.progressPanel;
+        modal.id = 'elog-progress-modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 20000; display: flex; align-items: center; justify-content: center;';
+        const container = document.createElement('div');
+        container.id = 'elog-progress-container';
+        container.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; width: 900px; max-width: 95%; max-height: 80vh; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); position: relative; display: flex; flex-direction: column;';
+        container.setAttribute('role', 'dialog');
+        container.setAttribute('aria-modal', 'true');
+        container.setAttribute('aria-labelledby', 'elog-progress-title');
+        const header = document.createElement('div');
+        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-shrink: 0;';
+        const titleContainer = document.createElement('div');
+        titleContainer.style.cssText = 'display: flex; align-items: center; gap: 12px;';
+        const title = document.createElement('h3');
+        title.id = 'elog-progress-title';
+        title.textContent = 'ELog Staff Entries - Scanning';
+        title.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600;';
+        const statusBadge = document.createElement('span');
+        statusBadge.id = 'elog-status-badge';
+        statusBadge.textContent = 'In Progress';
+        statusBadge.style.cssText = 'background: rgba(255, 255, 255, 0.3); color: #ffd93d; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 12px;';
+        titleContainer.appendChild(title);
+        titleContainer.appendChild(statusBadge);
+        const headerButtons = document.createElement('div');
+        headerButtons.style.cssText = 'display: flex; gap: 8px; align-items: center;';
+        const rescanButton = document.createElement('button');
+        rescanButton.textContent = 'Re-scan';
+        rescanButton.id = 'elog-rescan-btn';
+        rescanButton.setAttribute('aria-label', 'Re-scan document log');
+        rescanButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: 2px solid rgba(255, 255, 255, 0.3); color: white; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.25s ease;';
+        rescanButton.onmouseover = function() { rescanButton.style.background = 'rgba(255, 255, 255, 0.3)'; };
+        rescanButton.onmouseout = function() { rescanButton.style.background = 'rgba(255, 255, 255, 0.2)'; };
+        rescanButton.onclick = function() { addLogMessage('showELogProgressPanel: Re-scan clicked', 'log'); performRescan(); };
+        const closeButton = document.createElement('button');
+        closeButton.innerHTML = '✕';
+        closeButton.setAttribute('aria-label', 'Close and stop scanning');
+        closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
+        closeButton.onmouseover = function() { closeButton.style.background = 'rgba(255, 67, 54, 0.8)'; };
+        closeButton.onmouseout = function() { closeButton.style.background = 'rgba(255, 255, 255, 0.2)'; };
+        closeButton.onclick = function() {
+            addLogMessage('showELogProgressPanel: closed by user', 'warn');
+            if (modal.parentNode) { document.body.removeChild(modal); }
+            stopELog();
+            if (elogState.focusReturnElement) { elogState.focusReturnElement.focus(); }
+        };
+        headerButtons.appendChild(rescanButton);
+        headerButtons.appendChild(closeButton);
+        header.appendChild(titleContainer);
+        header.appendChild(headerButtons);
+        const panelsContainer = document.createElement('div');
+        panelsContainer.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 16px; flex: 1; min-height: 0; overflow: hidden;';
+        const leftPanel = createSubpanel('Scanned Log Entries', 'elog-left-panel', 'elog-left-search');
+        const rightPanel = createSubpanel('User Names Status', 'elog-right-panel', 'elog-right-search');
+        panelsContainer.appendChild(leftPanel);
+        panelsContainer.appendChild(rightPanel);
+        container.appendChild(header);
+        container.appendChild(panelsContainer);
+        modal.appendChild(container);
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        modal.style.pointerEvents = 'none';
+        container.style.pointerEvents = 'auto';
+        makeDraggable(container, header);
+        document.body.appendChild(modal);
+        initializeRightPanel();
+        rescanButton.focus();
+        addLogMessage('showELogProgressPanel: progress panel displayed, starting scan', 'log');
+        startELogScan();
+    }
+
+    function createSubpanel(titleText, listId, searchId) {
+        addLogMessage('createSubpanel: creating ' + titleText, 'log');
+        const panel = document.createElement('div');
+        panel.style.cssText = 'background: rgba(0, 0, 0, 0.2); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; min-height: 0; overflow: hidden;';
+        const panelHeader = document.createElement('div');
+        panelHeader.style.cssText = 'margin-bottom: 10px; flex-shrink: 0;';
+        const panelTitle = document.createElement('h4');
+        panelTitle.textContent = titleText;
+        panelTitle.style.cssText = 'margin: 0 0 8px 0; color: white; font-size: 14px; font-weight: 600;';
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.id = searchId;
+        searchInput.placeholder = 'Search...';
+        searchInput.setAttribute('aria-label', 'Search ' + titleText);
+        searchInput.style.cssText = 'width: 100%; padding: 8px 12px; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px; background: rgba(255, 255, 255, 0.1); color: white; font-size: 13px; outline: none; transition: all 0.2s ease; box-sizing: border-box;';
+        searchInput.onfocus = function() { searchInput.style.borderColor = 'rgba(255, 255, 255, 0.4)'; searchInput.style.background = 'rgba(255, 255, 255, 0.15)'; };
+        searchInput.onblur = function() { searchInput.style.borderColor = 'rgba(255, 255, 255, 0.2)'; searchInput.style.background = 'rgba(255, 255, 255, 0.1)'; };
+        searchInput.oninput = function() { filterSubpanelList(listId, searchInput.value); };
+        panelHeader.appendChild(panelTitle);
+        panelHeader.appendChild(searchInput);
+        const listContainer = document.createElement('div');
+        listContainer.id = listId;
+        listContainer.style.cssText = 'flex: 1; overflow-y: auto; min-height: 200px; max-height: 400px;';
+        panel.appendChild(panelHeader);
+        panel.appendChild(listContainer);
+        return panel;
+    }
+
+    function filterSubpanelList(listId, searchTerm) {
+        addLogMessage('filterSubpanelList: filtering ' + listId + ' with term: ' + searchTerm, 'log');
+        const list = document.getElementById(listId);
+        if (!list) { return; }
+        const items = list.querySelectorAll('.' + ELOG_CSS_CLASSNAMES.listItem);
+        const searchLower = searchTerm.toLowerCase().trim();
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            const text = item.textContent.toLowerCase();
+            if (!searchLower || text.indexOf(searchLower) !== -1) { item.style.display = 'flex'; }
+            else { item.style.display = 'none'; }
+        }
+    }
+
+    function initializeRightPanel() {
+        addLogMessage('initializeRightPanel: initializing with parsed names', 'log');
+        const rightPanel = document.getElementById('elog-right-panel');
+        if (!rightPanel) { addLogMessage('initializeRightPanel: right panel not found', 'error'); return; }
+        rightPanel.innerHTML = '';
+        for (let i = 0; i < elogState.parsedNames.length; i++) {
+            const nameObj = elogState.parsedNames[i];
+            const item = createListItem(nameObj.display, 'Pending', 'pending', i + 1);
+            item.setAttribute('data-normalized', nameObj.normalized);
+            rightPanel.appendChild(item);
+        }
+        addLogMessage('initializeRightPanel: added ' + elogState.parsedNames.length + ' items', 'log');
+    }
+
+    function createListItem(text, statusText, statusType, index) {
+        const item = document.createElement('div');
+        item.className = ELOG_CSS_CLASSNAMES.listItem;
+        item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; margin: 4px 0; background: rgba(255, 255, 255, 0.08); border-radius: 6px; transition: background 0.2s ease;';
+        item.onmouseover = function() { item.style.background = 'rgba(255, 255, 255, 0.12)'; };
+        item.onmouseout = function() { item.style.background = 'rgba(255, 255, 255, 0.08)'; };
+        const leftSection = document.createElement('div');
+        leftSection.style.cssText = 'display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;';
+        if (index !== null && index !== undefined) {
+            const indexBadge = document.createElement('span');
+            indexBadge.textContent = index;
+            indexBadge.style.cssText = 'background: rgba(255, 255, 255, 0.15); color: rgba(255, 255, 255, 0.7); font-size: 11px; font-weight: 600; min-width: 24px; height: 24px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;';
+            leftSection.appendChild(indexBadge);
+        }
+        const nameText = document.createElement('span');
+        nameText.textContent = text;
+        nameText.style.cssText = 'color: white; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;';
+        leftSection.appendChild(nameText);
+        item.appendChild(leftSection);
+        if (statusText) {
+            const statusBadge = document.createElement('span');
+            statusBadge.className = 'elog-status-badge';
+            statusBadge.textContent = statusText;
+            let badgeColor = 'rgba(255, 255, 255, 0.7)';
+            let badgeBg = 'rgba(255, 255, 255, 0.1)';
+            if (statusType === 'pending') { badgeColor = '#ffd93d'; badgeBg = 'rgba(255, 217, 61, 0.2)'; }
+            else if (statusType === 'found') { badgeColor = '#6bcf7f'; badgeBg = 'rgba(107, 207, 127, 0.2)'; }
+            else if (statusType === 'notfound') { badgeColor = '#ff6b6b'; badgeBg = 'rgba(255, 107, 107, 0.2)'; }
+            else if (statusType === 'duplicate') { badgeColor = '#ffa500'; badgeBg = 'rgba(255, 165, 0, 0.2)'; }
+            statusBadge.style.cssText = 'color: ' + badgeColor + '; background: ' + badgeBg + '; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 10px; white-space: nowrap; flex-shrink: 0;';
+            item.appendChild(statusBadge);
+        }
+        return item;
+    }
+
+    function startELogScan() {
+        addLogMessage('startELogScan: beginning scan', 'log');
+        elogState.scannedNames = [];
+        waitForElement(ELOG_SELECTORS.mainTable, ELOG_TIMEOUTS.waitTableMs)
+            .then(function(mainTable) {
+                addLogMessage('startELogScan: main table found', 'log');
+                return waitForElement(ELOG_SELECTORS.gridTable, ELOG_TIMEOUTS.waitGridMs);
+            })
+            .then(function(gridTable) {
+                addLogMessage('startELogScan: grid table found, scanning rows', 'log');
+                scanExistingStaffNames();
+            })
+            .catch(function(error) {
+                addLogMessage('startELogScan: error during scan: ' + error, 'error');
+                updateScanStatus('Error', 'error');
+                showInlineNotice('An error occurred during scanning. The table may not be fully loaded.');
+            });
+    }
+
+    function waitForElement(selector, timeout) {
+        addLogMessage('waitForElement: waiting for ' + selector, 'log');
+        return new Promise(function(resolve, reject) {
+            const element = document.querySelector(selector);
+            if (element) { addLogMessage('waitForElement: element found immediately', 'log'); resolve(element); return; }
+            const observer = new MutationObserver(function(mutations, obs) {
+                const el = document.querySelector(selector);
+                if (el) {
+                    addLogMessage('waitForElement: element found via observer', 'log');
+                    obs.disconnect();
+                    const idx = elogState.observers.indexOf(obs);
+                    if (idx > -1) { elogState.observers.splice(idx, 1); }
+                    resolve(el);
+                }
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+            elogState.observers.push(observer);
+            const timeoutId = setTimeout(function() {
+                observer.disconnect();
+                const idx = elogState.observers.indexOf(observer);
+                if (idx > -1) { elogState.observers.splice(idx, 1); }
+                addLogMessage('waitForElement: timeout waiting for ' + selector, 'warn');
+                reject(new Error('Timeout waiting for ' + selector));
+            }, timeout);
+            elogState.timeouts.push(timeoutId);
+        });
+    }
+
+    function scanExistingStaffNames() {
+        addLogMessage('scanExistingStaffNames: starting row iteration', 'log');
+        if (!elogState.isRunning) { addLogMessage('scanExistingStaffNames: aborted, not running', 'warn'); return; }
+        try {
+            const rows = document.querySelectorAll(ELOG_SELECTORS.row);
+            addLogMessage('scanExistingStaffNames: found ' + rows.length + ' rows', 'log');
+            let rowIndex = 0;
+            const processedNames = new Set();
+            const processNextRow = function() {
+                if (!elogState.isRunning) { addLogMessage('scanExistingStaffNames: stopped during processing', 'warn'); return; }
+                if (rowIndex >= rows.length) { addLogMessage('scanExistingStaffNames: completed scanning all rows', 'log'); finalizeScan(); return; }
+                const row = rows[rowIndex];
+                const extractedName = extractNameFromRow(row, rowIndex + 1);
+                if (extractedName && !processedNames.has(extractedName)) {
+                    processedNames.add(extractedName);
+                    elogState.scannedNames.push(extractedName);
+                    updateLeftPanelList(extractedName, rowIndex + 1);
+                    checkAndUpdateRightPanel(extractedName);
+                }
+                rowIndex++;
+                const timeoutId = setTimeout(processNextRow, 10);
+                elogState.timeouts.push(timeoutId);
+            };
+            processNextRow();
+        } catch (error) {
+            addLogMessage('scanExistingStaffNames: error: ' + error, 'error');
+            showInlineNotice('Error scanning rows: ' + error.message);
+        }
+    }
+
+    function extractNameFromRow(row, rowNumber) {
+        addLogMessage('extractNameFromRow: processing row ' + rowNumber, 'log');
+        try {
+            const cells = row.querySelectorAll(ELOG_SELECTORS.cell);
+            if (cells.length <= ELOG_SELECTORS.nameCellIndex) { addLogMessage('extractNameFromRow: not enough cells in row ' + rowNumber, 'warn'); return null; }
+            const targetCell = cells[ELOG_SELECTORS.nameCellIndex];
+            const primaryElement = targetCell.querySelector(ELOG_SELECTORS.namePrimary);
+            if (primaryElement) {
+                const brElement = primaryElement.querySelector('br');
+                if (brElement) {
+                    let nameText = '';
+                    for (let i = 0; i < primaryElement.childNodes.length; i++) {
+                        const node = primaryElement.childNodes[i];
+                        if (node.nodeName === 'BR') { break; }
+                        if (node.nodeType === Node.TEXT_NODE) { nameText += node.textContent; }
+                    }
+                    nameText = nameText.trim().replace(/\s+/g, ' ');
+                    if (nameText) { addLogMessage('extractNameFromRow: extracted (primary): ' + nameText, 'log'); return nameText; }
+                } else {
+                    let nameText = primaryElement.textContent.trim().replace(/\s+/g, ' ');
+                    if (nameText) { addLogMessage('extractNameFromRow: extracted (primary no br): ' + nameText, 'log'); return nameText; }
+                }
+            }
+            const fallbackElement = targetCell.querySelector(ELOG_SELECTORS.nameFallback);
+            if (fallbackElement) {
+                let nameText = fallbackElement.textContent.trim().replace(/\s+/g, ' ');
+                if (nameText) { addLogMessage('extractNameFromRow: extracted (fallback): ' + nameText, 'log'); return nameText; }
+            }
+            addLogMessage('extractNameFromRow: no name found in row ' + rowNumber, 'warn');
+            return null;
+        } catch (error) {
+            addLogMessage('extractNameFromRow: error in row ' + rowNumber + ': ' + error, 'error');
+            return null;
+        }
+    }
+
+    function updateLeftPanelList(name, rowNumber) {
+        addLogMessage('updateLeftPanelList: adding ' + name, 'log');
+        const leftPanel = document.getElementById('elog-left-panel');
+        if (!leftPanel) { addLogMessage('updateLeftPanelList: left panel not found', 'error'); return; }
+        const item = createListItem(name, null, null, rowNumber);
+        leftPanel.appendChild(item);
+        const searchInput = document.getElementById('elog-left-search');
+        if (searchInput && searchInput.value.trim()) { filterSubpanelList('elog-left-panel', searchInput.value); }
+    }
+
+    function checkAndUpdateRightPanel(scannedName) {
+        addLogMessage('checkAndUpdateRightPanel: checking ' + scannedName, 'log');
+        const normalizedScanned = elogNormalizeName(scannedName);
+        for (let i = 0; i < elogState.parsedNames.length; i++) {
+            const nameObj = elogState.parsedNames[i];
+            if (nameObj.normalized === normalizedScanned && nameObj.status === 'Pending') {
+                nameObj.status = 'Found';
+                updateRightPanelItemStatus(nameObj.normalized, 'Found', 'found');
+                addLogMessage('checkAndUpdateRightPanel: match found for ' + scannedName, 'log');
+            }
+        }
+    }
+
+    function updateRightPanelItemStatus(normalized, statusText, statusType) {
+        addLogMessage('updateRightPanelItemStatus: updating ' + normalized + ' to ' + statusText, 'log');
+        const rightPanel = document.getElementById('elog-right-panel');
+        if (!rightPanel) { return; }
+        const items = rightPanel.querySelectorAll('.' + ELOG_CSS_CLASSNAMES.listItem);
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (item.getAttribute('data-normalized') === normalized) {
+                const badge = item.querySelector('.elog-status-badge');
+                if (badge) {
+                    badge.textContent = statusText;
+                    let badgeColor = 'rgba(255, 255, 255, 0.7)';
+                    let badgeBg = 'rgba(255, 255, 255, 0.1)';
+                    if (statusType === 'found') { badgeColor = '#6bcf7f'; badgeBg = 'rgba(107, 207, 127, 0.2)'; }
+                    else if (statusType === 'notfound') { badgeColor = '#ff6b6b'; badgeBg = 'rgba(255, 107, 107, 0.2)'; }
+                    else if (statusType === 'pending') { badgeColor = '#ffd93d'; badgeBg = 'rgba(255, 217, 61, 0.2)'; }
+                    badge.style.color = badgeColor;
+                    badge.style.background = badgeBg;
+                }
+                break;
+            }
+        }
+    }
+
+    function finalizeScan() {
+        addLogMessage('finalizeScan: marking remaining as Not Found', 'log');
+        for (let i = 0; i < elogState.parsedNames.length; i++) {
+            const nameObj = elogState.parsedNames[i];
+            if (nameObj.status === 'Pending') {
+                nameObj.status = 'Not Found';
+                updateRightPanelItemStatus(nameObj.normalized, 'Not Found', 'notfound');
+            }
+        }
+        updateScanStatus('Complete', 'complete');
+        addLogMessage('finalizeScan: scan completed', 'log');
+    }
+
+    function updateScanStatus(statusText, statusType) {
+        addLogMessage('updateScanStatus: ' + statusText, 'log');
+        const badge = document.getElementById('elog-status-badge');
+        const title = document.getElementById('elog-progress-title');
+        if (badge) {
+            badge.textContent = statusText;
+            if (statusType === 'complete') { badge.style.background = 'rgba(107, 207, 127, 0.3)'; badge.style.color = '#6bcf7f'; }
+            else if (statusType === 'error') { badge.style.background = 'rgba(255, 107, 107, 0.3)'; badge.style.color = '#ff6b6b'; }
+            else { badge.style.background = 'rgba(255, 217, 61, 0.3)'; badge.style.color = '#ffd93d'; }
+        }
+        if (title && statusType === 'complete') { title.textContent = 'ELog Staff Entries - Complete'; }
+    }
+
+    function performRescan() {
+        addLogMessage('performRescan: restarting scan', 'log');
+        for (let i = 0; i < elogState.parsedNames.length; i++) {
+            elogState.parsedNames[i].status = 'Pending';
+            updateRightPanelItemStatus(elogState.parsedNames[i].normalized, 'Pending', 'pending');
+        }
+        const leftPanel = document.getElementById('elog-left-panel');
+        if (leftPanel) { leftPanel.innerHTML = ''; }
+        elogState.scannedNames = [];
+        updateScanStatus('In Progress', 'progress');
+        const title = document.getElementById('elog-progress-title');
+        if (title) { title.textContent = 'ELog Staff Entries - Scanning'; }
+        startELogScan();
+    }
+
+    function showInlineNotice(message) {
+        addLogMessage('showInlineNotice: ' + message, 'warn');
+        const container = document.getElementById('elog-progress-container');
+        if (!container) { return; }
+        const existingNotice = container.querySelector('.elog-inline-notice');
+        if (existingNotice) { existingNotice.remove(); }
+        const notice = document.createElement('div');
+        notice.className = 'elog-inline-notice';
+        notice.style.cssText = 'background: rgba(255, 193, 7, 0.2); border-left: 4px solid #ffc107; border-radius: 6px; padding: 10px 14px; margin-top: 12px; color: white; font-size: 13px; line-height: 1.4;';
+        notice.textContent = message;
+        container.appendChild(notice);
+    }
+
+    function stopELog() {
+        addLogMessage('stopELog: stopping all ELog processes', 'log');
+        elogState.isRunning = false;
+        for (let i = 0; i < elogState.observers.length; i++) { try { elogState.observers[i].disconnect(); } catch (e) { addLogMessage('stopELog: error disconnecting observer: ' + e, 'error'); } }
+        elogState.observers = [];
+        for (let i = 0; i < elogState.timeouts.length; i++) { try { clearTimeout(elogState.timeouts[i]); } catch (e) { addLogMessage('stopELog: error clearing timeout: ' + e, 'error'); } }
+        elogState.timeouts = [];
+        for (let i = 0; i < elogState.intervals.length; i++) { try { clearInterval(elogState.intervals[i]); } catch (e) { addLogMessage('stopELog: error clearing interval: ' + e, 'error'); } }
+        elogState.intervals = [];
+        for (let i = 0; i < elogState.eventListeners.length; i++) { try { const listener = elogState.eventListeners[i]; listener.element.removeEventListener(listener.type, listener.handler); } catch (e) { addLogMessage('stopELog: error removing event listener: ' + e, 'error'); } }
+        elogState.eventListeners = [];
+        if (elogState.abortController) { elogState.abortController.abort(); elogState.abortController = null; }
+        const inputModal = document.getElementById('elog-input-modal');
+        if (inputModal && inputModal.parentNode) { inputModal.parentNode.removeChild(inputModal); }
+        const progressModal = document.getElementById('elog-progress-modal');
+        if (progressModal && progressModal.parentNode) { progressModal.parentNode.removeChild(progressModal); }
+        resetELogState();
+        addLogMessage('stopELog: cleanup complete', 'log');
+    }
 
     //==========================
     // SHARED GUI AND PANEL FUNCTIONS
@@ -34,7 +691,7 @@
     //==========================
 
     let guiVisible = localStorage.getItem('florence-gui-visible') === 'true';
-     guiScale = parseFloat(localStorage.getItem('florence-gui-scale')) || 1;
+    let guiScale = parseFloat(localStorage.getItem('florence-gui-scale')) || 1;
     let isDragging = false;
     let dragOffsetX = 0;
     let dragOffsetY = 0;
@@ -327,6 +984,9 @@
             const button = document.createElement('button');
             if (i === 1) {
                 button.textContent = 'Add Signatures';
+            } else if (i === 2) {
+                button.textContent = 'Add ELog Staff Entries';
+                button.id = 'elog-staff-entries-btn';
             } else {
                 button.textContent = `Placeholder ${i}`;
             }
@@ -355,6 +1015,11 @@
                 button.onclick = () => {
                     console.log('Add Signatures button clicked');
                     startAddSignaturesFlow();
+                };
+            } else if (i === 2) {
+                button.onclick = () => {
+                    console.log('Add ELog Staff Entries button clicked');
+                    addELogStaffEntriesInit();
                 };
             } else {
                 button.onclick = () => console.log(`Placeholder ${i} clicked`);
