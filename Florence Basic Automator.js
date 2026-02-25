@@ -52,6 +52,30 @@
         statusDuplicate: 'elog-status-duplicate'
     };
 
+    const ELOG_SCROLL = {
+        stepPx: 600,
+        idleDelayMs: 80,
+        settleDelayMs: 250,
+        maxDurationMs: 120000,
+        maxNoProgressIterations: 8,
+        userScrollPauseMs: 800,
+        viewportOverscanPx: 400,
+        retryScanAttempts: 3,
+        retryScanDelayMs: 200
+    };
+
+    const ELOG_ATTRS = {
+        ariaBusyTarget: 'body',
+        ariaBusyAttr: 'aria-busy'
+    };
+
+    const ELOG_LABELS = {
+        progressComplete: 'Scan complete',
+        progressNoMore: 'End of list reached',
+        progressRescanning: 'Re-scanning',
+        progressStopped: 'Scan stopped'
+    };
+
     let elogState = {
         isRunning: false,
         observers: [],
@@ -62,7 +86,16 @@
         normalizedNames: new Map(),
         scannedNames: [],
         focusReturnElement: null,
-        abortController: null
+        abortController: null,
+        seenNormalizedNames: new Set(),
+        prevAriaBusy: null,
+        scrollContainer: null,
+        prevScrollTop: 0,
+        userScrollHandler: null,
+        userScrollPaused: false,
+        idleCallbackId: null,
+        leftPanelRowIndex: 0,
+        lastAutoScrollTime: 0
     };
 
     function addELogStaffEntriesInit() {
@@ -87,6 +120,15 @@
         elogState.parsedNames = [];
         elogState.normalizedNames = new Map();
         elogState.scannedNames = [];
+        elogState.seenNormalizedNames = new Set();
+        elogState.prevAriaBusy = null;
+        elogState.scrollContainer = null;
+        elogState.prevScrollTop = 0;
+        elogState.userScrollHandler = null;
+        elogState.userScrollPaused = false;
+        elogState.idleCallbackId = null;
+        elogState.leftPanelRowIndex = 0;
+        elogState.lastAutoScrollTime = 0;
     }
 
     function showELogWarning() {
@@ -340,8 +382,14 @@
         const rightPanel = createSubpanel('User Names Status', 'elog-right-panel', 'elog-right-search');
         panelsContainer.appendChild(leftPanel);
         panelsContainer.appendChild(rightPanel);
+        const ariaLiveRegion = document.createElement('div');
+        ariaLiveRegion.id = 'elog-aria-live';
+        ariaLiveRegion.setAttribute('aria-live', 'polite');
+        ariaLiveRegion.setAttribute('aria-atomic', 'true');
+        ariaLiveRegion.style.cssText = 'position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;';
         container.appendChild(header);
         container.appendChild(panelsContainer);
+        container.appendChild(ariaLiveRegion);
         modal.appendChild(container);
         container.style.position = 'fixed';
         container.style.top = '50%';
@@ -449,16 +497,32 @@
     }
 
     function startELogScan() {
-        addLogMessage('startELogScan: beginning scan', 'log');
+        addLogMessage('startELogScan: beginning scan with auto-scroll', 'log');
         elogState.scannedNames = [];
+        elogState.seenNormalizedNames = new Set();
         waitForElement(ELOG_SELECTORS.mainTable, ELOG_TIMEOUTS.waitTableMs)
             .then(function(mainTable) {
                 addLogMessage('startELogScan: main table found', 'log');
                 return waitForElement(ELOG_SELECTORS.gridTable, ELOG_TIMEOUTS.waitGridMs);
             })
             .then(function(gridTable) {
-                addLogMessage('startELogScan: grid table found, scanning rows', 'log');
-                scanExistingStaffNames();
+                addLogMessage('startELogScan: grid table found, starting auto-scroll scan', 'log');
+                autoScrollScan({
+                    onRow: function(name, normalized) {
+                        addLogMessage('startELogScan: onRow callback for ' + name, 'log');
+                    },
+                    onProgress: function(data) {
+                        addLogMessage('startELogScan: progress - scanned ' + data.scanned, 'log');
+                    },
+                    onDone: function(data) {
+                        addLogMessage('startELogScan: done - total=' + data.total + ' reason=' + data.reason, 'log');
+                    },
+                    onError: function(error) {
+                        addLogMessage('startELogScan: error - ' + error.message, 'error');
+                        updateScanStatus('Error', 'error');
+                        showInlineNotice('Error during auto-scroll scan: ' + error.message);
+                    }
+                });
             })
             .catch(function(error) {
                 addLogMessage('startELogScan: error during scan: ' + error, 'error');
@@ -635,18 +699,58 @@
     }
 
     function performRescan() {
-        addLogMessage('performRescan: restarting scan', 'log');
-        for (let i = 0; i < elogState.parsedNames.length; i++) {
-            elogState.parsedNames[i].status = 'Pending';
-            updateRightPanelItemStatus(elogState.parsedNames[i].normalized, 'Pending', 'pending');
+        addLogMessage('performRescan: restarting scan with auto-scroll', 'log');
+        updateAriaLiveRegion(ELOG_LABELS.progressRescanning);
+        for (let i = 0; i < elogState.observers.length; i++) {
+            try {
+                elogState.observers[i].disconnect();
+            } catch (e) {
+                addLogMessage('performRescan: error disconnecting observer: ' + e, 'error');
+            }
+        }
+        elogState.observers = [];
+        for (let i = 0; i < elogState.timeouts.length; i++) {
+            try {
+                clearTimeout(elogState.timeouts[i]);
+            } catch (e) {
+                addLogMessage('performRescan: error clearing timeout: ' + e, 'error');
+            }
+        }
+        elogState.timeouts = [];
+        if (elogState.idleCallbackId && typeof cancelIdleCallback === 'function') {
+            cancelIdleCallback(elogState.idleCallbackId);
+            elogState.idleCallbackId = null;
         }
         const leftPanel = document.getElementById('elog-left-panel');
-        if (leftPanel) { leftPanel.innerHTML = ''; }
+        if (leftPanel) {
+            leftPanel.innerHTML = '';
+        }
         elogState.scannedNames = [];
-        updateScanStatus('In Progress', 'progress');
+        elogState.seenNormalizedNames = new Set();
+        elogState.leftPanelRowIndex = 0;
+        elogState.userScrollPaused = false;
+        updateScanStatus(ELOG_LABELS.progressRescanning, 'progress');
         const title = document.getElementById('elog-progress-title');
-        if (title) { title.textContent = 'ELog Staff Entries - Scanning'; }
-        startELogScan();
+        if (title) {
+            title.textContent = 'ELog Staff Entries - ' + ELOG_LABELS.progressRescanning;
+        }
+        addLogMessage('performRescan: starting auto-scroll scan', 'log');
+        autoScrollScan({
+            onRow: function(name, normalized) {
+                addLogMessage('performRescan: onRow callback for ' + name, 'log');
+            },
+            onProgress: function(data) {
+                addLogMessage('performRescan: progress - scanned ' + data.scanned, 'log');
+            },
+            onDone: function(data) {
+                addLogMessage('performRescan: done - total=' + data.total + ' reason=' + data.reason, 'log');
+            },
+            onError: function(error) {
+                addLogMessage('performRescan: error - ' + error.message, 'error');
+                updateScanStatus('Error', 'error');
+                showInlineNotice('Error during re-scan: ' + error.message);
+            }
+        });
     }
 
     function showInlineNotice(message) {
@@ -662,22 +766,433 @@
         container.appendChild(notice);
     }
 
+    function findScrollableContainer(gridEl) {
+        addLogMessage('findScrollableContainer: searching for scrollable ancestor', 'log');
+        if (!gridEl) {
+            addLogMessage('findScrollableContainer: gridEl is null', 'warn');
+            return null;
+        }
+        let current = gridEl;
+        while (current && current !== document.body) {
+            const style = window.getComputedStyle(current);
+            const overflowY = style.overflowY;
+            const scrollDiff = current.scrollHeight - current.clientHeight;
+            addLogMessage('findScrollableContainer: checking ' + (current.className || current.tagName) + ' scrollDiff=' + scrollDiff + ' overflowY=' + overflowY, 'log');
+            if (scrollDiff >= 20 && (overflowY === 'scroll' || overflowY === 'auto')) {
+                addLogMessage('findScrollableContainer: found scrollable container', 'log');
+                return current;
+            }
+            current = current.parentElement;
+        }
+        addLogMessage('findScrollableContainer: no scrollable ancestor, using gridEl', 'warn');
+        return gridEl;
+    }
+
+    function getRenderedRowCount() {
+        addLogMessage('getRenderedRowCount: counting rows', 'log');
+        const gridTable = document.querySelector(ELOG_SELECTORS.gridTable);
+        if (!gridTable) {
+            addLogMessage('getRenderedRowCount: grid not found', 'warn');
+            return 0;
+        }
+        const rows = gridTable.querySelectorAll(ELOG_SELECTORS.row);
+        let count = 0;
+        for (let i = 0; i < rows.length; i++) {
+            if (rows[i].getAttribute('role') !== 'columnheader') {
+                count++;
+            }
+        }
+        addLogMessage('getRenderedRowCount: count=' + count, 'log');
+        return count;
+    }
+
+    function getRenderedLastRowKey() {
+        addLogMessage('getRenderedLastRowKey: computing key', 'log');
+        const gridTable = document.querySelector(ELOG_SELECTORS.gridTable);
+        if (!gridTable) {
+            addLogMessage('getRenderedLastRowKey: grid not found', 'warn');
+            return '';
+        }
+        const rows = gridTable.querySelectorAll(ELOG_SELECTORS.row);
+        let lastDataRow = null;
+        for (let i = rows.length - 1; i >= 0; i--) {
+            if (rows[i].getAttribute('role') !== 'columnheader') {
+                lastDataRow = rows[i];
+                break;
+            }
+        }
+        if (!lastDataRow) {
+            addLogMessage('getRenderedLastRowKey: no data rows', 'warn');
+            return '';
+        }
+        const cells = lastDataRow.querySelectorAll(ELOG_SELECTORS.cell);
+        if (cells.length > 0) {
+            const firstCellText = cells[0].textContent.trim();
+            if (firstCellText) {
+                addLogMessage('getRenderedLastRowKey: key=' + firstCellText, 'log');
+                return firstCellText;
+            }
+        }
+        let hash = 0;
+        const content = lastDataRow.textContent || '';
+        for (let i = 0; i < content.length; i++) {
+            hash = ((hash << 5) - hash) + content.charCodeAt(i);
+            hash = hash & hash;
+        }
+        const key = 'hash_' + hash;
+        addLogMessage('getRenderedLastRowKey: hash key=' + key, 'log');
+        return key;
+    }
+
+    function awaitSettle(container) {
+        addLogMessage('awaitSettle: waiting for settle', 'log');
+        return new Promise(function(resolve) {
+            const gridTable = document.querySelector(ELOG_SELECTORS.gridTable);
+            let resolved = false;
+            let observer = null;
+            const timeoutId = setTimeout(function() {
+                if (!resolved) {
+                    resolved = true;
+                    if (observer) {
+                        observer.disconnect();
+                        const idx = elogState.observers.indexOf(observer);
+                        if (idx > -1) {
+                            elogState.observers.splice(idx, 1);
+                        }
+                    }
+                    addLogMessage('awaitSettle: timeout after ' + ELOG_SCROLL.settleDelayMs + 'ms', 'log');
+                    resolve();
+                }
+            }, ELOG_SCROLL.settleDelayMs);
+            elogState.timeouts.push(timeoutId);
+            if (gridTable) {
+                observer = new MutationObserver(function() {
+                    if (!resolved) {
+                        resolved = true;
+                        clearTimeout(timeoutId);
+                        observer.disconnect();
+                        const idx = elogState.observers.indexOf(observer);
+                        if (idx > -1) {
+                            elogState.observers.splice(idx, 1);
+                        }
+                        addLogMessage('awaitSettle: mutation detected', 'log');
+                        resolve();
+                    }
+                });
+                observer.observe(gridTable, { childList: true, subtree: true });
+                elogState.observers.push(observer);
+            }
+        });
+    }
+
+    function setAriaBusyOn() {
+        addLogMessage('setAriaBusyOn: setting aria-busy', 'log');
+        const target = document.querySelector(ELOG_ATTRS.ariaBusyTarget);
+        if (target) {
+            elogState.prevAriaBusy = target.getAttribute(ELOG_ATTRS.ariaBusyAttr);
+            target.setAttribute(ELOG_ATTRS.ariaBusyAttr, 'true');
+            addLogMessage('setAriaBusyOn: prev=' + elogState.prevAriaBusy, 'log');
+        }
+    }
+
+    function setAriaBusyOff() {
+        addLogMessage('setAriaBusyOff: restoring aria-busy', 'log');
+        const target = document.querySelector(ELOG_ATTRS.ariaBusyTarget);
+        if (target) {
+            if (elogState.prevAriaBusy !== null) {
+                target.setAttribute(ELOG_ATTRS.ariaBusyAttr, elogState.prevAriaBusy);
+            } else {
+                target.removeAttribute(ELOG_ATTRS.ariaBusyAttr);
+            }
+            elogState.prevAriaBusy = null;
+        }
+    }
+
+    function computeEndReached(container, noProgress) {
+        addLogMessage('computeEndReached: checking end', 'log');
+        if (!container) {
+            return true;
+        }
+        const atBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 1;
+        addLogMessage('computeEndReached: atBottom=' + atBottom + ' noProgress=' + noProgress, 'log');
+        if (atBottom && noProgress >= 1) {
+            return true;
+        }
+        return false;
+    }
+
+    function restoreViewport(container, prevTop) {
+        addLogMessage('restoreViewport: prevTop=' + prevTop, 'log');
+        if (!container) {
+            return;
+        }
+        const diff = Math.abs(container.scrollTop - prevTop);
+        if (diff > 100) {
+            addLogMessage('restoreViewport: restoring scroll', 'log');
+            container.scrollTo({ top: prevTop, behavior: 'auto' });
+        }
+    }
+
+    function observeUserScrollPause(container) {
+        addLogMessage('observeUserScrollPause: setup', 'log');
+        if (!container || elogState.userScrollHandler) {
+            return;
+        }
+        elogState.userScrollHandler = function() {
+            const timeSinceAuto = Date.now() - elogState.lastAutoScrollTime;
+            if (timeSinceAuto > 50 && !elogState.userScrollPaused) {
+                addLogMessage('observeUserScrollPause: user scroll detected, pausing', 'log');
+                elogState.userScrollPaused = true;
+                const resumeTimeout = setTimeout(function() {
+                    addLogMessage('observeUserScrollPause: resuming', 'log');
+                    elogState.userScrollPaused = false;
+                }, ELOG_SCROLL.userScrollPauseMs);
+                elogState.timeouts.push(resumeTimeout);
+            }
+        };
+        container.addEventListener('scroll', elogState.userScrollHandler);
+        elogState.eventListeners.push({ element: container, type: 'scroll', handler: elogState.userScrollHandler });
+    }
+
+    function scanVisibleRowsOnce(onRow) {
+        addLogMessage('scanVisibleRowsOnce: scanning', 'log');
+        const gridTable = document.querySelector(ELOG_SELECTORS.gridTable);
+        if (!gridTable) {
+            addLogMessage('scanVisibleRowsOnce: grid not found', 'warn');
+            return 0;
+        }
+        const rows = gridTable.querySelectorAll(ELOG_SELECTORS.row);
+        let newCount = 0;
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            if (row.getAttribute('role') === 'columnheader') {
+                continue;
+            }
+            const extractedName = extractNameFromRow(row, i + 1);
+            if (!extractedName) {
+                continue;
+            }
+            const normalized = elogNormalizeName(extractedName);
+            if (elogState.seenNormalizedNames.has(normalized)) {
+                continue;
+            }
+            elogState.seenNormalizedNames.add(normalized);
+            elogState.scannedNames.push(extractedName);
+            newCount++;
+            addLogMessage('scanVisibleRowsOnce: new name: ' + extractedName, 'log');
+            if (onRow) {
+                onRow(extractedName, normalized);
+            }
+        }
+        addLogMessage('scanVisibleRowsOnce: newCount=' + newCount, 'log');
+        return newCount;
+    }
+
+    function updateAriaLiveRegion(message) {
+        addLogMessage('updateAriaLiveRegion: ' + message, 'log');
+        const liveRegion = document.getElementById('elog-aria-live');
+        if (liveRegion) {
+            liveRegion.textContent = message;
+        }
+    }
+
+    function autoScrollScan(options) {
+        addLogMessage('autoScrollScan: starting', 'log');
+        const onRow = options.onRow || function() {};
+        const onProgress = options.onProgress || function() {};
+        const onDone = options.onDone || function() {};
+        const onError = options.onError || function() {};
+        const gridTable = document.querySelector(ELOG_SELECTORS.gridTable);
+        if (!gridTable) {
+            addLogMessage('autoScrollScan: grid not found', 'error');
+            onError(new Error('Grid table not found'));
+            return;
+        }
+        const container = findScrollableContainer(gridTable);
+        if (!container) {
+            addLogMessage('autoScrollScan: container not found', 'error');
+            onError(new Error('Container not found'));
+            return;
+        }
+        elogState.scrollContainer = container;
+        elogState.prevScrollTop = container.scrollTop;
+        elogState.seenNormalizedNames = new Set();
+        elogState.leftPanelRowIndex = 0;
+        setAriaBusyOn();
+        observeUserScrollPause(container);
+        const startTime = Date.now();
+        let noProgress = 0;
+        addLogMessage('autoScrollScan: initial scan', 'log');
+        scanVisibleRowsOnce(function(name) {
+            elogState.leftPanelRowIndex++;
+            updateLeftPanelList(name, elogState.leftPanelRowIndex);
+            checkAndUpdateRightPanel(name);
+        });
+        onProgress({ scanned: elogState.scannedNames.length });
+        updateAriaLiveRegion('Scanning: ' + elogState.scannedNames.length + ' names');
+        function scrollLoop() {
+            addLogMessage('autoScrollScan: loop iteration', 'log');
+            if (!elogState.isRunning) {
+                addLogMessage('autoScrollScan: stopped', 'warn');
+                updateAriaLiveRegion(ELOG_LABELS.progressStopped);
+                finishScan(ELOG_LABELS.progressStopped, 'stopped');
+                return;
+            }
+            if (Date.now() - startTime > ELOG_SCROLL.maxDurationMs) {
+                addLogMessage('autoScrollScan: timeout', 'warn');
+                finishScan(ELOG_LABELS.progressComplete, 'timeout');
+                return;
+            }
+            if (elogState.userScrollPaused) {
+                addLogMessage('autoScrollScan: paused by user', 'log');
+                const pt = setTimeout(scrollLoop, 100);
+                elogState.timeouts.push(pt);
+                return;
+            }
+            const priorKey = getRenderedLastRowKey();
+            const priorCount = getRenderedRowCount();
+            const currTop = container.scrollTop;
+            const maxScroll = container.scrollHeight - container.clientHeight;
+            const newTop = Math.min(currTop + ELOG_SCROLL.stepPx, maxScroll);
+            addLogMessage('autoScrollScan: scroll ' + currTop + ' -> ' + newTop, 'log');
+            elogState.lastAutoScrollTime = Date.now();
+            container.scrollTo({ top: newTop, behavior: 'auto' });
+            awaitSettle(container).then(function() {
+                let attempts = 0;
+                function attemptScan() {
+                    const rc = getRenderedRowCount();
+                    if (rc === 0 && attempts < ELOG_SCROLL.retryScanAttempts) {
+                        attempts++;
+                        addLogMessage('autoScrollScan: zero rows, retry ' + attempts, 'log');
+                        const rt = setTimeout(attemptScan, ELOG_SCROLL.retryScanDelayMs);
+                        elogState.timeouts.push(rt);
+                        return;
+                    }
+                    scanVisibleRowsOnce(function(name) {
+                        elogState.leftPanelRowIndex++;
+                        updateLeftPanelList(name, elogState.leftPanelRowIndex);
+                        checkAndUpdateRightPanel(name);
+                    });
+                    onProgress({ scanned: elogState.scannedNames.length });
+                    updateAriaLiveRegion('Scanning: ' + elogState.scannedNames.length + ' names');
+                    const currKey = getRenderedLastRowKey();
+                    const currCount = getRenderedRowCount();
+                    if (currKey === priorKey && currCount === priorCount) {
+                        noProgress++;
+                        addLogMessage('autoScrollScan: no progress ' + noProgress, 'log');
+                    } else {
+                        noProgress = 0;
+                    }
+                    if (computeEndReached(container, noProgress)) {
+                        addLogMessage('autoScrollScan: end reached', 'log');
+                        finishScan(ELOG_LABELS.progressNoMore, 'endReached');
+                        return;
+                    }
+                    if (noProgress >= ELOG_SCROLL.maxNoProgressIterations) {
+                        addLogMessage('autoScrollScan: max no-progress', 'log');
+                        finishScan(ELOG_LABELS.progressNoMore, 'noProgress');
+                        return;
+                    }
+                    if (typeof requestIdleCallback === 'function') {
+                        elogState.idleCallbackId = requestIdleCallback(function() {
+                            elogState.idleCallbackId = null;
+                            scrollLoop();
+                        }, { timeout: ELOG_SCROLL.idleDelayMs * 2 });
+                    } else {
+                        const it = setTimeout(scrollLoop, ELOG_SCROLL.idleDelayMs);
+                        elogState.timeouts.push(it);
+                    }
+                }
+                attemptScan();
+            });
+        }
+        function finishScan(label, reason) {
+            addLogMessage('autoScrollScan: finish reason=' + reason, 'log');
+            for (let i = 0; i < elogState.parsedNames.length; i++) {
+                const nameObj = elogState.parsedNames[i];
+                if (nameObj.status === 'Pending') {
+                    nameObj.status = 'Not Found';
+                    updateRightPanelItemStatus(nameObj.normalized, 'Not Found', 'notfound');
+                }
+            }
+            if (reason === 'stopped') {
+                updateScanStatus(ELOG_LABELS.progressStopped, 'stopped');
+            } else {
+                updateScanStatus(ELOG_LABELS.progressComplete, 'complete');
+            }
+            const title = document.getElementById('elog-progress-title');
+            if (title) {
+                title.textContent = 'ELog Staff Entries - ' + label;
+            }
+            setAriaBusyOff();
+            addLogMessage('autoScrollScan: total=' + elogState.scannedNames.length, 'log');
+            onDone({ total: elogState.scannedNames.length, reason: reason });
+        }
+        const initTimeout = setTimeout(scrollLoop, ELOG_SCROLL.idleDelayMs);
+        elogState.timeouts.push(initTimeout);
+    }
+
     function stopELog() {
         addLogMessage('stopELog: stopping all ELog processes', 'log');
         elogState.isRunning = false;
-        for (let i = 0; i < elogState.observers.length; i++) { try { elogState.observers[i].disconnect(); } catch (e) { addLogMessage('stopELog: error disconnecting observer: ' + e, 'error'); } }
+        if (elogState.idleCallbackId && typeof cancelIdleCallback === 'function') {
+            addLogMessage('stopELog: cancelling idle callback', 'log');
+            cancelIdleCallback(elogState.idleCallbackId);
+            elogState.idleCallbackId = null;
+        }
+        for (let i = 0; i < elogState.observers.length; i++) {
+            try {
+                elogState.observers[i].disconnect();
+            } catch (e) {
+                addLogMessage('stopELog: error disconnecting observer: ' + e, 'error');
+            }
+        }
         elogState.observers = [];
-        for (let i = 0; i < elogState.timeouts.length; i++) { try { clearTimeout(elogState.timeouts[i]); } catch (e) { addLogMessage('stopELog: error clearing timeout: ' + e, 'error'); } }
+        for (let i = 0; i < elogState.timeouts.length; i++) {
+            try {
+                clearTimeout(elogState.timeouts[i]);
+            } catch (e) {
+                addLogMessage('stopELog: error clearing timeout: ' + e, 'error');
+            }
+        }
         elogState.timeouts = [];
-        for (let i = 0; i < elogState.intervals.length; i++) { try { clearInterval(elogState.intervals[i]); } catch (e) { addLogMessage('stopELog: error clearing interval: ' + e, 'error'); } }
+        for (let i = 0; i < elogState.intervals.length; i++) {
+            try {
+                clearInterval(elogState.intervals[i]);
+            } catch (e) {
+                addLogMessage('stopELog: error clearing interval: ' + e, 'error');
+            }
+        }
         elogState.intervals = [];
-        for (let i = 0; i < elogState.eventListeners.length; i++) { try { const listener = elogState.eventListeners[i]; listener.element.removeEventListener(listener.type, listener.handler); } catch (e) { addLogMessage('stopELog: error removing event listener: ' + e, 'error'); } }
+        for (let i = 0; i < elogState.eventListeners.length; i++) {
+            try {
+                const listener = elogState.eventListeners[i];
+                listener.element.removeEventListener(listener.type, listener.handler);
+            } catch (e) {
+                addLogMessage('stopELog: error removing event listener: ' + e, 'error');
+            }
+        }
         elogState.eventListeners = [];
-        if (elogState.abortController) { elogState.abortController.abort(); elogState.abortController = null; }
+        if (elogState.abortController) {
+            elogState.abortController.abort();
+            elogState.abortController = null;
+        }
+        setAriaBusyOff();
+        if (elogState.scrollContainer && elogState.prevScrollTop !== undefined) {
+            addLogMessage('stopELog: restoring viewport', 'log');
+            restoreViewport(elogState.scrollContainer, elogState.prevScrollTop);
+        }
+        elogState.scrollContainer = null;
+        elogState.userScrollHandler = null;
+        elogState.userScrollPaused = false;
         const inputModal = document.getElementById('elog-input-modal');
-        if (inputModal && inputModal.parentNode) { inputModal.parentNode.removeChild(inputModal); }
+        if (inputModal && inputModal.parentNode) {
+            inputModal.parentNode.removeChild(inputModal);
+        }
         const progressModal = document.getElementById('elog-progress-modal');
-        if (progressModal && progressModal.parentNode) { progressModal.parentNode.removeChild(progressModal); }
+        if (progressModal && progressModal.parentNode) {
+            progressModal.parentNode.removeChild(progressModal);
+        }
         resetELogState();
         addLogMessage('stopELog: cleanup complete', 'log');
     }
