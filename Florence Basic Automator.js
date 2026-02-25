@@ -30,7 +30,7 @@
     let dragOffsetY = 0;
     let logMessages = [];
     let lastScrollPosition = 0;
-    
+
     const originalLog = console.log;
     const originalError = console.error;
     const originalWarn = console.warn;
@@ -56,198 +56,7 @@
         addLogMessage(args.join(' '), 'warn');
     };
 
-    function openSignaturesInputGUI() {
-        addLogMessage('openSignaturesInputGUI: opening input modal', 'log');
-        const modal = document.createElement('div');
-        modal.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.7);
-        z-index: 20000;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    `;
 
-        const container = document.createElement('div');
-        container.style.cssText = `
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border-radius: 12px;
-        padding: 24px;
-        width: 450px;
-        max-width: 90%;
-        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
-        position: relative;
-    `;
-
-        const header = document.createElement('div');
-        header.style.cssText = `
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 20px;
-    `;
-
-        const title = document.createElement('h3');
-        title.textContent = 'Add Signatures';
-        title.style.cssText = `
-        margin: 0;
-        color: white;
-        font-size: 18px;
-        font-weight: 600;
-        letter-spacing: 0.2px;
-    `;
-
-        const closeButton = document.createElement('button');
-        closeButton.innerHTML = '✕';
-        closeButton.style.cssText = `
-        background: rgba(255, 255, 255, 0.2);
-        border: none;
-        color: white;
-        width: 28px;
-        height: 28px;
-        border-radius: 50%;
-        cursor: pointer;
-        font-size: 16px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: all 0.3s ease;
-    `;
-        closeButton.onmouseover = () => {
-            closeButton.style.background = 'rgba(255, 67, 54, 0.8)';
-        };
-        closeButton.onmouseout = () => {
-            closeButton.style.background = 'rgba(255, 255, 255, 0.2)';
-        };
-        closeButton.onclick = () => {
-            addLogMessage('openSignaturesInputGUI: modal closed by user', 'warn');
-            document.body.removeChild(modal);
-        };
-
-        header.appendChild(title);
-        header.appendChild(closeButton);
-
-        const description = document.createElement('p');
-        description.textContent = 'Paste or type the full list of signers. Separate names with commas or place each name on a new line.';
-        description.style.cssText = `
-        color: rgba(255, 255, 255, 0.9);
-        margin: 0 0 12px 0;
-        font-size: 14px;
-        line-height: 1.4;
-    `;
-
-        const textarea = document.createElement('textarea');
-        textarea.placeholder = 'Name1, Name2, Name3\nor\nName1\nName2\nName3';
-        textarea.style.cssText = `
-        width: 100%;
-        height: 140px;
-        padding: 12px 14px;
-        border: 2px solid rgba(255, 255, 255, 0.35);
-        border-radius: 10px;
-        background: rgba(255, 255, 255, 0.95);
-        color: #1e293b;
-        font-size: 14px;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        resize: vertical;
-        outline: none;
-        transition: all 0.25s ease;
-        box-shadow: 0 2px 0 rgba(0,0,0,0.04) inset;
-    `;
-        textarea.onfocus = () => {
-            textarea.style.borderColor = '#8ea0ff';
-            textarea.style.boxShadow = '0 0 0 4px rgba(102, 126, 234, 0.25)';
-        };
-        textarea.onblur = () => {
-            textarea.style.borderColor = 'rgba(255, 255, 255, 0.35)';
-            textarea.style.boxShadow = '0 2px 0 rgba(0,0,0,0.04) inset';
-        };
-
-        const buttonContainer = document.createElement('div');
-        buttonContainer.style.cssText = `
-        display: flex;
-        gap: 12px;
-        margin-top: 20px;
-        justify-content: flex-end;
-    `;
-
-        const clearButton = document.createElement('button');
-        clearButton.textContent = 'Clear All';
-        clearButton.style.cssText = `
-        background: rgba(255, 255, 255, 0.18);
-        border: 2px solid rgba(255, 255, 255, 0.35);
-        color: white;
-        padding: 10px 20px;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 500;
-        transition: all 0.25s ease;
-        backdrop-filter: blur(2px);
-    `;
-        clearButton.onmouseover = () => {
-            clearButton.style.background = 'rgba(255, 255, 255, 0.28)';
-        };
-        clearButton.onmouseout = () => {
-            clearButton.style.background = 'rgba(255, 255, 255, 0.18)';
-        };
-        clearButton.onclick = () => {
-            addLogMessage('openSignaturesInputGUI: Clear All clicked', 'log');
-            textarea.value = '';
-        };
-
-        const confirmButton = document.createElement('button');
-        confirmButton.textContent = 'Confirm';
-        confirmButton.style.cssText = `
-        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-        border: 2px solid rgba(255, 255, 255, 0.35);
-        color: white;
-        padding: 10px 20px;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 600;
-        letter-spacing: 0.2px;
-        transition: all 0.25s ease;
-    `;
-        confirmButton.onmouseover = () => {
-            confirmButton.style.background = 'linear-gradient(135deg, #218838 0%, #1ea085 100%)';
-        };
-        confirmButton.onmouseout = () => {
-            confirmButton.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
-        };
-        confirmButton.onclick = () => {
-            addLogMessage('openSignaturesInputGUI: Confirm clicked', 'log');
-            const names = parseNames(textarea.value);
-            addLogMessage('openSignaturesInputGUI: parsed ' + names.length + ' name(s)', 'log');
-            if (names.length === 0) {
-                addLogMessage('openSignaturesInputGUI: no names entered, showing warning', 'warn');
-                showWarning('Please enter at least one name.');
-                return;
-            }
-            document.body.removeChild(modal);
-            processSignatures(names);
-        };
-
-        buttonContainer.appendChild(clearButton);
-        buttonContainer.appendChild(confirmButton);
-
-        container.appendChild(header);
-        container.appendChild(description);
-        container.appendChild(textarea);
-        container.appendChild(buttonContainer);
-
-        modal.appendChild(container);
-
-        document.body.appendChild(modal);
-
-        textarea.focus();
-    }
-
-    
     function showWarning(message) {
         const modal = document.createElement('div');
         modal.style.cssText = `
@@ -347,40 +156,48 @@
         container.appendChild(okButton);
         modal.appendChild(container);
 
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        modal.style.pointerEvents = 'none';
+        container.style.pointerEvents = 'auto';
+        makeDraggable(container, header);
+
         document.body.appendChild(modal);
     }
-function makeDraggable(container, handle) {
-    let isDraggingModal = false;
-    let offsetX = 0;
-    let offsetY = 0;
-    
-    handle.style.cursor = 'move';
-    
-    handle.addEventListener('mousedown', function(e) {
-        if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-        isDraggingModal = true;
-        const rect = container.getBoundingClientRect();
-        offsetX = e.clientX - rect.left;
-        offsetY = e.clientY - rect.top;
-        e.preventDefault();
-    });
-    
-    document.addEventListener('mousemove', function(e) {
-        if (!isDraggingModal) return;
-        const newX = e.clientX - offsetX;
-        const newY = e.clientY - offsetY;
-        container.style.left = newX + 'px';
-        container.style.top = newY + 'px';
-        container.style.right = 'auto';
-        container.style.transform = 'none';
-    });
-    
-    document.addEventListener('mouseup', function() {
-        isDraggingModal = false;
-    });
-}
+    function makeDraggable(container, handle) {
+        let isDraggingModal = false;
+        let offsetX = 0;
+        let offsetY = 0;
 
-        function createGUI() {
+        handle.style.cursor = 'move';
+
+        handle.addEventListener('mousedown', function(e) {
+            if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            isDraggingModal = true;
+            const rect = container.getBoundingClientRect();
+            offsetX = e.clientX - rect.left;
+            offsetY = e.clientY - rect.top;
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', function(e) {
+            if (!isDraggingModal) return;
+            const newX = e.clientX - offsetX;
+            const newY = e.clientY - offsetY;
+            container.style.left = newX + 'px';
+            container.style.top = newY + 'px';
+            container.style.right = 'auto';
+            container.style.transform = 'none';
+        });
+
+        document.addEventListener('mouseup', function() {
+            isDraggingModal = false;
+        });
+    }
+
+    function createGUI() {
         const guiContainer = document.createElement('div');
         guiContainer.id = 'florence-gui';
         guiContainer.style.cssText = `
@@ -579,6 +396,7 @@ function makeDraggable(container, handle) {
         }
 
         document.body.appendChild(guiContainer);
+        makeDraggable(guiContainer, header);
         addLogMessage('Florence Automator GUI initialized', 'log');
     }
 
@@ -623,6 +441,206 @@ function makeDraggable(container, handle) {
     //==========================
     // This section contains functions used by Add Signatures feature
     //==========================
+
+
+    function openSignaturesInputGUI() {
+        addLogMessage('openSignaturesInputGUI: opening input modal', 'log');
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 20000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+
+        const container = document.createElement('div');
+        container.style.cssText = `
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 12px;
+        padding: 24px;
+        width: 450px;
+        max-width: 90%;
+        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+        position: relative;
+    `;
+
+        const header = document.createElement('div');
+        header.style.cssText = `
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    `;
+
+        const title = document.createElement('h3');
+        title.textContent = 'Add Signatures';
+        title.style.cssText = `
+        margin: 0;
+        color: white;
+        font-size: 18px;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+    `;
+
+        const closeButton = document.createElement('button');
+        closeButton.innerHTML = '✕';
+        closeButton.style.cssText = `
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        color: white;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s ease;
+    `;
+        closeButton.onmouseover = () => {
+            closeButton.style.background = 'rgba(255, 67, 54, 0.8)';
+        };
+        closeButton.onmouseout = () => {
+            closeButton.style.background = 'rgba(255, 255, 255, 0.2)';
+        };
+        closeButton.onclick = () => {
+            addLogMessage('openSignaturesInputGUI: modal closed by user', 'warn');
+            document.body.removeChild(modal);
+        };
+
+        header.appendChild(title);
+        header.appendChild(closeButton);
+
+        const description = document.createElement('p');
+        description.textContent = 'Paste or type the full list of signers. Separate names with commas or place each name on a new line.';
+        description.style.cssText = `
+        color: rgba(255, 255, 255, 0.9);
+        margin: 0 0 12px 0;
+        font-size: 14px;
+        line-height: 1.4;
+    `;
+
+        const textarea = document.createElement('textarea');
+        textarea.placeholder = 'Name1, Name2, Name3\nor\nName1\nName2\nName3';
+        textarea.style.cssText = `
+        width: 100%;
+        height: 140px;
+        padding: 12px 14px;
+        border: 2px solid rgba(255, 255, 255, 0.35);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.95);
+        color: #1e293b;
+        font-size: 14px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        resize: vertical;
+        outline: none;
+        transition: all 0.25s ease;
+        box-shadow: 0 2px 0 rgba(0,0,0,0.04) inset;
+    `;
+        textarea.onfocus = () => {
+            textarea.style.borderColor = '#8ea0ff';
+            textarea.style.boxShadow = '0 0 0 4px rgba(102, 126, 234, 0.25)';
+        };
+        textarea.onblur = () => {
+            textarea.style.borderColor = 'rgba(255, 255, 255, 0.35)';
+            textarea.style.boxShadow = '0 2px 0 rgba(0,0,0,0.04) inset';
+        };
+
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.cssText = `
+        display: flex;
+        gap: 12px;
+        margin-top: 20px;
+        justify-content: flex-end;
+    `;
+
+        const clearButton = document.createElement('button');
+        clearButton.textContent = 'Clear All';
+        clearButton.style.cssText = `
+        background: rgba(255, 255, 255, 0.18);
+        border: 2px solid rgba(255, 255, 255, 0.35);
+        color: white;
+        padding: 10px 20px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.25s ease;
+        backdrop-filter: blur(2px);
+    `;
+        clearButton.onmouseover = () => {
+            clearButton.style.background = 'rgba(255, 255, 255, 0.28)';
+        };
+        clearButton.onmouseout = () => {
+            clearButton.style.background = 'rgba(255, 255, 255, 0.18)';
+        };
+        clearButton.onclick = () => {
+            addLogMessage('openSignaturesInputGUI: Clear All clicked', 'log');
+            textarea.value = '';
+        };
+
+        const confirmButton = document.createElement('button');
+        confirmButton.textContent = 'Confirm';
+        confirmButton.style.cssText = `
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        border: 2px solid rgba(255, 255, 255, 0.35);
+        color: white;
+        padding: 10px 20px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+        transition: all 0.25s ease;
+    `;
+        confirmButton.onmouseover = () => {
+            confirmButton.style.background = 'linear-gradient(135deg, #218838 0%, #1ea085 100%)';
+        };
+        confirmButton.onmouseout = () => {
+            confirmButton.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
+        };
+        confirmButton.onclick = () => {
+            addLogMessage('openSignaturesInputGUI: Confirm clicked', 'log');
+            const names = parseNames(textarea.value);
+            addLogMessage('openSignaturesInputGUI: parsed ' + names.length + ' name(s)', 'log');
+            if (names.length === 0) {
+                addLogMessage('openSignaturesInputGUI: no names entered, showing warning', 'warn');
+                showWarning('Please enter at least one name.');
+                return;
+            }
+            document.body.removeChild(modal);
+            processSignatures(names);
+        };
+
+        buttonContainer.appendChild(clearButton);
+        buttonContainer.appendChild(confirmButton);
+
+        container.appendChild(header);
+        container.appendChild(description);
+        container.appendChild(textarea);
+        container.appendChild(buttonContainer);
+
+        modal.appendChild(container);
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        modal.style.pointerEvents = 'none';
+        container.style.pointerEvents = 'auto';
+        makeDraggable(container, header);
+
+        document.body.appendChild(modal);
+
+        textarea.focus();
+    }
+
     function startAddSignaturesFlow() {
         addLogMessage('Start Add Signatures flow clicked', 'log');
         addLogMessage('Validating if user is on the Request Signatures page', 'log');
@@ -797,9 +815,32 @@ function makeDraggable(container, handle) {
 
         container.appendChild(header);
         container.appendChild(spinner);
+
+        const warningMessage = document.createElement('div');
+        warningMessage.style.cssText = `
+            background: rgba(255, 193, 7, 0.2);
+            border-left: 4px solid #ffc107;
+            border-radius: 6px;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            color: white;
+            font-size: 13px;
+            line-height: 1.5;
+        `;
+        warningMessage.innerHTML = `
+            <strong style="display: block; margin-bottom: 4px; font-size: 14px;">⚠️ Important</strong>
+            Please do not click anywhere on the page while the automation is running. Clicking may close the dropdown menu and interrupt the process.
+        `;
+        container.appendChild(warningMessage);
         container.appendChild(statusContainer);
         modal.appendChild(container);
-
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        modal.style.pointerEvents = 'none';
+        container.style.pointerEvents = 'auto';
+        makeDraggable(container, header);
         document.body.appendChild(modal);
 
         names.forEach(name => {
@@ -910,100 +951,200 @@ function makeDraggable(container, handle) {
             addLogMessage('closeLoadingGUI: error closing modal: ' + e, 'error');
         }
     }
-    function processSignerList(names) {
-        lastScrollPosition = 0;
-        addLogMessage('processSignerList: start (sequential search+select via input)', 'log');
-        if (window.signatureProcessStopped) {
-            addLogMessage('processSignerList: process stopped flag detected, aborting', 'warn');
-            return;
-        }
 
-        const searchInput = document.getElementById('filtered-select-input');
-        if (!searchInput) {
-            addLogMessage('processSignerList: search input not found, cannot proceed', 'error');
-            updateSignatureStatus('System', 'Search input not found', '#ff6b6b');
-            return;
-        }
+    function getExistingSignersFromTable(callback) {
+        const existingNames = new Set();
+        addLogMessage('getExistingSignersFromTable: starting to collect all existing signers', 'log');
 
-        let index = 0;
-
-        function processNext() {
-            if (window.signatureProcessStopped) {
-                addLogMessage('processSignerList: stop flag detected, ending sequence', 'warn');
+        try {
+            const table = document.querySelector('.documents-signers-tab__table');
+            if (!table) {
+                addLogMessage('getExistingSignersFromTable: table not found', 'warn');
+                callback([]);
                 return;
             }
 
-            if (index >= names.length) {
-                addLogMessage('processSignerList: all names processed, showing completion summary', 'log');
+            const viewport = table.querySelector('cdk-virtual-scroll-viewport');
+            if (!viewport) {
+                addLogMessage('getExistingSignersFromTable: viewport not found, collecting visible rows only', 'warn');
+                const rows = table.querySelectorAll('[role="row"].documents-signers-tab__table__row');
+                rows.forEach(row => {
+                    const ariaLabel = row.getAttribute('aria-label');
+                    if (ariaLabel) {
+                        existingNames.add(ariaLabel.trim().toLowerCase());
+                    }
+                });
+                callback(Array.from(existingNames));
+                return;
+            }
+
+            let scrollPosition = 0;
+            const SCROLL_STEP = 200;
+
+            function scrollAndCollect() {
+                viewport.scrollTop = scrollPosition;
+
                 setTimeout(() => {
-                        closeLoadingGUI();
+                    const rows = table.querySelectorAll('[role="row"].documents-signers-tab__table__row');
+                    rows.forEach(row => {
+                        const ariaLabel = row.getAttribute('aria-label');
+                        if (ariaLabel) {
+                            existingNames.add(ariaLabel.trim().toLowerCase());
+                        }
+                    });
+
+                    addLogMessage('getExistingSignersFromTable: collected ' + existingNames.size + ' unique names at scroll position ' + scrollPosition, 'log');
+
+                    if (scrollPosition >= viewport.scrollHeight - viewport.clientHeight) {
+                        const finalNames = Array.from(existingNames);
+                        addLogMessage('getExistingSignersFromTable: finished collecting ' + finalNames.length + ' total existing signers', 'log');
+                        viewport.scrollTop = 0;
+                        callback(finalNames);
+                        return;
+                    }
+
+                    scrollPosition += SCROLL_STEP;
+                    setTimeout(scrollAndCollect, 150);
+                }, 150);
+            }
+
+            scrollAndCollect();
+
+        } catch (e) {
+            addLogMessage('getExistingSignersFromTable: error: ' + e, 'error');
+            callback(Array.from(existingNames));
+        }
+    }
+
+    function normalizeName(name) {
+        if (!name) return '';
+
+        let normalized = name
+        .replace(/[`'"''""_-]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+        addLogMessage('normalizeName: "' + name + '" -> "' + normalized + '"', 'log');
+        return normalized;
+    }
+
+    function filterOutExistingSigners(names, callback) {
+        getExistingSignersFromTable(function(existingSigners) {
+            const filteredNames = [];
+            const duplicates = [];
+            const normalizedExistingSigners = existingSigners.map(s => normalizeName(s).toLowerCase());
+
+            names.forEach(name => {
+                const normalizedName = normalizeName(name).toLowerCase();
+
+                if (normalizedExistingSigners.includes(normalizedName)) {
+                    addLogMessage('filterOutExistingSigners: "' + name + '" already exists, skipping', 'log');
+                    updateSignatureStatus(name, 'Already Exist', '#ffd93d');
+                    duplicates.push({ name: name, status: 'Already Exist', statusType: 'duplicate' });
+                } else {
+                    filteredNames.push(name);
+                }
+            });
+
+            addLogMessage('filterOutExistingSigners: ' + filteredNames.length + ' names to process after filtering', 'log');
+            callback(filteredNames, duplicates);
+        });
+    }
+    function processSignerList(names) {
+        lastScrollPosition = 0;
+        addLogMessage('processSignerList: start with ' + names.length + ' names to process', 'log');
+
+        // Filter out existing signers first (async)
+        filterOutExistingSigners(names, function(filteredNames, duplicates) {
+            if (filteredNames.length === 0) {
+                addLogMessage('processSignerList: no names to process after filtering', 'log');
+                setTimeout(() => {
+                    showCompletionSummary(names, duplicates || []);
                 }, 500);
                 return;
             }
+            const processResults = duplicates || [];
+            let index = 0;
 
-            const originalName = names[index];
-            addLogMessage('processSignerList: processing "' + originalName + '" (index ' + (index + 1) + ' of ' + names.length + ')', 'log');
+            function processNext() {
+                if (window.signatureProcessStopped) {
+                    addLogMessage('processSignerList: stop flag detected, ending sequence', 'warn');
+                    return;
+                }
 
-            const parts = splitNameParts(originalName);
+                if (index >= filteredNames.length) {
+                    addLogMessage('processSignerList: all names processed, showing completion summary', 'log');
+                    setTimeout(() => {
+                        showCompletionSummary(names, processResults);
+                    }, 500);
+                    return;
+                }
 
-            try {
-                attemptSelectByScrolling(parts, function(success, matchType) {
-                    // Clear the search input before processing the next name
-                    const searchInput = document.getElementById('filtered-select-input');
-                    if (searchInput) {
-                        clearSearchInput(searchInput);
-                        // Re-open the dropdown for the next search
-                        setTimeout(() => {
-                            searchInput.click();
-                            searchInput.focus();
-                            // Restore scroll position after reopening dropdown
+                const originalName = filteredNames[index];
+                addLogMessage('processSignerList: processing "' + originalName + '" (index ' + (index + 1) + ' of ' + filteredNames.length + ')', 'log');
+
+                const parts = splitNameParts(originalName);
+
+                try {
+                    attemptSelectByScrolling(parts, function(success, matchType) {
+                        // Clear the search input before processing the next name
+                        const searchInput = document.getElementById('filtered-select-input');
+                        if (searchInput) {
+                            clearSearchInput(searchInput);
+                            // Re-open the dropdown for the next search
                             setTimeout(() => {
-                                const viewport = document.querySelector('cdk-virtual-scroll-viewport');
-                                if (viewport) {
-                                    viewport.scrollTop = lastScrollPosition;
-                                    addLogMessage('processNext: restored scroll position to ' + lastScrollPosition, 'log');
-                                }
-                            }, 50);
-                        }, 100);
-                    }
-                    
-                    if (success) {
-                        updateSignatureStatus(originalName, matchType, '#6bcf7f');
-                        index = index + 1;
-                        setTimeout(processNext, 500);
-                        return;
-                    } else {
-                        addLogMessage('processSignerList: not found after scrolling search -> "' + originalName + '"', 'warn');
-                        updateSignatureStatus(originalName, 'Not found', '#ff6b6b');
-                        index = index + 1;
-                        setTimeout(processNext, 500);
-                        return;
-                    }
-                });
-            } catch (err) {
-                addLogMessage('processSignerList: error while processing "' + originalName + '": ' + err, 'error');
-                updateSignatureStatus(originalName, 'Processing failed', '#ff6b6b');
-                index = index + 1;
-                setTimeout(processNext, 400);
-                return;
-            }
-        }
+                                searchInput.click();
+                                searchInput.focus();
+                                // Restore scroll position after reopening dropdown
+                                setTimeout(() => {
+                                    const viewport = document.querySelector('cdk-virtual-scroll-viewport');
+                                    if (viewport) {
+                                        viewport.scrollTop = lastScrollPosition;
+                                        addLogMessage('processNext: restored scroll position to ' + lastScrollPosition, 'log');
+                                    }
+                                }, 50);
+                            }, 100);
+                        }
 
-        processNext();
+                        if (success) {
+                            updateSignatureStatus(originalName, matchType, '#6bcf7f');
+                            processResults.push({ name: originalName, status: matchType, statusType: 'success' });
+                            index = index + 1;
+                            setTimeout(processNext, 500);
+                            return;
+                        } else {
+                            addLogMessage('processSignerList: not found after scrolling search -> "' + originalName + '"', 'warn');
+                            updateSignatureStatus(originalName, 'Not found', '#ff6b6b');
+                            processResults.push({ name: originalName, status: 'Not found', statusType: 'failure' });
+                            index = index + 1;
+                            setTimeout(processNext, 500);
+                            return;
+                        }
+                    });
+                } catch (err) {
+                    addLogMessage('processSignerList: error while processing "' + originalName + '": ' + err, 'error');
+                    updateSignatureStatus(originalName, 'Processing failed', '#ff6b6b');
+                    index = index + 1;
+                    setTimeout(processNext, 400);
+                    return;
+                }
+            }
+            processNext();
+        });
     }
     function attemptSelectByQuery(searchInput, query, parts, callback) {
         addLogMessage('attemptSelectByQuery: searching for "' + query + '"', 'log');
-        
+
         // Clear the input first
         clearSearchInput(searchInput);
-        
+
         // Type the search query
         typeIntoSearchInput(searchInput, query, function() {
             // Wait for the list to update with search results
             waitForListUpdate(query, 3000, 200, function(items) {
                 addLogMessage('attemptSelectByQuery: list updated, searching for candidate', 'log');
                 const candidate = findCandidateItem(items, parts);
-                
+
                 if (candidate) {
                     addLogMessage('attemptSelectByQuery: found candidate for "' + query + '"', 'log');
                     const clicked = clickCheckboxForItem(candidate, parts.full);
@@ -1025,67 +1166,118 @@ function makeDraggable(container, handle) {
         });
     }
 
-    function attemptSelectByScrolling(parts, callback) {
-    addLogMessage('attemptSelectByScrolling: searching for "' + parts.full + '" from position ' + lastScrollPosition, 'log');
-    
-    const viewport = document.querySelector('cdk-virtual-scroll-viewport');
-    if (!viewport) {
-        addLogMessage('attemptSelectByScrolling: virtual scroll viewport not found, falling back to search', 'warn');
-        // Fallback to search-based approach
-        const searchInput = document.getElementById('filtered-select-input');
-        if (searchInput && parts.first) {
-            attemptSelectByQuery(searchInput, parts.first, parts, callback);
-        } else {
-            callback(false, '');
-        }
-        return;
-    }
+    function attemptSelectByScrolling(parts, callback, retryCount = 0) {
+        addLogMessage('attemptSelectByScrolling: searching for "' + parts.full + '" (attempt ' + (retryCount + 1) + ')', 'log');
 
-    // Start from the last scroll position instead of 0
-    let scrollPosition = lastScrollPosition;
-    const SCROLL_STEP = 200;
-    const MAX_SCROLLS = 50;
-    let scrollCount = 0;
-
-    function scrollAndSearch() {
-        if (scrollCount >= MAX_SCROLLS) {
-            addLogMessage('attemptSelectByScrolling: max scrolls reached, item not found', 'warn');
+        const viewport = document.querySelector('cdk-virtual-scroll-viewport');
+        if (!viewport) {
+            addLogMessage('attemptSelectByScrolling: viewport not found', 'error');
             callback(false, '');
             return;
         }
 
-        // Scroll to position
-        viewport.scrollTop = scrollPosition;
-        
-        // Wait for items to render
-        setTimeout(() => {
-            const snapshot = getListItemsSnapshot();
-            const candidate = findCandidateItem(snapshot.items, parts);
-            
-            if (candidate) {
-                addLogMessage('attemptSelectByScrolling: found candidate at scroll position ' + scrollPosition, 'log');
-                const clicked = clickCheckboxForItem(candidate, parts.full);
-                if (clicked) {
-                    setTimeout(function() {
-                        clickAddButtonIfEnabled();
-                        // Update the last scroll position to where we found the item
-                        lastScrollPosition = scrollPosition;
-                        addLogMessage('attemptSelectByScrolling: updated lastScrollPosition to ' + lastScrollPosition, 'log');
-                        callback(true, 'Selected');
-                    }, 80);
-                    return;
-                }
-            }
-            
-            // Continue scrolling
-            scrollPosition += SCROLL_STEP;
-            scrollCount++;
-            setTimeout(scrollAndSearch, 100);
-        }, 200);
-    }
+        // Start from the last scroll position, or reset to 0 if this is a retry
+        let scrollPosition = retryCount > 0 ? 0 : lastScrollPosition;
+        const SCROLL_STEP = 200;
+        const MAX_SCROLLS = 50;
+        let scrollCount = 0;
+        let hasScrolledFullCycle = false;
 
-    scrollAndSearch();
-}
+        function scrollAndCheck() {
+            if (window.signatureProcessStopped) {
+                addLogMessage('attemptSelectByScrolling: process stopped', 'warn');
+                callback(false, '');
+                return;
+            }
+
+            viewport.scrollTop = scrollPosition;
+            lastScrollPosition = scrollPosition;
+
+            setTimeout(function() {
+                try {
+                    const items = document.querySelectorAll('.filtered-select__list__item');
+                    addLogMessage('attemptSelectByScrolling: found ' + items.length + ' items at scroll position ' + scrollPosition, 'log');
+
+                    if (items.length > 0) {
+                        const candidate = findCandidateItem(items, parts);
+                        if (candidate) {
+                            addLogMessage('attemptSelectByScrolling: found candidate for "' + parts.full + '"', 'log');
+                            const clicked = clickCheckboxForItem(candidate, parts.full);
+                            if (clicked) {
+                                setTimeout(function() {
+                                    clickAddButtonIfEnabled();
+                                    // Update the last scroll position to where we found the item
+                                    lastScrollPosition = scrollPosition;
+                                    addLogMessage('attemptSelectByScrolling: updated lastScrollPosition to ' + lastScrollPosition, 'log');
+                                    callback(true, 'Selected');
+                                }, 80);
+                                return;
+                            }
+                        }
+                    }
+
+                    // Continue scrolling
+                    scrollPosition += SCROLL_STEP;
+                    scrollCount++;
+
+                    // Check if we've scrolled past the bottom
+                    if (scrollPosition >= viewport.scrollHeight - viewport.clientHeight) {
+                        if (!hasScrolledFullCycle) {
+                            addLogMessage('attemptSelectByScrolling: reached bottom, starting from top', 'log');
+                            scrollPosition = 0;
+                            hasScrolledFullCycle = true;
+                        } else {
+                            // Completed full cycle without finding the item
+                            if (retryCount === 0) {
+                                // First attempt failed, retry with reset scroll
+                                addLogMessage('attemptSelectByScrolling: first attempt failed, retrying with reset scroll', 'warn');
+                                setTimeout(() => {
+                                    attemptSelectByScrolling(parts, callback, 1);
+                                }, 500);
+                                return;
+                            } else {
+                                // Second attempt also failed
+                                addLogMessage('attemptSelectByScrolling: second attempt failed, moving to next name', 'warn');
+                                callback(false, '');
+                                return;
+                            }
+                        }
+                    }
+
+                    if (scrollCount >= MAX_SCROLLS) {
+                        if (retryCount === 0) {
+                            // First attempt failed, retry
+                            addLogMessage('attemptSelectByScrolling: max scrolls reached on first attempt, retrying', 'warn');
+                            setTimeout(() => {
+                                attemptSelectByScrolling(parts, callback, 1);
+                            }, 500);
+                            return;
+                        } else {
+                            // Second attempt failed
+                            addLogMessage('attemptSelectByScrolling: max scrolls reached on second attempt, moving to next name', 'warn');
+                            callback(false, '');
+                            return;
+                        }
+                    }
+
+                    // Continue scrolling
+                    setTimeout(scrollAndCheck, 50);
+
+                } catch (err) {
+                    addLogMessage('attemptSelectByScrolling: error during scroll: ' + err, 'error');
+                    if (retryCount === 0) {
+                        setTimeout(() => {
+                            attemptSelectByScrolling(parts, callback, 1);
+                        }, 500);
+                    } else {
+                        callback(false, '');
+                    }
+                }
+            }, 100);
+        }
+
+        scrollAndCheck();
+    }
 
     function splitNameParts(name) {
         const result = { full: name, first: '', last: '' };
@@ -1095,7 +1287,8 @@ function makeDraggable(container, handle) {
             return result;
         }
 
-        const trimmed = name.trim();
+        const trimmed = normalizeName(name);
+
         if (trimmed.indexOf(',') !== -1) {
             const parts = trimmed.split(',').map(x => x.trim()).filter(x => x);
             if (parts.length >= 2) {
@@ -1243,12 +1436,12 @@ function makeDraggable(container, handle) {
         return (li.textContent || '').trim().replace(/\s+/g, ' ');
     }
     function findCandidateItem(items, parts) {
-        const firstLower = (parts.first || '').toLowerCase();
-        const lastLower = (parts.last || '').toLowerCase();
+        const firstLower = normalizeName(parts.first || '').toLowerCase();
+        const lastLower = normalizeName(parts.last || '').toLowerCase();
 
         const candidates = [];
         for (let i = 0; i < items.length; i++) {
-            const nameText = getItemDisplayName(items[i]);
+            const nameText = normalizeName(getItemDisplayName(items[i]));
             const lc = nameText.toLowerCase();
 
             if (firstLower && lc.indexOf(firstLower) !== -1) {
@@ -1406,11 +1599,26 @@ function makeDraggable(container, handle) {
         return name;
     }
 
-    function showCompletionSummary(names) {
+    function showCompletionSummary(names, results) {
         const modal = document.getElementById('signatures-loading-modal');
         if (modal) {
             document.body.removeChild(modal);
         }
+        let successCount = 0;
+        let duplicateCount = 0;
+        let failureCount = 0;
+
+        results.forEach(result => {
+            if (result.statusType === 'success') {
+                successCount++;
+            } else if (result.statusType === 'duplicate') {
+                duplicateCount++;
+            } else if (result.statusType === 'failure') {
+                failureCount++;
+            }
+        });
+
+        const totalProcessed = names.length;
 
         const summaryModal = document.createElement('div');
         summaryModal.style.cssText = `
@@ -1419,7 +1627,7 @@ function makeDraggable(container, handle) {
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.8);
             z-index: 50000;
             display: flex;
             align-items: center;
@@ -1428,10 +1636,10 @@ function makeDraggable(container, handle) {
 
         const container = document.createElement('div');
         container.style.cssText = `
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border-radius: 12px;
             padding: 24px;
-            width: 450px;
+            width: 520px;
             max-width: 90%;
             box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
             position: relative;
@@ -1445,6 +1653,23 @@ function makeDraggable(container, handle) {
             margin-bottom: 20px;
         `;
 
+        const titleContainer = document.createElement('div');
+        titleContainer.style.cssText = `display: flex; align-items: center; gap: 10px;`;
+
+        const checkIcon = document.createElement('span');
+        checkIcon.innerHTML = '✓';
+        checkIcon.style.cssText = `
+            background: rgba(255, 255, 255, 0.2);
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: #6bcf7f;
+        `;
+
         const title = document.createElement('h3');
         title.textContent = 'Process Complete';
         title.style.cssText = `
@@ -1453,6 +1678,9 @@ function makeDraggable(container, handle) {
             font-size: 18px;
             font-weight: 600;
         `;
+
+        titleContainer.appendChild(checkIcon);
+        titleContainer.appendChild(title);
 
         const closeButton = document.createElement('button');
         closeButton.innerHTML = '✕';
@@ -1470,62 +1698,246 @@ function makeDraggable(container, handle) {
             justify-content: center;
             transition: all 0.3s ease;
         `;
-        closeButton.onmouseover = () => closeButton.style.background = 'rgba(255, 255, 255, 0.3)';
+        closeButton.onmouseover = () => closeButton.style.background = 'rgba(255, 67, 54, 0.8)';
         closeButton.onmouseout = () => closeButton.style.background = 'rgba(255, 255, 255, 0.2)';
         closeButton.onclick = () => document.body.removeChild(summaryModal);
 
-        header.appendChild(title);
+        header.appendChild(titleContainer);
         header.appendChild(closeButton);
 
-        const summaryDiv = document.createElement('div');
-        summaryDiv.style.cssText = `
+        // Statistics Section
+        const statsSection = document.createElement('div');
+        statsSection.style.cssText = `
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 16px;
+        `;
+
+        const createStatBox = (label, value, bgColor) => {
+            const box = document.createElement('div');
+            box.style.cssText = `
+                background: ${bgColor};
+                border-radius: 8px;
+                padding: 12px 8px;
+                text-align: center;
+            `;
+
+            const valueEl = document.createElement('div');
+            valueEl.textContent = value;
+            valueEl.style.cssText = `
+                font-size: 24px;
+                font-weight: 700;
+                color: white;
+                line-height: 1;
+            `;
+
+            const labelEl = document.createElement('div');
+            labelEl.textContent = label;
+            labelEl.style.cssText = `
+                font-size: 11px;
+                color: rgba(255, 255, 255, 0.85);
+                margin-top: 4px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            `;
+
+            box.appendChild(valueEl);
+            box.appendChild(labelEl);
+            return box;
+        };
+
+        statsSection.appendChild(createStatBox('Total', totalProcessed, 'rgba(255, 255, 255, 0.15)'));
+        statsSection.appendChild(createStatBox('Success', successCount, 'rgba(107, 207, 127, 0.3)'));
+        statsSection.appendChild(createStatBox('Duplicate', duplicateCount, 'rgba(255, 217, 61, 0.3)'));
+        statsSection.appendChild(createStatBox('Failed', failureCount, 'rgba(255, 107, 107, 0.3)'));
+
+        // Results List Section
+        const listHeader = document.createElement('div');
+        listHeader.style.cssText = `
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        `;
+
+        const listTitle = document.createElement('span');
+        listTitle.textContent = 'Detailed Results';
+        listTitle.style.cssText = `
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        `;
+
+        listHeader.appendChild(listTitle);
+
+        const resultsContainer = document.createElement('div');
+        resultsContainer.style.cssText = `
             background: rgba(0, 0, 0, 0.2);
             border-radius: 8px;
-            padding: 16px;
-            max-height: 300px;
+            padding: 8px;
+            max-height: 250px;
             overflow-y: auto;
         `;
 
-        names.forEach(name => {
-            const statusDiv = document.createElement('div');
-            statusDiv.style.cssText = `
-                color: white;
-                padding: 6px;
-                margin: 2px 0;
-                font-size: 14px;
-            `;
-            const originalStatus = document.getElementById(`status-${name.replace(/\s+/g, '-')}`);
-            if (originalStatus) {
-                statusDiv.innerHTML = originalStatus.innerHTML;
+        // Custom scrollbar styling
+        const scrollStyle = document.createElement('style');
+        scrollStyle.textContent = `
+            .completion-results-list::-webkit-scrollbar {
+                width: 6px;
             }
-            summaryDiv.appendChild(statusDiv);
+            .completion-results-list::-webkit-scrollbar-track {
+                background: rgba(0, 0, 0, 0.1);
+                border-radius: 3px;
+            }
+            .completion-results-list::-webkit-scrollbar-thumb {
+                background: rgba(255, 255, 255, 0.3);
+                border-radius: 3px;
+            }
+            .completion-results-list::-webkit-scrollbar-thumb:hover {
+                background: rgba(255, 255, 255, 0.5);
+            }
+        `;
+        document.head.appendChild(scrollStyle);
+        resultsContainer.className = 'completion-results-list';
+
+        results.forEach((result, index) => {
+            const row = document.createElement('div');
+            row.style.cssText = `
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 10px 12px;
+                margin: 4px 0;
+                background: rgba(255, 255, 255, 0.08);
+                border-radius: 6px;
+                transition: background 0.2s ease;
+            `;
+            row.onmouseover = () => row.style.background = 'rgba(255, 255, 255, 0.12)';
+            row.onmouseout = () => row.style.background = 'rgba(255, 255, 255, 0.08)';
+
+            const nameSection = document.createElement('div');
+            nameSection.style.cssText = `
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                flex: 1;
+                min-width: 0;
+            `;
+
+            const indexBadge = document.createElement('span');
+            indexBadge.textContent = index + 1;
+            indexBadge.style.cssText = `
+                background: rgba(255, 255, 255, 0.15);
+                color: rgba(255, 255, 255, 0.7);
+                font-size: 11px;
+                font-weight: 600;
+                min-width: 24px;
+                height: 24px;
+                border-radius: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+
+            const nameText = document.createElement('span');
+            nameText.textContent = result.name;
+            nameText.style.cssText = `
+                color: white;
+                font-size: 14px;
+                font-weight: 500;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            `;
+
+            nameSection.appendChild(indexBadge);
+            nameSection.appendChild(nameText);
+
+            const statusBadge = document.createElement('span');
+            statusBadge.textContent = result.status;
+
+            let badgeColor, badgeBg;
+            switch (result.statusType) {
+                case 'success':
+                    badgeColor = '#6bcf7f';
+                    badgeBg = 'rgba(107, 207, 127, 0.2)';
+                    break;
+                case 'duplicate':
+                    badgeColor = '#ffd93d';
+                    badgeBg = 'rgba(255, 217, 61, 0.2)';
+                    break;
+                case 'failure':
+                    badgeColor = '#ff6b6b';
+                    badgeBg = 'rgba(255, 107, 107, 0.2)';
+                    break;
+                default:
+                    badgeColor = 'rgba(255, 255, 255, 0.7)';
+                    badgeBg = 'rgba(255, 255, 255, 0.1)';
+            }
+
+            statusBadge.style.cssText = `
+                color: ${badgeColor};
+                background: ${badgeBg};
+                font-size: 12px;
+                font-weight: 600;
+                padding: 4px 10px;
+                border-radius: 12px;
+                white-space: nowrap;
+                flex-shrink: 0;
+            `;
+
+            row.appendChild(nameSection);
+            row.appendChild(statusBadge);
+            resultsContainer.appendChild(row);
         });
 
+        // OK Button
         const okButton = document.createElement('button');
-        okButton.textContent = 'OK';
+        okButton.textContent = 'Close';
         okButton.style.cssText = `
             background: rgba(255, 255, 255, 0.2);
             border: 2px solid rgba(255, 255, 255, 0.3);
             color: white;
-            padding: 10px 20px;
+            padding: 12px 24px;
             border-radius: 8px;
             cursor: pointer;
             font-size: 14px;
-            font-weight: 500;
+            font-weight: 600;
             transition: all 0.3s ease;
-            margin-top: 20px;
+            margin-top: 16px;
             width: 100%;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         `;
-        okButton.onmouseover = () => okButton.style.background = 'rgba(255, 255, 255, 0.3)';
-        okButton.onmouseout = () => okButton.style.background = 'rgba(255, 255, 255, 0.2)';
+        okButton.onmouseover = () => {
+            okButton.style.background = 'rgba(255, 255, 255, 0.3)';
+            okButton.style.borderColor = 'rgba(255, 255, 255, 0.5)';
+        };
+        okButton.onmouseout = () => {
+            okButton.style.background = 'rgba(255, 255, 255, 0.2)';
+            okButton.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+        };
         okButton.onclick = () => document.body.removeChild(summaryModal);
 
         container.appendChild(header);
-        container.appendChild(summaryDiv);
+        container.appendChild(statsSection);
+        container.appendChild(listHeader);
+        container.appendChild(resultsContainer);
         container.appendChild(okButton);
         summaryModal.appendChild(container);
-
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        summaryModal.style.pointerEvents = 'none';
+        container.style.pointerEvents = 'auto';
+        makeDraggable(container, header);
         document.body.appendChild(summaryModal);
+
+        addLogMessage('showCompletionSummary: displayed summary - Total: ' + totalProcessed + ', Success: ' + successCount + ', Duplicates: ' + duplicateCount + ', Failed: ' + failureCount, 'log');
     }
 
     function init() {
