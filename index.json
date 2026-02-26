@@ -389,6 +389,13 @@
     "title": "Edit Check Difference between Start and End Time",
     "tags": ["Start", "End", "Time", "Difference"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Difference%20between%20Start%20and%20End%20Time.md",
-    "updated": "2026-02-18"
+    "updated": "2026-02-25"
+  },
+  {
+    "id": "M-057",
+    "title": "Year of Birth",
+    "tags": ["Year", "Birth"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Year%20of%20Birth.md",
+    "updated": "2026-02-26"
   }
 ]
