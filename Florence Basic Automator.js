@@ -76,6 +76,43 @@
         progressStopped: 'Scan stopped'
     };
 
+    const ELOG_FORM_SELECTORS = {
+        addEntryBtn: '.test-createLogEntryBtn',
+        memberInput: '#filtered-select-input.filtered-select__input',
+        listContainer: 'ul.filtered-select__list.u-z-index-1060, ul.filtered-select__list',
+        virtualViewport: '.filtered-select__list, .cdk-virtual-scroll-viewport',
+        optionItem: '.filtered-select__list [role="option"], .filtered-select__list li, .cdk-virtual-scroll-viewport [role="option"], .cdk-virtual-scroll-viewport li',
+        saveAndAddAnotherBtn: 'button.btn.btn-primary',
+        modalOrFormRoot: '.modal.show, .document-log-entries, body'
+    };
+
+    const ELOG_FORM_TIMEOUTS = {
+        waitOpenMs: 10000,
+        waitListMs: 6000,
+        waitOptionRenderMs: 3000,
+        waitSaveAfterClickMs: 8000,
+        scrollIdleMs: 120,
+        settleMs: 250,
+        maxSelectDurationMs: 45000
+    };
+
+    const ELOG_FORM_RETRY = {
+        openListRetries: 4,
+        selectRetriesPerScroll: 2,
+        maxScrollPasses: 8,
+        saveRetries: 2
+    };
+
+    const ELOG_RUN_LABELS = {
+        statusPending: 'Pending',
+        statusAlready: 'Already Exist',
+        statusAdded: 'Added',
+        statusNotInDropdown: 'Not In Dropdown',
+        statusSelectionFailed: 'Selection Failed',
+        statusSaveFailed: 'Save Failed',
+        statusStopped: 'Stopped'
+    };
+
     let elogState = {
         isRunning: false,
         observers: [],
@@ -95,7 +132,13 @@
         userScrollPaused: false,
         idleCallbackId: null,
         leftPanelRowIndex: 0,
-        lastAutoScrollTime: 0
+        lastAutoScrollTime: 0,
+        addQueue: [],
+        addQueueIndex: 0,
+        existingPairs: new Set(),
+        counters: { total: 0, added: 0, duplicates: 0, failures: 0, pending: 0 },
+        listScrollTop: 0,
+        isAddingEntries: false
     };
 
     function addELogStaffEntriesInit() {
@@ -129,6 +172,12 @@
         elogState.idleCallbackId = null;
         elogState.leftPanelRowIndex = 0;
         elogState.lastAutoScrollTime = 0;
+        elogState.addQueue = [];
+        elogState.addQueueIndex = 0;
+        elogState.existingPairs = new Set();
+        elogState.counters = { total: 0, added: 0, duplicates: 0, failures: 0, pending: 0 };
+        elogState.listScrollTop = 0;
+        elogState.isAddingEntries = false;
     }
 
     function showELogWarning() {
@@ -382,6 +431,32 @@
         const rightPanel = createSubpanel('User Names Status', 'elog-right-panel', 'elog-right-search');
         panelsContainer.appendChild(leftPanel);
         panelsContainer.appendChild(rightPanel);
+        const summaryFooter = document.createElement('div');
+        summaryFooter.id = 'elog-summary-footer';
+        summaryFooter.setAttribute('aria-label', 'Processing summary');
+        summaryFooter.style.cssText = 'display: flex; justify-content: space-around; align-items: center; padding: 10px 16px; background: rgba(0, 0, 0, 0.2); border-radius: 8px; margin-top: 12px; flex-shrink: 0;';
+        const summaryItems = [
+            { id: 'elog-summary-total', label: 'Total', value: '0' },
+            { id: 'elog-summary-added', label: 'Added', value: '0' },
+            { id: 'elog-summary-duplicates', label: 'Duplicates', value: '0' },
+            { id: 'elog-summary-failures', label: 'Failures', value: '0' },
+            { id: 'elog-summary-pending', label: 'Pending', value: '0' },
+            { id: 'elog-summary-percent', label: 'Progress', value: '0%' }
+        ];
+        for (let si = 0; si < summaryItems.length; si++) {
+            const summaryItem = document.createElement('div');
+            summaryItem.style.cssText = 'text-align: center;';
+            const valSpan = document.createElement('span');
+            valSpan.id = summaryItems[si].id;
+            valSpan.textContent = summaryItems[si].value;
+            valSpan.style.cssText = 'display: block; color: white; font-size: 16px; font-weight: 700;';
+            const labelSpan = document.createElement('span');
+            labelSpan.textContent = summaryItems[si].label;
+            labelSpan.style.cssText = 'display: block; color: rgba(255, 255, 255, 0.6); font-size: 11px; font-weight: 500; margin-top: 2px;';
+            summaryItem.appendChild(valSpan);
+            summaryItem.appendChild(labelSpan);
+            summaryFooter.appendChild(summaryItem);
+        }
         const ariaLiveRegion = document.createElement('div');
         ariaLiveRegion.id = 'elog-aria-live';
         ariaLiveRegion.setAttribute('aria-live', 'polite');
@@ -389,6 +464,7 @@
         ariaLiveRegion.style.cssText = 'position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;';
         container.appendChild(header);
         container.appendChild(panelsContainer);
+        container.appendChild(summaryFooter);
         container.appendChild(ariaLiveRegion);
         modal.appendChild(container);
         container.style.position = 'fixed';
@@ -516,6 +592,10 @@
                     },
                     onDone: function(data) {
                         addLogMessage('startELogScan: done - total=' + data.total + ' reason=' + data.reason, 'log');
+                        if (data.reason !== 'stopped' && elogState.isRunning) {
+                            addLogMessage('startELogScan: scan complete, starting add entries flow', 'log');
+                            beginAddNonDuplicateELogEntries();
+                        }
                     },
                     onError: function(error) {
                         addLogMessage('startELogScan: error - ' + error.message, 'error');
@@ -744,6 +824,10 @@
             },
             onDone: function(data) {
                 addLogMessage('performRescan: done - total=' + data.total + ' reason=' + data.reason, 'log');
+                if (data.reason !== 'stopped' && elogState.isRunning) {
+                    addLogMessage('performRescan: re-scan complete, starting add entries flow', 'log');
+                    beginAddNonDuplicateELogEntries();
+                }
             },
             onError: function(error) {
                 addLogMessage('performRescan: error - ' + error.message, 'error');
@@ -764,6 +848,625 @@
         notice.style.cssText = 'background: rgba(255, 193, 7, 0.2); border-left: 4px solid #ffc107; border-radius: 6px; padding: 10px 14px; margin-top: 12px; color: white; font-size: 13px; line-height: 1.4;';
         notice.textContent = message;
         container.appendChild(notice);
+    }
+
+    function getFirstAndLast(name) {
+        addLogMessage('getFirstAndLast: parsing ' + name, 'log');
+        if (!name || !name.trim()) {
+            addLogMessage('getFirstAndLast: empty name', 'warn');
+            return ['', ''];
+        }
+        const suffixPattern = /^(jr|sr|ii|iii|iv)\.?$/i;
+        const trimmed = name.trim().replace(/\s+/g, ' ');
+        const tokens = trimmed.split(' ');
+        const filtered = [];
+        for (let i = 0; i < tokens.length; i++) {
+            if (tokens[i]) {
+                filtered.push(tokens[i]);
+            }
+        }
+        if (filtered.length === 0) {
+            addLogMessage('getFirstAndLast: no tokens', 'warn');
+            return ['', ''];
+        }
+        if (filtered.length === 1) {
+            addLogMessage('getFirstAndLast: single token=' + filtered[0], 'log');
+            return [filtered[0], filtered[0]];
+        }
+        const first = filtered[0];
+        let last = filtered[filtered.length - 1];
+        if (filtered.length > 2 && suffixPattern.test(last)) {
+            addLogMessage('getFirstAndLast: stripping suffix=' + last, 'log');
+            last = filtered[filtered.length - 2];
+        }
+        addLogMessage('getFirstAndLast: first=' + first + ' last=' + last, 'log');
+        return [first, last];
+    }
+
+    function normalizeFirstLastPair(name) {
+        addLogMessage('normalizeFirstLastPair: name=' + name, 'log');
+        const pair = getFirstAndLast(name);
+        const result = elogNormalizeName(pair[0] + ' ' + pair[1]);
+        addLogMessage('normalizeFirstLastPair: result=' + result, 'log');
+        return result;
+    }
+
+    function buildExistingPairsFromScan(scannedNamesArray) {
+        addLogMessage('buildExistingPairsFromScan: building from ' + scannedNamesArray.length + ' names', 'log');
+        const pairs = new Set();
+        for (let i = 0; i < scannedNamesArray.length; i++) {
+            const pk = normalizeFirstLastPair(scannedNamesArray[i]);
+            if (pk) {
+                pairs.add(pk);
+            }
+        }
+        addLogMessage('buildExistingPairsFromScan: built ' + pairs.size + ' pairs', 'log');
+        return pairs;
+    }
+
+    function buildUserQueueSorted(userNamesArray) {
+        addLogMessage('buildUserQueueSorted: building from ' + userNamesArray.length + ' names', 'log');
+        const seenPairKeys = new Set();
+        const unique = [];
+        const duplicateIndices = [];
+        for (let i = 0; i < userNamesArray.length; i++) {
+            const nameObj = userNamesArray[i];
+            const pk = normalizeFirstLastPair(nameObj.display);
+            if (seenPairKeys.has(pk)) {
+                addLogMessage('buildUserQueueSorted: input duplicate pairKey=' + pk + ' display=' + nameObj.display, 'log');
+                duplicateIndices.push(i);
+                continue;
+            }
+            seenPairKeys.add(pk);
+            unique.push({
+                display: nameObj.display,
+                normalized: nameObj.normalized,
+                pairKey: pk,
+                status: ELOG_RUN_LABELS.statusPending
+            });
+        }
+        unique.sort(function(a, b) {
+            const aPair = getFirstAndLast(a.display);
+            const bPair = getFirstAndLast(b.display);
+            const firstCmp = aPair[0].localeCompare(bPair[0], undefined, { sensitivity: 'base', numeric: true });
+            if (firstCmp !== 0) {
+                return firstCmp;
+            }
+            const lastCmp = aPair[1].localeCompare(bPair[1], undefined, { sensitivity: 'base', numeric: true });
+            if (lastCmp !== 0) {
+                return lastCmp;
+            }
+            return a.display.localeCompare(b.display, undefined, { sensitivity: 'base', numeric: true });
+        });
+        addLogMessage('buildUserQueueSorted: unique=' + unique.length + ' duplicates=' + duplicateIndices.length, 'log');
+        return { queue: unique, duplicateIndices: duplicateIndices };
+    }
+
+    function updateRightPanelStatus(pairKey, newStatus) {
+        addLogMessage('updateRightPanelStatus: pairKey=' + pairKey + ' status=' + newStatus, 'log');
+        const rightPanel = document.getElementById('elog-right-panel');
+        if (!rightPanel) {
+            addLogMessage('updateRightPanelStatus: right panel not found', 'error');
+            return;
+        }
+        const items = rightPanel.querySelectorAll('.' + ELOG_CSS_CLASSNAMES.listItem);
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            const normalized = item.getAttribute('data-normalized');
+            if (!normalized) {
+                continue;
+            }
+            const itemPairKey = normalizeFirstLastPair(item.querySelector('span') ? item.querySelector('span:not(.elog-status-badge)').textContent : '');
+            if (itemPairKey === pairKey) {
+                const badge = item.querySelector('.elog-status-badge');
+                if (badge) {
+                    badge.textContent = newStatus;
+                    let badgeColor = 'rgba(255, 255, 255, 0.7)';
+                    let badgeBg = 'rgba(255, 255, 255, 0.1)';
+                    if (newStatus === ELOG_RUN_LABELS.statusAdded) {
+                        badgeColor = '#6bcf7f';
+                        badgeBg = 'rgba(107, 207, 127, 0.2)';
+                    }
+                    else if (newStatus === ELOG_RUN_LABELS.statusAlready) {
+                        badgeColor = '#ffa500';
+                        badgeBg = 'rgba(255, 165, 0, 0.2)';
+                    }
+                    else if (newStatus === ELOG_RUN_LABELS.statusNotInDropdown || newStatus === ELOG_RUN_LABELS.statusSelectionFailed || newStatus === ELOG_RUN_LABELS.statusSaveFailed) {
+                        badgeColor = '#ff6b6b';
+                        badgeBg = 'rgba(255, 107, 107, 0.2)';
+                    }
+                    else if (newStatus === ELOG_RUN_LABELS.statusStopped) {
+                        badgeColor = '#aaa';
+                        badgeBg = 'rgba(170, 170, 170, 0.2)';
+                    }
+                    else if (newStatus === ELOG_RUN_LABELS.statusPending) {
+                        badgeColor = '#ffd93d';
+                        badgeBg = 'rgba(255, 217, 61, 0.2)';
+                    }
+                    badge.style.color = badgeColor;
+                    badge.style.background = badgeBg;
+                }
+                addLogMessage('updateRightPanelStatus: updated item for pairKey=' + pairKey, 'log');
+                break;
+            }
+        }
+    }
+
+    function updateRightPanelSummary(counters) {
+        addLogMessage('updateRightPanelSummary: total=' + counters.total + ' added=' + counters.added + ' dup=' + counters.duplicates + ' fail=' + counters.failures + ' pending=' + counters.pending, 'log');
+        const totalEl = document.getElementById('elog-summary-total');
+        const addedEl = document.getElementById('elog-summary-added');
+        const dupEl = document.getElementById('elog-summary-duplicates');
+        const failEl = document.getElementById('elog-summary-failures');
+        const pendingEl = document.getElementById('elog-summary-pending');
+        const percentEl = document.getElementById('elog-summary-percent');
+        if (totalEl) {
+            totalEl.textContent = String(counters.total);
+        }
+        if (addedEl) {
+            addedEl.textContent = String(counters.added);
+        }
+        if (dupEl) {
+            dupEl.textContent = String(counters.duplicates);
+        }
+        if (failEl) {
+            failEl.textContent = String(counters.failures);
+        }
+        if (pendingEl) {
+            pendingEl.textContent = String(counters.pending);
+        }
+        if (percentEl) {
+            const processed = counters.total - counters.pending;
+            const pct = counters.total > 0 ? Math.round((processed / counters.total) * 100) : 0;
+            percentEl.textContent = pct + '%';
+        }
+        updateAriaLiveRegion('Added: ' + counters.added + ', Duplicates: ' + counters.duplicates + ', Pending: ' + counters.pending);
+    }
+
+    function ensureAddEntryFormOpen() {
+        addLogMessage('ensureAddEntryFormOpen: checking form state', 'log');
+        return new Promise(function(resolve, reject) {
+            const memberInput = document.querySelector(ELOG_FORM_SELECTORS.memberInput);
+            if (memberInput) {
+                addLogMessage('ensureAddEntryFormOpen: member input already present', 'log');
+                resolve(memberInput);
+                return;
+            }
+            const addBtn = document.querySelector(ELOG_FORM_SELECTORS.addEntryBtn);
+            if (addBtn) {
+                addLogMessage('ensureAddEntryFormOpen: clicking Add Entry button', 'log');
+                addBtn.click();
+            } else {
+                addLogMessage('ensureAddEntryFormOpen: Add Entry button not found, waiting for input', 'warn');
+            }
+            waitForElement(ELOG_FORM_SELECTORS.memberInput, ELOG_FORM_TIMEOUTS.waitOpenMs)
+                .then(function(el) {
+                    addLogMessage('ensureAddEntryFormOpen: member input found', 'log');
+                    resolve(el);
+                })
+                .catch(function(err) {
+                    addLogMessage('ensureAddEntryFormOpen: timeout waiting for member input: ' + err, 'error');
+                    reject(err);
+                });
+        });
+    }
+
+    function ensureMemberDropdownOpen() {
+        addLogMessage('ensureMemberDropdownOpen: checking dropdown', 'log');
+        return new Promise(function(resolve, reject) {
+            let retries = 0;
+            function tryOpen() {
+                addLogMessage('ensureMemberDropdownOpen: attempt ' + (retries + 1), 'log');
+                const listEl = document.querySelector(ELOG_FORM_SELECTORS.listContainer);
+                if (listEl) {
+                    addLogMessage('ensureMemberDropdownOpen: list already open', 'log');
+                    resolve(listEl);
+                    return;
+                }
+                const inputEl = document.querySelector(ELOG_FORM_SELECTORS.memberInput);
+                if (inputEl) {
+                    addLogMessage('ensureMemberDropdownOpen: clicking input to open list', 'log');
+                    inputEl.click();
+                    inputEl.focus();
+                }
+                waitForElement(ELOG_FORM_SELECTORS.listContainer, ELOG_FORM_TIMEOUTS.waitListMs)
+                    .then(function(el) {
+                        addLogMessage('ensureMemberDropdownOpen: list opened', 'log');
+                        resolve(el);
+                    })
+                    .catch(function(err) {
+                        retries++;
+                        if (retries < ELOG_FORM_RETRY.openListRetries) {
+                            addLogMessage('ensureMemberDropdownOpen: retry ' + retries, 'warn');
+                            const tid = setTimeout(tryOpen, 300);
+                            elogState.timeouts.push(tid);
+                        } else {
+                            addLogMessage('ensureMemberDropdownOpen: exhausted retries', 'error');
+                            reject(err);
+                        }
+                    });
+            }
+            tryOpen();
+        });
+    }
+
+    function findDropdownViewportElement() {
+        addLogMessage('findDropdownViewportElement: searching', 'log');
+        const el = document.querySelector(ELOG_FORM_SELECTORS.virtualViewport);
+        if (el) {
+            addLogMessage('findDropdownViewportElement: found', 'log');
+        } else {
+            addLogMessage('findDropdownViewportElement: not found', 'warn');
+        }
+        return el;
+    }
+
+    function rememberListScrollPosition(viewportEl) {
+        if (viewportEl) {
+            elogState.listScrollTop = viewportEl.scrollTop;
+            addLogMessage('rememberListScrollPosition: saved=' + elogState.listScrollTop, 'log');
+        }
+    }
+
+    function restoreListScrollPosition(viewportEl) {
+        if (viewportEl && elogState.listScrollTop > 0) {
+            viewportEl.scrollTop = elogState.listScrollTop;
+            addLogMessage('restoreListScrollPosition: restored=' + elogState.listScrollTop, 'log');
+        }
+    }
+
+    function attemptSelectByScrollingForName(targetDisplay, targetPairKey) {
+        addLogMessage('attemptSelectByScrollingForName: target=' + targetDisplay + ' pairKey=' + targetPairKey, 'log');
+        return new Promise(function(resolve) {
+            var viewportEl = findDropdownViewportElement();
+            if (!viewportEl) {
+                addLogMessage('attemptSelectByScrollingForName: no viewport element', 'error');
+                resolve(false);
+                return;
+            }
+            restoreListScrollPosition(viewportEl);
+            var passCount = 0;
+            var lastScrollTop = -1;
+            var lastOptionSnapshot = '';
+            var startTime = Date.now();
+
+            function scanAndScroll() {
+                if (!elogState.isRunning) {
+                    addLogMessage('attemptSelectByScrollingForName: stopped', 'warn');
+                    rememberListScrollPosition(viewportEl);
+                    resolve(false);
+                    return;
+                }
+                if (Date.now() - startTime > ELOG_FORM_TIMEOUTS.maxSelectDurationMs) {
+                    addLogMessage('attemptSelectByScrollingForName: max duration exceeded', 'warn');
+                    rememberListScrollPosition(viewportEl);
+                    resolve(false);
+                    return;
+                }
+                if (passCount >= ELOG_FORM_RETRY.maxScrollPasses) {
+                    addLogMessage('attemptSelectByScrollingForName: max passes reached', 'warn');
+                    rememberListScrollPosition(viewportEl);
+                    resolve(false);
+                    return;
+                }
+                var options = document.querySelectorAll(ELOG_FORM_SELECTORS.optionItem);
+                var retryCount = 0;
+                function tryScanOptions() {
+                    options = document.querySelectorAll(ELOG_FORM_SELECTORS.optionItem);
+                    if (options.length === 0 && retryCount < ELOG_FORM_RETRY.selectRetriesPerScroll) {
+                        retryCount++;
+                        addLogMessage('attemptSelectByScrollingForName: empty render, retry ' + retryCount, 'log');
+                        var rtid = setTimeout(tryScanOptions, ELOG_FORM_TIMEOUTS.waitOptionRenderMs);
+                        elogState.timeouts.push(rtid);
+                        return;
+                    }
+                    var found = false;
+                    var optionTexts = [];
+                    for (var oi = 0; oi < options.length; oi++) {
+                        var optText = (options[oi].textContent || '').trim();
+                        optionTexts.push(optText);
+                        var optPairKey = normalizeFirstLastPair(optText);
+                        if (optPairKey === targetPairKey) {
+                            addLogMessage('attemptSelectByScrollingForName: match found at index ' + oi + ' text=' + optText, 'log');
+                            options[oi].click();
+                            found = true;
+                            rememberListScrollPosition(viewportEl);
+                            var verifyTid = setTimeout(function() {
+                                var inputEl = document.querySelector(ELOG_FORM_SELECTORS.memberInput);
+                                if (inputEl && inputEl.value && inputEl.value.trim()) {
+                                    addLogMessage('attemptSelectByScrollingForName: selection verified via input value', 'log');
+                                    resolve(true);
+                                } else {
+                                    var listGone = !document.querySelector(ELOG_FORM_SELECTORS.listContainer);
+                                    if (listGone) {
+                                        addLogMessage('attemptSelectByScrollingForName: selection verified via list close', 'log');
+                                        resolve(true);
+                                    } else {
+                                        addLogMessage('attemptSelectByScrollingForName: selection not verified, treating as success', 'log');
+                                        resolve(true);
+                                    }
+                                }
+                            }, ELOG_FORM_TIMEOUTS.settleMs);
+                            elogState.timeouts.push(verifyTid);
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        var currentSnapshot = optionTexts.join('|');
+                        var currentTop = viewportEl.scrollTop;
+                        var noProgress = (currentTop === lastScrollTop && currentSnapshot === lastOptionSnapshot);
+                        if (noProgress) {
+                            passCount++;
+                            addLogMessage('attemptSelectByScrollingForName: no progress pass ' + passCount, 'log');
+                        }
+                        lastScrollTop = currentTop;
+                        lastOptionSnapshot = currentSnapshot;
+                        var stepSize = Math.round(viewportEl.clientHeight * 0.7);
+                        var maxScroll = viewportEl.scrollHeight - viewportEl.clientHeight;
+                        var newTop = Math.min(currentTop + stepSize, maxScroll);
+                        if (newTop <= currentTop && currentTop > 0) {
+                            addLogMessage('attemptSelectByScrollingForName: at bottom, trying reverse', 'log');
+                            newTop = 0;
+                            lastScrollTop = -1;
+                            lastOptionSnapshot = '';
+                            passCount++;
+                        }
+                        viewportEl.scrollTop = newTop;
+                        var scrollTid = setTimeout(scanAndScroll, ELOG_FORM_TIMEOUTS.scrollIdleMs);
+                        elogState.timeouts.push(scrollTid);
+                    }
+                }
+                tryScanOptions();
+            }
+            var initTid = setTimeout(scanAndScroll, ELOG_FORM_TIMEOUTS.scrollIdleMs);
+            elogState.timeouts.push(initTid);
+        });
+    }
+
+    function clickSaveAndAddAnother() {
+        addLogMessage('clickSaveAndAddAnother: searching for button', 'log');
+        return new Promise(function(resolve) {
+            var buttons = document.querySelectorAll(ELOG_FORM_SELECTORS.saveAndAddAnotherBtn);
+            var targetBtn = null;
+            for (var bi = 0; bi < buttons.length; bi++) {
+                var btnText = (buttons[bi].innerText || '').toLowerCase();
+                if (btnText.indexOf('save') !== -1 && btnText.indexOf('add another') !== -1) {
+                    targetBtn = buttons[bi];
+                    break;
+                }
+            }
+            if (!targetBtn) {
+                addLogMessage('clickSaveAndAddAnother: button not found', 'error');
+                resolve('not_found');
+                return;
+            }
+            if (targetBtn.disabled || targetBtn.getAttribute('disabled') !== null) {
+                addLogMessage('clickSaveAndAddAnother: button is disabled', 'warn');
+                resolve('disabled');
+                return;
+            }
+            addLogMessage('clickSaveAndAddAnother: clicking button', 'log');
+            targetBtn.click();
+            var waitStart = Date.now();
+            function checkSaveResult() {
+                if (Date.now() - waitStart > ELOG_FORM_TIMEOUTS.waitSaveAfterClickMs) {
+                    addLogMessage('clickSaveAndAddAnother: timeout waiting for save result', 'warn');
+                    resolve('timeout');
+                    return;
+                }
+                var inputEl = document.querySelector(ELOG_FORM_SELECTORS.memberInput);
+                if (inputEl && (!inputEl.value || !inputEl.value.trim())) {
+                    addLogMessage('clickSaveAndAddAnother: input cleared, save successful', 'log');
+                    resolve('success');
+                    return;
+                }
+                var listGone = !document.querySelector(ELOG_FORM_SELECTORS.listContainer);
+                if (listGone && inputEl && (!inputEl.value || !inputEl.value.trim())) {
+                    addLogMessage('clickSaveAndAddAnother: list closed and input clear', 'log');
+                    resolve('success');
+                    return;
+                }
+                var tid = setTimeout(checkSaveResult, 200);
+                elogState.timeouts.push(tid);
+            }
+            var initTid = setTimeout(checkSaveResult, 300);
+            elogState.timeouts.push(initTid);
+        });
+    }
+
+    function processNextStaffFromQueue() {
+        addLogMessage('processNextStaffFromQueue: index=' + elogState.addQueueIndex + ' of ' + elogState.addQueue.length, 'log');
+        if (!elogState.isRunning) {
+            addLogMessage('processNextStaffFromQueue: stopped, marking remaining as Stopped', 'warn');
+            for (var si = elogState.addQueueIndex; si < elogState.addQueue.length; si++) {
+                if (elogState.addQueue[si].status === ELOG_RUN_LABELS.statusPending) {
+                    elogState.addQueue[si].status = ELOG_RUN_LABELS.statusStopped;
+                    updateRightPanelStatus(elogState.addQueue[si].pairKey, ELOG_RUN_LABELS.statusStopped);
+                    elogState.counters.pending--;
+                }
+            }
+            updateRightPanelSummary(elogState.counters);
+            elogState.isAddingEntries = false;
+            updateScanStatus('Stopped', 'stopped');
+            var title = document.getElementById('elog-progress-title');
+            if (title) {
+                title.textContent = 'ELog Staff Entries - Stopped';
+            }
+            if (elogState.focusReturnElement) {
+                elogState.focusReturnElement.focus();
+            }
+            return;
+        }
+        if (elogState.addQueueIndex >= elogState.addQueue.length) {
+            addLogMessage('processNextStaffFromQueue: all candidates processed', 'log');
+            elogState.isAddingEntries = false;
+            updateScanStatus('Complete', 'complete');
+            var titleEl = document.getElementById('elog-progress-title');
+            if (titleEl) {
+                titleEl.textContent = 'ELog Staff Entries - Complete';
+            }
+            updateRightPanelSummary(elogState.counters);
+            updateAriaLiveRegion('Processing complete. Added: ' + elogState.counters.added + ', Duplicates: ' + elogState.counters.duplicates + ', Failures: ' + elogState.counters.failures);
+            var memberInput = document.querySelector(ELOG_FORM_SELECTORS.memberInput);
+            if (memberInput) {
+                memberInput.focus();
+            } else if (elogState.focusReturnElement) {
+                elogState.focusReturnElement.focus();
+            }
+            return;
+        }
+        var candidate = elogState.addQueue[elogState.addQueueIndex];
+        addLogMessage('processNextStaffFromQueue: processing ' + candidate.display + ' pairKey=' + candidate.pairKey, 'log');
+        if (elogState.existingPairs.has(candidate.pairKey)) {
+            addLogMessage('processNextStaffFromQueue: already exists in table', 'log');
+            candidate.status = ELOG_RUN_LABELS.statusAlready;
+            elogState.counters.duplicates++;
+            elogState.counters.pending--;
+            updateRightPanelStatus(candidate.pairKey, ELOG_RUN_LABELS.statusAlready);
+            updateRightPanelSummary(elogState.counters);
+            elogState.addQueueIndex++;
+            var tid1 = setTimeout(processNextStaffFromQueue, 50);
+            elogState.timeouts.push(tid1);
+            return;
+        }
+        ensureAddEntryFormOpen()
+            .then(function() {
+                addLogMessage('processNextStaffFromQueue: form open, opening dropdown', 'log');
+                return ensureMemberDropdownOpen();
+            })
+            .then(function() {
+                addLogMessage('processNextStaffFromQueue: dropdown open, selecting name', 'log');
+                return attemptSelectByScrollingForName(candidate.display, candidate.pairKey);
+            })
+            .then(function(selected) {
+                if (!selected) {
+                    addLogMessage('processNextStaffFromQueue: not found in dropdown', 'warn');
+                    candidate.status = ELOG_RUN_LABELS.statusNotInDropdown;
+                    elogState.counters.failures++;
+                    elogState.counters.pending--;
+                    updateRightPanelStatus(candidate.pairKey, ELOG_RUN_LABELS.statusNotInDropdown);
+                    updateRightPanelSummary(elogState.counters);
+                    elogState.addQueueIndex++;
+                    var tid2 = setTimeout(processNextStaffFromQueue, 50);
+                    elogState.timeouts.push(tid2);
+                    return;
+                }
+                addLogMessage('processNextStaffFromQueue: selected, clicking save', 'log');
+                clickSaveAndAddAnother().then(function(saveResult) {
+                    if (saveResult === 'disabled') {
+                        addLogMessage('processNextStaffFromQueue: save disabled, retrying selection', 'warn');
+                        ensureMemberDropdownOpen()
+                            .then(function() {
+                                return attemptSelectByScrollingForName(candidate.display, candidate.pairKey);
+                            })
+                            .then(function(reselected) {
+                                if (!reselected) {
+                                    candidate.status = ELOG_RUN_LABELS.statusSelectionFailed;
+                                    elogState.counters.failures++;
+                                    elogState.counters.pending--;
+                                    updateRightPanelStatus(candidate.pairKey, ELOG_RUN_LABELS.statusSelectionFailed);
+                                    updateRightPanelSummary(elogState.counters);
+                                    elogState.addQueueIndex++;
+                                    var tid3 = setTimeout(processNextStaffFromQueue, 50);
+                                    elogState.timeouts.push(tid3);
+                                    return;
+                                }
+                                return clickSaveAndAddAnother().then(function(retryResult) {
+                                    if (retryResult === 'success') {
+                                        candidate.status = ELOG_RUN_LABELS.statusAdded;
+                                        elogState.counters.added++;
+                                        elogState.counters.pending--;
+                                        updateRightPanelStatus(candidate.pairKey, ELOG_RUN_LABELS.statusAdded);
+                                    } else {
+                                        candidate.status = ELOG_RUN_LABELS.statusSelectionFailed;
+                                        elogState.counters.failures++;
+                                        elogState.counters.pending--;
+                                        updateRightPanelStatus(candidate.pairKey, ELOG_RUN_LABELS.statusSelectionFailed);
+                                    }
+                                    updateRightPanelSummary(elogState.counters);
+                                    elogState.addQueueIndex++;
+                                    var tid4 = setTimeout(processNextStaffFromQueue, 50);
+                                    elogState.timeouts.push(tid4);
+                                });
+                            })
+                            .catch(function(err) {
+                                addLogMessage('processNextStaffFromQueue: retry error: ' + err, 'error');
+                                candidate.status = ELOG_RUN_LABELS.statusSelectionFailed;
+                                elogState.counters.failures++;
+                                elogState.counters.pending--;
+                                updateRightPanelStatus(candidate.pairKey, ELOG_RUN_LABELS.statusSelectionFailed);
+                                updateRightPanelSummary(elogState.counters);
+                                elogState.addQueueIndex++;
+                                var tid5 = setTimeout(processNextStaffFromQueue, 50);
+                                elogState.timeouts.push(tid5);
+                            });
+                        return;
+                    }
+                    if (saveResult === 'success') {
+                        addLogMessage('processNextStaffFromQueue: saved successfully', 'log');
+                        candidate.status = ELOG_RUN_LABELS.statusAdded;
+                        elogState.counters.added++;
+                        elogState.counters.pending--;
+                        updateRightPanelStatus(candidate.pairKey, ELOG_RUN_LABELS.statusAdded);
+                    } else {
+                        addLogMessage('processNextStaffFromQueue: save failed result=' + saveResult, 'warn');
+                        candidate.status = ELOG_RUN_LABELS.statusSaveFailed;
+                        elogState.counters.failures++;
+                        elogState.counters.pending--;
+                        updateRightPanelStatus(candidate.pairKey, ELOG_RUN_LABELS.statusSaveFailed);
+                    }
+                    updateRightPanelSummary(elogState.counters);
+                    elogState.addQueueIndex++;
+                    var tid6 = setTimeout(processNextStaffFromQueue, 50);
+                    elogState.timeouts.push(tid6);
+                });
+            })
+            .catch(function(err) {
+                addLogMessage('processNextStaffFromQueue: error: ' + err, 'error');
+                candidate.status = ELOG_RUN_LABELS.statusSaveFailed;
+                elogState.counters.failures++;
+                elogState.counters.pending--;
+                updateRightPanelStatus(candidate.pairKey, ELOG_RUN_LABELS.statusSaveFailed);
+                updateRightPanelSummary(elogState.counters);
+                elogState.addQueueIndex++;
+                var tid7 = setTimeout(processNextStaffFromQueue, 50);
+                elogState.timeouts.push(tid7);
+            });
+    }
+
+    function beginAddNonDuplicateELogEntries() {
+        addLogMessage('beginAddNonDuplicateELogEntries: starting', 'log');
+        elogState.existingPairs = buildExistingPairsFromScan(elogState.scannedNames);
+        addLogMessage('beginAddNonDuplicateELogEntries: existingPairs count=' + elogState.existingPairs.size, 'log');
+        var result = buildUserQueueSorted(elogState.parsedNames);
+        elogState.addQueue = result.queue;
+        elogState.addQueueIndex = 0;
+        elogState.listScrollTop = 0;
+        elogState.isAddingEntries = true;
+        for (var di = 0; di < result.duplicateIndices.length; di++) {
+            var dupIdx = result.duplicateIndices[di];
+            var dupName = elogState.parsedNames[dupIdx];
+            if (dupName) {
+                var dupPk = normalizeFirstLastPair(dupName.display);
+                updateRightPanelStatus(dupPk, ELOG_RUN_LABELS.statusAlready);
+            }
+        }
+        elogState.counters = {
+            total: elogState.addQueue.length,
+            added: 0,
+            duplicates: 0,
+            failures: 0,
+            pending: elogState.addQueue.length
+        };
+        updateRightPanelSummary(elogState.counters);
+        updateScanStatus('Adding Entries', 'progress');
+        var title = document.getElementById('elog-progress-title');
+        if (title) {
+            title.textContent = 'ELog Staff Entries - Adding Entries';
+        }
+        updateAriaLiveRegion('Starting to add ' + elogState.addQueue.length + ' entries');
+        addLogMessage('beginAddNonDuplicateELogEntries: queue size=' + elogState.addQueue.length + ', starting processing', 'log');
+        processNextStaffFromQueue();
     }
 
     function findScrollableContainer(gridEl) {
@@ -1185,6 +1888,20 @@
         elogState.scrollContainer = null;
         elogState.userScrollHandler = null;
         elogState.userScrollPaused = false;
+        if (elogState.isAddingEntries) {
+            addLogMessage('stopELog: was adding entries, marking remaining as Stopped', 'log');
+            for (let qi = elogState.addQueueIndex; qi < elogState.addQueue.length; qi++) {
+                if (elogState.addQueue[qi].status === ELOG_RUN_LABELS.statusPending) {
+                    elogState.addQueue[qi].status = ELOG_RUN_LABELS.statusStopped;
+                    elogState.counters.pending--;
+                }
+            }
+            elogState.isAddingEntries = false;
+        }
+        elogState.addQueue = [];
+        elogState.addQueueIndex = 0;
+        elogState.existingPairs = new Set();
+        elogState.listScrollTop = 0;
         const inputModal = document.getElementById('elog-input-modal');
         if (inputModal && inputModal.parentNode) {
             inputModal.parentNode.removeChild(inputModal);

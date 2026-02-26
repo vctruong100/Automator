@@ -62,13 +62,13 @@ if (
     temp < temp_min_range
 ) return attachedItemCodeList[2]; // Out of Protocol Range
 else if ( // IR
-    sys <= sys_max_range ||
-    sys >= sys_min_range || 
-    dia <= dia_max_range ||
-    dia >= dia_min_range ||
-    hr <= hr_max_range ||
-    hr >= hr_min_range ||
-    temp <= temp_max_range ||
+    sys <= sys_max_range &&
+    sys >= sys_min_range && 
+    dia <= dia_max_range &&
+    dia >= dia_min_range &&
+    hr <= hr_max_range &&
+    hr >= hr_min_range &&
+    temp <= temp_max_range &&
     temp >= temp_min_range
 ) return attachedItemCodeList[4]; // Within Normal Range
 
