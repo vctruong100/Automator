@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.8.9
+// @version     1.9.0
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -7907,6 +7907,17 @@
     //==========================
 
     function SubjectEligibilityFunctions() {}
+    const ELIGIBILITY_LIST_URL_PROD = "https://cenexel.clinspark.com/secure/crfdesign/studylibrary/eligibility/list";
+    const ELIGIBILITY_VALID_HOSTNAMES = ["cenexeltest.clinspark.com", "cenexel.clinspark.com"];
+    const ELIGIBILITY_LIST_PATH = "/secure/crfdesign/studylibrary/eligibility/list";
+    const IE_CODE_REGEX = /\b(INC|EXC)\s*(\d+)\b/i;
+    const IE_CODE_REGEX_GLOBAL = /\b(INC|EXC)\s*(\d+)\b/gi;
+    const IMPORT_IE_HELPER_TIMEOUT = 15000;
+    const IMPORT_IE_POLL_INTERVAL = 120;
+    const IMPORT_IE_MODAL_TIMEOUT = 12000;
+    const IMPORT_IE_SHORT_DELAY_MIN = 150;
+    const IMPORT_IE_SHORT_DELAY_MAX = 400;
+    var IMPORT_IE_CANCELED = false;
 
     // Update Import Eligibility popup lists
     function addToImportEligCompletedList(itemCode) {

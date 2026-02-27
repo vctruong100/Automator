@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.3.0
+// @version 3.3.1
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -91,6 +91,8 @@
     const STORAGE_PANEL_HIDDEN = "activityPlanState.panel.hidden";
     const STORAGE_PANEL_HOTKEY = "activityPlanState.panel.hotkey";
     const PANEL_TOGGLE_KEY = "F2";
+
+    // Run Subject Eligibility
     const ELIGIBILITY_LIST_URL = "https://cenexeltest.clinspark.com/secure/crfdesign/studylibrary/eligibility/list";
     const STORAGE_ELIG_IMPORTED = "activityPlanState.eligibility.importedItems";
     const RUNMODE_ELIG_IMPORT = "eligibilityImport";
@@ -106,6 +108,7 @@
     const IMPORT_IE_MODAL_TIMEOUT = 12000;
     const IMPORT_IE_SHORT_DELAY_MIN = 150;
     const IMPORT_IE_SHORT_DELAY_MAX = 400;
+    var IMPORT_IE_CANCELED = false;
 
     // Run Find Study Event
 
@@ -9968,8 +9971,6 @@
 
     function ClearEligibilityFunctions() {}
 
-    var IMPORT_IE_CANCELED = false;
-
     function startClearMapping() {
         if (CLEAR_MAPPING_CANCELED) {
             log("ClearMapping: startClearMapping cancelled");
@@ -12467,7 +12468,7 @@
         var mappings = [];
         var planSel = document.querySelector("select#activityPlan");
         if (!planSel) {
-            planSel = await waitForElement("select#activityPlan", 10000);
+            planSel = await waitForElement("select#activityPlan", 5000);
         }
         if (!planSel) {
             log("ImportIE: collectMappingsFromModal planSel not found");
@@ -12488,7 +12489,7 @@
             await sleep(200);
             var schedSel = document.querySelector("select#scheduledActivity");
             if (!schedSel) {
-                schedSel = await waitForElement("select#scheduledActivity", 8000);
+                schedSel = await waitForElement("select#scheduledActivity", 4000);
             }
             if (!schedSel) {
                 log("ImportIE: collectMappingsFromModal schedSel not found for plan='" + String(pTxt) + "'");
@@ -12517,7 +12518,7 @@
                 await sleep(100);
                 var itemRefSel = document.querySelector("select#itemRef");
                 if (!itemRefSel) {
-                    itemRefSel = await waitForElement("select#itemRef", 8000);
+                    itemRefSel = await waitForElement("select#itemRef", 4000);
                 }
                 if (!itemRefSel) {
                     log("ImportIE: collectMappingsFromModal itemRefSel not found for SA='" + String(sTxt) + "'");
@@ -13432,7 +13433,6 @@
                             rows[index].statusSpan.title = msg;
                         }
                     }
-                    listEl.scrollTop = listEl.scrollHeight;
                 }
             },
             updateSummary: function (successes, failures) {
@@ -13508,7 +13508,7 @@
             log("ImportIE: step b - selecting eligibility item for code=" + String(mapping.code));
             var eligSel = document.querySelector("select#eligibilityItemRef");
             if (!eligSel) {
-                eligSel = await waitForElement("select#eligibilityItemRef", 10000);
+                eligSel = await waitForElement("select#eligibilityItemRef", 5000);
             }
             if (!eligSel) {
                 log("ImportIE: eligibilityItemRef not found");
