@@ -109,6 +109,11 @@
     const IMPORT_IE_SHORT_DELAY_MIN = 150;
     const IMPORT_IE_SHORT_DELAY_MAX = 400;
     var IMPORT_IE_CANCELED = false;
+    var RIGHT_PANEL_MODE = { HIERARCHY: "hierarchy", CODE: "code" };
+    var CODE_SORT_TOGGLE_BUTTON_ID = "ieCodeSortToggle";
+    var RIGHT_PANEL_BODY_ID = "ieRightPanelBody";
+    var CODE_TOKEN_REGEX = /\b(INC|EXC)\s*[-_:/#]?\s*0*(\d+)\b/i;
+    var CODE_PAD_WIDTH = 3;
 
     // Run Find Study Event
 
@@ -12489,14 +12494,14 @@
             await sleep(200);
             var schedSel = document.querySelector("select#scheduledActivity");
             if (!schedSel) {
-                schedSel = await waitForElement("select#scheduledActivity", 4000);
+                schedSel = await waitForElement("select#scheduledActivity", 6000);
             }
             if (!schedSel) {
                 log("ImportIE: collectMappingsFromModal schedSel not found for plan='" + String(pTxt) + "'");
                 pi = pi + 1;
                 continue;
             }
-            var hasSchedOpts = await waitForSelectOptions(schedSel, 1, 3000);
+            var hasSchedOpts = await waitForSelectOptions(schedSel, 1, 6000);
             if (!hasSchedOpts) {
                 log("ImportIE: collectMappingsFromModal no SA options for plan='" + String(pTxt) + "'");
                 pi = pi + 1;
@@ -12793,6 +12798,7 @@
         rightPanel.appendChild(rightSearch);
 
         var rightList = document.createElement("div");
+        rightList.id = RIGHT_PANEL_BODY_ID;
         rightList.style.flex = "1";
         rightList.style.overflowY = "auto";
         rightList.style.paddingRight = "4px";
@@ -12803,11 +12809,421 @@
         var itemCheckboxes = [];
 
         function updateCounter() {
+            updateSelectedCountAndConfirmState();
+        }
+
+        function updateParentState(planIdx) {
+            updateCounter();
+        }
+
+        // State tracking
+        var selectedItems = {};
+        var selectedSAs = {};
+        var selectedPlans = {};
+
+        var currentRightPanelMode = RIGHT_PANEL_MODE.HIERARCHY;
+        var flatDataset = [];
+        var flatCheckboxes = [];
+        var selectionStateMap = {};
+
+        function getMappingKey(m) {
+            log("ImportIE: getMappingKey start");
+            var apv = "";
+            var sav = "";
+            var civ = "";
+            if (m.ids && typeof m.ids === "object") {
+                if (m.ids.activityPlanValue) {
+                    apv = String(m.ids.activityPlanValue);
+                }
+                if (m.ids.scheduledActivityValue) {
+                    sav = String(m.ids.scheduledActivityValue);
+                }
+                if (m.ids.checkItemValue) {
+                    civ = String(m.ids.checkItemValue);
+                }
+            }
+            if (apv.length > 0 || sav.length > 0 || civ.length > 0) {
+                var keyResult = apv + "|" + sav + "|" + civ;
+                log("ImportIE: getMappingKey result=" + keyResult);
+                return keyResult;
+            }
+            var apt = (m.activityPlanText || "").replace(/\s+/g, " ").trim();
+            var sat = (m.scheduledActivityText || "").replace(/\s+/g, " ").trim();
+            var cit = (m.checkItemText || "").replace(/\s+/g, " ").trim();
+            var fallbackKey = apt + "|" + sat + "|" + cit;
+            log("ImportIE: getMappingKey fallback result=" + fallbackKey);
+            return fallbackKey;
+        }
+
+        function parseCodeParts(labelText) {
+            log("ImportIE: parseCodeParts start labelText=" + String(labelText));
+            if (!labelText || typeof labelText !== "string") {
+                log("ImportIE: parseCodeParts - no label text, returning null");
+                return null;
+            }
+            var re = new RegExp("\\b(INC|EXC)\\s*[-_:/#]?\\s*0*(\\d+)\\b", "i");
+            var match = re.exec(labelText);
+            if (!match) {
+                log("ImportIE: parseCodeParts - no match found, returning null");
+                return null;
+            }
+            var typeRaw = match[1];
+            var numRaw = match[2];
+            var typeUpper = typeRaw.toUpperCase();
+            var numberInt = parseInt(numRaw, 10);
+            var padStr = String(numberInt);
+            while (padStr.length < CODE_PAD_WIDTH) {
+                padStr = "0" + padStr;
+            }
+            var numberPadded = padStr;
+            var result = {
+                type: typeRaw,
+                numberInt: numberInt,
+                typeUpper: typeUpper,
+                numberPadded: numberPadded,
+                rawMatch: match[0]
+            };
+            log("ImportIE: parseCodeParts result type=" + typeUpper + " num=" + String(numberInt) + " padded=" + numberPadded);
+            return result;
+        }
+
+        function formatCodeDisplay(typeUpper, numberInt) {
+            log("ImportIE: formatCodeDisplay start type=" + String(typeUpper) + " num=" + String(numberInt));
+            var padStr = String(numberInt);
+            while (padStr.length < CODE_PAD_WIDTH) {
+                padStr = "0" + padStr;
+            }
+            var display = typeUpper + padStr;
+            log("ImportIE: formatCodeDisplay result=" + display);
+            return display;
+        }
+
+        function buildFlatCodeOrderedDataset(allMappings, alreadyExistCodeSet) {
+            log("ImportIE: buildFlatCodeOrderedDataset start mappings=" + String(allMappings.length) + " existingCodes=" + String(alreadyExistCodeSet.size));
+            var rows = [];
+            var mi = 0;
+            while (mi < allMappings.length) {
+                var m = allMappings[mi];
+                log("ImportIE: buildFlatCodeOrderedDataset processing mapping index=" + String(mi));
+                var parsed = parseCodeParts(m.checkItemText);
+                if (!parsed) {
+                    log("ImportIE: buildFlatCodeOrderedDataset - no code token for mapping index=" + String(mi) + ", skipping");
+                    mi = mi + 1;
+                    continue;
+                }
+                var codeDisplay = formatCodeDisplay(parsed.typeUpper, parsed.numberInt);
+                var alreadyExists = alreadyExistCodeSet.has(m.code.toUpperCase());
+                var statusVal = alreadyExists ? "Already Exist" : "Not Added";
+                var disabledVal = alreadyExists;
+                var apText = (m.activityPlanText || "").replace(/\s+/g, " ").trim();
+                var saText = (m.scheduledActivityText || "").replace(/\s+/g, " ").trim();
+                var ciText = (m.checkItemText || "").replace(/\s+/g, " ").trim();
+                var stableKey = getMappingKey(m);
+                var flatRow = {
+                    key: stableKey,
+                    typeUpper: parsed.typeUpper,
+                    numberInt: parsed.numberInt,
+                    codeDisplay: codeDisplay,
+                    activityPlanText: apText,
+                    scheduledActivityText: saText,
+                    checkItemText: ciText,
+                    status: statusVal,
+                    disabled: disabledVal,
+                    mapping: m,
+                    values: {
+                        activityPlanValue: (m.ids && m.ids.activityPlanValue) ? String(m.ids.activityPlanValue) : "",
+                        scheduledActivityValue: (m.ids && m.ids.scheduledActivityValue) ? String(m.ids.scheduledActivityValue) : "",
+                        checkItemValue: (m.ids && m.ids.checkItemValue) ? String(m.ids.checkItemValue) : ""
+                    }
+                };
+                rows.push(flatRow);
+                log("ImportIE: buildFlatCodeOrderedDataset added row key=" + stableKey + " code=" + codeDisplay + " status=" + statusVal);
+                mi = mi + 1;
+            }
+            log("ImportIE: buildFlatCodeOrderedDataset done rows=" + String(rows.length));
+            return rows;
+        }
+
+        function sortFlatDataset(flatRows) {
+            log("ImportIE: sortFlatDataset start count=" + String(flatRows.length));
+            var typePrecedence = { "INC": 0, "EXC": 1 };
+            flatRows.sort(function (a, b) {
+                var ta = typePrecedence.hasOwnProperty(a.typeUpper) ? typePrecedence[a.typeUpper] : 99;
+                var tb = typePrecedence.hasOwnProperty(b.typeUpper) ? typePrecedence[b.typeUpper] : 99;
+                if (ta !== tb) {
+                    return ta - tb;
+                }
+                if (a.numberInt !== b.numberInt) {
+                    return a.numberInt - b.numberInt;
+                }
+                var apA = (a.activityPlanText || "").toLowerCase().replace(/\s+/g, " ").trim();
+                var apB = (b.activityPlanText || "").toLowerCase().replace(/\s+/g, " ").trim();
+                if (apA < apB) {
+                    return -1;
+                }
+                if (apA > apB) {
+                    return 1;
+                }
+                var saA = (a.scheduledActivityText || "").toLowerCase().replace(/\s+/g, " ").trim();
+                var saB = (b.scheduledActivityText || "").toLowerCase().replace(/\s+/g, " ").trim();
+                if (saA < saB) {
+                    return -1;
+                }
+                if (saA > saB) {
+                    return 1;
+                }
+                var ciA = (a.checkItemText || "").toLowerCase().replace(/\s+/g, " ").trim();
+                var ciB = (b.checkItemText || "").toLowerCase().replace(/\s+/g, " ").trim();
+                if (ciA < ciB) {
+                    return -1;
+                }
+                if (ciA > ciB) {
+                    return 1;
+                }
+                return 0;
+            });
+            log("ImportIE: sortFlatDataset done");
+        }
+
+        function captureSelectionState() {
+            log("ImportIE: captureSelectionState start mode=" + currentRightPanelMode);
+            if (currentRightPanelMode === RIGHT_PANEL_MODE.HIERARCHY) {
+                var hi = 0;
+                while (hi < itemCheckboxes.length) {
+                    var entry = itemCheckboxes[hi];
+                    if (entry && entry.mapping && entry.cb) {
+                        var mk = getMappingKey(entry.mapping);
+                        if (!entry.cb.disabled) {
+                            selectionStateMap[mk] = entry.cb.checked;
+                            log("ImportIE: captureSelectionState hierarchy key=" + mk + " checked=" + String(entry.cb.checked));
+                        }
+                    }
+                    hi = hi + 1;
+                }
+            } else {
+                var fi = 0;
+                while (fi < flatCheckboxes.length) {
+                    var fEntry = flatCheckboxes[fi];
+                    if (fEntry && fEntry.cb && !fEntry.cb.disabled) {
+                        selectionStateMap[fEntry.key] = fEntry.cb.checked;
+                        log("ImportIE: captureSelectionState flat key=" + fEntry.key + " checked=" + String(fEntry.cb.checked));
+                    }
+                    fi = fi + 1;
+                }
+            }
+            log("ImportIE: captureSelectionState done keys=" + String(Object.keys(selectionStateMap).length));
+        }
+
+        function restoreSelectionToHierarchy() {
+            log("ImportIE: restoreSelectionToHierarchy start");
+            var ri = 0;
+            while (ri < itemCheckboxes.length) {
+                var entry = itemCheckboxes[ri];
+                if (entry && entry.mapping && entry.cb && !entry.cb.disabled) {
+                    var mk = getMappingKey(entry.mapping);
+                    if (selectionStateMap.hasOwnProperty(mk)) {
+                        entry.cb.checked = selectionStateMap[mk];
+                        log("ImportIE: restoreSelectionToHierarchy key=" + mk + " checked=" + String(selectionStateMap[mk]));
+                    }
+                }
+                ri = ri + 1;
+            }
+            log("ImportIE: restoreSelectionToHierarchy done");
+        }
+
+        function restoreSelectionToFlat() {
+            log("ImportIE: restoreSelectionToFlat start");
+            var fi = 0;
+            while (fi < flatCheckboxes.length) {
+                var fEntry = flatCheckboxes[fi];
+                if (fEntry && fEntry.cb && !fEntry.cb.disabled) {
+                    if (selectionStateMap.hasOwnProperty(fEntry.key)) {
+                        fEntry.cb.checked = selectionStateMap[fEntry.key];
+                        log("ImportIE: restoreSelectionToFlat key=" + fEntry.key + " checked=" + String(selectionStateMap[fEntry.key]));
+                    }
+                }
+                fi = fi + 1;
+            }
+            log("ImportIE: restoreSelectionToFlat done");
+        }
+
+        function syncSelectionStateBetweenViews(targetSelectionStateMap) {
+            log("ImportIE: syncSelectionStateBetweenViews start mode=" + currentRightPanelMode);
+            if (currentRightPanelMode === RIGHT_PANEL_MODE.HIERARCHY) {
+                restoreSelectionToHierarchy();
+            } else {
+                restoreSelectionToFlat();
+            }
+            log("ImportIE: syncSelectionStateBetweenViews done");
+        }
+
+        function renderRightPanelFlatCodeView(flatRows, targetSelectionState, searchText) {
+            log("ImportIE: renderRightPanelFlatCodeView start rows=" + String(flatRows.length) + " search=" + String(searchText));
+            rightList.innerHTML = "";
+            allCheckboxes = [];
+            planCheckboxes = [];
+            saCheckboxes = [];
+            itemCheckboxes = [];
+            flatCheckboxes = [];
+            var filterLower = (searchText || "").replace(/\s+/g, " ").trim().toLowerCase();
+            var fi = 0;
+            while (fi < flatRows.length) {
+                var fr = flatRows[fi];
+                log("ImportIE: renderRightPanelFlatCodeView rendering row index=" + String(fi) + " code=" + fr.codeDisplay);
+
+                var row = document.createElement("div");
+                row.style.display = "flex";
+                row.style.alignItems = "flex-start";
+                row.style.gap = "8px";
+                row.style.padding = "6px 8px";
+                row.style.fontSize = "12px";
+                row.style.borderBottom = "1px solid #2a2a2a";
+                row.style.transition = "background 0.1s";
+                row.setAttribute("data-flat-key", fr.key);
+
+                row.addEventListener("mouseenter", (function (r) {
+                    return function () {
+                        r.style.background = "#1a1a1a";
+                    };
+                })(row));
+                row.addEventListener("mouseleave", (function (r) {
+                    return function () {
+                        r.style.background = "transparent";
+                    };
+                })(row));
+
+                var cb = document.createElement("input");
+                cb.type = "checkbox";
+                cb.style.cursor = "pointer";
+                cb.style.flexShrink = "0";
+                cb.style.marginTop = "3px";
+                if (fr.disabled) {
+                    cb.checked = false;
+                    cb.disabled = true;
+                    cb.style.cursor = "not-allowed";
+                } else {
+                    if (targetSelectionState.hasOwnProperty(fr.key)) {
+                        cb.checked = targetSelectionState[fr.key];
+                    } else {
+                        cb.checked = true;
+                    }
+                }
+
+                var textBlock = document.createElement("div");
+                textBlock.style.flex = "1";
+                textBlock.style.minWidth = "0";
+
+                var codeLabel = document.createElement("div");
+                codeLabel.textContent = fr.codeDisplay;
+                codeLabel.style.fontWeight = "600";
+                codeLabel.style.fontSize = "13px";
+                codeLabel.style.color = "#fff";
+
+                var pathLabel = document.createElement("div");
+                pathLabel.textContent = fr.activityPlanText + " -> " + fr.scheduledActivityText + " -> " + fr.checkItemText;
+                pathLabel.style.fontSize = "10px";
+                pathLabel.style.color = "#888";
+                pathLabel.style.marginTop = "2px";
+                pathLabel.style.wordBreak = "break-word";
+                pathLabel.style.lineHeight = "1.3";
+
+                textBlock.appendChild(codeLabel);
+                textBlock.appendChild(pathLabel);
+
+                var statusBadge = document.createElement("span");
+                statusBadge.style.fontSize = "10px";
+                statusBadge.style.padding = "2px 6px";
+                statusBadge.style.borderRadius = "3px";
+                statusBadge.style.flexShrink = "0";
+                statusBadge.style.marginTop = "2px";
+                if (fr.disabled) {
+                    statusBadge.textContent = "Already Exist";
+                    statusBadge.style.background = "#555";
+                    statusBadge.style.color = "#aaa";
+                } else {
+                    statusBadge.textContent = "Not Added";
+                    statusBadge.style.background = "#1a4a1a";
+                    statusBadge.style.color = "#6f6";
+                }
+
+                row.appendChild(cb);
+                row.appendChild(textBlock);
+                row.appendChild(statusBadge);
+
+                var flatEntry = {
+                    cb: cb,
+                    mapping: fr.mapping,
+                    row: row,
+                    key: fr.key,
+                    codeDisplay: fr.codeDisplay,
+                    activityPlanText: fr.activityPlanText,
+                    scheduledActivityText: fr.scheduledActivityText,
+                    checkItemText: fr.checkItemText
+                };
+                flatCheckboxes.push(flatEntry);
+                itemCheckboxes.push(flatEntry);
+                allCheckboxes.push({ type: "item", idx: fi, row: row });
+
+                (function (capturedEntry) {
+                    cb.addEventListener("change", function (e) {
+                        e.stopPropagation();
+                        log("ImportIE: flat checkbox changed key=" + capturedEntry.key + " checked=" + String(cb.checked));
+                        selectionStateMap[capturedEntry.key] = cb.checked;
+                        updateSelectedCountAndConfirmState();
+                    });
+                })(flatEntry);
+
+                var matchesFilter = true;
+                if (filterLower.length > 0) {
+                    var combined = (fr.codeDisplay + " " + fr.activityPlanText + " " + fr.scheduledActivityText + " " + fr.checkItemText).replace(/\s+/g, " ").toLowerCase();
+                    if (combined.indexOf(filterLower) < 0) {
+                        matchesFilter = false;
+                    }
+                }
+                row.style.display = matchesFilter ? "flex" : "none";
+
+                rightList.appendChild(row);
+                fi = fi + 1;
+            }
+            log("ImportIE: renderRightPanelFlatCodeView done rendered=" + String(flatCheckboxes.length));
+        }
+
+        function applySearchFilterToFlatView(searchText) {
+            log("ImportIE: applySearchFilterToFlatView start search=" + String(searchText));
+            var filterLower = (searchText || "").replace(/\s+/g, " ").trim().toLowerCase();
+            var fi = 0;
+            while (fi < flatCheckboxes.length) {
+                var fEntry = flatCheckboxes[fi];
+                var matchesFilter = true;
+                if (filterLower.length > 0) {
+                    var combined = (fEntry.codeDisplay + " " + fEntry.activityPlanText + " " + fEntry.scheduledActivityText + " " + fEntry.checkItemText).replace(/\s+/g, " ").toLowerCase();
+                    if (combined.indexOf(filterLower) < 0) {
+                        matchesFilter = false;
+                    }
+                }
+                fEntry.row.style.display = matchesFilter ? "flex" : "none";
+                fi = fi + 1;
+            }
+            log("ImportIE: applySearchFilterToFlatView done");
+            updateSelectedCountAndConfirmState();
+        }
+
+        function updateSelectedCountAndConfirmState() {
+            log("ImportIE: updateSelectedCountAndConfirmState start mode=" + currentRightPanelMode);
             var count = 0;
+            var hasVisibleSelectable = false;
             var ci = 0;
             while (ci < itemCheckboxes.length) {
-                if (itemCheckboxes[ci].cb.checked && !itemCheckboxes[ci].cb.disabled) {
-                    count = count + 1;
+                var entry = itemCheckboxes[ci];
+                if (entry && entry.cb && entry.row) {
+                    var isVisible = entry.row.style.display !== "none";
+                    var isSelectable = !entry.cb.disabled;
+                    if (isVisible && isSelectable) {
+                        hasVisibleSelectable = true;
+                        if (entry.cb.checked) {
+                            count = count + 1;
+                        }
+                    }
                 }
                 ci = ci + 1;
             }
@@ -12819,16 +13235,49 @@
                 confirmBtn.disabled = true;
                 confirmBtn.style.opacity = "0.5";
             }
+            log("ImportIE: updateSelectedCountAndConfirmState done count=" + String(count) + " hasVisibleSelectable=" + String(hasVisibleSelectable));
         }
 
-        function updateParentState(planIdx) {
-            updateCounter();
+        async function toggleRightPanelViewMode(nextMode) {
+            log("ImportIE: toggleRightPanelViewMode start nextMode=" + String(nextMode) + " currentMode=" + currentRightPanelMode);
+            captureSelectionState();
+            log("ImportIE: toggleRightPanelViewMode - selection captured");
+            await sleep(Math.floor(Math.random() * 40) + 10);
+            if (nextMode === RIGHT_PANEL_MODE.CODE) {
+                log("ImportIE: toggleRightPanelViewMode - switching to code view");
+                currentRightPanelMode = RIGHT_PANEL_MODE.CODE;
+                flatDataset = buildFlatCodeOrderedDataset(mappings, existingCodeSet);
+                log("ImportIE: toggleRightPanelViewMode - flat dataset built count=" + String(flatDataset.length));
+                sortFlatDataset(flatDataset);
+                log("ImportIE: toggleRightPanelViewMode - flat dataset sorted");
+                await sleep(Math.floor(Math.random() * 30) + 10);
+                var currentSearch = rightSearch.value || "";
+                renderRightPanelFlatCodeView(flatDataset, selectionStateMap, currentSearch);
+                log("ImportIE: toggleRightPanelViewMode - flat view rendered");
+                await sleep(Math.floor(Math.random() * 20) + 10);
+                restoreSelectionToFlat();
+                log("ImportIE: toggleRightPanelViewMode - selection restored to flat");
+                applySearchFilterToFlatView(currentSearch);
+                log("ImportIE: toggleRightPanelViewMode - search filter applied to flat");
+                await sleep(Math.floor(Math.random() * 20) + 10);
+                updateSelectedCountAndConfirmState();
+                log("ImportIE: toggleRightPanelViewMode - counter updated for code view");
+            } else {
+                log("ImportIE: toggleRightPanelViewMode - switching to hierarchy view");
+                currentRightPanelMode = RIGHT_PANEL_MODE.HIERARCHY;
+                flatCheckboxes = [];
+                var currentSearch2 = rightSearch.value || "";
+                renderRightList(currentSearch2);
+                log("ImportIE: toggleRightPanelViewMode - hierarchy re-rendered");
+                await sleep(Math.floor(Math.random() * 30) + 10);
+                restoreSelectionToHierarchy();
+                log("ImportIE: toggleRightPanelViewMode - selection restored to hierarchy");
+                await sleep(Math.floor(Math.random() * 20) + 10);
+                updateSelectedCountAndConfirmState();
+                log("ImportIE: toggleRightPanelViewMode - counter updated for hierarchy view");
+            }
+            log("ImportIE: toggleRightPanelViewMode done mode=" + currentRightPanelMode);
         }
-
-        // State tracking
-        var selectedItems = {};
-        var selectedSAs = {};
-        var selectedPlans = {};
 
         // Helper functions
         function toggleItem(itemIdx, itemEntry) {
@@ -13209,7 +13658,12 @@
 
         renderRightList("");
         rightSearch.addEventListener("input", function () {
-            renderRightList(rightSearch.value);
+            log("ImportIE: rightSearch input changed mode=" + currentRightPanelMode + " value=" + String(rightSearch.value));
+            if (currentRightPanelMode === RIGHT_PANEL_MODE.CODE) {
+                applySearchFilterToFlatView(rightSearch.value);
+            } else {
+                renderRightList(rightSearch.value);
+            }
         });
         rightPanel.appendChild(rightList);
 
@@ -13244,19 +13698,25 @@
             selectAllBtn.style.background = "#2a2a2a";
         });
         selectAllBtn.addEventListener("click", function () {
-            log("ImportIE: Select All clicked");
+            log("ImportIE: Select All clicked mode=" + currentRightPanelMode);
             var xi = 0;
             while (xi < itemCheckboxes.length) {
-                if (!itemCheckboxes[xi].cb.disabled) {
+                if (!itemCheckboxes[xi].cb.disabled && itemCheckboxes[xi].row && itemCheckboxes[xi].row.style.display !== "none") {
                     itemCheckboxes[xi].cb.checked = true;
+                    if (currentRightPanelMode === RIGHT_PANEL_MODE.CODE && itemCheckboxes[xi].key) {
+                        selectionStateMap[itemCheckboxes[xi].key] = true;
+                    }
                 }
                 xi = xi + 1;
             }
-            var pci2 = 0;
-            while (pci2 < planCheckboxes.length) {
-                updateParentState(pci2);
-                pci2 = pci2 + 1;
+            if (currentRightPanelMode === RIGHT_PANEL_MODE.HIERARCHY) {
+                var pci2 = 0;
+                while (pci2 < planCheckboxes.length) {
+                    updateParentState(pci2);
+                    pci2 = pci2 + 1;
+                }
             }
+            updateSelectedCountAndConfirmState();
         });
 
         var clearAllBtn = document.createElement("button");
@@ -13275,30 +13735,47 @@
             clearAllBtn.style.background = "#2a2a2a";
         });
         clearAllBtn.addEventListener("click", function () {
+            log("ImportIE: Clear All clicked mode=" + currentRightPanelMode);
+            if (currentRightPanelMode === RIGHT_PANEL_MODE.HIERARCHY) {
                 selectedItems = {};
                 selectedSAs = {};
                 selectedPlans = {};
-                
                 var ci = 0;
                 while (ci < itemCheckboxes.length) {
-                    if (!itemCheckboxes[ci].cb.disabled) {
+                    if (!itemCheckboxes[ci].cb.disabled && itemCheckboxes[ci].row && itemCheckboxes[ci].row.style.display !== "none") {
                         itemCheckboxes[ci].cb.checked = false;
                     }
                     ci = ci + 1;
                 }
                 var sai = 0;
                 while (sai < saCheckboxes.length) {
-                    saCheckboxes[sai].cb.checked = false;
-                    saCheckboxes[sai].cb.indeterminate = false;
+                    if (saCheckboxes[sai].row && saCheckboxes[sai].row.style.display !== "none") {
+                        saCheckboxes[sai].cb.checked = false;
+                        saCheckboxes[sai].cb.indeterminate = false;
+                    }
                     sai = sai + 1;
                 }
                 var pi = 0;
                 while (pi < planCheckboxes.length) {
-                    planCheckboxes[pi].cb.checked = false;
-                    planCheckboxes[pi].cb.indeterminate = false;
+                    if (planCheckboxes[pi].row && planCheckboxes[pi].row.style.display !== "none") {
+                        planCheckboxes[pi].cb.checked = false;
+                        planCheckboxes[pi].cb.indeterminate = false;
+                    }
                     pi = pi + 1;
                 }
-                updateCounter();
+            } else {
+                var fi = 0;
+                while (fi < itemCheckboxes.length) {
+                    if (!itemCheckboxes[fi].cb.disabled && itemCheckboxes[fi].row && itemCheckboxes[fi].row.style.display !== "none") {
+                        itemCheckboxes[fi].cb.checked = false;
+                        if (itemCheckboxes[fi].key) {
+                            selectionStateMap[itemCheckboxes[fi].key] = false;
+                        }
+                    }
+                    fi = fi + 1;
+                }
+            }
+            updateSelectedCountAndConfirmState();
         });
 
         confirmBtn.addEventListener("click", function () {
@@ -13316,7 +13793,49 @@
             onConfirm(selected);
         });
 
+        var codeSortToggleBtn = document.createElement("button");
+        codeSortToggleBtn.id = CODE_SORT_TOGGLE_BUTTON_ID;
+        codeSortToggleBtn.textContent = "Sort by Code";
+        codeSortToggleBtn.style.background = "#2a2a2a";
+        codeSortToggleBtn.style.color = "#fff";
+        codeSortToggleBtn.style.border = "1px solid #444";
+        codeSortToggleBtn.style.padding = "8px 16px";
+        codeSortToggleBtn.style.borderRadius = "4px";
+        codeSortToggleBtn.style.cursor = "pointer";
+        codeSortToggleBtn.style.transition = "background 0.15s";
+        codeSortToggleBtn.addEventListener("mouseenter", function () {
+            codeSortToggleBtn.style.background = "#3a3a3a";
+        });
+        codeSortToggleBtn.addEventListener("mouseleave", function () {
+            codeSortToggleBtn.style.background = "#2a2a2a";
+        });
+
+        var initialFlatCheck = buildFlatCodeOrderedDataset(mappings, existingCodeSet);
+        if (initialFlatCheck.length === 0) {
+            codeSortToggleBtn.disabled = true;
+            codeSortToggleBtn.style.opacity = "0.5";
+            codeSortToggleBtn.style.cursor = "not-allowed";
+            log("ImportIE: no valid code tokens found, toggle button disabled");
+        }
+
+        codeSortToggleBtn.addEventListener("click", async function () {
+            if (codeSortToggleBtn.disabled) {
+                return;
+            }
+            log("ImportIE: codeSortToggleBtn clicked currentMode=" + currentRightPanelMode);
+            if (currentRightPanelMode === RIGHT_PANEL_MODE.HIERARCHY) {
+                await toggleRightPanelViewMode(RIGHT_PANEL_MODE.CODE);
+                codeSortToggleBtn.textContent = "Hierarchical View";
+                log("ImportIE: toggled to code view, button now says Hierarchical View");
+            } else {
+                await toggleRightPanelViewMode(RIGHT_PANEL_MODE.HIERARCHY);
+                codeSortToggleBtn.textContent = "Sort by Code";
+                log("ImportIE: toggled to hierarchy view, button now says Sort by Code");
+            }
+        });
+
         footerBar.appendChild(selectAllBtn);
+        footerBar.appendChild(codeSortToggleBtn);
         footerBar.appendChild(clearAllBtn);
         footerBar.appendChild(confirmBtn);
         container.appendChild(footerBar);
@@ -13508,7 +14027,7 @@
             log("ImportIE: step b - selecting eligibility item for code=" + String(mapping.code));
             var eligSel = document.querySelector("select#eligibilityItemRef");
             if (!eligSel) {
-                eligSel = await waitForElement("select#eligibilityItemRef", 5000);
+                eligSel = await waitForElement("select#eligibilityItemRef", 8000);
             }
             if (!eligSel) {
                 log("ImportIE: eligibilityItemRef not found");
@@ -13572,7 +14091,7 @@
             eligSel.value = bestMatchVal;
             select2TriggerChange(eligSel);
             log("ImportIE: eligibility item selected value='" + String(bestMatchVal) + "'");
-            await sleep(importIERandomDelay() + 200);
+            await sleep(importIERandomDelay() + 300);
             eligMatched = true;
 
             if (IMPORT_IE_CANCELED) {
@@ -13608,7 +14127,7 @@
                 var cb3 = document.querySelector("#ajaxModal .modal-content button.close");
                 if (cb3) {
                     cb3.click();
-                    await waitForModalClose(5000);
+                    await waitForModalClose(8000);
                 }
                 mi = mi + 1;
                 continue;
@@ -13618,7 +14137,7 @@
             log("ImportIE: step e - selecting scheduled activity value='" + String(mapping.ids.scheduledActivityValue) + "'");
             var schedSelE = document.querySelector("select#scheduledActivity");
             if (schedSelE) {
-                await waitForSelectOptions(schedSelE, 1, 8000);
+                await waitForSelectOptions(schedSelE, 1, 12000);
             }
             var saOk = await select2SelectByValue("select#scheduledActivity", mapping.ids.scheduledActivityValue);
             if (!saOk) {
@@ -13632,7 +14151,7 @@
                 var cb4 = document.querySelector("#ajaxModal .modal-content button.close");
                 if (cb4) {
                     cb4.click();
-                    await waitForModalClose(5000);
+                    await waitForModalClose(8000);
                 }
                 mi = mi + 1;
                 continue;
@@ -13647,10 +14166,10 @@
             log("ImportIE: step f - selecting check item value='" + String(mapping.ids.checkItemValue) + "'");
             var itemRefSelF = document.querySelector("select#itemRef");
             if (itemRefSelF) {
-                await waitForSelectOptions(itemRefSelF, 1, 8000);
+                await waitForSelectOptions(itemRefSelF, 1, 12000);
             }
             var prevSigF = getItemRefOptionsSignature();
-            await waitForItemRefReload(prevSigF, 2000);
+            await waitForItemRefReload(prevSigF, 4000);
             var itemOk = await select2SelectByValue("select#itemRef", mapping.ids.checkItemValue);
             if (!itemOk) {
                 itemOk = await select2SelectByText("select#itemRef", mapping.checkItemText);
@@ -13673,7 +14192,7 @@
             log("ImportIE: step g - setting comparator to EQ");
             var compOk = await setComparatorEQ();
             if (!compOk) {
-                await stabilizeSelectionBeforeComparator(4000);
+                await stabilizeSelectionBeforeComparator(6000);
                 compOk = await setComparatorEQ();
             }
             if (!compOk) {

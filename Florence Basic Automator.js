@@ -113,6 +113,118 @@
         statusStopped: 'Stopped'
     };
 
+    const RESP_SELECTORS = {
+        pageStepRoot: 'doa-log-template-study-roles-step',
+        roleColumns: '.doa-log-form-step__column.roles__column',
+        roleSearchInput: '#filtered-select-input.filtered-select__input[placeholder*="Search"]',
+        roleListContainer: 'ul.filtered-select__list.u-z-index-1060, ul.filtered-select__list',
+        virtualViewport: 'cdk-virtual-scroll-viewport.cdk-virtual-scroll-viewport, .filtered-select__list',
+        roleOptionItem: '.filtered-select__list__item, [role="option"], .cdk-virtual-scroll-viewport .filtered-select__list__item',
+        roleOptionText: '.filtered-select__list__item__text',
+        roleOptionCheckboxTri: '.test-checkboxTristate[role="checkbox"]',
+        responsibilitiesToggleBtn: 'button[dropdowntoggle][data-test="study-responsibilities-dropdown-toggle"].roles__select-options-dropdown-button',
+        responsibilitiesMenu: 'ul[role="menu"][data-test="study-responsibilities-list"]',
+        responsibilitiesItem: 'ul[role="menu"][data-test="study-responsibilities-list"] li',
+        responsibilitiesItemCheckbox: 'ul[role="menu"][data-test="study-responsibilities-list"] li input[type="checkbox"]',
+        addStudyRoleBtn: 'button[data-test="add-study-role-button"]',
+        selectedRoleCheckboxInColumn: '[role="checkbox"][aria-checked="true"]',
+        mainPanelButtonTarget: '.main-gui-panel',
+        ariaLiveRegion: '.aria-live-region'
+    };
+
+    const RESP_TIMEOUTS = {
+        waitPageMs: 10000,
+        waitInputPanelMs: 10000,
+        waitProgressPanelMs: 10000,
+        waitListOpenMs: 6000,
+        waitOptionRenderMs: 3000,
+        waitAfterSelectRoleMs: 2000,
+        waitResponsibilitiesMenuMs: 4000,
+        waitAfterToggleResponsibilityMs: 500,
+        waitAddRoleResultMs: 8000,
+        settleAfterScrollMs: 250,
+        idleBetweenScrollsMs: 120,
+        maxSelectRoleDurationMs: 45000
+    };
+
+    const RESP_RETRY = {
+        openListRetries: 4,
+        optionScanRetries: 2,
+        maxScrollPasses: 8,
+        addRoleRetries: 2
+    };
+
+    const RESP_LABELS = {
+        notOnPageWarning: 'You are not on the Study Role Page.',
+        statusPending: 'Pending',
+        statusCompleted: 'Completed',
+        statusFailed: 'Failed',
+        statusStopped: 'Stopped',
+        parsing: 'Parsing input',
+        scanningExisting: 'Scanning existing roles',
+        selectingRole: 'Selecting role',
+        selectingResponsibilities: 'Selecting responsibilities',
+        addingRole: 'Adding study role',
+        done: 'Completed'
+    };
+
+    const RESP_COUNTERS = {
+        total: 0,
+        completed: 0,
+        failed: 0,
+        pending: 0
+    };
+
+    const RESP_REGEX = {
+        range: /\b(\d+)\s*(?:to|\-|\u2013|\u2014)\s*(\d+)\b/i,
+        number: /\b\d+\b/g,
+        quoteCleanup: /[\u201c\u201d\u201e\u201f"""]+/g,
+        hyphenBreak: /-\s*\n\s*/g,
+        lineBreakInRole: /\n+/g,
+        whitespace: /\s+/g
+    };
+
+    const RESP_ROLE_ALIASES = {
+        'pi': 'Principal Investigator',
+        'principal investigator': 'Principal Investigator',
+        'sub investigator': 'Sub-Investigator',
+        'sub-investigator': 'Sub-Investigator',
+        'research nurse': 'Research Nurse',
+        'nurse': 'Research Nurse',
+        'research assistant': 'Research Assistant',
+        'study coordinator': 'Study Coordinator',
+        'pharmacy': 'Pharmacy'
+    };
+
+    const RESP_SCROLL = {
+        stepPx: 0.7,
+        userPauseMs: 800
+    };
+
+    const RESP_ATTRS = {
+        ariaBusyTarget: 'body',
+        ariaBusyAttr: 'aria-busy'
+    };
+
+    let respState = {
+        isRunning: false,
+        stopRequested: false,
+        observers: [],
+        timeouts: [],
+        intervals: [],
+        eventListeners: [],
+        idleCallbackIds: [],
+        focusReturnElement: null,
+        prevAriaBusy: null,
+        parsedRoles: null,
+        rolesData: [],
+        counters: { total: 0, completed: 0, failed: 0, pending: 0 },
+        listScrollTop: 0,
+        userScrollHandler: null,
+        userScrollPaused: false
+    };
+
+
     let elogState = {
         isRunning: false,
         observers: [],
@@ -198,7 +310,7 @@
         title.textContent = 'Document Log Not Found';
         title.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600;';
         const closeButton = document.createElement('button');
-        closeButton.innerHTML = '✕';
+        closeButton.innerHTML = 'âœ•';
         closeButton.setAttribute('aria-label', 'Close warning');
         closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
         closeButton.onmouseover = function() { closeButton.style.background = 'rgba(255, 255, 255, 0.3)'; };
@@ -259,7 +371,7 @@
         title.textContent = 'Add ELog Staff Entries';
         title.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600; letter-spacing: 0.2px;';
         const closeButton = document.createElement('button');
-        closeButton.innerHTML = '✕';
+        closeButton.innerHTML = 'âœ•';
         closeButton.setAttribute('aria-label', 'Close panel');
         closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
         closeButton.onmouseover = function() { closeButton.style.background = 'rgba(255, 67, 54, 0.8)'; };
@@ -410,7 +522,7 @@
         rescanButton.onmouseout = function() { rescanButton.style.background = 'rgba(255, 255, 255, 0.2)'; };
         rescanButton.onclick = function() { addLogMessage('showELogProgressPanel: Re-scan clicked', 'log'); performRescan(); };
         const closeButton = document.createElement('button');
-        closeButton.innerHTML = '✕';
+        closeButton.innerHTML = 'âœ•';
         closeButton.setAttribute('aria-label', 'Close and stop scanning');
         closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
         closeButton.onmouseover = function() { closeButton.style.background = 'rgba(255, 67, 54, 0.8)'; };
@@ -1914,6 +2026,1014 @@
         addLogMessage('stopELog: cleanup complete', 'log');
     }
 
+    function resetRespState() {
+        addLogMessage('resetRespState: resetting state', 'log');
+        respState.isRunning = false;
+        respState.stopRequested = false;
+        respState.observers = [];
+        respState.timeouts = [];
+        respState.intervals = [];
+        respState.eventListeners = [];
+        respState.idleCallbackIds = [];
+        respState.prevAriaBusy = null;
+        respState.parsedRoles = null;
+        respState.rolesData = [];
+        respState.counters = { total: 0, completed: 0, failed: 0, pending: 0 };
+        respState.listScrollTop = 0;
+        respState.userScrollHandler = null;
+        respState.userScrollPaused = false;
+    }
+
+    function respWaitForElement(selector, timeout) {
+        addLogMessage('respWaitForElement: waiting for ' + selector, 'log');
+        return new Promise(function(resolve, reject) {
+            var element = document.querySelector(selector);
+            if (element) {
+                addLogMessage('respWaitForElement: found immediately', 'log');
+                resolve(element);
+                return;
+            }
+            var observer = new MutationObserver(function(mutations, obs) {
+                var el = document.querySelector(selector);
+                if (el) {
+                    obs.disconnect();
+                    var idx = respState.observers.indexOf(obs);
+                    if (idx > -1) { respState.observers.splice(idx, 1); }
+                    resolve(el);
+                }
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+            respState.observers.push(observer);
+            var timeoutId = setTimeout(function() {
+                observer.disconnect();
+                var idx = respState.observers.indexOf(observer);
+                if (idx > -1) { respState.observers.splice(idx, 1); }
+                addLogMessage('respWaitForElement: timeout for ' + selector, 'warn');
+                reject(new Error('Timeout waiting for ' + selector));
+            }, timeout);
+            respState.timeouts.push(timeoutId);
+        });
+    }
+
+    function respDelay(ms) {
+        return new Promise(function(resolve) {
+            var tid = setTimeout(resolve, ms);
+            respState.timeouts.push(tid);
+        });
+    }
+
+    function normalizeRoleName(s) {
+        if (!s) { return { display: '', key: '' }; }
+        var cleaned = s.trim();
+        cleaned = cleaned.replace(RESP_REGEX.quoteCleanup, '');
+        cleaned = cleaned.replace(RESP_REGEX.hyphenBreak, '-');
+        cleaned = cleaned.replace(RESP_REGEX.lineBreakInRole, ' ');
+        cleaned = cleaned.replace(RESP_REGEX.whitespace, ' ');
+        cleaned = cleaned.trim();
+        var display = cleaned;
+        var key = cleaned.toLowerCase();
+        if (RESP_ROLE_ALIASES[key]) {
+            display = RESP_ROLE_ALIASES[key];
+            key = display.toLowerCase();
+        }
+        addLogMessage('normalizeRoleName: display=' + display + ' key=' + key, 'log');
+        return { display: display, key: key };
+    }
+
+    function expandRanges(tokens) {
+        addLogMessage('expandRanges: tokens=' + JSON.stringify(tokens), 'log');
+        var result = new Set();
+        var i = 0;
+        while (i < tokens.length) {
+            var current = tokens[i];
+            if (i + 2 < tokens.length && /^(to)$/i.test(tokens[i + 1])) {
+                var start = parseInt(current, 10);
+                var end = parseInt(tokens[i + 2], 10);
+                if (!isNaN(start) && !isNaN(end)) {
+                    var lo = Math.min(start, end);
+                    var hi = Math.max(start, end);
+                    for (var n = lo; n <= hi; n++) { result.add(n); }
+                    i += 3;
+                    continue;
+                }
+            }
+            var num = parseInt(current, 10);
+            if (!isNaN(num)) { result.add(num); }
+            i++;
+        }
+        addLogMessage('expandRanges: result size=' + result.size, 'log');
+        return result;
+    }
+
+    function parseResponsibilitiesInput(rawText) {
+        addLogMessage('parseResponsibilitiesInput: starting parse', 'log');
+        try {
+            if (!rawText || !rawText.trim()) {
+                addLogMessage('parseResponsibilitiesInput: empty input', 'warn');
+                return null;
+            }
+            var text = rawText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            text = text.replace(/[\u201c\u201d\u201e\u201f\u2018\u2019]+/g, '"');
+            text = text.replace(/-\s*\n\s*/g, '-');
+            var rawLines = text.split('\n');
+            var mergedLines = [];
+            var pendingQuote = false;
+            var buffer = '';
+            for (var li = 0; li < rawLines.length; li++) {
+                var line = rawLines[li];
+                if (pendingQuote) {
+                    buffer = buffer + ' ' + line;
+                    var quoteCount = 0;
+                    for (var ci = 0; ci < buffer.length; ci++) {
+                        if (buffer[ci] === '"') { quoteCount++; }
+                    }
+                    if (quoteCount % 2 === 0) {
+                        pendingQuote = false;
+                        mergedLines.push(buffer);
+                        buffer = '';
+                    }
+                    continue;
+                }
+                var qc = 0;
+                for (var ci2 = 0; ci2 < line.length; ci2++) {
+                    if (line[ci2] === '"') { qc++; }
+                }
+                if (qc % 2 !== 0) {
+                    pendingQuote = true;
+                    buffer = line;
+                    continue;
+                }
+                mergedLines.push(line);
+            }
+            if (buffer) { mergedLines.push(buffer); }
+            addLogMessage('parseResponsibilitiesInput: merged into ' + mergedLines.length + ' lines', 'log');
+            var parsedMap = {};
+            for (var mi = 0; mi < mergedLines.length; mi++) {
+                var mline = mergedLines[mi].trim();
+                if (!mline) { continue; }
+                mline = mline.replace(/"+/g, '');
+                var parts = mline.split(/\t+/);
+                var rolePart = '';
+                var numberPart = '';
+                if (parts.length >= 2) {
+                    rolePart = parts[0].trim();
+                    numberPart = parts.slice(1).join(' ');
+                } else {
+                    var firstNumMatch = mline.match(/\d/);
+                    if (firstNumMatch) {
+                        var idx = mline.indexOf(firstNumMatch[0]);
+                        var beforeNum = mline.substring(0, idx).trim();
+                        var afterNum = mline.substring(idx).trim();
+                        if (beforeNum) {
+                            rolePart = beforeNum;
+                            numberPart = afterNum;
+                        } else {
+                            addLogMessage('parseResponsibilitiesInput: line ' + mi + ' no role part, skip', 'warn');
+                            continue;
+                        }
+                    } else {
+                        addLogMessage('parseResponsibilitiesInput: line ' + mi + ' no numbers, skip', 'warn');
+                        continue;
+                    }
+                }
+                rolePart = rolePart.replace(/"+/g, '').trim();
+                if (!rolePart) {
+                    addLogMessage('parseResponsibilitiesInput: line ' + mi + ' empty role, skip', 'warn');
+                    continue;
+                }
+                var normalized = normalizeRoleName(rolePart);
+                if (!normalized.key) {
+                    addLogMessage('parseResponsibilitiesInput: line ' + mi + ' normalize fail, skip', 'warn');
+                    continue;
+                }
+                var numTokens = numberPart.replace(/,/g, ' ').split(/\s+/).filter(function(t) { return t.length > 0; });
+                var numbers = expandRanges(numTokens);
+                if (numbers.size === 0) {
+                    addLogMessage('parseResponsibilitiesInput: line ' + mi + ' no numbers for ' + normalized.display, 'warn');
+                    continue;
+                }
+                if (!parsedMap[normalized.key]) {
+                    parsedMap[normalized.key] = { displayRole: normalized.display, occurrences: [], union: new Set(), intersection: null, excluded: new Set() };
+                }
+                parsedMap[normalized.key].occurrences.push(numbers);
+                addLogMessage('parseResponsibilitiesInput: role=' + normalized.display + ' occ#' + parsedMap[normalized.key].occurrences.length + ' nums=' + Array.from(numbers).join(','), 'log');
+            }
+            addLogMessage('parseResponsibilitiesInput: parsed ' + Object.keys(parsedMap).length + ' unique roles', 'log');
+            return parsedMap;
+        } catch (error) {
+            addLogMessage('parseResponsibilitiesInput: error: ' + error.message, 'error');
+            return null;
+        }
+    }
+
+    function computeRoleCommonAndExcluded(parsedMap) {
+        addLogMessage('computeRoleCommonAndExcluded: computing sets', 'log');
+        var rolesData = [];
+        var keys = Object.keys(parsedMap);
+        for (var ki = 0; ki < keys.length; ki++) {
+            var key = keys[ki];
+            var entry = parsedMap[key];
+            var union = new Set();
+            var intersection = null;
+            for (var oi = 0; oi < entry.occurrences.length; oi++) {
+                var occ = entry.occurrences[oi];
+                occ.forEach(function(n) { union.add(n); });
+                if (intersection === null) {
+                    intersection = new Set(occ);
+                } else {
+                    var newInt = new Set();
+                    intersection.forEach(function(n) { if (occ.has(n)) { newInt.add(n); } });
+                    intersection = newInt;
+                }
+            }
+            if (intersection === null) { intersection = new Set(); }
+            var excluded = new Set();
+            union.forEach(function(n) { if (!intersection.has(n)) { excluded.add(n); } });
+            entry.union = union;
+            entry.intersection = intersection;
+            entry.excluded = excluded;
+            var status = RESP_LABELS.statusPending;
+            if (intersection.size === 0) {
+                status = RESP_LABELS.statusFailed;
+                addLogMessage('computeRoleCommonAndExcluded: role=' + entry.displayRole + ' empty intersection', 'warn');
+            }
+            rolesData.push({
+                key: key,
+                displayRole: entry.displayRole,
+                common: Array.from(intersection).sort(function(a, b) { return a - b; }),
+                excluded: Array.from(excluded).sort(function(a, b) { return a - b; }),
+                intersection: intersection,
+                status: status,
+                reason: intersection.size === 0 ? 'No common numbers across occurrences' : ''
+            });
+            addLogMessage('computeRoleCommonAndExcluded: role=' + entry.displayRole + ' common=[' + rolesData[rolesData.length - 1].common.join(',') + '] excluded=[' + rolesData[rolesData.length - 1].excluded.join(',') + ']', 'log');
+        }
+        return rolesData;
+    }
+
+    function setResponsibilitiesInit() {
+        addLogMessage('setResponsibilitiesInit: starting feature', 'log');
+        respState.focusReturnElement = document.getElementById('resp-set-btn');
+        resetRespState();
+        var pageStep = document.querySelector(RESP_SELECTORS.pageStepRoot);
+        addLogMessage('setResponsibilitiesInit: checking for page step root', 'log');
+        if (!pageStep) {
+            addLogMessage('setResponsibilitiesInit: not on Study Role Page', 'warn');
+            showRespWarning();
+            return;
+        }
+        addLogMessage('setResponsibilitiesInit: on Study Role Page', 'log');
+        showResponsibilitiesInputPanel();
+    }
+
+    function showRespWarning() {
+        addLogMessage('showRespWarning: creating warning popup', 'log');
+        var modal = document.createElement('div');
+        modal.id = 'resp-warning-modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 30000; display: flex; align-items: center; justify-content: center;';
+        var container = document.createElement('div');
+        container.style.cssText = 'background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); border-radius: 12px; padding: 24px; width: 450px; max-width: 90%; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); position: relative;';
+        container.setAttribute('role', 'alertdialog');
+        container.setAttribute('aria-modal', 'true');
+        container.setAttribute('aria-labelledby', 'resp-warning-title');
+        container.setAttribute('aria-describedby', 'resp-warning-message');
+        var header = document.createElement('div');
+        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;';
+        var title = document.createElement('h3');
+        title.id = 'resp-warning-title';
+        title.textContent = 'Study Role Page Not Found';
+        title.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600;';
+        var closeButton = document.createElement('button');
+        closeButton.innerHTML = '\u2715';
+        closeButton.setAttribute('aria-label', 'Close warning');
+        closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
+        closeButton.onmouseover = function() { closeButton.style.background = 'rgba(255, 255, 255, 0.3)'; };
+        closeButton.onmouseout = function() { closeButton.style.background = 'rgba(255, 255, 255, 0.2)'; };
+        var closeWarning = function() {
+            addLogMessage('showRespWarning: closing warning', 'log');
+            if (modal.parentNode) { document.body.removeChild(modal); }
+            if (respState.focusReturnElement) { respState.focusReturnElement.focus(); }
+        };
+        closeButton.onclick = closeWarning;
+        header.appendChild(title);
+        header.appendChild(closeButton);
+        var messageDiv = document.createElement('p');
+        messageDiv.id = 'resp-warning-message';
+        messageDiv.textContent = RESP_LABELS.notOnPageWarning + ' Please navigate to the Study Roles step before using this feature.';
+        messageDiv.style.cssText = 'color: rgba(255, 255, 255, 0.9); margin: 0; font-size: 14px; line-height: 1.5;';
+        var okButton = document.createElement('button');
+        okButton.textContent = 'OK';
+        okButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: 2px solid rgba(255, 255, 255, 0.3); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.3s ease; margin-top: 20px; width: 100%;';
+        okButton.onmouseover = function() { okButton.style.background = 'rgba(255, 255, 255, 0.3)'; };
+        okButton.onmouseout = function() { okButton.style.background = 'rgba(255, 255, 255, 0.2)'; };
+        okButton.onclick = closeWarning;
+        var keyHandler = function(e) { if (e.key === 'Escape') { closeWarning(); } };
+        document.addEventListener('keydown', keyHandler);
+        respState.eventListeners.push({ element: document, type: 'keydown', handler: keyHandler });
+        container.appendChild(header);
+        container.appendChild(messageDiv);
+        container.appendChild(okButton);
+        modal.appendChild(container);
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        modal.style.pointerEvents = 'none';
+        container.style.pointerEvents = 'auto';
+        makeDraggable(container, header);
+        document.body.appendChild(modal);
+        okButton.focus();
+        addLogMessage('showRespWarning: warning displayed', 'log');
+    }
+
+    function showResponsibilitiesInputPanel() {
+        addLogMessage('showResponsibilitiesInputPanel: creating input panel', 'log');
+        var modal = document.createElement('div');
+        modal.id = 'resp-input-modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 20000; display: flex; align-items: center; justify-content: center;';
+        var container = document.createElement('div');
+        container.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; width: 550px; max-width: 90%; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); position: relative;';
+        container.setAttribute('role', 'dialog');
+        container.setAttribute('aria-modal', 'true');
+        container.setAttribute('aria-labelledby', 'resp-input-title');
+        var header = document.createElement('div');
+        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;';
+        var titleEl = document.createElement('h3');
+        titleEl.id = 'resp-input-title';
+        titleEl.textContent = 'Set Responsibilities';
+        titleEl.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600; letter-spacing: 0.2px;';
+        var closeButton = document.createElement('button');
+        closeButton.innerHTML = '\u2715';
+        closeButton.setAttribute('aria-label', 'Close panel');
+        closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
+        closeButton.onmouseover = function() { closeButton.style.background = 'rgba(255, 67, 54, 0.8)'; };
+        closeButton.onmouseout = function() { closeButton.style.background = 'rgba(255, 255, 255, 0.2)'; };
+        closeButton.onclick = function() {
+            addLogMessage('showResponsibilitiesInputPanel: closed by user', 'warn');
+            if (modal.parentNode) { document.body.removeChild(modal); }
+            stopResponsibilities();
+        };
+        header.appendChild(titleEl);
+        header.appendChild(closeButton);
+        var description = document.createElement('p');
+        description.textContent = 'Paste role-to-responsibility assignments below. Each line: Role name followed by tab and responsibility numbers. Ranges like "1 to 8" are supported.';
+        description.style.cssText = 'color: rgba(255, 255, 255, 0.9); margin: 0 0 12px 0; font-size: 14px; line-height: 1.4;';
+        var textarea = document.createElement('textarea');
+        textarea.id = 'resp-input-textarea';
+        textarea.placeholder = 'PI  1 to 8  13  14  17  21\nStudy Coordinator  1 6 7 8 10 12 13 14 17 33';
+        textarea.setAttribute('aria-label', 'Role responsibilities input');
+        textarea.style.cssText = 'width: 100%; height: 200px; padding: 12px 14px; border: 2px solid rgba(255, 255, 255, 0.35); border-radius: 10px; background: rgba(255, 255, 255, 0.95); color: #1e293b; font-size: 14px; font-family: Segoe UI, Tahoma, Geneva, Verdana, sans-serif; resize: vertical; outline: none; transition: all 0.25s ease; box-shadow: 0 2px 0 rgba(0,0,0,0.04) inset; box-sizing: border-box;';
+        textarea.onfocus = function() { textarea.style.borderColor = '#8ea0ff'; textarea.style.boxShadow = '0 0 0 4px rgba(102, 126, 234, 0.25)'; };
+        textarea.onblur = function() { textarea.style.borderColor = 'rgba(255, 255, 255, 0.35)'; textarea.style.boxShadow = '0 2px 0 rgba(0,0,0,0.04) inset'; };
+        var confirmButton = document.createElement('button');
+        confirmButton.textContent = 'Confirm';
+        confirmButton.disabled = true;
+        confirmButton.style.cssText = 'background: linear-gradient(135deg, #28a745 0%, #20c997 100%); border: 2px solid rgba(255, 255, 255, 0.35); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; letter-spacing: 0.2px; transition: all 0.25s ease; opacity: 0.5;';
+        textarea.oninput = function() {
+            if (textarea.value.trim().length > 0) { confirmButton.disabled = false; confirmButton.style.opacity = '1'; confirmButton.style.cursor = 'pointer'; }
+            else { confirmButton.disabled = true; confirmButton.style.opacity = '0.5'; confirmButton.style.cursor = 'not-allowed'; }
+        };
+        confirmButton.onmouseover = function() { if (!confirmButton.disabled) { confirmButton.style.background = 'linear-gradient(135deg, #218838 0%, #1ea085 100%)'; } };
+        confirmButton.onmouseout = function() { confirmButton.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)'; };
+        confirmButton.onclick = function() {
+            addLogMessage('showResponsibilitiesInputPanel: Confirm clicked', 'log');
+            var parsedMap = parseResponsibilitiesInput(textarea.value);
+            if (!parsedMap || Object.keys(parsedMap).length === 0) { addLogMessage('showResponsibilitiesInputPanel: no valid roles', 'warn'); return; }
+            respState.parsedRoles = parsedMap;
+            var rd = computeRoleCommonAndExcluded(parsedMap);
+            respState.rolesData = rd;
+            addLogMessage('showResponsibilitiesInputPanel: parsed ' + rd.length + ' roles', 'log');
+            if (modal.parentNode) { document.body.removeChild(modal); }
+            showResponsibilitiesProgressPanel(rd);
+            processRolesWorkflow(rd);
+        };
+        var clearButton = document.createElement('button');
+        clearButton.textContent = 'Clear All';
+        clearButton.style.cssText = 'background: rgba(255, 255, 255, 0.18); border: 2px solid rgba(255, 255, 255, 0.35); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.25s ease;';
+        clearButton.onmouseover = function() { clearButton.style.background = 'rgba(255, 255, 255, 0.28)'; };
+        clearButton.onmouseout = function() { clearButton.style.background = 'rgba(255, 255, 255, 0.18)'; };
+        clearButton.onclick = function() {
+            addLogMessage('showResponsibilitiesInputPanel: Clear All clicked', 'log');
+            textarea.value = '';
+            respState.parsedRoles = null;
+            confirmButton.disabled = true;
+            confirmButton.style.opacity = '0.5';
+            confirmButton.style.cursor = 'not-allowed';
+        };
+        var buttonContainer = document.createElement('div');
+        buttonContainer.style.cssText = 'display: flex; gap: 12px; margin-top: 20px; justify-content: flex-end;';
+        buttonContainer.appendChild(clearButton);
+        buttonContainer.appendChild(confirmButton);
+        container.appendChild(header);
+        container.appendChild(description);
+        container.appendChild(textarea);
+        container.appendChild(buttonContainer);
+        modal.appendChild(container);
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        modal.style.pointerEvents = 'none';
+        container.style.pointerEvents = 'auto';
+        makeDraggable(container, header);
+        document.body.appendChild(modal);
+        textarea.focus();
+        addLogMessage('showResponsibilitiesInputPanel: displayed', 'log');
+    }
+
+    function getRespBadgeColors(status) {
+        if (status === RESP_LABELS.statusCompleted) { return { color: '#6bcf7f', bg: 'rgba(107, 207, 127, 0.2)' }; }
+        if (status === RESP_LABELS.statusFailed) { return { color: '#ff6b6b', bg: 'rgba(255, 107, 107, 0.2)' }; }
+        if (status === RESP_LABELS.statusStopped) { return { color: '#aaa', bg: 'rgba(170, 170, 170, 0.2)' }; }
+        return { color: '#ffd93d', bg: 'rgba(255, 217, 61, 0.2)' };
+    }
+
+    function createRespRoleRow(roleData, index) {
+        var item = document.createElement('div');
+        item.className = 'resp-role-item';
+        item.setAttribute('data-role-key', roleData.key);
+        item.style.cssText = 'display: flex; flex-direction: column; padding: 10px 12px; margin: 4px 0; background: rgba(255, 255, 255, 0.08); border-radius: 6px; transition: background 0.2s ease;';
+        item.onmouseover = function() { item.style.background = 'rgba(255, 255, 255, 0.12)'; };
+        item.onmouseout = function() { item.style.background = 'rgba(255, 255, 255, 0.08)'; };
+        var topRow = document.createElement('div');
+        topRow.style.cssText = 'display: flex; justify-content: space-between; align-items: center;';
+        var leftSection = document.createElement('div');
+        leftSection.style.cssText = 'display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;';
+        var indexBadge = document.createElement('span');
+        indexBadge.textContent = String(index + 1);
+        indexBadge.style.cssText = 'background: rgba(255, 255, 255, 0.15); color: rgba(255, 255, 255, 0.7); font-size: 11px; font-weight: 600; min-width: 24px; height: 24px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;';
+        var nameText = document.createElement('span');
+        nameText.textContent = roleData.displayRole;
+        nameText.style.cssText = 'color: white; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;';
+        leftSection.appendChild(indexBadge);
+        leftSection.appendChild(nameText);
+        var statusBadge = document.createElement('span');
+        statusBadge.className = 'resp-status-badge';
+        statusBadge.textContent = roleData.status;
+        var badgeColors = getRespBadgeColors(roleData.status);
+        statusBadge.style.cssText = 'color: ' + badgeColors.color + '; background: ' + badgeColors.bg + '; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 10px; white-space: nowrap; flex-shrink: 0;';
+        topRow.appendChild(leftSection);
+        topRow.appendChild(statusBadge);
+        var detailRow = document.createElement('div');
+        detailRow.className = 'resp-detail-row';
+        detailRow.style.cssText = 'margin-top: 6px; font-size: 11px; color: rgba(255, 255, 255, 0.7); line-height: 1.4;';
+        var commonLabel = document.createElement('div');
+        commonLabel.innerHTML = '<strong style="color: rgba(255,255,255,0.85);">Common:</strong> ' + (roleData.common.length > 0 ? roleData.common.join(', ') : 'None');
+        detailRow.appendChild(commonLabel);
+        if (roleData.excluded.length > 0) {
+            var excludedLabel = document.createElement('div');
+            excludedLabel.innerHTML = '<strong style="color: rgba(255,255,255,0.85);">Excluded:</strong> ' + roleData.excluded.join(', ');
+            detailRow.appendChild(excludedLabel);
+        }
+        if (roleData.reason) {
+            var reasonLabel = document.createElement('div');
+            reasonLabel.style.cssText = 'color: #ff6b6b; margin-top: 2px;';
+            reasonLabel.textContent = roleData.reason;
+            detailRow.appendChild(reasonLabel);
+        }
+        var liveRegion = document.createElement('span');
+        liveRegion.setAttribute('aria-live', 'polite');
+        liveRegion.style.cssText = 'position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;';
+        item.appendChild(topRow);
+        item.appendChild(detailRow);
+        item.appendChild(liveRegion);
+        return item;
+    }
+
+    function showResponsibilitiesProgressPanel(rolesData) {
+        addLogMessage('showResponsibilitiesProgressPanel: creating', 'log');
+        respState.isRunning = true;
+        respState.stopRequested = false;
+        respState.counters = { total: rolesData.length, completed: 0, failed: 0, pending: 0 };
+        for (var ci = 0; ci < rolesData.length; ci++) {
+            if (rolesData[ci].status === RESP_LABELS.statusPending) { respState.counters.pending++; }
+            else if (rolesData[ci].status === RESP_LABELS.statusFailed) { respState.counters.failed++; }
+            else if (rolesData[ci].status === RESP_LABELS.statusCompleted) { respState.counters.completed++; }
+        }
+        var modal = document.createElement('div');
+        modal.id = 'resp-progress-modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 20000; display: flex; align-items: center; justify-content: center;';
+        var container = document.createElement('div');
+        container.id = 'resp-progress-container';
+        container.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; width: 750px; max-width: 95%; max-height: 80vh; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); position: relative; display: flex; flex-direction: column;';
+        container.setAttribute('role', 'dialog');
+        container.setAttribute('aria-modal', 'true');
+        container.setAttribute('aria-labelledby', 'resp-progress-title');
+        var header = document.createElement('div');
+        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-shrink: 0;';
+        var titleContainer = document.createElement('div');
+        titleContainer.style.cssText = 'display: flex; align-items: center; gap: 12px;';
+        var title = document.createElement('h3');
+        title.id = 'resp-progress-title';
+        title.textContent = 'Set Responsibilities - Processing';
+        title.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600;';
+        var statusBadge = document.createElement('span');
+        statusBadge.id = 'resp-status-badge';
+        statusBadge.textContent = 'In Progress';
+        statusBadge.style.cssText = 'background: rgba(255, 255, 255, 0.3); color: #ffd93d; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 12px;';
+        titleContainer.appendChild(title);
+        titleContainer.appendChild(statusBadge);
+        var closeButton = document.createElement('button');
+        closeButton.innerHTML = '\u2715';
+        closeButton.setAttribute('aria-label', 'Close and stop');
+        closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
+        closeButton.onmouseover = function() { closeButton.style.background = 'rgba(255, 67, 54, 0.8)'; };
+        closeButton.onmouseout = function() { closeButton.style.background = 'rgba(255, 255, 255, 0.2)'; };
+        closeButton.onclick = function() { addLogMessage('showResponsibilitiesProgressPanel: closed', 'warn'); stopResponsibilities(); };
+        header.appendChild(titleContainer);
+        header.appendChild(closeButton);
+        var searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.id = 'resp-progress-search';
+        searchInput.placeholder = 'Search roles...';
+        searchInput.setAttribute('aria-label', 'Search roles');
+        searchInput.style.cssText = 'width: 100%; padding: 8px 12px; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px; background: rgba(255, 255, 255, 0.1); color: white; font-size: 13px; outline: none; box-sizing: border-box; margin-bottom: 12px; flex-shrink: 0;';
+        searchInput.oninput = function() {
+            var term = searchInput.value.toLowerCase().trim();
+            var items = document.querySelectorAll('.resp-role-item');
+            for (var si = 0; si < items.length; si++) {
+                var text = items[si].textContent.toLowerCase();
+                items[si].style.display = (!term || text.indexOf(term) !== -1) ? 'flex' : 'none';
+            }
+        };
+        var listContainer = document.createElement('div');
+        listContainer.id = 'resp-roles-list';
+        listContainer.style.cssText = 'flex: 1; overflow-y: auto; min-height: 150px; max-height: 400px;';
+        for (var ri = 0; ri < rolesData.length; ri++) { listContainer.appendChild(createRespRoleRow(rolesData[ri], ri)); }
+        var summaryFooter = document.createElement('div');
+        summaryFooter.id = 'resp-summary-footer';
+        summaryFooter.style.cssText = 'display: flex; justify-content: space-around; align-items: center; padding: 10px 16px; background: rgba(0, 0, 0, 0.2); border-radius: 8px; margin-top: 12px; flex-shrink: 0;';
+        var summaryItems = [
+            { id: 'resp-summary-total', label: 'Total', value: String(respState.counters.total) },
+            { id: 'resp-summary-completed', label: 'Completed', value: String(respState.counters.completed) },
+            { id: 'resp-summary-failed', label: 'Failed', value: String(respState.counters.failed) },
+            { id: 'resp-summary-pending', label: 'Pending', value: String(respState.counters.pending) },
+            { id: 'resp-summary-percent', label: 'Progress', value: '0%' }
+        ];
+        for (var si2 = 0; si2 < summaryItems.length; si2++) {
+            var sItem = document.createElement('div');
+            sItem.style.cssText = 'text-align: center;';
+            var vSpan = document.createElement('span');
+            vSpan.id = summaryItems[si2].id;
+            vSpan.textContent = summaryItems[si2].value;
+            vSpan.style.cssText = 'display: block; color: white; font-size: 16px; font-weight: 700;';
+            var lSpan = document.createElement('span');
+            lSpan.textContent = summaryItems[si2].label;
+            lSpan.style.cssText = 'display: block; color: rgba(255, 255, 255, 0.6); font-size: 11px; font-weight: 500; margin-top: 2px;';
+            sItem.appendChild(vSpan);
+            sItem.appendChild(lSpan);
+            summaryFooter.appendChild(sItem);
+        }
+        var ariaLiveRegion = document.createElement('div');
+        ariaLiveRegion.id = 'resp-aria-live';
+        ariaLiveRegion.setAttribute('aria-live', 'polite');
+        ariaLiveRegion.setAttribute('aria-atomic', 'true');
+        ariaLiveRegion.style.cssText = 'position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;';
+        container.appendChild(header);
+        container.appendChild(searchInput);
+        container.appendChild(listContainer);
+        container.appendChild(summaryFooter);
+        container.appendChild(ariaLiveRegion);
+        modal.appendChild(container);
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        modal.style.pointerEvents = 'none';
+        container.style.pointerEvents = 'auto';
+        makeDraggable(container, header);
+        document.body.appendChild(modal);
+        closeButton.focus();
+        addLogMessage('showResponsibilitiesProgressPanel: displayed', 'log');
+    }
+
+    function updateRespRoleStatus(roleKey, newStatus, reason) {
+        addLogMessage('updateRespRoleStatus: role=' + roleKey + ' status=' + newStatus, 'log');
+        var items = document.querySelectorAll('.resp-role-item');
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].getAttribute('data-role-key') === roleKey) {
+                var badge = items[i].querySelector('.resp-status-badge');
+                if (badge) { badge.textContent = newStatus; var colors = getRespBadgeColors(newStatus); badge.style.color = colors.color; badge.style.background = colors.bg; }
+                if (reason) {
+                    var dr = items[i].querySelector('.resp-detail-row');
+                    if (dr) { var re = document.createElement('div'); re.style.cssText = 'color: #ff6b6b; margin-top: 2px;'; re.textContent = reason; dr.appendChild(re); }
+                }
+                var lr = items[i].querySelector('[aria-live]');
+                if (lr) { lr.textContent = roleKey + ' ' + newStatus; }
+                break;
+            }
+        }
+    }
+
+    function updateRespSummary() {
+        addLogMessage('updateRespSummary: t=' + respState.counters.total + ' c=' + respState.counters.completed + ' f=' + respState.counters.failed + ' p=' + respState.counters.pending, 'log');
+        var el1 = document.getElementById('resp-summary-total');
+        var el2 = document.getElementById('resp-summary-completed');
+        var el3 = document.getElementById('resp-summary-failed');
+        var el4 = document.getElementById('resp-summary-pending');
+        var el5 = document.getElementById('resp-summary-percent');
+        if (el1) { el1.textContent = String(respState.counters.total); }
+        if (el2) { el2.textContent = String(respState.counters.completed); }
+        if (el3) { el3.textContent = String(respState.counters.failed); }
+        if (el4) { el4.textContent = String(respState.counters.pending); }
+        if (el5) {
+            var processed = respState.counters.completed + respState.counters.failed;
+            var pct = respState.counters.total > 0 ? Math.round((processed / respState.counters.total) * 100) : 0;
+            el5.textContent = pct + '%';
+        }
+        updateRespAriaLive('Completed: ' + respState.counters.completed + ', Failed: ' + respState.counters.failed + ', Pending: ' + respState.counters.pending);
+    }
+
+    function updateRespAriaLive(message) {
+        var lr = document.getElementById('resp-aria-live');
+        if (lr) { lr.textContent = message; }
+    }
+
+    function scanExistingCompletedRoles() {
+        addLogMessage('scanExistingCompletedRoles: scanning', 'log');
+        try {
+            var columns = document.querySelectorAll(RESP_SELECTORS.roleColumns);
+            addLogMessage('scanExistingCompletedRoles: ' + columns.length + ' columns', 'log');
+            for (var colIdx = 0; colIdx < columns.length; colIdx++) {
+                var checked = columns[colIdx].querySelectorAll(RESP_SELECTORS.selectedRoleCheckboxInColumn);
+                for (var bi = 0; bi < checked.length; bi++) {
+                    var ariaLabel = checked[bi].getAttribute('aria-label') || '';
+                    var parentItem = checked[bi].closest('.filtered-select__list__item');
+                    var roleText = ariaLabel || (parentItem ? parentItem.textContent || '' : '');
+                    if (!roleText) { continue; }
+                    var normalized = normalizeRoleName(roleText);
+                    for (var ri = 0; ri < respState.rolesData.length; ri++) {
+                        if (respState.rolesData[ri].key === normalized.key && respState.rolesData[ri].status === RESP_LABELS.statusPending) {
+                            respState.rolesData[ri].status = RESP_LABELS.statusCompleted;
+                            respState.counters.completed++;
+                            respState.counters.pending--;
+                            updateRespRoleStatus(respState.rolesData[ri].key, RESP_LABELS.statusCompleted, '');
+                            addLogMessage('scanExistingCompletedRoles: ' + normalized.display + ' already done', 'log');
+                        }
+                    }
+                }
+            }
+            updateRespSummary();
+            updateRespAriaLive('Existing roles scanned');
+        } catch (error) {
+            addLogMessage('scanExistingCompletedRoles: error: ' + error.message, 'error');
+        }
+    }
+
+    function ensureRoleListOpenForColumn() {
+        addLogMessage('ensureRoleListOpenForColumn: ensuring open', 'log');
+        return new Promise(function(resolve, reject) {
+            var retries = 0;
+            function tryOpen() {
+                if (respState.stopRequested) { reject(new Error('Stopped')); return; }
+                addLogMessage('ensureRoleListOpenForColumn: attempt ' + (retries + 1), 'log');
+                var listEl = document.querySelector(RESP_SELECTORS.roleListContainer);
+                if (listEl) { resolve(listEl); return; }
+                var inputEl = document.querySelector(RESP_SELECTORS.roleSearchInput);
+                if (inputEl) { inputEl.click(); inputEl.focus(); }
+                respWaitForElement(RESP_SELECTORS.roleListContainer, RESP_TIMEOUTS.waitListOpenMs)
+                    .then(function(el) { resolve(el); })
+                    .catch(function(err) {
+                        retries++;
+                        if (retries < RESP_RETRY.openListRetries) {
+                            var tid = setTimeout(tryOpen, 300);
+                            respState.timeouts.push(tid);
+                        } else { reject(err); }
+                    });
+            }
+            tryOpen();
+        });
+    }
+
+    function findRoleListViewport() {
+        var el = document.querySelector(RESP_SELECTORS.virtualViewport);
+        if (el) { addLogMessage('findRoleListViewport: found virtual', 'log'); }
+        else {
+            el = document.querySelector(RESP_SELECTORS.roleListContainer);
+            if (el) { addLogMessage('findRoleListViewport: fallback', 'log'); }
+            else { addLogMessage('findRoleListViewport: not found', 'warn'); }
+        }
+        return el;
+    }
+
+    function respRememberListScrollPosition(viewportEl) {
+        if (viewportEl) { respState.listScrollTop = viewportEl.scrollTop; addLogMessage('respRememberScroll: ' + respState.listScrollTop, 'log'); }
+    }
+
+    function respRestoreListScrollPosition(viewportEl) {
+        if (viewportEl && respState.listScrollTop > 0) { viewportEl.scrollTop = respState.listScrollTop; addLogMessage('respRestoreScroll: ' + respState.listScrollTop, 'log'); }
+    }
+
+    function attemptSelectByScrollingForRole(targetRoleDisplay, targetRoleKey) {
+        addLogMessage('attemptSelectByScrollingForRole: target=' + targetRoleDisplay, 'log');
+        return new Promise(function(resolve) {
+            var viewportEl = findRoleListViewport();
+            if (!viewportEl) { resolve(false); return; }
+            respRestoreListScrollPosition(viewportEl);
+            var passCount = 0;
+            var lastScrollTop = -1;
+            var lastSnapshot = '';
+            var startTime = Date.now();
+            function scanAndScroll() {
+                if (respState.stopRequested) { respRememberListScrollPosition(viewportEl); resolve(false); return; }
+                if (Date.now() - startTime > RESP_TIMEOUTS.maxSelectRoleDurationMs) { respRememberListScrollPosition(viewportEl); resolve(false); return; }
+                if (passCount >= RESP_RETRY.maxScrollPasses) { respRememberListScrollPosition(viewportEl); resolve(false); return; }
+                var options = document.querySelectorAll(RESP_SELECTORS.roleOptionItem);
+                var retryCount = 0;
+                function tryScan() {
+                    options = document.querySelectorAll(RESP_SELECTORS.roleOptionItem);
+                    if (options.length === 0 && retryCount < RESP_RETRY.optionScanRetries) {
+                        retryCount++;
+                        var rtid = setTimeout(tryScan, RESP_TIMEOUTS.waitOptionRenderMs);
+                        respState.timeouts.push(rtid);
+                        return;
+                    }
+                    var found = false;
+                    var optTexts = [];
+                    for (var oi = 0; oi < options.length; oi++) {
+                        var textEl = options[oi].querySelector(RESP_SELECTORS.roleOptionText);
+                        var optText = textEl ? textEl.textContent.trim() : (options[oi].textContent || '').trim();
+                        optTexts.push(optText);
+                        var norm = normalizeRoleName(optText);
+                        if (norm.key === targetRoleKey) {
+                            addLogMessage('attemptSelectByScrollingForRole: match at ' + oi, 'log');
+                            var cb = options[oi].querySelector(RESP_SELECTORS.roleOptionCheckboxTri);
+                            if (cb) { cb.click(); } else { options[oi].click(); }
+                            found = true;
+                            respRememberListScrollPosition(viewportEl);
+                            var vt = setTimeout(function() { resolve(true); }, RESP_TIMEOUTS.waitAfterSelectRoleMs);
+                            respState.timeouts.push(vt);
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        var snap = optTexts.join('|');
+                        var curTop = viewportEl.scrollTop;
+                        if (curTop === lastScrollTop && snap === lastSnapshot) { passCount++; }
+                        lastScrollTop = curTop;
+                        lastSnapshot = snap;
+                        var step = Math.round(viewportEl.clientHeight * RESP_SCROLL.stepPx);
+                        var maxS = viewportEl.scrollHeight - viewportEl.clientHeight;
+                        var newTop = Math.min(curTop + step, maxS);
+                        if (newTop <= curTop && curTop > 0) { newTop = 0; lastScrollTop = -1; lastSnapshot = ''; passCount++; }
+                        viewportEl.scrollTop = newTop;
+                        var st = setTimeout(scanAndScroll, RESP_TIMEOUTS.idleBetweenScrollsMs);
+                        respState.timeouts.push(st);
+                    }
+                }
+                tryScan();
+            }
+            var initTid = setTimeout(scanAndScroll, RESP_TIMEOUTS.idleBetweenScrollsMs);
+            respState.timeouts.push(initTid);
+        });
+    }
+
+    function openResponsibilitiesDropdown() {
+        addLogMessage('openResponsibilitiesDropdown: opening', 'log');
+        return new Promise(function(resolve, reject) {
+            try {
+                var toggleBtn = document.querySelector(RESP_SELECTORS.responsibilitiesToggleBtn);
+                if (!toggleBtn) { reject(new Error('Toggle button not found')); return; }
+                var existing = document.querySelector(RESP_SELECTORS.responsibilitiesMenu);
+                if (existing) { resolve(existing); return; }
+                toggleBtn.click();
+                respWaitForElement(RESP_SELECTORS.responsibilitiesMenu, RESP_TIMEOUTS.waitResponsibilitiesMenuMs)
+                    .then(function(menu) { resolve(menu); })
+                    .catch(function(err) { reject(err); });
+            } catch (error) { reject(error); }
+        });
+    }
+
+    function selectResponsibilitiesByNumbers(numbersSet) {
+        addLogMessage('selectResponsibilitiesByNumbers: selecting ' + numbersSet.size + ' numbers', 'log');
+        return new Promise(function(resolve) {
+            try {
+                var items = document.querySelectorAll(RESP_SELECTORS.responsibilitiesItem);
+                var itemIndex = 0;
+                function processNext() {
+                    if (respState.stopRequested) { resolve(); return; }
+                    if (itemIndex >= items.length) { resolve(); return; }
+                    var item = items[itemIndex];
+                    var text = (item.textContent || '').trim();
+                    var numMatch = text.match(/^(\d+)/);
+                    if (numMatch) {
+                        var num = parseInt(numMatch[1], 10);
+                        if (numbersSet.has(num)) {
+                            var checkbox = item.querySelector('input[type="checkbox"]');
+                            if (checkbox && !checkbox.checked) {
+                                checkbox.click();
+                                itemIndex++;
+                                var tid = setTimeout(processNext, RESP_TIMEOUTS.waitAfterToggleResponsibilityMs);
+                                respState.timeouts.push(tid);
+                                return;
+                            } else if (!checkbox) {
+                                item.click();
+                                itemIndex++;
+                                var tid2 = setTimeout(processNext, RESP_TIMEOUTS.waitAfterToggleResponsibilityMs);
+                                respState.timeouts.push(tid2);
+                                return;
+                            }
+                        }
+                    }
+                    itemIndex++;
+                    var tid3 = setTimeout(processNext, 20);
+                    respState.timeouts.push(tid3);
+                }
+                processNext();
+            } catch (error) { addLogMessage('selectResponsibilitiesByNumbers: error: ' + error.message, 'error'); resolve(); }
+        });
+    }
+
+    function clickAddStudyRole() {
+        addLogMessage('clickAddStudyRole: clicking', 'log');
+        return new Promise(function(resolve) {
+            var retries = 0;
+            function tryClick() {
+                if (respState.stopRequested) { resolve(false); return; }
+                var addBtn = document.querySelector(RESP_SELECTORS.addStudyRoleBtn);
+                if (!addBtn) { resolve(false); return; }
+                if (addBtn.disabled || addBtn.getAttribute('disabled') !== null) {
+                    if (retries < RESP_RETRY.addRoleRetries) {
+                        retries++;
+                        var tid = setTimeout(tryClick, 1000);
+                        respState.timeouts.push(tid);
+                        return;
+                    }
+                    resolve(false);
+                    return;
+                }
+                addBtn.click();
+                var wt = setTimeout(function() { resolve(true); }, RESP_TIMEOUTS.waitAddRoleResultMs);
+                respState.timeouts.push(wt);
+            }
+            tryClick();
+        });
+    }
+
+    function respSetAriaBusyOn() {
+        var target = document.querySelector(RESP_ATTRS.ariaBusyTarget);
+        if (target) { respState.prevAriaBusy = target.getAttribute(RESP_ATTRS.ariaBusyAttr); target.setAttribute(RESP_ATTRS.ariaBusyAttr, 'true'); }
+    }
+
+    function respSetAriaBusyOff() {
+        var target = document.querySelector(RESP_ATTRS.ariaBusyTarget);
+        if (target) {
+            if (respState.prevAriaBusy !== null) { target.setAttribute(RESP_ATTRS.ariaBusyAttr, respState.prevAriaBusy); }
+            else { target.removeAttribute(RESP_ATTRS.ariaBusyAttr); }
+            respState.prevAriaBusy = null;
+        }
+    }
+
+    function processRolesWorkflow(rolesData) {
+        addLogMessage('processRolesWorkflow: starting with ' + rolesData.length + ' roles', 'log');
+        respState.isRunning = true;
+        respState.stopRequested = false;
+        respSetAriaBusyOn();
+        updateRespAriaLive(RESP_LABELS.scanningExisting);
+        scanExistingCompletedRoles();
+        var roleIndex = 0;
+        function processNextRole() {
+            if (respState.stopRequested) {
+                for (var si = roleIndex; si < rolesData.length; si++) {
+                    if (rolesData[si].status === RESP_LABELS.statusPending) { rolesData[si].status = RESP_LABELS.statusStopped; respState.counters.pending--; updateRespRoleStatus(rolesData[si].key, RESP_LABELS.statusStopped, ''); }
+                }
+                updateRespSummary();
+                respSetAriaBusyOff();
+                var t1 = document.getElementById('resp-progress-title');
+                if (t1) { t1.textContent = 'Set Responsibilities - Stopped'; }
+                var b1 = document.getElementById('resp-status-badge');
+                if (b1) { b1.textContent = 'Stopped'; b1.style.color = '#aaa'; }
+                updateRespAriaLive('Process stopped');
+                respState.isRunning = false;
+                return;
+            }
+            if (roleIndex >= rolesData.length) {
+                respSetAriaBusyOff();
+                respState.isRunning = false;
+                var t2 = document.getElementById('resp-progress-title');
+                if (t2) { t2.textContent = 'Set Responsibilities - Complete'; }
+                var b2 = document.getElementById('resp-status-badge');
+                if (b2) { b2.textContent = 'Complete'; b2.style.background = 'rgba(107, 207, 127, 0.3)'; b2.style.color = '#6bcf7f'; }
+                updateRespSummary();
+                updateRespAriaLive('Complete. Done: ' + respState.counters.completed + ', Failed: ' + respState.counters.failed);
+                return;
+            }
+            var role = rolesData[roleIndex];
+            if (role.status !== RESP_LABELS.statusPending) {
+                roleIndex++;
+                var sk = setTimeout(processNextRole, 50);
+                respState.timeouts.push(sk);
+                return;
+            }
+            addLogMessage('processRolesWorkflow: processing ' + role.displayRole, 'log');
+            updateRespAriaLive(RESP_LABELS.selectingRole + ': ' + role.displayRole);
+            ensureRoleListOpenForColumn()
+                .then(function() {
+                    if (respState.stopRequested) { throw new Error('Stopped'); }
+                    return attemptSelectByScrollingForRole(role.displayRole, role.key);
+                })
+                .then(function(selected) {
+                    if (respState.stopRequested) { throw new Error('Stopped'); }
+                    if (!selected) {
+                        role.status = RESP_LABELS.statusFailed;
+                        role.reason = 'Role not in dropdown';
+                        respState.counters.failed++;
+                        respState.counters.pending--;
+                        updateRespRoleStatus(role.key, RESP_LABELS.statusFailed, 'Role not in dropdown');
+                        updateRespSummary();
+                        roleIndex++;
+                        var ft = setTimeout(processNextRole, 200);
+                        respState.timeouts.push(ft);
+                        return;
+                    }
+                    updateRespAriaLive(RESP_LABELS.selectingResponsibilities + ': ' + role.displayRole);
+                    return openResponsibilitiesDropdown()
+                        .then(function() {
+                            if (respState.stopRequested) { throw new Error('Stopped'); }
+                            return selectResponsibilitiesByNumbers(role.intersection);
+                        })
+                        .then(function() {
+                            if (respState.stopRequested) { throw new Error('Stopped'); }
+                            updateRespAriaLive(RESP_LABELS.addingRole + ': ' + role.displayRole);
+                            return clickAddStudyRole();
+                        })
+                        .then(function(addOk) {
+                            if (addOk) {
+                                role.status = RESP_LABELS.statusCompleted;
+                                respState.counters.completed++;
+                                respState.counters.pending--;
+                                updateRespRoleStatus(role.key, RESP_LABELS.statusCompleted, '');
+                            } else {
+                                role.status = RESP_LABELS.statusFailed;
+                                role.reason = 'Add Study Role failed';
+                                respState.counters.failed++;
+                                respState.counters.pending--;
+                                updateRespRoleStatus(role.key, RESP_LABELS.statusFailed, 'Add Study Role failed');
+                            }
+                            updateRespSummary();
+                            roleIndex++;
+                            var nt = setTimeout(processNextRole, 500);
+                            respState.timeouts.push(nt);
+                        });
+                })
+                .catch(function(err) {
+                    if (respState.stopRequested) {
+                        role.status = RESP_LABELS.statusStopped;
+                        updateRespRoleStatus(role.key, RESP_LABELS.statusStopped, '');
+                        respState.counters.pending--;
+                    } else {
+                        role.status = RESP_LABELS.statusFailed;
+                        role.reason = err.message;
+                        respState.counters.failed++;
+                        respState.counters.pending--;
+                        updateRespRoleStatus(role.key, RESP_LABELS.statusFailed, err.message);
+                    }
+                    updateRespSummary();
+                    roleIndex++;
+                    var et = setTimeout(processNextRole, 200);
+                    respState.timeouts.push(et);
+                });
+        }
+        processNextRole();
+    }
+
+    function stopResponsibilities() {
+        addLogMessage('stopResponsibilities: stopping', 'log');
+        respState.stopRequested = true;
+        respState.isRunning = false;
+        for (var i = 0; i < respState.idleCallbackIds.length; i++) {
+            try { if (typeof cancelIdleCallback === 'function') { cancelIdleCallback(respState.idleCallbackIds[i]); } } catch (e) {}
+        }
+        respState.idleCallbackIds = [];
+        for (var i2 = 0; i2 < respState.observers.length; i2++) {
+            try { respState.observers[i2].disconnect(); } catch (e2) {}
+        }
+        respState.observers = [];
+        for (var i3 = 0; i3 < respState.timeouts.length; i3++) {
+            try { clearTimeout(respState.timeouts[i3]); } catch (e3) {}
+        }
+        respState.timeouts = [];
+        for (var i4 = 0; i4 < respState.intervals.length; i4++) {
+            try { clearInterval(respState.intervals[i4]); } catch (e4) {}
+        }
+        respState.intervals = [];
+        for (var i5 = 0; i5 < respState.eventListeners.length; i5++) {
+            try { var l = respState.eventListeners[i5]; l.element.removeEventListener(l.type, l.handler); } catch (e5) {}
+        }
+        respState.eventListeners = [];
+        respSetAriaBusyOff();
+        var im = document.getElementById('resp-input-modal');
+        if (im && im.parentNode) { im.parentNode.removeChild(im); }
+        var pm = document.getElementById('resp-progress-modal');
+        if (pm && pm.parentNode) { pm.parentNode.removeChild(pm); }
+        var wm = document.getElementById('resp-warning-modal');
+        if (wm && wm.parentNode) { wm.parentNode.removeChild(wm); }
+        if (respState.focusReturnElement) { respState.focusReturnElement.focus(); }
+        resetRespState();
+        addLogMessage('stopResponsibilities: cleanup complete', 'log');
+    }
+
+
     //==========================
     // SHARED GUI AND PANEL FUNCTIONS
     //==========================
@@ -2000,7 +3120,7 @@
         `;
 
         const closeButton = document.createElement('button');
-        closeButton.innerHTML = '✕';
+        closeButton.innerHTML = 'âœ•';
         closeButton.style.cssText = `
             background: rgba(255, 255, 255, 0.2);
             border: none;
@@ -2181,7 +3301,7 @@
     `;
 
         const closeButton = document.createElement('button');
-        closeButton.innerHTML = '✕';
+        closeButton.innerHTML = 'âœ•';
         closeButton.style.cssText = `
         background: rgba(255, 255, 255, 0.2);
         border: none;
@@ -2219,6 +3339,9 @@
             } else if (i === 2) {
                 button.textContent = 'Add ELog Staff Entries';
                 button.id = 'elog-staff-entries-btn';
+            } else if (i === 3) {
+                button.textContent = 'Set Responsibilities';
+                button.id = 'resp-set-btn';
             } else {
                 button.textContent = `Placeholder ${i}`;
             }
@@ -2252,6 +3375,11 @@
                 button.onclick = () => {
                     console.log('Add ELog Staff Entries button clicked');
                     addELogStaffEntriesInit();
+                };
+            } else if (i === 3) {
+                button.onclick = () => {
+                    console.log('Set Responsibilities button clicked');
+                    setResponsibilitiesInit();
                 };
             } else {
                 button.onclick = () => console.log(`Placeholder ${i} clicked`);
@@ -2417,7 +3545,7 @@
     `;
 
         const closeButton = document.createElement('button');
-        closeButton.innerHTML = '✕';
+        closeButton.innerHTML = 'âœ•';
         closeButton.style.cssText = `
         background: rgba(255, 255, 255, 0.2);
         border: none;
@@ -2686,7 +3814,7 @@
         `;
 
         const closeButton = document.createElement('button');
-        closeButton.innerHTML = '✕';
+        closeButton.innerHTML = 'âœ•';
         closeButton.style.cssText = `
             background: rgba(255, 255, 255, 0.2);
             border: none;
@@ -2756,7 +3884,7 @@
             line-height: 1.5;
         `;
         warningMessage.innerHTML = `
-            <strong style="display: block; margin-bottom: 4px; font-size: 14px;">⚠️ Important</strong>
+            <strong style="display: block; margin-bottom: 4px; font-size: 14px;">âš ï¸ Important</strong>
             Please do not click anywhere on the page while the automation is running. Clicking may close the dropdown menu and interrupt the process.
         `;
         container.appendChild(warningMessage);
@@ -3585,7 +4713,7 @@
         titleContainer.style.cssText = `display: flex; align-items: center; gap: 10px;`;
 
         const checkIcon = document.createElement('span');
-        checkIcon.innerHTML = '✓';
+        checkIcon.innerHTML = 'âœ“';
         checkIcon.style.cssText = `
             background: rgba(255, 255, 255, 0.2);
             width: 32px;
@@ -3611,7 +4739,7 @@
         titleContainer.appendChild(title);
 
         const closeButton = document.createElement('button');
-        closeButton.innerHTML = '✕';
+        closeButton.innerHTML = 'âœ•';
         closeButton.style.cssText = `
             background: rgba(255, 255, 255, 0.2);
             border: none;
