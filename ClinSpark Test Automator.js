@@ -101,8 +101,8 @@
     const ELIGIBILITY_LIST_URL_PROD = "https://cenexel.clinspark.com/secure/crfdesign/studylibrary/eligibility/list";
     const ELIGIBILITY_VALID_HOSTNAMES = ["cenexeltest.clinspark.com", "cenexel.clinspark.com"];
     const ELIGIBILITY_LIST_PATH = "/secure/crfdesign/studylibrary/eligibility/list";
-    const IE_CODE_REGEX = /\b(INC|EXC)\s*(\d+)\b/i;
-    const IE_CODE_REGEX_GLOBAL = /\b(INC|EXC)\s*(\d+)\b/gi;
+    const IE_CODE_REGEX = /\b(INC|EXC)\s*(\d+)([a-zA-Z]?)\b/i;
+    const IE_CODE_REGEX_GLOBAL = /\b(INC|EXC)\s*(\d+)([a-zA-Z]?)\b/gi;
     const IMPORT_IE_HELPER_TIMEOUT = 15000;
     const IMPORT_IE_POLL_INTERVAL = 120;
     const IMPORT_IE_MODAL_TIMEOUT = 12000;
@@ -112,9 +112,9 @@
     var RIGHT_PANEL_MODE = { HIERARCHY: "hierarchy", CODE: "code" };
     var CODE_SORT_TOGGLE_BUTTON_ID = "ieCodeSortToggle";
     var RIGHT_PANEL_BODY_ID = "ieRightPanelBody";
-    var CODE_TOKEN_REGEX = /\b(INC|EXC)\s*[-_:/#]?\s*0*(\d+)\b/i;
+    var CODE_TOKEN_REGEX = /\b(INC|EXC)\s*[-_:/#]?\s*0*(\d+)([a-zA-Z]?)\b/i;
     var CODE_PAD_WIDTH = 3;
-    var CODE_TOKEN_REGEX_POOL = /\b(INC|EXC)\s*[-_:/#]?\s*0*(\d+)\b/i;
+    var CODE_TOKEN_REGEX_POOL = /\b(INC|EXC)\s*[-_:/#]?\s*0*(\d+)([a-zA-Z]?)\b/i;
     var CODE_PAD_WIDTH_POOL = 3;
     var ELIG_POOL_PANEL_ID = "ieEligPoolPanel";
     var ELIG_POOL_LIST_ID = "ieEligPoolList";
@@ -12281,7 +12281,8 @@
         if (match) {
             var prefix = match[1].toUpperCase();
             var num = match[2];
-            var code = prefix + num;
+            var suffix = (match[3] || "").toLowerCase();
+            var code = prefix + num + suffix;
             return code;
         }
         return "";
@@ -12289,19 +12290,21 @@
 
     function extractIECodeStrict(text) {
         var s = (text + "").trim();
-        var re = /\b(INC|EXC)(\d+)\b/i;
+        var re = /\b(INC|EXC)(\d+)([a-zA-Z]?)\b/i;
         var match = re.exec(s);
         if (match) {
             var prefix = match[1].toUpperCase();
             var num = match[2];
-            return prefix + num;
+            var suffix = (match[3] || "").toLowerCase();
+            return prefix + num + suffix;
         }
-        var re2 = /\b(INC|EXC)\s+(\d+)\b/i;
+        var re2 = /\b(INC|EXC)\s+(\d+)([a-zA-Z]?)\b/i;
         var match2 = re2.exec(s);
         if (match2) {
             var prefix2 = match2[1].toUpperCase();
             var num2 = match2[2];
-            return prefix2 + num2;
+            var suffix2 = (match2[3] || "").toLowerCase();
+            return prefix2 + num2 + suffix2;
         }
         return "";
     }
@@ -12507,6 +12510,7 @@
         }
         var typeRaw = match[1];
         var numRaw = match[2];
+        var suffixRaw = (match[3] || "").toLowerCase();
         var typeUpper = typeRaw.toUpperCase();
         var numberInt = parseInt(numRaw, 10);
         if (isNaN(numberInt)) {
@@ -12516,16 +12520,17 @@
         while (padded.length < CODE_PAD_WIDTH_POOL) {
             padded = "0" + padded;
         }
-        log("ImportIE: parsePoolCodeParts matched type=" + typeUpper + " num=" + String(numberInt) + " padded=" + padded);
-        return { type: typeRaw, numberInt: numberInt, typeUpper: typeUpper, numberPadded: padded, rawMatch: match[0] };
+        log("ImportIE: parsePoolCodeParts matched type=" + typeUpper + " num=" + String(numberInt) + " padded=" + padded + " suffix=" + suffixRaw);
+        return { type: typeRaw, numberInt: numberInt, typeUpper: typeUpper, numberPadded: padded, suffix: suffixRaw, rawMatch: match[0] };
     }
 
-    function formatPoolCodeDisplay(typeUpper, numberInt) {
+    function formatPoolCodeDisplay(typeUpper, numberInt, suffix) {
+        var sfx = (suffix || "").toLowerCase();
         var padded = String(numberInt);
         while (padded.length < CODE_PAD_WIDTH_POOL) {
             padded = "0" + padded;
         }
-        return typeUpper + padded;
+        return typeUpper + padded + sfx;
     }
 
     async function collectEligibilityItemPool() {
@@ -12563,7 +12568,7 @@
             var codeParts = parsePoolCodeParts(fullText);
             var codeStr = "";
             if (codeParts) {
-                codeStr = formatPoolCodeDisplay(codeParts.typeUpper, codeParts.numberInt);
+                codeStr = formatPoolCodeDisplay(codeParts.typeUpper, codeParts.numberInt, codeParts.suffix);
             }
             var normalizedLabel = fullText.toLowerCase().trim().replace(/\s+/g, " ");
             var labelShort = truncateToWords(fullText, ELIG_POOL_LABEL_WORD_LIMIT);
@@ -12610,6 +12615,14 @@
                 return -1;
             }
             if (a.codeParts.numberInt > b.codeParts.numberInt) {
+                return 1;
+            }
+            var sfxA = (a.codeParts.suffix || "").toLowerCase();
+            var sfxB = (b.codeParts.suffix || "").toLowerCase();
+            if (sfxA < sfxB) {
+                return -1;
+            }
+            if (sfxA > sfxB) {
                 return 1;
             }
             if (a.normalizedLabel < b.normalizedLabel) {
@@ -13115,7 +13128,7 @@
                 log("ImportIE: parseCodeParts - no label text, returning null");
                 return null;
             }
-            var re = new RegExp("\\b(INC|EXC)\\s*[-_:/#]?\\s*0*(\\d+)\\b", "i");
+            var re = new RegExp("\\b(INC|EXC)\\s*[-_:/#]?\\s*0*(\\d+)([a-zA-Z]?)\\b", "i");
             var match = re.exec(labelText);
             if (!match) {
                 log("ImportIE: parseCodeParts - no match found, returning null");
@@ -13123,6 +13136,7 @@
             }
             var typeRaw = match[1];
             var numRaw = match[2];
+            var suffixRaw = (match[3] || "").toLowerCase();
             var typeUpper = typeRaw.toUpperCase();
             var numberInt = parseInt(numRaw, 10);
             var padStr = String(numberInt);
@@ -13135,19 +13149,21 @@
                 numberInt: numberInt,
                 typeUpper: typeUpper,
                 numberPadded: numberPadded,
+                suffix: suffixRaw,
                 rawMatch: match[0]
             };
-            log("ImportIE: parseCodeParts result type=" + typeUpper + " num=" + String(numberInt) + " padded=" + numberPadded);
+            log("ImportIE: parseCodeParts result type=" + typeUpper + " num=" + String(numberInt) + " padded=" + numberPadded + " suffix=" + suffixRaw);
             return result;
         }
 
-        function formatCodeDisplay(typeUpper, numberInt) {
-            log("ImportIE: formatCodeDisplay start type=" + String(typeUpper) + " num=" + String(numberInt));
+        function formatCodeDisplay(typeUpper, numberInt, suffix) {
+            var sfx = (suffix || "").toLowerCase();
+            log("ImportIE: formatCodeDisplay start type=" + String(typeUpper) + " num=" + String(numberInt) + " suffix=" + sfx);
             var padStr = String(numberInt);
             while (padStr.length < CODE_PAD_WIDTH) {
                 padStr = "0" + padStr;
             }
-            var display = typeUpper + padStr;
+            var display = typeUpper + padStr + sfx;
             log("ImportIE: formatCodeDisplay result=" + display);
             return display;
         }
@@ -13165,7 +13181,7 @@
                     mi = mi + 1;
                     continue;
                 }
-                var codeDisplay = formatCodeDisplay(parsed.typeUpper, parsed.numberInt);
+                var codeDisplay = formatCodeDisplay(parsed.typeUpper, parsed.numberInt, parsed.suffix);
                 var alreadyExists = alreadyExistCodeSet.has(m.code.toUpperCase());
                 var statusVal = alreadyExists ? "Already Exist" : "Not Added";
                 var disabledVal = false;
@@ -13177,6 +13193,7 @@
                     key: stableKey,
                     typeUpper: parsed.typeUpper,
                     numberInt: parsed.numberInt,
+                    suffix: parsed.suffix || "",
                     codeDisplay: codeDisplay,
                     activityPlanText: apText,
                     scheduledActivityText: saText,
@@ -13209,6 +13226,14 @@
                 }
                 if (a.numberInt !== b.numberInt) {
                     return a.numberInt - b.numberInt;
+                }
+                var sfxA = (a.suffix || "").toLowerCase();
+                var sfxB = (b.suffix || "").toLowerCase();
+                if (sfxA < sfxB) {
+                    return -1;
+                }
+                if (sfxA > sfxB) {
+                    return 1;
                 }
                 var apA = (a.activityPlanText || "").toLowerCase().replace(/\s+/g, " ").trim();
                 var apB = (b.activityPlanText || "").toLowerCase().replace(/\s+/g, " ").trim();
