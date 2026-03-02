@@ -397,5 +397,19 @@
     "tags": ["Year", "Birth"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Year%20of%20Birth.md",
     "updated": "2026-02-26"
+  },
+  {
+    "id": "M-058",
+    "title": "After-Dose",
+    "tags": ["Dose"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/After-Dose.md",
+    "updated": "2026-03-02"
+  },
+  {
+    "id": "M-059",
+    "title": "Edit Check Void Interval Check",
+    "tags": ["Void", "Interval", "Check"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Void%20Interval%20Check.md",
+    "updated": "2026-03-02"
   }
 ]
