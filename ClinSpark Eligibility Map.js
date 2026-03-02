@@ -59,6 +59,13 @@
     const IMPORT_IE_MODAL_TIMEOUT = 12000;
     const IMPORT_IE_SHORT_DELAY_MIN = 150;
     const IMPORT_IE_SHORT_DELAY_MAX = 400;
+    var CODE_TOKEN_REGEX_POOL = /\b(INC|EXC)\s*[-_:/#]?\s*0*(\d+)\b/i;
+    var CODE_PAD_WIDTH_POOL = 3;
+    var ELIG_POOL_PANEL_ID = "ieEligPoolPanel";
+    var ELIG_POOL_LIST_ID = "ieEligPoolList";
+    var ELIG_DROPBOX_CLASS = "ie-elig-dropbox";
+    var ELIG_DRAG_TYPE = "application/x-elig-item-value";
+    var ELIG_POOL_LABEL_WORD_LIMIT = 10;
     function ClearEligibilityFunctions() {}
     const RUNMODE_CLEAR_MAPPING = "clearMapping";
 
@@ -2007,6 +2014,160 @@
 
 
 
+    function truncateToWords(text, maxWords) {
+        log("ImportIE: truncateToWords start text=" + String((text + "").substring(0, 40)) + " maxWords=" + String(maxWords));
+        var s = (text + "").trim().replace(/\s+/g, " ");
+        var words = s.split(" ");
+        if (words.length <= maxWords) {
+            log("ImportIE: truncateToWords no truncation needed wordCount=" + String(words.length));
+            return s;
+        }
+        var result = "";
+        var wi = 0;
+        while (wi < maxWords) {
+            if (wi > 0) {
+                result = result + " ";
+            }
+            result = result + words[wi];
+            wi = wi + 1;
+        }
+        log("ImportIE: truncateToWords truncated to " + String(maxWords) + " words");
+        return result;
+    }
+
+    function parsePoolCodeParts(labelText) {
+        log("ImportIE: parsePoolCodeParts start label=" + String((labelText + "").substring(0, 50)));
+        var s = (labelText + "").trim();
+        var re = new RegExp(CODE_TOKEN_REGEX_POOL.source, CODE_TOKEN_REGEX_POOL.flags);
+        var match = re.exec(s);
+        if (!match) {
+            log("ImportIE: parsePoolCodeParts no match");
+            return null;
+        }
+        var typeRaw = match[1];
+        var numRaw = match[2];
+        var typeUpper = typeRaw.toUpperCase();
+        var numberInt = parseInt(numRaw, 10);
+        if (isNaN(numberInt)) {
+            numberInt = 0;
+        }
+        var padded = String(numberInt);
+        while (padded.length < CODE_PAD_WIDTH_POOL) {
+            padded = "0" + padded;
+        }
+        log("ImportIE: parsePoolCodeParts matched type=" + typeUpper + " num=" + String(numberInt) + " padded=" + padded);
+        return { type: typeRaw, numberInt: numberInt, typeUpper: typeUpper, numberPadded: padded, rawMatch: match[0] };
+    }
+
+    function formatPoolCodeDisplay(typeUpper, numberInt) {
+        var padded = String(numberInt);
+        while (padded.length < CODE_PAD_WIDTH_POOL) {
+            padded = "0" + padded;
+        }
+        return typeUpper + padded;
+    }
+
+    async function collectEligibilityItemPool() {
+        log("ImportIE: collectEligibilityItemPool start");
+        var pool = [];
+        var seenValues = {};
+        var eligSel = document.querySelector("select#eligibilityItemRef");
+        if (!eligSel) {
+            eligSel = await waitForElement("select#eligibilityItemRef", 10000);
+        }
+        if (!eligSel) {
+            log("ImportIE: collectEligibilityItemPool select#eligibilityItemRef not found");
+            return pool;
+        }
+        var opts = eligSel.querySelectorAll("option");
+        log("ImportIE: collectEligibilityItemPool total options=" + String(opts.length));
+        var oi = 0;
+        while (oi < opts.length) {
+            var val = (opts[oi].value + "").trim();
+            var fullText = (opts[oi].textContent + "").trim().replace(/\s+/g, " ");
+            if (val.length === 0) {
+                oi = oi + 1;
+                continue;
+            }
+            if (fullText.length === 0) {
+                oi = oi + 1;
+                continue;
+            }
+            if (seenValues.hasOwnProperty(val)) {
+                log("ImportIE: collectEligibilityItemPool duplicate value=" + String(val) + " skipping");
+                oi = oi + 1;
+                continue;
+            }
+            seenValues[val] = true;
+            var codeParts = parsePoolCodeParts(fullText);
+            var codeStr = "";
+            if (codeParts) {
+                codeStr = formatPoolCodeDisplay(codeParts.typeUpper, codeParts.numberInt);
+            }
+            var normalizedLabel = fullText.toLowerCase().trim().replace(/\s+/g, " ");
+            var labelShort = truncateToWords(fullText, ELIG_POOL_LABEL_WORD_LIMIT);
+            var entry = {
+                labelFull: fullText,
+                labelShort: labelShort,
+                value: val,
+                code: codeStr,
+                normalizedLabel: normalizedLabel,
+                codeParts: codeParts
+            };
+            pool.push(entry);
+            log("ImportIE: collectEligibilityItemPool added value=" + String(val) + " code=" + String(codeStr) + " labelShort=" + String(labelShort));
+            oi = oi + 1;
+        }
+        log("ImportIE: collectEligibilityItemPool collected=" + String(pool.length) + " before sort");
+        pool.sort(function (a, b) {
+            var aHasCode = a.codeParts !== null;
+            var bHasCode = b.codeParts !== null;
+            if (aHasCode && !bHasCode) {
+                return -1;
+            }
+            if (!aHasCode && bHasCode) {
+                return 1;
+            }
+            if (!aHasCode && !bHasCode) {
+                if (a.normalizedLabel < b.normalizedLabel) {
+                    return -1;
+                }
+                if (a.normalizedLabel > b.normalizedLabel) {
+                    return 1;
+                }
+                return 0;
+            }
+            var aType = a.codeParts.typeUpper;
+            var bType = b.codeParts.typeUpper;
+            if (aType === "INC" && bType === "EXC") {
+                return -1;
+            }
+            if (aType === "EXC" && bType === "INC") {
+                return 1;
+            }
+            if (a.codeParts.numberInt < b.codeParts.numberInt) {
+                return -1;
+            }
+            if (a.codeParts.numberInt > b.codeParts.numberInt) {
+                return 1;
+            }
+            if (a.normalizedLabel < b.normalizedLabel) {
+                return -1;
+            }
+            if (a.normalizedLabel > b.normalizedLabel) {
+                return 1;
+            }
+            return 0;
+        });
+        log("ImportIE: collectEligibilityItemPool sorted pool count=" + String(pool.length));
+        var si = 0;
+        while (si < pool.length) {
+            log("ImportIE: collectEligibilityItemPool sorted[" + String(si) + "] code=" + String(pool[si].code) + " value=" + String(pool[si].value));
+            si = si + 1;
+        }
+        return pool;
+    }
+
     async function collectMappingsFromModal(existingCodeSet) {
         log("ImportIE: collectMappingsFromModal start");
         var mappings = [];
@@ -2170,11 +2331,119 @@
         return plans;
     }
 
-    function buildImportIEReviewPanel(existingCodeSet, mappings, onConfirm) {
-        log("ImportIE: buildImportIEReviewPanel start existingCodes=" + String(existingCodeSet.size) + " mappings=" + String(mappings.length));
+    function buildImportIEReviewPanel(existingCodeSet, mappings, eligibilityItemPool, onConfirm) {
+        log("ImportIE: buildImportIEReviewPanel start existingCodes=" + String(existingCodeSet.size) + " mappings=" + String(mappings.length) + " pool=" + String(eligibilityItemPool.length));
         var hierarchy = buildHierarchy(mappings);
         var existingArr = Array.from(existingCodeSet);
         existingArr.sort();
+
+        var assignedEligMap = {};
+        var availablePool = [];
+        var pi2 = 0;
+        while (pi2 < eligibilityItemPool.length) {
+            availablePool.push(eligibilityItemPool[pi2]);
+            pi2 = pi2 + 1;
+        }
+        log("ImportIE: initial availablePool count=" + String(availablePool.length));
+
+        function getMappingKey(m) {
+            var apv = "";
+            var sav = "";
+            var civ = "";
+            if (m && m.ids) {
+                if (m.ids.activityPlanValue) {
+                    apv = String(m.ids.activityPlanValue);
+                }
+                if (m.ids.scheduledActivityValue) {
+                    sav = String(m.ids.scheduledActivityValue);
+                }
+                if (m.ids.checkItemValue) {
+                    civ = String(m.ids.checkItemValue);
+                }
+            }
+            if (apv.length === 0 && sav.length === 0 && civ.length === 0) {
+                apv = String(m.activityPlanText || "");
+                sav = String(m.scheduledActivityText || "");
+                civ = String(m.checkItemText || "");
+            }
+            return apv + "|" + sav + "|" + civ;
+        }
+
+        function removeFromAvailablePool(eligValue) {
+            log("ImportIE: removeFromAvailablePool value=" + String(eligValue));
+            var ni = 0;
+            var newPool = [];
+            while (ni < availablePool.length) {
+                if (availablePool[ni].value !== eligValue) {
+                    newPool.push(availablePool[ni]);
+                }
+                ni = ni + 1;
+            }
+            availablePool = newPool;
+            log("ImportIE: removeFromAvailablePool done remaining=" + String(availablePool.length));
+        }
+
+        function sortAvailablePool() {
+            availablePool.sort(function (a, b) {
+                var aHasCode = a.codeParts !== null;
+                var bHasCode = b.codeParts !== null;
+                if (aHasCode && !bHasCode) { return -1; }
+                if (!aHasCode && bHasCode) { return 1; }
+                if (!aHasCode && !bHasCode) {
+                    if (a.normalizedLabel < b.normalizedLabel) { return -1; }
+                    if (a.normalizedLabel > b.normalizedLabel) { return 1; }
+                    return 0;
+                }
+                var aType = a.codeParts.typeUpper;
+                var bType = b.codeParts.typeUpper;
+                if (aType === "INC" && bType === "EXC") { return -1; }
+                if (aType === "EXC" && bType === "INC") { return 1; }
+                if (a.codeParts.numberInt < b.codeParts.numberInt) { return -1; }
+                if (a.codeParts.numberInt > b.codeParts.numberInt) { return 1; }
+                if (a.normalizedLabel < b.normalizedLabel) { return -1; }
+                if (a.normalizedLabel > b.normalizedLabel) { return 1; }
+                return 0;
+            });
+        }
+
+        function restoreToAvailablePool(eligValue) {
+            log("ImportIE: restoreToAvailablePool value=" + String(eligValue));
+            var ai = 0;
+            while (ai < availablePool.length) {
+                if (availablePool[ai].value === eligValue) {
+                    log("ImportIE: restoreToAvailablePool already in pool");
+                    return;
+                }
+                ai = ai + 1;
+            }
+            var found = null;
+            var fi = 0;
+            while (fi < eligibilityItemPool.length) {
+                if (eligibilityItemPool[fi].value === eligValue) {
+                    found = eligibilityItemPool[fi];
+                    break;
+                }
+                fi = fi + 1;
+            }
+            if (!found) {
+                log("ImportIE: restoreToAvailablePool item not found in master pool");
+                return;
+            }
+            availablePool.push(found);
+            sortAvailablePool();
+            log("ImportIE: restoreToAvailablePool restored, pool count=" + String(availablePool.length));
+        }
+
+        function findPoolEntryByValue(val) {
+            var i = 0;
+            while (i < eligibilityItemPool.length) {
+                if (eligibilityItemPool[i].value === val) {
+                    return eligibilityItemPool[i];
+                }
+                i = i + 1;
+            }
+            return null;
+        }
 
         var overlay = document.createElement("div");
         overlay.id = "importIEReviewOverlay";
@@ -2196,9 +2465,9 @@
         container.style.background = "#111";
         container.style.border = "1px solid #444";
         container.style.borderRadius = "8px";
-        container.style.width = "90%";
-        container.style.maxWidth = "1100px";
-        container.style.height = "85vh";
+        container.style.width = "95%";
+        container.style.maxWidth = "1500px";
+        container.style.height = "88vh";
         container.style.display = "flex";
         container.style.flexDirection = "column";
         container.style.boxShadow = "0 4px 20px rgba(0,0,0,0.5)";
@@ -2239,7 +2508,7 @@
         panelBody.style.overflow = "hidden";
 
         var leftPanel = document.createElement("div");
-        leftPanel.style.width = "280px";
+        leftPanel.style.width = "220px";
         leftPanel.style.flexShrink = "0";
         leftPanel.style.borderRight = "1px solid #444";
         leftPanel.style.display = "flex";
@@ -2304,6 +2573,7 @@
         rightPanel.style.flexDirection = "column";
         rightPanel.style.padding = "12px";
         rightPanel.style.overflow = "hidden";
+        rightPanel.style.borderRight = "1px solid #444";
 
         var rightTitle = document.createElement("div");
         rightTitle.textContent = "Mapped Check Items";
@@ -2429,6 +2699,172 @@
             updateParentState(saEntry.planIdx);
         }
 
+        function createDropbox(mappingRecord) {
+            var mKey = getMappingKey(mappingRecord);
+            var dropbox = document.createElement("div");
+            dropbox.className = ELIG_DROPBOX_CLASS;
+            dropbox.style.minWidth = "120px";
+            dropbox.style.maxWidth = "180px";
+            dropbox.style.minHeight = "24px";
+            dropbox.style.border = "1px dashed #555";
+            dropbox.style.borderRadius = "3px";
+            dropbox.style.padding = "2px 6px";
+            dropbox.style.fontSize = "10px";
+            dropbox.style.color = "#888";
+            dropbox.style.background = "#1a1a1a";
+            dropbox.style.display = "inline-flex";
+            dropbox.style.alignItems = "center";
+            dropbox.style.flexShrink = "0";
+            dropbox.style.cursor = "default";
+            dropbox.style.transition = "border-color 0.15s, background 0.15s";
+            dropbox.style.wordBreak = "break-word";
+            dropbox.style.overflow = "hidden";
+            dropbox.setAttribute("data-mapping-key", mKey);
+
+            if (assignedEligMap.hasOwnProperty(mKey)) {
+                var assignedVal = assignedEligMap[mKey];
+                var poolEntry = findPoolEntryByValue(assignedVal);
+                if (poolEntry) {
+                    dropbox.textContent = poolEntry.labelShort;
+                    dropbox.title = poolEntry.labelFull;
+                    dropbox.style.color = "#8cf";
+                    dropbox.style.border = "1px solid #4a8";
+                    dropbox.style.background = "#1a2a1a";
+                    dropbox.setAttribute("data-elig-value", assignedVal);
+                    dropbox.draggable = true;
+                } else {
+                    dropbox.textContent = "Drop here";
+                }
+            } else {
+                dropbox.textContent = "Drop here";
+            }
+
+            dropbox.addEventListener("dragover", function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                dropbox.style.borderColor = "#0af";
+                dropbox.style.background = "#1a2a3a";
+            });
+            dropbox.addEventListener("dragleave", function (e) {
+                e.preventDefault();
+                var hasVal = dropbox.getAttribute("data-elig-value");
+                if (hasVal) {
+                    dropbox.style.borderColor = "#4a8";
+                    dropbox.style.background = "#1a2a1a";
+                } else {
+                    dropbox.style.borderColor = "#555";
+                    dropbox.style.background = "#1a1a1a";
+                }
+            });
+            dropbox.addEventListener("drop", function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var draggedVal = e.dataTransfer.getData(ELIG_DRAG_TYPE);
+                log("ImportIE: dropbox drop mKey=" + mKey + " droppedValue=" + String(draggedVal));
+                if (!draggedVal || draggedVal.length === 0) {
+                    dropbox.style.borderColor = "#555";
+                    dropbox.style.background = "#1a1a1a";
+                    return;
+                }
+                var prevVal = dropbox.getAttribute("data-elig-value");
+                if (prevVal && prevVal.length > 0 && prevVal !== draggedVal) {
+                    log("ImportIE: dropbox replacing previous value=" + String(prevVal));
+                    delete assignedEligMap[mKey];
+                    if (mappingRecord.eligibilityItemValue === prevVal) {
+                        delete mappingRecord.eligibilityItemValue;
+                    }
+                    restoreToAvailablePool(prevVal);
+                }
+                var otherKeys = Object.keys(assignedEligMap);
+                var oki = 0;
+                while (oki < otherKeys.length) {
+                    if (otherKeys[oki] !== mKey && assignedEligMap[otherKeys[oki]] === draggedVal) {
+                        log("ImportIE: dropbox clearing cross-assignment from mKey=" + String(otherKeys[oki]));
+                        delete assignedEligMap[otherKeys[oki]];
+                        var mi3 = 0;
+                        while (mi3 < mappings.length) {
+                            if (getMappingKey(mappings[mi3]) === otherKeys[oki]) {
+                                if (mappings[mi3].eligibilityItemValue === draggedVal) {
+                                    delete mappings[mi3].eligibilityItemValue;
+                                    log("ImportIE: dropbox cross-assign cleared eligibilityItemValue on mapping key=" + String(otherKeys[oki]));
+                                }
+                            }
+                            mi3 = mi3 + 1;
+                        }
+                        break;
+                    }
+                    oki = oki + 1;
+                }
+                assignedEligMap[mKey] = draggedVal;
+                mappingRecord.eligibilityItemValue = draggedVal;
+                removeFromAvailablePool(draggedVal);
+                var pe = findPoolEntryByValue(draggedVal);
+                if (pe) {
+                    dropbox.textContent = pe.labelShort;
+                    dropbox.title = pe.labelFull;
+                } else {
+                    dropbox.textContent = draggedVal;
+                    dropbox.title = draggedVal;
+                }
+                dropbox.style.color = "#8cf";
+                dropbox.style.border = "1px solid #4a8";
+                dropbox.style.background = "#1a2a1a";
+                dropbox.setAttribute("data-elig-value", draggedVal);
+                dropbox.draggable = true;
+                renderPoolList(poolSearch.value);
+                log("ImportIE: dropbox attach complete mKey=" + mKey + " eligValue=" + String(draggedVal));
+            });
+
+            dropbox.addEventListener("dragstart", function (e) {
+                var currentVal = dropbox.getAttribute("data-elig-value");
+                if (!currentVal || currentVal.length === 0) {
+                    e.preventDefault();
+                    return;
+                }
+                e.dataTransfer.setData(ELIG_DRAG_TYPE, currentVal);
+                e.dataTransfer.effectAllowed = "move";
+                log("ImportIE: dropbox dragstart detaching eligValue=" + String(currentVal) + " from mKey=" + mKey);
+            });
+
+            dropbox.addEventListener("dragend", function (e) {
+                var currentVal = dropbox.getAttribute("data-elig-value");
+                if (!currentVal || currentVal.length === 0) {
+                    return;
+                }
+                var stillAssigned = assignedEligMap[mKey] === currentVal;
+                if (!stillAssigned) {
+                    log("ImportIE: dropbox dragend item reassigned elsewhere mKey=" + mKey + " eligValue=" + String(currentVal));
+                    dropbox.textContent = "Drop here";
+                    dropbox.title = "";
+                    dropbox.style.color = "#888";
+                    dropbox.style.border = "1px dashed #555";
+                    dropbox.style.background = "#1a1a1a";
+                    dropbox.removeAttribute("data-elig-value");
+                    dropbox.draggable = false;
+                    return;
+                }
+                if (e.dataTransfer.dropEffect === "none" || e.dataTransfer.dropEffect === "" || !e.dataTransfer.dropEffect) {
+                    log("ImportIE: dropbox dragend no valid drop, restoring eligValue=" + String(currentVal) + " to pool from mKey=" + mKey);
+                    delete assignedEligMap[mKey];
+                    if (mappingRecord.eligibilityItemValue === currentVal) {
+                        delete mappingRecord.eligibilityItemValue;
+                    }
+                    restoreToAvailablePool(currentVal);
+                    dropbox.textContent = "Drop here";
+                    dropbox.title = "";
+                    dropbox.style.color = "#888";
+                    dropbox.style.border = "1px dashed #555";
+                    dropbox.style.background = "#1a1a1a";
+                    dropbox.removeAttribute("data-elig-value");
+                    dropbox.draggable = false;
+                    renderPoolList(poolSearch.value);
+                    log("ImportIE: dropbox dragend restore complete mKey=" + mKey);
+                }
+            });
+
+            return dropbox;
+        }
+
         function renderRightList(filter) {
             rightList.innerHTML = "";
             allCheckboxes = [];
@@ -2517,6 +2953,7 @@
                         itemRow.style.gap = "6px";
                         itemRow.style.padding = "3px 4px 3px 48px";
                         itemRow.style.fontSize = "12px";
+                        itemRow.style.flexWrap = "wrap";
 
                         var itemCb = document.createElement("input");
                         itemCb.type = "checkbox";
@@ -2550,11 +2987,14 @@
                             statusBadge.style.color = "#6f6";
                         }
 
+                        var dropbox = createDropbox(item);
+
                         itemRow.appendChild(itemCb);
                         itemRow.appendChild(itemLabel);
+                        itemRow.appendChild(dropbox);
                         itemRow.appendChild(statusBadge);
 
-                        var itemEntry = { cb: itemCb, mapping: item, row: itemRow, planIdx: planIdx, saIdx: saIdx };
+                        var itemEntry = { cb: itemCb, mapping: item, row: itemRow, planIdx: planIdx, saIdx: saIdx, dropbox: dropbox };
                         itemCheckboxes.push(itemEntry);
 
                         var matchesFilter = true;
@@ -2643,6 +3083,152 @@
         rightPanel.appendChild(counterEl);
 
         panelBody.appendChild(rightPanel);
+
+        var poolPanel = document.createElement("div");
+        poolPanel.id = ELIG_POOL_PANEL_ID;
+        poolPanel.style.width = "280px";
+        poolPanel.style.flexShrink = "0";
+        poolPanel.style.display = "flex";
+        poolPanel.style.flexDirection = "column";
+        poolPanel.style.padding = "12px";
+        poolPanel.style.overflow = "hidden";
+
+        var poolTitle = document.createElement("div");
+        poolTitle.textContent = "Eligibility Items (" + String(eligibilityItemPool.length) + ")";
+        poolTitle.style.fontWeight = "600";
+        poolTitle.style.marginBottom = "8px";
+        poolTitle.style.fontSize = "13px";
+        poolPanel.appendChild(poolTitle);
+
+        var poolSearch = document.createElement("input");
+        poolSearch.type = "text";
+        poolSearch.placeholder = "Search items...";
+        poolSearch.style.width = "100%";
+        poolSearch.style.padding = "6px 8px";
+        poolSearch.style.marginBottom = "8px";
+        poolSearch.style.background = "#222";
+        poolSearch.style.color = "#fff";
+        poolSearch.style.border = "1px solid #555";
+        poolSearch.style.borderRadius = "4px";
+        poolSearch.style.boxSizing = "border-box";
+        poolSearch.style.fontSize = "12px";
+        poolPanel.appendChild(poolSearch);
+
+        var poolList = document.createElement("div");
+        poolList.id = ELIG_POOL_LIST_ID;
+        poolList.style.flex = "1";
+        poolList.style.overflowY = "auto";
+
+        poolList.addEventListener("dragover", function (e) {
+            e.preventDefault();
+            poolList.style.background = "#1a2a1a";
+        });
+        poolList.addEventListener("dragleave", function () {
+            poolList.style.background = "transparent";
+        });
+        poolList.addEventListener("drop", function (e) {
+            e.preventDefault();
+            poolList.style.background = "transparent";
+            var draggedVal = e.dataTransfer.getData(ELIG_DRAG_TYPE);
+            log("ImportIE: poolList drop received eligValue=" + String(draggedVal));
+            if (!draggedVal || draggedVal.length === 0) {
+                return;
+            }
+            var foundKey = "";
+            var kk;
+            for (kk in assignedEligMap) {
+                if (assignedEligMap.hasOwnProperty(kk)) {
+                    if (assignedEligMap[kk] === draggedVal) {
+                        foundKey = kk;
+                        break;
+                    }
+                }
+            }
+            if (foundKey.length > 0) {
+                delete assignedEligMap[foundKey];
+                var mi2 = 0;
+                while (mi2 < mappings.length) {
+                    if (getMappingKey(mappings[mi2]) === foundKey) {
+                        delete mappings[mi2].eligibilityItemValue;
+                        break;
+                    }
+                    mi2 = mi2 + 1;
+                }
+                log("ImportIE: poolList drop detached from mapping key=" + foundKey);
+            }
+            restoreToAvailablePool(draggedVal);
+            renderPoolList(poolSearch.value);
+            renderRightList(rightSearch.value);
+        });
+
+        function renderPoolList(filter) {
+            poolList.innerHTML = "";
+            var filterLower = (filter + "").toLowerCase().replace(/\s+/g, " ").trim();
+            log("ImportIE: renderPoolList start filter='" + String(filter) + "' available=" + String(availablePool.length));
+            var ri = 0;
+            while (ri < availablePool.length) {
+                var pItem = availablePool[ri];
+                if (filterLower.length > 0) {
+                    if (pItem.normalizedLabel.indexOf(filterLower) < 0 && pItem.code.toLowerCase().indexOf(filterLower) < 0) {
+                        ri = ri + 1;
+                        continue;
+                    }
+                }
+                var row = document.createElement("div");
+                row.style.padding = "4px 8px";
+                row.style.fontSize = "12px";
+                row.style.color = "#ccc";
+                row.style.cursor = "grab";
+                row.style.borderBottom = "1px solid #222";
+                row.style.transition = "background 0.1s";
+                row.style.userSelect = "none";
+                row.draggable = true;
+                row.title = pItem.labelFull;
+
+                var codeSpan = document.createElement("span");
+                codeSpan.style.fontWeight = "600";
+                codeSpan.style.color = "#8cf";
+                codeSpan.style.marginRight = "6px";
+                codeSpan.textContent = pItem.code.length > 0 ? pItem.code : "";
+
+                var labelSpan = document.createElement("span");
+                labelSpan.textContent = pItem.labelShort;
+
+                row.appendChild(codeSpan);
+                row.appendChild(labelSpan);
+
+                row.addEventListener("mouseenter", function () {
+                    this.style.background = "#222";
+                });
+                row.addEventListener("mouseleave", function () {
+                    this.style.background = "transparent";
+                });
+
+                (function (capturedItem) {
+                    row.addEventListener("dragstart", function (e) {
+                        e.dataTransfer.setData(ELIG_DRAG_TYPE, capturedItem.value);
+                        e.dataTransfer.effectAllowed = "move";
+                        log("ImportIE: pool dragstart eligValue=" + String(capturedItem.value));
+                    });
+                    row.addEventListener("dragend", function (e) {
+                        log("ImportIE: pool dragend eligValue=" + String(capturedItem.value) + " dropEffect=" + String(e.dataTransfer.dropEffect));
+                        renderPoolList(poolSearch.value);
+                    });
+                })(pItem);
+
+                poolList.appendChild(row);
+                ri = ri + 1;
+            }
+            log("ImportIE: renderPoolList done rendered=" + String(poolList.childNodes.length));
+        }
+
+        renderPoolList("");
+        poolSearch.addEventListener("input", function () {
+            renderPoolList(poolSearch.value);
+        });
+        poolPanel.appendChild(poolList);
+        panelBody.appendChild(poolPanel);
+
         container.appendChild(panelBody);
 
         var footerBar = document.createElement("div");
@@ -2718,7 +3304,13 @@
             var gi = 0;
             while (gi < itemCheckboxes.length) {
                 if (itemCheckboxes[gi].cb.checked && !itemCheckboxes[gi].cb.disabled) {
-                    selected.push(itemCheckboxes[gi].mapping);
+                    var selMapping = itemCheckboxes[gi].mapping;
+                    var mKey = getMappingKey(selMapping);
+                    if (assignedEligMap.hasOwnProperty(mKey)) {
+                        selMapping.eligibilityItemValue = assignedEligMap[mKey];
+                        log("ImportIE: confirm attaching eligibilityItemValue=" + String(assignedEligMap[mKey]) + " to mapping key=" + mKey);
+                    }
+                    selected.push(selMapping);
                 }
                 gi = gi + 1;
             }
@@ -2924,31 +3516,53 @@
             var eligOpts = eligSel.querySelectorAll("option");
             var bestMatch = null;
             var bestMatchVal = "";
-            var eoi = 0;
-            while (eoi < eligOpts.length) {
-                var eoVal = (eligOpts[eoi].value + "").trim();
-                var eoTxt = (eligOpts[eoi].textContent + "").trim();
-                if (eoVal.length > 0) {
-                    var eoCode = extractIECodeStrict(eoTxt);
-                    if (eoCode.length === 0) {
-                        eoCode = parseItemCodeFromEligibilityOptionText(eoTxt);
-                    }
-                    if (eoCode.toUpperCase() === mapping.code.toUpperCase()) {
-                        bestMatch = eligOpts[eoi];
-                        bestMatchVal = eoVal;
+
+            if (mapping.eligibilityItemValue && String(mapping.eligibilityItemValue).length > 0) {
+                log("ImportIE: step b - checking attached eligibilityItemValue=" + String(mapping.eligibilityItemValue));
+                var attachedVal = String(mapping.eligibilityItemValue);
+                var avi = 0;
+                while (avi < eligOpts.length) {
+                    var avOptVal = (eligOpts[avi].value + "").trim();
+                    if (avOptVal === attachedVal) {
+                        bestMatch = eligOpts[avi];
+                        bestMatchVal = avOptVal;
+                        log("ImportIE: step b - attached eligibilityItemValue matched option value=" + String(avOptVal));
                         break;
                     }
-                    if (!bestMatch) {
-                        var eoTxtUpper = eoTxt.toUpperCase();
-                        var codeUpper = mapping.code.toUpperCase();
-                        var re = new RegExp("\\b" + codeUpper.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i");
-                        if (re.test(eoTxtUpper)) {
+                    avi = avi + 1;
+                }
+                if (!bestMatch) {
+                    log("ImportIE: step b - attached eligibilityItemValue not found in current options, falling back to code match");
+                }
+            }
+
+            if (!bestMatch) {
+                var eoi = 0;
+                while (eoi < eligOpts.length) {
+                    var eoVal = (eligOpts[eoi].value + "").trim();
+                    var eoTxt = (eligOpts[eoi].textContent + "").trim();
+                    if (eoVal.length > 0) {
+                        var eoCode = extractIECodeStrict(eoTxt);
+                        if (eoCode.length === 0) {
+                            eoCode = parseItemCodeFromEligibilityOptionText(eoTxt);
+                        }
+                        if (eoCode.toUpperCase() === mapping.code.toUpperCase()) {
                             bestMatch = eligOpts[eoi];
                             bestMatchVal = eoVal;
+                            break;
+                        }
+                        if (!bestMatch) {
+                            var eoTxtUpper = eoTxt.toUpperCase();
+                            var codeUpper = mapping.code.toUpperCase();
+                            var re = new RegExp("\\b" + codeUpper.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i");
+                            if (re.test(eoTxtUpper)) {
+                                bestMatch = eligOpts[eoi];
+                                bestMatchVal = eoVal;
+                            }
                         }
                     }
+                    eoi = eoi + 1;
                 }
-                eoi = eoi + 1;
             }
 
             if (!bestMatch) {
@@ -3244,6 +3858,11 @@
                 }
                 await sleep(800);
 
+                log("ImportIE: step 3b - collecting eligibility item pool from modal");
+                loadingEl.textContent = "Step 3b: Collecting Eligibility Items...";
+                var eligibilityItemPool = await collectEligibilityItemPool();
+                log("ImportIE: eligibility item pool collected count=" + String(eligibilityItemPool.length));
+
                 log("ImportIE: step 4 - collecting mappings from modal");
                 loadingEl.textContent = "Step 4: Scanning all Activity Plans, Scheduled Activities, and Check Items...";
                 var rawMappings = await collectMappingsFromModal(existingCodeSet);
@@ -3269,7 +3888,7 @@
                 }
 
                 log("ImportIE: step 5 - showing review panel");
-                buildImportIEReviewPanel(existingCodeSet, mappings, function (selectedMappings) {
+                buildImportIEReviewPanel(existingCodeSet, mappings, eligibilityItemPool, function (selectedMappings) {
                     log("ImportIE: user confirmed " + String(selectedMappings.length) + " mappings");
                     if (selectedMappings.length === 0) {
                         log("ImportIE: no items selected, stopping");
