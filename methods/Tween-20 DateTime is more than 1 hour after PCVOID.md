@@ -1,5 +1,6 @@
 const pcvoidItem = [
-    "PCVOID"
+    "PCVOID",
+    "PCVOID w/edit check",
 ]
 const enteredTimeItem = [
     "Tween-20 Date/Time"
@@ -25,16 +26,16 @@ var collectedTimeMs = enteredTime.dateValueMs;
 var differenceMs = collectedTimeMs - pcvoidMs;
 logger(differenceMs)
 if (differenceMs < 0) {
-    return attachedCodeList[0];
+    return attachedCodeList[0]; // return YES
 }
 var differenceInMins = Math.abs(Math.floor(differenceMs / (1000 * 60)))
 
 logger(differenceInMins)
 if(differenceInMins >= difference){
-    return attachedCodeList[0];
+    return attachedCodeList[0]; // return YES
 }
 
-return attachedCodeList[1];
+return attachedCodeList[1]; // return NO
 
 function getItemGroupID(form) {
     for (var i = 0; i < form.itemGroups.length; i++) {

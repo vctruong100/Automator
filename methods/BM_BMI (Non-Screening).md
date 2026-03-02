@@ -3,11 +3,13 @@ const item = itemJson.item;
 const sigfig = itemJson.item.significantDigits;
 
 const heightitemList = [
+    "VS_HEIGHT",
     "BM_HT", 
     "BM_HT_Visit 2",
     "BMI_HEIGHT"
 ];
 const weightitemList = [
+    "VS_WEIGHT",
     "BM_WT #1", 
     "BM_WT #2",
     "BMI_WEIGHT",
@@ -18,6 +20,7 @@ const screeningStudyEvent = [
     "SCREENING"
 ];
 const screeningBMI_Form = [
+    "BM_Height / Weight / BMI",
     "BM_Height/Weight/BMI",
     "📏 SCREEN BODY MEASUREMENTS (HEIGHT / WEIGHT / BMI)",
     "📏 BM_BODY MEASUREMENTS (HEIGHT / WEIGHT / BMI)"
@@ -27,9 +30,14 @@ var weight = 0;
 var height = 0;
 var bmi = 0;
 
-var form = pullForm(screeningStudyEvent, screeningBMI_Form);
-if (!form) return null;
-height = pullItemFromForm(form, heightitemList);
+height = pullItemFromForm(formJson, heightitemList);
+
+if (!height || height == null) {
+    var form = pullForm(screeningStudyEvent, screeningBMI_Form);
+    if (form) {
+       height = pullItemFromForm(form, heightitemList);
+    }
+}
 
 var maxCount = 0; 
 var list = [];

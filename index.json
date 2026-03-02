@@ -411,5 +411,12 @@
     "tags": ["Void", "Interval", "Check"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Void%20Interval%20Check.md",
     "updated": "2026-03-02"
+  },
+  {
+    "id": "M-060",
+    "title": "Edit Check Tween-20 datetime is 1 hour after PCVOID",
+    "tags": ["Void", "Check"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Tween-20%20datetime%20is%201%20hour%20after%20PCVOID.md",
+    "updated": "2026-03-02"
   }
 ]

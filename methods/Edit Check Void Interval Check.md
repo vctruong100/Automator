@@ -14,6 +14,10 @@ const allForms = [
     "(*) 💧 72 to 96 hrs Urine Interval v3",// 7
 ]
 
+const attachedItemName = [
+    "PCVOID w/edit check",
+    "PCVOID",
+]
 const formMaps = {
     "(*)💧0 to 4 hr Urine Interval v4" : "(*) 💧 -2 to 0 hr Urine Interval v3",
     "(*) 💧 4 to 8 hr Urine Interval v2" : "(*)💧0 to 4 hr Urine Interval v2",
@@ -74,13 +78,14 @@ if (form.name != allForms[1]) {
 
 var collectedTimeMs = null;
 if (!item || item.dateValueMs == null || item.dateValueMs == undefined) {
-    var voidTime = pullItemFromForm(formJson, "PCVOID");
+    var voidTime = pullItemFromForm(formJson, attachedItemName);
     collectedTimeMs = voidTime.dateValueMs;
 }
 else {
+    var voidTime = item;
     var collectedTimeMs = item.dateValueMs;
 }
-
+logger(voidTime.name)
 var endTimeMs = endTime.dateValueMs;
 
 logger("Collected Time: "  + formatDateTimeByType(voidTime));
