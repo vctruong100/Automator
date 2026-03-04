@@ -430,21 +430,21 @@
     "id": "M-062",
     "title": "Protocol Check Average Vital Signs Range SYS, DIA (BOTH)",
     "tags": ["Protocol", "Protocol"],
-    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Average%20Vital%20Signs%20Range%20SYS%2C%20DIA%2C%20(BOTH).md",
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Average%20Vital%20Signs%20Range%20SYS%2C%20DIA%20(BOTH).md",
     "updated": "2026-03-04"
   },
   {
     "id": "M-062",
     "title": "Protocol Check Average Vital Signs Range SYS, DIA, HR (NON-REPEAT)",
     "tags": ["Protocol", "Protocol"],
-    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Average%20Vital%20Signs%20Range%20SYS%2C%20DIA%2C%20(NON-REPEAT).md",
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Average%20Vital%20Signs%20Range%20SYS%2C%20DIA%2C%20HR%20(NON-REPEAT).md",
     "updated": "2026-03-04"
   },
   {
     "id": "M-062",
     "title": "Protocol Check Average Vital Signs Range SYS, DIA, HR (REPEAT)",
     "tags": ["Protocol", "Protocol"],
-    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Average%20Vital%20Signs%20Range%20SYS%2C%20DIA%2C%20(REPEAT).md",
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Average%20Vital%20Signs%20Range%20SYS%2C%20DIA%2C%20HR%20(REPEAT).md",
     "updated": "2026-03-04"
   }
 ]
