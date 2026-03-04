@@ -16,102 +16,11 @@
 (function () {
 
     //==========================
-    // TRAINING ELOG FUNCTIONS
+    // SET RESPONSIBILITIES FUNCTIONS
     //==========================
-    // This section contains functions to handle Training ELogs feature.
+    // This section contains functions to handle Set Responsibilities feature.
     // This includes a UI user input, parsing a list of names, and adding entries on webpages.
     //==========================
-
-    const ELOG_SELECTORS = {
-        mainTable: '.document-log-entries.document-log-entries__table',
-        gridTable: '.document-log-entries__grid-table[role="table"]',
-        row: 'log-entry-row[role="row"], .document-log-entries__grid-table__row[role="row"]',
-        cell: '[role="cell"]',
-        nameCellIndex: 3,
-        namePrimary: '.u-text-overflow-ellipsis',
-        nameFallback: '.test-logEntrySignature span'
-    };
-
-    const ELOG_TIMEOUTS = {
-        waitTableMs: 10000,
-        waitGridMs: 10000
-    };
-
-    const ELOG_CSS_CLASSNAMES = {
-        panelOverlay: 'elog-panel-overlay',
-        inputPanel: 'elog-input-panel',
-        progressPanel: 'elog-progress-panel',
-        warningPanel: 'elog-warning-panel',
-        subpanelLeft: 'elog-subpanel-left',
-        subpanelRight: 'elog-subpanel-right',
-        searchInput: 'elog-search-input',
-        listItem: 'elog-list-item',
-        statusPending: 'elog-status-pending',
-        statusFound: 'elog-status-found',
-        statusNotFound: 'elog-status-notfound',
-        statusDuplicate: 'elog-status-duplicate'
-    };
-
-    const ELOG_SCROLL = {
-        stepPx: 600,
-        idleDelayMs: 80,
-        settleDelayMs: 250,
-        maxDurationMs: 120000,
-        maxNoProgressIterations: 8,
-        userScrollPauseMs: 800,
-        viewportOverscanPx: 400,
-        retryScanAttempts: 3,
-        retryScanDelayMs: 200
-    };
-
-    const ELOG_ATTRS = {
-        ariaBusyTarget: 'body',
-        ariaBusyAttr: 'aria-busy'
-    };
-
-    const ELOG_LABELS = {
-        progressComplete: 'Scan complete',
-        progressNoMore: 'End of list reached',
-        progressRescanning: 'Re-scanning',
-        progressStopped: 'Scan stopped'
-    };
-
-    const ELOG_FORM_SELECTORS = {
-        addEntryBtn: '.test-createLogEntryBtn',
-        memberInput: '#filtered-select-input.filtered-select__input',
-        listContainer: 'ul.filtered-select__list.u-z-index-1060, ul.filtered-select__list',
-        virtualViewport: '.filtered-select__list, .cdk-virtual-scroll-viewport',
-        optionItem: '.filtered-select__list [role="option"], .filtered-select__list li, .cdk-virtual-scroll-viewport [role="option"], .cdk-virtual-scroll-viewport li',
-        saveAndAddAnotherBtn: 'button.btn.btn-primary',
-        modalOrFormRoot: '.modal.show, .document-log-entries, body'
-    };
-
-    const ELOG_FORM_TIMEOUTS = {
-        waitOpenMs: 10000,
-        waitListMs: 6000,
-        waitOptionRenderMs: 3000,
-        waitSaveAfterClickMs: 8000,
-        scrollIdleMs: 120,
-        settleMs: 250,
-        maxSelectDurationMs: 45000
-    };
-
-    const ELOG_FORM_RETRY = {
-        openListRetries: 4,
-        selectRetriesPerScroll: 2,
-        maxScrollPasses: 8,
-        saveRetries: 2
-    };
-
-    const ELOG_RUN_LABELS = {
-        statusPending: 'Pending',
-        statusAlready: 'Already Exist',
-        statusAdded: 'Added',
-        statusNotInDropdown: 'Not In Dropdown',
-        statusSelectionFailed: 'Selection Failed',
-        statusSaveFailed: 'Save Failed',
-        statusStopped: 'Stopped'
-    };
 
     const RESP_SELECTORS = {
         pageStepRoot: 'doa-log-template-study-roles-step',
@@ -225,6 +134,1909 @@
         userScrollPaused: false
     };
 
+    function resetRespState() {
+        addLogMessage('resetRespState: resetting state', 'log');
+        respState.isRunning = false;
+        respState.stopRequested = false;
+        respState.observers = [];
+        respState.timeouts = [];
+        respState.intervals = [];
+        respState.eventListeners = [];
+        respState.idleCallbackIds = [];
+        respState.prevAriaBusy = null;
+        respState.parsedRoles = null;
+        respState.rolesData = [];
+        respState.counters = { total: 0, completed: 0, failed: 0, pending: 0 };
+        respState.listScrollTop = 0;
+        respState.userScrollHandler = null;
+        respState.userScrollPaused = false;
+    }
+
+    function respWaitForElement(selector, timeout) {
+        addLogMessage('respWaitForElement: waiting for ' + selector, 'log');
+        return new Promise(function(resolve, reject) {
+            var element = document.querySelector(selector);
+            if (element) {
+                addLogMessage('respWaitForElement: found immediately', 'log');
+                resolve(element);
+                return;
+            }
+            var observer = new MutationObserver(function(mutations, obs) {
+                var el = document.querySelector(selector);
+                if (el) {
+                    obs.disconnect();
+                    var idx = respState.observers.indexOf(obs);
+                    if (idx > -1) {
+                        respState.observers.splice(idx, 1);
+                    }
+                    resolve(el);
+                }
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+            respState.observers.push(observer);
+            var timeoutId = setTimeout(function() {
+                observer.disconnect();
+                var idx = respState.observers.indexOf(observer);
+                if (idx > -1) {
+                    respState.observers.splice(idx, 1);
+                }
+                addLogMessage('respWaitForElement: timeout for ' + selector, 'warn');
+                reject(new Error('Timeout waiting for ' + selector));
+            }, timeout);
+            respState.timeouts.push(timeoutId);
+        });
+    }
+
+    function respDelay(ms) {
+        return new Promise(function(resolve) {
+            var tid = setTimeout(resolve, ms);
+            respState.timeouts.push(tid);
+        });
+    }
+
+    function normalizeRoleName(s) {
+        if (!s) {
+            return { display: '', key: '' };
+        }
+        var cleaned = s.trim();
+        cleaned = cleaned.replace(RESP_REGEX.quoteCleanup, '');
+        cleaned = cleaned.replace(RESP_REGEX.hyphenBreak, '-');
+        cleaned = cleaned.replace(RESP_REGEX.lineBreakInRole, ' ');
+        cleaned = cleaned.replace(RESP_REGEX.whitespace, ' ');
+        cleaned = cleaned.trim();
+        var display = cleaned;
+        var key = cleaned.toLowerCase();
+        if (RESP_ROLE_ALIASES[key]) {
+            display = RESP_ROLE_ALIASES[key];
+            key = display.toLowerCase();
+        }
+        addLogMessage('normalizeRoleName: display=' + display + ' key=' + key, 'log');
+        return { display: display, key: key };
+    }
+
+    function expandRanges(tokens) {
+        addLogMessage('expandRanges: tokens=' + JSON.stringify(tokens), 'log');
+        var result = new Set();
+        var i = 0;
+        while (i < tokens.length) {
+            var current = tokens[i];
+            if (i + 2 < tokens.length && /^(to)$/i.test(tokens[i + 1])) {
+                var start = parseInt(current, 10);
+                var end = parseInt(tokens[i + 2], 10);
+                if (!isNaN(start) && !isNaN(end)) {
+                    var lo = Math.min(start, end);
+                    var hi = Math.max(start, end);
+                    for (var n = lo; n <= hi; n++) {
+                        result.add(n);
+                    }
+                    i += 3;
+                    continue;
+                }
+            }
+            var num = parseInt(current, 10);
+            if (!isNaN(num)) {
+                result.add(num);
+            }
+            i++;
+        }
+        addLogMessage('expandRanges: result size=' + result.size, 'log');
+        return result;
+    }
+
+    function parseResponsibilitiesInput(rawText) {
+        addLogMessage('parseResponsibilitiesInput: starting parse', 'log');
+        try {
+            if (!rawText || !rawText.trim()) {
+                addLogMessage('parseResponsibilitiesInput: empty input', 'warn');
+                return null;
+            }
+            var text = rawText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            text = text.replace(/[\u201c\u201d\u201e\u201f\u2018\u2019]+/g, '"');
+            text = text.replace(/-\s*\n\s*/g, '-');
+            var rawLines = text.split('\n');
+            var mergedLines = [];
+            var pendingQuote = false;
+            var buffer = '';
+            for (var li = 0; li < rawLines.length; li++) {
+                var line = rawLines[li];
+                if (pendingQuote) {
+                    buffer = buffer + ' ' + line;
+                    var quoteCount = 0;
+                    for (var ci = 0; ci < buffer.length; ci++) {
+                        if (buffer[ci] === '"') {
+                            quoteCount++;
+                        }
+                    }
+                    if (quoteCount % 2 === 0) {
+                        pendingQuote = false;
+                        mergedLines.push(buffer);
+                        buffer = '';
+                    }
+                    continue;
+                }
+                var qc = 0;
+                for (var ci2 = 0; ci2 < line.length; ci2++) {
+                    if (line[ci2] === '"') {
+                        qc++;
+                    }
+                }
+                if (qc % 2 !== 0) {
+                    pendingQuote = true;
+                    buffer = line;
+                    continue;
+                }
+                mergedLines.push(line);
+            }
+            if (buffer) {
+                mergedLines.push(buffer);
+            }
+            addLogMessage('parseResponsibilitiesInput: merged into ' + mergedLines.length + ' lines', 'log');
+            var parsedMap = {};
+            for (var mi = 0; mi < mergedLines.length; mi++) {
+                var mline = mergedLines[mi].trim();
+                if (!mline) {
+                    continue;
+                }
+                mline = mline.replace(/"+/g, '');
+                var parts = mline.split(/\t+/);
+                var rolePart = '';
+                var numberPart = '';
+                if (parts.length >= 2) {
+                    rolePart = parts[0].trim();
+                    numberPart = parts.slice(1).join(' ');
+                } else {
+                    var firstNumMatch = mline.match(/\d/);
+                    if (firstNumMatch) {
+                        var idx = mline.indexOf(firstNumMatch[0]);
+                        var beforeNum = mline.substring(0, idx).trim();
+                        var afterNum = mline.substring(idx).trim();
+                        if (beforeNum) {
+                            rolePart = beforeNum;
+                            numberPart = afterNum;
+                        } else {
+                            addLogMessage('parseResponsibilitiesInput: line ' + mi + ' no role part, skip', 'warn');
+                            continue;
+                        }
+                    } else {
+                        addLogMessage('parseResponsibilitiesInput: line ' + mi + ' no numbers, skip', 'warn');
+                        continue;
+                    }
+                }
+                rolePart = rolePart.replace(/"+/g, '').trim();
+                if (!rolePart) {
+                    addLogMessage('parseResponsibilitiesInput: line ' + mi + ' empty role, skip', 'warn');
+                    continue;
+                }
+                var normalized = normalizeRoleName(rolePart);
+                if (!normalized.key) {
+                    addLogMessage('parseResponsibilitiesInput: line ' + mi + ' normalize fail, skip', 'warn');
+                    continue;
+                }
+                var numTokens = numberPart.replace(/,/g, ' ').split(/\s+/).filter(function(t) {
+                    return t.length > 0;
+                });
+                var numbers = expandRanges(numTokens);
+                if (numbers.size === 0) {
+                    addLogMessage('parseResponsibilitiesInput: line ' + mi + ' no numbers for ' + normalized.display, 'warn');
+                    continue;
+                }
+                if (!parsedMap[normalized.key]) {
+                    parsedMap[normalized.key] = { displayRole: normalized.display, occurrences: [], union: new Set(), intersection: null, excluded: new Set() };
+                }
+                parsedMap[normalized.key].occurrences.push(numbers);
+                addLogMessage('parseResponsibilitiesInput: role=' + normalized.display + ' occ#' + parsedMap[normalized.key].occurrences.length + ' nums=' + Array.from(numbers).join(','), 'log');
+            }
+            addLogMessage('parseResponsibilitiesInput: parsed ' + Object.keys(parsedMap).length + ' unique roles', 'log');
+            return parsedMap;
+        } catch (error) {
+            addLogMessage('parseResponsibilitiesInput: error: ' + error.message, 'error');
+            return null;
+        }
+    }
+
+    function computeRoleCommonAndExcluded(parsedMap) {
+        addLogMessage('computeRoleCommonAndExcluded: computing sets', 'log');
+        var rolesData = [];
+        var keys = Object.keys(parsedMap);
+        for (var ki = 0; ki < keys.length; ki++) {
+            var key = keys[ki];
+            var entry = parsedMap[key];
+            var union = new Set();
+            var intersection = null;
+            for (var oi = 0; oi < entry.occurrences.length; oi++) {
+                var occ = entry.occurrences[oi];
+                occ.forEach(function(n) {
+                    union.add(n);
+                });
+                if (intersection === null) {
+                    intersection = new Set(occ);
+                } else {
+                    var newInt = new Set();
+                    intersection.forEach(function(n) {
+                        if (occ.has(n)) {
+                            newInt.add(n);
+                        }
+                    });
+                    intersection = newInt;
+                }
+            }
+            if (intersection === null) {
+                intersection = new Set();
+            }
+            var excluded = new Set();
+            union.forEach(function(n) {
+                if (!intersection.has(n)) {
+                    excluded.add(n);
+                }
+            });
+            entry.union = union;
+            entry.intersection = intersection;
+            entry.excluded = excluded;
+            var status = RESP_LABELS.statusPending;
+            if (intersection.size === 0) {
+                status = RESP_LABELS.statusFailed;
+                addLogMessage('computeRoleCommonAndExcluded: role=' + entry.displayRole + ' empty intersection', 'warn');
+            }
+            rolesData.push({
+                key: key,
+                displayRole: entry.displayRole,
+                common: Array.from(intersection).sort(function(a, b) {
+                    return a - b;
+                }),
+                excluded: Array.from(excluded).sort(function(a, b) {
+                    return a - b;
+                }),
+                intersection: intersection,
+                status: status,
+                reason: intersection.size === 0 ? 'No common numbers across occurrences' : ''
+            });
+            addLogMessage('computeRoleCommonAndExcluded: role=' + entry.displayRole + ' common=[' + rolesData[rolesData.length - 1].common.join(',') + '] excluded=[' + rolesData[rolesData.length - 1].excluded.join(',') + ']', 'log');
+        }
+        return rolesData;
+    }
+
+    function setResponsibilitiesInit() {
+        addLogMessage('setResponsibilitiesInit: starting feature', 'log');
+        respState.focusReturnElement = document.getElementById('resp-set-btn');
+        resetRespState();
+        var pageStep = document.querySelector(RESP_SELECTORS.pageStepRoot);
+        addLogMessage('setResponsibilitiesInit: checking for page step root', 'log');
+        if (!pageStep) {
+            addLogMessage('setResponsibilitiesInit: not on Study Role Page', 'warn');
+            showRespWarning();
+            return;
+        }
+        addLogMessage('setResponsibilitiesInit: on Study Role Page', 'log');
+        showResponsibilitiesInputPanel();
+    }
+
+    function showRespWarning() {
+        addLogMessage('showRespWarning: creating warning popup', 'log');
+        var modal = document.createElement('div');
+        modal.id = 'resp-warning-modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 30000; display: flex; align-items: center; justify-content: center;';
+        var container = document.createElement('div');
+        container.style.cssText = 'background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); border-radius: 12px; padding: 24px; width: 450px; max-width: 90%; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); position: relative;';
+        container.setAttribute('role', 'alertdialog');
+        container.setAttribute('aria-modal', 'true');
+        container.setAttribute('aria-labelledby', 'resp-warning-title');
+        container.setAttribute('aria-describedby', 'resp-warning-message');
+        var header = document.createElement('div');
+        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;';
+        var title = document.createElement('h3');
+        title.id = 'resp-warning-title';
+        title.textContent = 'Study Role Page Not Found';
+        title.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600;';
+        var closeButton = document.createElement('button');
+        closeButton.innerHTML = '\u2715';
+        closeButton.setAttribute('aria-label', 'Close warning');
+        closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
+        closeButton.onmouseover = function() {
+            closeButton.style.background = 'rgba(255, 255, 255, 0.3)';
+        };
+        closeButton.onmouseout = function() {
+            closeButton.style.background = 'rgba(255, 255, 255, 0.2)';
+        };
+        var closeWarning = function() {
+            addLogMessage('showRespWarning: closing warning', 'log');
+            if (modal.parentNode) {
+                document.body.removeChild(modal);
+            }
+            if (respState.focusReturnElement) {
+                respState.focusReturnElement.focus();
+            }
+        };
+        closeButton.onclick = closeWarning;
+        header.appendChild(title);
+        header.appendChild(closeButton);
+        var messageDiv = document.createElement('p');
+        messageDiv.id = 'resp-warning-message';
+        messageDiv.textContent = RESP_LABELS.notOnPageWarning + ' Please navigate to the Study Roles step before using this feature.';
+        messageDiv.style.cssText = 'color: rgba(255, 255, 255, 0.9); margin: 0; font-size: 14px; line-height: 1.5;';
+        var okButton = document.createElement('button');
+        okButton.textContent = 'OK';
+        okButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: 2px solid rgba(255, 255, 255, 0.3); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.3s ease; margin-top: 20px; width: 100%;';
+        okButton.onmouseover = function() {
+            okButton.style.background = 'rgba(255, 255, 255, 0.3)';
+        };
+        okButton.onmouseout = function() {
+            okButton.style.background = 'rgba(255, 255, 255, 0.2)';
+        };
+        okButton.onclick = closeWarning;
+        var keyHandler = function(e) {
+            if (e.key === 'Escape') {
+                closeWarning();
+            }
+        };
+        document.addEventListener('keydown', keyHandler);
+        respState.eventListeners.push({ element: document, type: 'keydown', handler: keyHandler });
+        container.appendChild(header);
+        container.appendChild(messageDiv);
+        container.appendChild(okButton);
+        modal.appendChild(container);
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        modal.style.pointerEvents = 'none';
+        container.style.pointerEvents = 'auto';
+        makeDraggable(container, header);
+        document.body.appendChild(modal);
+        okButton.focus();
+        addLogMessage('showRespWarning: warning displayed', 'log');
+    }
+
+    function showResponsibilitiesInputPanel() {
+        addLogMessage('showResponsibilitiesInputPanel: creating input panel', 'log');
+        var modal = document.createElement('div');
+        modal.id = 'resp-input-modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 20000; display: flex; align-items: center; justify-content: center;';
+        var container = document.createElement('div');
+        container.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; width: 550px; max-width: 90%; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); position: relative;';
+        container.setAttribute('role', 'dialog');
+        container.setAttribute('aria-modal', 'true');
+        container.setAttribute('aria-labelledby', 'resp-input-title');
+        var header = document.createElement('div');
+        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;';
+        var titleEl = document.createElement('h3');
+        titleEl.id = 'resp-input-title';
+        titleEl.textContent = 'Set Responsibilities';
+        titleEl.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600; letter-spacing: 0.2px;';
+        var closeButton = document.createElement('button');
+        closeButton.innerHTML = '\u2715';
+        closeButton.setAttribute('aria-label', 'Close panel');
+        closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
+        closeButton.onmouseover = function() {
+            closeButton.style.background = 'rgba(255, 67, 54, 0.8)';
+        };
+        closeButton.onmouseout = function() {
+            closeButton.style.background = 'rgba(255, 255, 255, 0.2)';
+        };
+        closeButton.onclick = function() {
+            addLogMessage('showResponsibilitiesInputPanel: closed by user', 'warn');
+            if (modal.parentNode) {
+                document.body.removeChild(modal);
+            }
+            stopResponsibilities();
+        };
+        header.appendChild(titleEl);
+        header.appendChild(closeButton);
+        var description = document.createElement('p');
+        description.style.cssText = 'color: rgba(255, 255, 255, 0.9); margin: 0 0 12px 0; font-size: 14px; line-height: 1.4;';
+        description.append("Rules:");
+        description.appendChild(document.createElement('br'));
+        var lines = [
+            'Make sure the Study Responsibilities Identifier are set to Numbers and NOT Letters',
+            'Paste role-to-responsibility assignments below.',
+            'Each line should contain the role name, followed by a tab, then the responsibility numbers.',
+            'Ranges such as "1 to 8" are supported.',
+            'Ensure that no existing Study Roles are already added on the page.',
+            'After clicking Confirm, do not click anywhere else on the page, as this will impact the process.'
+        ];
+
+        for (var i = 0; i < lines.length; i++) {
+            description.appendChild(document.createTextNode('• ' + lines[i]));
+            if (i < lines.length - 1) {
+                description.appendChild(document.createElement('br'));
+            }
+        }
+        var textarea = document.createElement('textarea');
+        textarea.id = 'resp-input-textarea';
+        textarea.placeholder = 'PI  1 to 8  13  14  17  21\nStudy Coordinator  1 6 7 8 10 12 13 14 17 33';
+        textarea.setAttribute('aria-label', 'Role responsibilities input');
+        textarea.style.cssText = 'width: 100%; height: 200px; padding: 12px 14px; border: 2px solid rgba(255, 255, 255, 0.35); border-radius: 10px; background: rgba(255, 255, 255, 0.95); color: #1e293b; font-size: 14px; font-family: Segoe UI, Tahoma, Geneva, Verdana, sans-serif; resize: vertical; outline: none; transition: all 0.25s ease; box-shadow: 0 2px 0 rgba(0,0,0,0.04) inset; box-sizing: border-box;';
+        textarea.onfocus = function() {
+            textarea.style.borderColor = '#8ea0ff';
+            textarea.style.boxShadow = '0 0 0 4px rgba(102, 126, 234, 0.25)';
+        };
+        textarea.onblur = function() {
+            textarea.style.borderColor = 'rgba(255, 255, 255, 0.35)';
+            textarea.style.boxShadow = '0 2px 0 rgba(0,0,0,0.04) inset';
+        };
+        var confirmButton = document.createElement('button');
+        confirmButton.textContent = 'Confirm';
+        confirmButton.disabled = true;
+        confirmButton.style.cssText = 'background: linear-gradient(135deg, #28a745 0%, #20c997 100%); border: 2px solid rgba(255, 255, 255, 0.35); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; letter-spacing: 0.2px; transition: all 0.25s ease; opacity: 0.5;';
+        textarea.oninput = function() {
+            if (textarea.value.trim().length > 0) {
+                confirmButton.disabled = false;
+                confirmButton.style.opacity = '1';
+                confirmButton.style.cursor = 'pointer';
+            } else {
+                confirmButton.disabled = true;
+                confirmButton.style.opacity = '0.5';
+                confirmButton.style.cursor = 'not-allowed';
+            }
+        };
+        confirmButton.onmouseover = function() {
+            if (!confirmButton.disabled) {
+                confirmButton.style.background = 'linear-gradient(135deg, #218838 0%, #1ea085 100%)';
+            }
+        };
+        confirmButton.onmouseout = function() {
+            confirmButton.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
+        };
+        confirmButton.onclick = function() {
+            addLogMessage('showResponsibilitiesInputPanel: Confirm clicked', 'log');
+            var parsedMap = parseResponsibilitiesInput(textarea.value);
+            if (!parsedMap || Object.keys(parsedMap).length === 0) {
+                addLogMessage('showResponsibilitiesInputPanel: no valid roles', 'warn');
+                return;
+            }
+            respState.parsedRoles = parsedMap;
+            var rd = computeRoleCommonAndExcluded(parsedMap);
+            respState.rolesData = rd;
+            addLogMessage('showResponsibilitiesInputPanel: parsed ' + rd.length + ' roles', 'log');
+            if (modal.parentNode) {
+                document.body.removeChild(modal);
+            }
+            showResponsibilitiesProgressPanel(rd);
+            processRolesWorkflow(rd);
+        };
+        var clearButton = document.createElement('button');
+        clearButton.textContent = 'Clear All';
+        clearButton.style.cssText = 'background: rgba(255, 255, 255, 0.18); border: 2px solid rgba(255, 255, 255, 0.35); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.25s ease;';
+        clearButton.onmouseover = function() {
+            clearButton.style.background = 'rgba(255, 255, 255, 0.28)';
+        };
+        clearButton.onmouseout = function() {
+            clearButton.style.background = 'rgba(255, 255, 255, 0.18)';
+        };
+        clearButton.onclick = function() {
+            addLogMessage('showResponsibilitiesInputPanel: Clear All clicked', 'log');
+            textarea.value = '';
+            respState.parsedRoles = null;
+            confirmButton.disabled = true;
+            confirmButton.style.opacity = '0.5';
+            confirmButton.style.cursor = 'not-allowed';
+        };
+        var buttonContainer = document.createElement('div');
+        buttonContainer.style.cssText = 'display: flex; gap: 12px; margin-top: 20px; justify-content: flex-end;';
+        buttonContainer.appendChild(clearButton);
+        buttonContainer.appendChild(confirmButton);
+        container.appendChild(header);
+        container.appendChild(description);
+        container.appendChild(textarea);
+        container.appendChild(buttonContainer);
+        modal.appendChild(container);
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        modal.style.pointerEvents = 'none';
+        container.style.pointerEvents = 'auto';
+        makeDraggable(container, header);
+        document.body.appendChild(modal);
+        textarea.focus();
+        addLogMessage('showResponsibilitiesInputPanel: displayed', 'log');
+    }
+
+    function getRespBadgeColors(status) {
+        if (status === RESP_LABELS.statusCompleted) {
+            return { color: '#6bcf7f', bg: 'rgba(107, 207, 127, 0.2)' };
+        }
+        if (status === RESP_LABELS.statusFailed) {
+            return { color: '#ff6b6b', bg: 'rgba(255, 107, 107, 0.2)' };
+        }
+        if (status === RESP_LABELS.statusStopped) {
+            return { color: '#aaa', bg: 'rgba(170, 170, 170, 0.2)' };
+        }
+        return { color: '#ffd93d', bg: 'rgba(255, 217, 61, 0.2)' };
+    }
+
+    function createRespRoleRow(roleData, index) {
+        var item = document.createElement('div');
+        item.className = 'resp-role-item';
+        item.setAttribute('data-role-key', roleData.key);
+        item.style.cssText = 'display: flex; flex-direction: column; padding: 10px 12px; margin: 4px 0; background: rgba(255, 255, 255, 0.08); border-radius: 6px; transition: background 0.2s ease;';
+        item.onmouseover = function() {
+            item.style.background = 'rgba(255, 255, 255, 0.12)';
+        };
+        item.onmouseout = function() {
+            item.style.background = 'rgba(255, 255, 255, 0.08)';
+        };
+        var topRow = document.createElement('div');
+        topRow.style.cssText = 'display: flex; justify-content: space-between; align-items: center;';
+        var leftSection = document.createElement('div');
+        leftSection.style.cssText = 'display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;';
+        var indexBadge = document.createElement('span');
+        indexBadge.textContent = String(index + 1);
+        indexBadge.style.cssText = 'background: rgba(255, 255, 255, 0.15); color: rgba(255, 255, 255, 0.7); font-size: 11px; font-weight: 600; min-width: 24px; height: 24px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;';
+        var nameText = document.createElement('span');
+        nameText.textContent = roleData.displayRole;
+        nameText.style.cssText = 'color: white; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;';
+        leftSection.appendChild(indexBadge);
+        leftSection.appendChild(nameText);
+        var statusBadge = document.createElement('span');
+        statusBadge.className = 'resp-status-badge';
+        statusBadge.textContent = roleData.status;
+        var badgeColors = getRespBadgeColors(roleData.status);
+        statusBadge.style.cssText = 'color: ' + badgeColors.color + '; background: ' + badgeColors.bg + '; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 10px; white-space: nowrap; flex-shrink: 0;';
+        topRow.appendChild(leftSection);
+        topRow.appendChild(statusBadge);
+        var detailRow = document.createElement('div');
+        detailRow.className = 'resp-detail-row';
+        detailRow.style.cssText = 'margin-top: 6px; font-size: 11px; color: rgba(255, 255, 255, 0.7); line-height: 1.4;';
+        var commonLabel = document.createElement('div');
+        commonLabel.innerHTML = '<strong style="color: rgba(255,255,255,0.85);">Common:</strong> ' + (roleData.common.length > 0 ? roleData.common.join(', ') : 'None');
+        detailRow.appendChild(commonLabel);
+        if (roleData.excluded.length > 0) {
+            var excludedLabel = document.createElement('div');
+            excludedLabel.innerHTML = '<strong style="color: rgba(255,255,255,0.85);">Excluded:</strong> ' + roleData.excluded.join(', ');
+            detailRow.appendChild(excludedLabel);
+        }
+        if (roleData.reason) {
+            var reasonLabel = document.createElement('div');
+            reasonLabel.style.cssText = 'color: #ff6b6b; margin-top: 2px;';
+            reasonLabel.textContent = roleData.reason;
+            detailRow.appendChild(reasonLabel);
+        }
+        var liveRegion = document.createElement('span');
+        liveRegion.setAttribute('aria-live', 'polite');
+        liveRegion.style.cssText = 'position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;';
+        item.appendChild(topRow);
+        item.appendChild(detailRow);
+        item.appendChild(liveRegion);
+        return item;
+    }
+function showResponsibilitiesProgressPanel(rolesData) {
+    addLogMessage('showResponsibilitiesProgressPanel: creating', 'log');
+    respState.isRunning = true;
+    respState.stopRequested = false;
+    respState.counters = { total: rolesData.length, completed: 0, failed: 0, pending: 0 };
+    for (var ci = 0; ci < rolesData.length; ci++) {
+        if (rolesData[ci].status === RESP_LABELS.statusPending) {
+            respState.counters.pending++;
+        } else if (rolesData[ci].status === RESP_LABELS.statusFailed) {
+            respState.counters.failed++;
+        } else if (rolesData[ci].status === RESP_LABELS.statusCompleted) {
+            respState.counters.completed++;
+        }
+    }
+    var modal = document.createElement('div');
+    modal.id = 'resp-progress-modal';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 20000; display: flex; align-items: center; justify-content: center;';
+    var container = document.createElement('div');
+    container.id = 'resp-progress-container';
+    container.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; width: 750px; max-width: 95%; max-height: 80vh; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); position: relative; display: flex; flex-direction: column;';
+    container.setAttribute('role', 'dialog');
+    container.setAttribute('aria-modal', 'true');
+    container.setAttribute('aria-labelledby', 'resp-progress-title');
+    var header = document.createElement('div');
+    header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-shrink: 0; order: 0;';
+    var titleContainer = document.createElement('div');
+    titleContainer.style.cssText = 'display: flex; align-items: center; gap: 12px;';
+    var title = document.createElement('h3');
+    title.id = 'resp-progress-title';
+    title.textContent = 'Set Responsibilities - Processing';
+    title.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600;';
+    var statusBadge = document.createElement('span');
+    statusBadge.id = 'resp-status-badge';
+    statusBadge.textContent = 'In Progress';
+    statusBadge.style.cssText = 'background: rgba(255, 255, 255, 0.3); color: #ffd93d; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 12px;';
+    titleContainer.appendChild(title);
+    titleContainer.appendChild(statusBadge);
+    var closeButton = document.createElement('button');
+    closeButton.innerHTML = '\u2715';
+    closeButton.setAttribute('aria-label', 'Close and stop');
+    closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
+    closeButton.onmouseover = function() {
+        closeButton.style.background = 'rgba(255, 67, 54, 0.8)';
+    };
+    closeButton.onmouseout = function() {
+        closeButton.style.background = 'rgba(255, 255, 255, 0.2)';
+    };
+    closeButton.onclick = function() {
+        addLogMessage('showResponsibilitiesProgressPanel: closed', 'warn');
+        stopResponsibilities();
+    };
+    header.appendChild(titleContainer);
+    header.appendChild(closeButton);
+    container.appendChild(header);
+    addLogMessage('showResponsibilitiesProgressPanel: header appended', 'log');
+
+    var descriptionContainer = document.createElement('div');
+    descriptionContainer.style.cssText = 'margin-bottom: 12px; padding: 8px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);';
+    var description = document.createElement('div');
+    var bulletPoints = [
+        'Do not click anywhere on the page or outside of the page. It will affect the process as doing so closes the dropdown menu.',
+        'If you need to make changes, do it at the end of the process.'
+    ];
+    description.innerHTML = bulletPoints.map(function(point) {
+        return '• ' + point;
+    }).join('<br>');
+    description.style.cssText = 'color: rgba(255, 255, 255, 0.85); font-size: 13px; line-height: 1.4; font-weight: 400;';
+    descriptionContainer.appendChild(description);
+    container.appendChild(descriptionContainer);
+    addLogMessage('showResponsibilitiesProgressPanel: description appended', 'log');
+
+    var searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.id = 'resp-progress-search';
+    searchInput.placeholder = 'Search roles...';
+    searchInput.setAttribute('aria-label', 'Search roles');
+    searchInput.style.cssText = 'width: 100%; padding: 8px 12px; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px; background: rgba(255, 255, 255, 0.1); color: white; font-size: 13px; outline: none; box-sizing: border-box; margin-bottom: 12px; flex-shrink: 0;';
+    searchInput.oninput = function() {
+        var term = searchInput.value.toLowerCase().trim();
+        var items = document.querySelectorAll('.resp-role-item');
+        for (var si = 0; si < items.length; si++) {
+            var text = items[si].textContent.toLowerCase();
+            if (!term || text.indexOf(term) !== -1) {
+                items[si].style.display = 'flex';
+            } else {
+                items[si].style.display = 'none';
+            }
+        }
+    };
+    container.appendChild(searchInput);
+    addLogMessage('showResponsibilitiesProgressPanel: search input appended', 'log');
+
+    var listContainer = document.createElement('div');
+    listContainer.id = 'resp-roles-list';
+    listContainer.style.cssText = 'flex: 1; overflow-y: auto; min-height: 150px; max-height: 400px;';
+    for (var ri = 0; ri < rolesData.length; ri++) {
+        listContainer.appendChild(createRespRoleRow(rolesData[ri], ri));
+    }
+    container.appendChild(listContainer);
+    addLogMessage('showResponsibilitiesProgressPanel: list appended', 'log');
+
+    var summaryFooter = document.createElement('div');
+    summaryFooter.id = 'resp-summary-footer';
+    summaryFooter.style.cssText = 'display: flex; justify-content: space-around; align-items: center; padding: 10px 16px; background: rgba(0, 0, 0, 0.2); border-radius: 8px; margin-top: 12px; flex-shrink: 0;';
+    var summaryItems = [
+        { id: 'resp-summary-total', label: 'Total', value: String(respState.counters.total) },
+        { id: 'resp-summary-completed', label: 'Completed', value: String(respState.counters.completed) },
+        { id: 'resp-summary-failed', label: 'Failed', value: String(respState.counters.failed) },
+        { id: 'resp-summary-pending', label: 'Pending', value: String(respState.counters.pending) },
+        { id: 'resp-summary-percent', label: 'Progress', value: '0%' }
+    ];
+    for (var si2 = 0; si2 < summaryItems.length; si2++) {
+        var sItem = document.createElement('div');
+        sItem.style.cssText = 'text-align: center;';
+        var vSpan = document.createElement('span');
+        vSpan.id = summaryItems[si2].id;
+        vSpan.textContent = summaryItems[si2].value;
+        vSpan.style.cssText = 'display: block; color: white; font-size: 16px; font-weight: 700;';
+        var lSpan = document.createElement('span');
+        lSpan.textContent = summaryItems[si2].label;
+        lSpan.style.cssText = 'display: block; color: rgba(255, 255, 255, 0.6); font-size: 11px; font-weight: 500; margin-top: 2px;';
+        sItem.appendChild(vSpan);
+        sItem.appendChild(lSpan);
+        summaryFooter.appendChild(sItem);
+    }
+    container.appendChild(summaryFooter);
+    addLogMessage('showResponsibilitiesProgressPanel: summary appended', 'log');
+
+    var ariaLiveRegion = document.createElement('div');
+    ariaLiveRegion.id = 'resp-aria-live';
+    ariaLiveRegion.setAttribute('aria-live', 'polite');
+    ariaLiveRegion.setAttribute('aria-atomic', 'true');
+    ariaLiveRegion.style.cssText = 'position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;';
+    container.appendChild(ariaLiveRegion);
+    addLogMessage('showResponsibilitiesProgressPanel: aria-live appended', 'log');
+
+    modal.appendChild(container);
+    container.style.position = 'fixed';
+    container.style.top = '50%';
+    container.style.left = '50%';
+    container.style.transform = 'translate(-50%, -50%)';
+    modal.style.pointerEvents = 'none';
+    container.style.pointerEvents = 'auto';
+    makeDraggable(container, header);
+    document.body.appendChild(modal);
+    closeButton.focus();
+    addLogMessage('showResponsibilitiesProgressPanel: displayed', 'log');
+}
+
+
+    function updateRespRoleStatus(roleKey, newStatus, reason) {
+        addLogMessage('updateRespRoleStatus: role=' + roleKey + ' status=' + newStatus, 'log');
+        var items = document.querySelectorAll('.resp-role-item');
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].getAttribute('data-role-key') === roleKey) {
+                var badge = items[i].querySelector('.resp-status-badge');
+                if (badge) {
+                    badge.textContent = newStatus;
+                    var colors = getRespBadgeColors(newStatus);
+                    badge.style.color = colors.color;
+                    badge.style.background = colors.bg;
+                }
+                if (reason) {
+                    var dr = items[i].querySelector('.resp-detail-row');
+                    if (dr) {
+                        var re = document.createElement('div');
+                        re.style.cssText = 'color: #ff6b6b; margin-top: 2px;';
+                        re.textContent = reason;
+                        dr.appendChild(re);
+                    }
+                }
+                var lr = items[i].querySelector('[aria-live]');
+                if (lr) {
+                    lr.textContent = roleKey + ' ' + newStatus;
+                }
+                break;
+            }
+        }
+    }
+
+    function updateRespSummary() {
+        addLogMessage('updateRespSummary: t=' + respState.counters.total + ' c=' + respState.counters.completed + ' f=' + respState.counters.failed + ' p=' + respState.counters.pending, 'log');
+        var el1 = document.getElementById('resp-summary-total');
+        var el2 = document.getElementById('resp-summary-completed');
+        var el3 = document.getElementById('resp-summary-failed');
+        var el4 = document.getElementById('resp-summary-pending');
+        var el5 = document.getElementById('resp-summary-percent');
+        if (el1) {
+            el1.textContent = String(respState.counters.total);
+        }
+        if (el2) {
+            el2.textContent = String(respState.counters.completed);
+        }
+        if (el3) {
+            el3.textContent = String(respState.counters.failed);
+        }
+        if (el4) {
+            el4.textContent = String(respState.counters.pending);
+        }
+        if (el5) {
+            var processed = respState.counters.completed + respState.counters.failed;
+            var pct = respState.counters.total > 0 ? Math.round((processed / respState.counters.total) * 100) : 0;
+            el5.textContent = pct + '%';
+        }
+        updateRespAriaLive('Completed: ' + respState.counters.completed + ', Failed: ' + respState.counters.failed + ', Pending: ' + respState.counters.pending);
+    }
+
+    function updateRespAriaLive(message) {
+        var lr = document.getElementById('resp-aria-live');
+        if (lr) {
+            lr.textContent = message;
+        }
+    }
+
+    function scanExistingCompletedRoles() {
+        addLogMessage('scanExistingCompletedRoles: scanning', 'log');
+        try {
+            var dropList = document.querySelector(RESP_SELECTORS.dropListContainer);
+            if (!dropList) {
+                addLogMessage('scanExistingCompletedRoles: no drop list container', 'warn');
+                return;
+            }
+            var columns = dropList.querySelectorAll(RESP_SELECTORS.roleColumns);
+            addLogMessage('scanExistingCompletedRoles: ' + columns.length + ' columns', 'log');
+            for (var colIdx = 0; colIdx < columns.length; colIdx++) {
+                var checked = columns[colIdx].querySelectorAll(RESP_SELECTORS.selectedRoleCheckboxInColumn);
+                for (var bi = 0; bi < checked.length; bi++) {
+                    var ariaLabel = checked[bi].getAttribute('aria-label') || '';
+                    var parentItem = checked[bi].closest('.filtered-select__list__item');
+                    var roleText = ariaLabel || (parentItem ? parentItem.textContent || '' : '');
+                    if (!roleText) {
+                        continue;
+                    }
+                    var normalized = normalizeRoleName(roleText);
+                    for (var ri = 0; ri < respState.rolesData.length; ri++) {
+                        if (respState.rolesData[ri].key === normalized.key && respState.rolesData[ri].status === RESP_LABELS.statusPending) {
+                            respState.rolesData[ri].status = RESP_LABELS.statusCompleted;
+                            respState.counters.completed++;
+                            respState.counters.pending--;
+                            updateRespRoleStatus(respState.rolesData[ri].key, RESP_LABELS.statusCompleted, '');
+                            addLogMessage('scanExistingCompletedRoles: ' + normalized.display + ' already done', 'log');
+                        }
+                    }
+                }
+            }
+            updateRespSummary();
+            updateRespAriaLive('Existing roles scanned');
+        } catch (error) {
+            addLogMessage('scanExistingCompletedRoles: error: ' + error.message, 'error');
+        }
+    }
+
+    function findAvailableRoleColumn() {
+        addLogMessage('findAvailableRoleColumn: searching for last empty column', 'log');
+        return new Promise(function(resolve, reject) {
+            if (respState.stopRequested) {
+                reject(new Error('Stopped'));
+                return;
+            }
+            var dropList = document.querySelector(RESP_SELECTORS.dropListContainer);
+            if (!dropList) {
+                addLogMessage('findAvailableRoleColumn: drop list container not found', 'warn');
+                reject(new Error('Drop list container not found'));
+                return;
+            }
+            var columns = dropList.querySelectorAll(RESP_SELECTORS.roleColumns);
+            addLogMessage('findAvailableRoleColumn: found ' + columns.length + ' columns in drop list', 'log');
+            var lastEmpty = null;
+            for (var ci = columns.length - 1; ci >= 0; ci--) {
+                var selectedCheckbox = columns[ci].querySelector(RESP_SELECTORS.selectedRoleCheckboxInColumn);
+                if (!selectedCheckbox) {
+                    lastEmpty = columns[ci];
+                    addLogMessage('findAvailableRoleColumn: last empty column at index ' + ci, 'log');
+                    break;
+                }
+            }
+            if (lastEmpty) {
+                resolve(lastEmpty);
+                return;
+            }
+            addLogMessage('findAvailableRoleColumn: no empty columns, clicking Add Study Role', 'log');
+            var addBtn = document.querySelector(RESP_SELECTORS.addStudyRoleBtn);
+            if (!addBtn) {
+                reject(new Error('Add Study Role button not found'));
+                return;
+            }
+            addBtn.click();
+            var waitTid = setTimeout(function() {
+                var updatedColumns = dropList.querySelectorAll(RESP_SELECTORS.roleColumns);
+                addLogMessage('findAvailableRoleColumn: after add, ' + updatedColumns.length + ' columns', 'log');
+                if (updatedColumns.length === 0) {
+                    reject(new Error('No columns found after adding study role'));
+                    return;
+                }
+                var lastCol = updatedColumns[updatedColumns.length - 1];
+                var sel = lastCol.querySelector(RESP_SELECTORS.selectedRoleCheckboxInColumn);
+                if (!sel) {
+                    addLogMessage('findAvailableRoleColumn: new last column at index ' + (updatedColumns.length - 1), 'log');
+                    resolve(lastCol);
+                    return;
+                }
+                reject(new Error('No empty column after adding study role'));
+            }, RESP_TIMEOUTS.waitAddRoleResultMs);
+            respState.timeouts.push(waitTid);
+        });
+    }
+
+    function ensureRoleListOpenForColumn(columnEl) {
+        addLogMessage('ensureRoleListOpenForColumn: ensuring open in target column', 'log');
+        return new Promise(function(resolve, reject) {
+            var retries = 0;
+            function tryOpen() {
+                if (respState.stopRequested) {
+                    reject(new Error('Stopped'));
+                    return;
+                }
+                addLogMessage('ensureRoleListOpenForColumn: attempt ' + (retries + 1), 'log');
+                var globalList = document.querySelector(RESP_SELECTORS.roleListContainer);
+                if (globalList) {
+                    addLogMessage('ensureRoleListOpenForColumn: global list already open', 'log');
+                    resolve(globalList);
+                    return;
+                }
+                var inputEl = columnEl.querySelector(RESP_SELECTORS.roleSearchInput);
+                if (!inputEl) {
+                    inputEl = columnEl.querySelector('.filtered-select__input, input[placeholder*="Search"]');
+                }
+                if (!inputEl) {
+                    var allInputs = columnEl.querySelectorAll('input');
+                    if (allInputs.length > 0) {
+                        inputEl = allInputs[0];
+                    }
+                }
+                if (inputEl) {
+                    addLogMessage('ensureRoleListOpenForColumn: clicking input in column', 'log');
+                    inputEl.click();
+                    inputEl.focus();
+                } else {
+                    addLogMessage('ensureRoleListOpenForColumn: no input found in column, clicking column itself', 'warn');
+                    columnEl.click();
+                }
+                var waitStart = Date.now();
+                function pollForList() {
+                    var el = document.querySelector(RESP_SELECTORS.roleListContainer);
+                    if (el) {
+                        addLogMessage('ensureRoleListOpenForColumn: global list appeared', 'log');
+                        resolve(el);
+                        return;
+                    }
+                    var vp = document.querySelector('cdk-virtual-scroll-viewport');
+                    if (vp && vp.scrollHeight > 0 && vp.clientHeight > 0) {
+                        addLogMessage('ensureRoleListOpenForColumn: found active viewport as list proxy', 'log');
+                        resolve(vp);
+                        return;
+                    }
+                    if (Date.now() - waitStart > RESP_TIMEOUTS.waitListOpenMs) {
+                        retries++;
+                        if (retries < RESP_RETRY.openListRetries) {
+                            var tid = setTimeout(tryOpen, 300);
+                            respState.timeouts.push(tid);
+                        } else {
+                            reject(new Error('Could not open role list in column'));
+                        }
+                        return;
+                    }
+                    var pt = setTimeout(pollForList, 200);
+                    respState.timeouts.push(pt);
+                }
+                pollForList();
+            }
+            tryOpen();
+        });
+    }
+
+    function findRoleListViewport() {
+        var allViewports = document.querySelectorAll('cdk-virtual-scroll-viewport');
+        addLogMessage('findRoleListViewport: found ' + allViewports.length + ' global cdk-virtual-scroll-viewport elements', 'log');
+        if (allViewports.length > 0) {
+            var best = null;
+            for (var vi = allViewports.length - 1; vi >= 0; vi--) {
+                var vp = allViewports[vi];
+                if (vp.scrollHeight > 0 && vp.clientHeight > 0) {
+                    best = vp;
+                    addLogMessage('findRoleListViewport: using viewport index ' + vi + ' scrollH=' + vp.scrollHeight + ' clientH=' + vp.clientHeight, 'log');
+                    break;
+                }
+            }
+            if (best) {
+                return best;
+            }
+            var last = allViewports[allViewports.length - 1];
+            addLogMessage('findRoleListViewport: fallback to last viewport index ' + (allViewports.length - 1) + ' scrollH=' + last.scrollHeight + ' clientH=' + last.clientHeight, 'log');
+            return last;
+        }
+        var listEl = document.querySelector(RESP_SELECTORS.roleListContainer);
+        if (listEl) {
+            addLogMessage('findRoleListViewport: fallback to global list container scrollH=' + listEl.scrollHeight + ' clientH=' + listEl.clientHeight, 'log');
+            return listEl;
+        }
+        addLogMessage('findRoleListViewport: no viewport found anywhere', 'warn');
+        return null;
+    }
+
+    function respRememberListScrollPosition(viewportEl) {
+        if (viewportEl) {
+            respState.listScrollTop = viewportEl.scrollTop;
+            addLogMessage('respRememberScroll: ' + respState.listScrollTop, 'log');
+        }
+    }
+
+    function respRestoreListScrollPosition(viewportEl) {
+        if (viewportEl && respState.listScrollTop > 0) {
+            viewportEl.scrollTop = respState.listScrollTop;
+            addLogMessage('respRestoreScroll: ' + respState.listScrollTop, 'log');
+        }
+    }
+
+    function attemptSelectByScrollingForRole(columnEl, targetRoleDisplay, targetRoleKey) {
+        addLogMessage('attemptSelectByScrollingForRole: target=' + targetRoleDisplay + ' key=' + targetRoleKey, 'log');
+        return new Promise(function(resolve) {
+            var retryCount = 0;
+            var maxRetries = 3;
+
+            function trySelect() {
+                if (respState.stopRequested) {
+                    resolve(false);
+                    return;
+                }
+
+                var viewportEl = findRoleListViewport();
+                if (!viewportEl) {
+                    addLogMessage('attemptSelectByScrollingForRole: no viewport found, may need to reopen dropdown', 'warn');
+                    if (retryCount < maxRetries) {
+                        retryCount++;
+                        addLogMessage('attemptSelectByScrollingForRole: reopening role dropdown, attempt ' + retryCount, 'log');
+                        ensureRoleListOpenForColumn(columnEl).then(function() {
+                            var tid = setTimeout(trySelect, 800);
+                            respState.timeouts.push(tid);
+                        }).catch(function() {
+                            var tid = setTimeout(trySelect, 800);
+                            respState.timeouts.push(tid);
+                        });
+                        return;
+                    } else {
+                        addLogMessage('attemptSelectByScrollingForRole: max retries reached, giving up', 'error');
+                        resolve(false);
+                        return;
+                    }
+                }
+
+                addLogMessage('attemptSelectByScrollingForRole: viewport scrollH=' + viewportEl.scrollHeight + ' clientH=' + viewportEl.clientHeight, 'log');
+                viewportEl.scrollTop = 0;
+                var passCount = 0;
+                var lastScrollTop = -1;
+                var lastSnapshot = '';
+                var startTime = Date.now();
+
+                function scanAndScroll() {
+                    if (respState.stopRequested) {
+                        respRememberListScrollPosition(viewportEl);
+                        resolve(false);
+                        return;
+                    }
+                    if (Date.now() - startTime > RESP_TIMEOUTS.maxSelectRoleDurationMs) {
+                        addLogMessage('attemptSelectByScrollingForRole: max duration exceeded', 'warn');
+                        respRememberListScrollPosition(viewportEl);
+                        resolve(false);
+                        return;
+                    }
+                    if (passCount >= RESP_RETRY.maxScrollPasses) {
+                        addLogMessage('attemptSelectByScrollingForRole: max passes reached (' + passCount + '), may need to reopen dropdown', 'warn');
+                        if (retryCount < maxRetries) {
+                            retryCount++;
+                            addLogMessage('attemptSelectByScrollingForRole: reopening role dropdown, attempt ' + retryCount, 'log');
+                            ensureRoleListOpenForColumn(columnEl).then(function() {
+                                var tid = setTimeout(trySelect, 800);
+                                respState.timeouts.push(tid);
+                            }).catch(function() {
+                                var tid = setTimeout(trySelect, 800);
+                                respState.timeouts.push(tid);
+                            });
+                            return;
+                        } else {
+                            addLogMessage('attemptSelectByScrollingForRole: max retries reached, giving up', 'error');
+                            respRememberListScrollPosition(viewportEl);
+                            resolve(false);
+                            return;
+                        }
+                    }
+                    var options = document.querySelectorAll(RESP_SELECTORS.roleOptionItem);
+                    var optionRetryCount = 0;
+
+                    function tryScan() {
+                        options = document.querySelectorAll(RESP_SELECTORS.roleOptionItem);
+                        if (options.length === 0 && optionRetryCount < RESP_RETRY.optionScanRetries) {
+                            optionRetryCount++;
+                            addLogMessage('attemptSelectByScrollingForRole: empty render, retry ' + optionRetryCount, 'log');
+                            var rtid = setTimeout(tryScan, RESP_TIMEOUTS.waitOptionRenderMs);
+                            respState.timeouts.push(rtid);
+                            return;
+                        }
+                        if (options.length === 0) {
+                            addLogMessage('attemptSelectByScrollingForRole: no options found after retries, may need to reopen dropdown', 'warn');
+                            if (retryCount < maxRetries) {
+                                retryCount++;
+                                addLogMessage('attemptSelectByScrollingForRole: reopening role dropdown, attempt ' + retryCount, 'log');
+                                ensureRoleListOpenForColumn(columnEl).then(function() {
+                                    var tid = setTimeout(trySelect, 800);
+                                    respState.timeouts.push(tid);
+                                }).catch(function() {
+                                    var tid = setTimeout(trySelect, 800);
+                                    respState.timeouts.push(tid);
+                                });
+                                return;
+                            } else {
+                                addLogMessage('attemptSelectByScrollingForRole: max retries reached, giving up', 'error');
+                                resolve(false);
+                                return;
+                            }
+                        }
+                        addLogMessage('attemptSelectByScrollingForRole: scanning ' + options.length + ' options at scrollTop=' + viewportEl.scrollTop, 'log');
+                        var found = false;
+                        var optTexts = [];
+                        for (var oi = 0; oi < options.length; oi++) {
+                            var textEl = options[oi].querySelector(RESP_SELECTORS.roleOptionText);
+                            var optText = textEl ? textEl.textContent.trim() : (options[oi].textContent || '').trim();
+                            optTexts.push(optText);
+                            var norm = normalizeRoleName(optText);
+                            if (norm.key === targetRoleKey) {
+                                addLogMessage('attemptSelectByScrollingForRole: MATCH at index ' + oi + ' text=' + optText, 'log');
+                                var cb = options[oi].querySelector(RESP_SELECTORS.roleOptionCheckboxTri);
+                                if (cb) {
+                                    cb.click();
+                                    addLogMessage('attemptSelectByScrollingForRole: clicked checkbox tristate', 'log');
+                                } else {
+                                    options[oi].click();
+                                    addLogMessage('attemptSelectByScrollingForRole: clicked option item directly', 'log');
+                                }
+                                found = true;
+                                respRememberListScrollPosition(viewportEl);
+                                var vt = setTimeout(function() {
+                                    addLogMessage('attemptSelectByScrollingForRole: closing role dropdown after selection', 'log');
+                                    document.body.click();
+                                    var closeTid = setTimeout(function() {
+                                        resolve(true);
+                                    }, 300);
+                                    respState.timeouts.push(closeTid);
+                                }, RESP_TIMEOUTS.waitAfterSelectRoleMs);
+                                respState.timeouts.push(vt);
+                                break;
+                            }
+                        }
+                        if (!found) {
+                            var snap = optTexts.join('|');
+                            var curTop = viewportEl.scrollTop;
+                            if (curTop === lastScrollTop && snap === lastSnapshot) {
+                                passCount++;
+                                addLogMessage('attemptSelectByScrollingForRole: no progress pass ' + passCount + ' opts=' + options.length, 'log');
+                            }
+                            lastScrollTop = curTop;
+                            lastSnapshot = snap;
+                            var step = Math.round(viewportEl.clientHeight * RESP_SCROLL.stepRatio);
+                            if (step < 50) {
+                                step = 200;
+                                addLogMessage('attemptSelectByScrollingForRole: step too small, using fallback 200px', 'warn');
+                            }
+                            var maxS = viewportEl.scrollHeight - viewportEl.clientHeight;
+                            var newTop = Math.min(curTop + step, maxS);
+                            if (newTop <= curTop && curTop > 0) {
+                                addLogMessage('attemptSelectByScrollingForRole: at bottom, wrapping to top', 'log');
+                                newTop = 0;
+                                lastScrollTop = -1;
+                                lastSnapshot = '';
+                                passCount++;
+                            }
+                            viewportEl.scrollTop = newTop;
+                            addLogMessage('attemptSelectByScrollingForRole: scrolled to ' + newTop + ' (max=' + maxS + ' step=' + step + ')', 'log');
+                            var st = setTimeout(scanAndScroll, RESP_TIMEOUTS.idleBetweenScrollsMs);
+                            respState.timeouts.push(st);
+                        }
+                    }
+                    tryScan();
+                }
+                var initTid = setTimeout(scanAndScroll, RESP_TIMEOUTS.settleAfterScrollMs);
+                respState.timeouts.push(initTid);
+            }
+            trySelect();
+        });
+    }
+
+    function dismissExistingResponsibilitiesMenu() {
+        return new Promise(function(resolve) {
+            var allMenus = document.querySelectorAll(RESP_SELECTORS.responsibilitiesMenu);
+            if (allMenus.length === 0) {
+                resolve();
+                return;
+            }
+            addLogMessage('dismissExistingResponsibilitiesMenu: found ' + allMenus.length + ' open menu(s), closing', 'log');
+            var allToggles = document.querySelectorAll(RESP_SELECTORS.responsibilitiesToggleBtn);
+            for (var ti = 0; ti < allToggles.length; ti++) {
+                var btn = allToggles[ti];
+                var expanded = btn.getAttribute('aria-expanded');
+                if (expanded === 'true') {
+                    addLogMessage('dismissExistingResponsibilitiesMenu: clicking expanded toggle at index ' + ti, 'log');
+                    btn.click();
+                }
+            }
+            if (allToggles.length === 0) {
+                document.body.click();
+            }
+            var attempts = 0;
+            function waitGone() {
+                var still = document.querySelectorAll(RESP_SELECTORS.responsibilitiesMenu);
+                if (still.length === 0) {
+                    addLogMessage('dismissExistingResponsibilitiesMenu: all menus closed', 'log');
+                    resolve();
+                    return;
+                }
+                attempts++;
+                if (attempts >= 10) {
+                    addLogMessage('dismissExistingResponsibilitiesMenu: menus still visible after retries, clicking body to close', 'warn');
+                    document.body.click();
+                    var finalTid = setTimeout(function() {
+                        addLogMessage('dismissExistingResponsibilitiesMenu: proceeding after final close attempt', 'log');
+                        resolve();
+                    }, 300);
+                    respState.timeouts.push(finalTid);
+                    return;
+                }
+                if (attempts === 5) {
+                    addLogMessage('dismissExistingResponsibilitiesMenu: mid-retry body click', 'log');
+                    document.body.click();
+                }
+                var tid = setTimeout(waitGone, 200);
+                respState.timeouts.push(tid);
+            }
+            var initTid = setTimeout(waitGone, 300);
+            respState.timeouts.push(initTid);
+        });
+    }
+
+    function openResponsibilitiesDropdown(columnEl) {
+        addLogMessage('openResponsibilitiesDropdown: opening responsibilities dropdown', 'log');
+        return dismissExistingResponsibilitiesMenu().then(function() {
+            return new Promise(function(resolve, reject) {
+                try {
+                    var targetColumn = columnEl;
+                    addLogMessage('openResponsibilitiesDropdown: using passed columnEl directly', 'log');
+                    var toggleBtn = targetColumn.querySelector(RESP_SELECTORS.responsibilitiesToggleBtn);
+                    if (!toggleBtn) {
+                        toggleBtn = targetColumn.querySelector('button[dropdowntoggle]');
+                    }
+                    if (!toggleBtn) {
+                        toggleBtn = targetColumn.querySelector('.roles__select-options-dropdown-button');
+                    }
+                    if (!toggleBtn) {
+                        var allToggles = document.querySelectorAll(RESP_SELECTORS.responsibilitiesToggleBtn);
+                        if (allToggles.length > 0) {
+                            toggleBtn = allToggles[allToggles.length - 1];
+                            addLogMessage('openResponsibilitiesDropdown: using last global toggle button', 'log');
+                        }
+                    }
+                    if (!toggleBtn) {
+                        addLogMessage('openResponsibilitiesDropdown: toggle button not found anywhere', 'error');
+                        reject(new Error('Responsibilities toggle button not found'));
+                        return;
+                    }
+                    var menusBefore = document.querySelectorAll(RESP_SELECTORS.responsibilitiesMenu).length;
+                    addLogMessage('openResponsibilitiesDropdown: menus before click: ' + menusBefore + ', clicking toggle button', 'log');
+                    toggleBtn.click();
+
+                    function waitForLastMenu(timeoutMs, retryClick) {
+                        var elapsed = 0;
+                        var interval = 100;
+                        function poll() {
+                            var allMenus = document.querySelectorAll(RESP_SELECTORS.responsibilitiesMenu);
+                            var lastMenu = allMenus.length > 0 ? allMenus[allMenus.length - 1] : null;
+                            if (allMenus.length > menusBefore && lastMenu) {
+                                addLogMessage('openResponsibilitiesDropdown: new menu appeared (count ' + menusBefore + ' -> ' + allMenus.length + ')', 'log');
+                                resolve(lastMenu);
+                                return;
+                            }
+                            if (lastMenu && allMenus.length >= 1) {
+                                var isVisible = lastMenu.offsetParent !== null || lastMenu.offsetHeight > 0;
+                                if (isVisible) {
+                                    addLogMessage('openResponsibilitiesDropdown: last menu is visible (count=' + allMenus.length + ')', 'log');
+                                    resolve(lastMenu);
+                                    return;
+                                }
+                            }
+                            elapsed += interval;
+                            if (elapsed >= timeoutMs) {
+                                if (retryClick) {
+                                    addLogMessage('openResponsibilitiesDropdown: timeout, retrying click', 'warn');
+                                    toggleBtn.click();
+                                    waitForLastMenu(timeoutMs, false);
+                                } else {
+                                    if (lastMenu) {
+                                        addLogMessage('openResponsibilitiesDropdown: timeout but using last menu', 'warn');
+                                        resolve(lastMenu);
+                                    } else {
+                                        reject(new Error('Timeout waiting for responsibilities menu'));
+                                    }
+                                }
+                                return;
+                            }
+                            var tid = setTimeout(poll, interval);
+                            respState.timeouts.push(tid);
+                        }
+                        var initTid = setTimeout(poll, interval);
+                        respState.timeouts.push(initTid);
+                    }
+                    waitForLastMenu(RESP_TIMEOUTS.waitResponsibilitiesMenuMs, true);
+                } catch (error) {
+                    addLogMessage('openResponsibilitiesDropdown: error: ' + error.message, 'error');
+                    reject(error);
+                }
+            });
+        });
+    }
+
+    function selectResponsibilitiesByNumbers(numbersSet, menuEl, columnEl) {
+        addLogMessage('selectResponsibilitiesByNumbers: selecting ' + numbersSet.size + ' numbers: [' + Array.from(numbersSet).join(',') + ']', 'log');
+        return new Promise(function(resolve) {
+            var retryCount = 0;
+            var maxRetries = 3;
+
+            function trySelect() {
+                if (respState.stopRequested) {
+                    resolve();
+                    return;
+                }
+
+                try {
+                    var remaining = new Set(numbersSet);
+                    var scrollPassCount = 0;
+                    var maxScrollPasses = 10;
+                    var lastSnapshot = '';
+
+                    function getMenuContainer() {
+                        if (menuEl && menuEl.isConnected) {
+                            return menuEl;
+                        }
+                        var allMenus = document.querySelectorAll(RESP_SELECTORS.responsibilitiesMenu);
+                        return allMenus.length > 0 ? allMenus[allMenus.length - 1] : null;
+                    }
+
+                    function processVisibleItems(callback) {
+                        var container = getMenuContainer();
+                        if (!container) {
+                            addLogMessage('selectResponsibilitiesByNumbers: no menu container, may need to reopen dropdown', 'warn');
+                            if (retryCount < maxRetries && columnEl) {
+                                retryCount++;
+                                addLogMessage('selectResponsibilitiesByNumbers: reopening responsibilities dropdown, attempt ' + retryCount, 'log');
+                                openResponsibilitiesDropdown(columnEl).then(function(newMenu) {
+                                    menuEl = newMenu;
+                                    var tid = setTimeout(trySelect, 800);
+                                    respState.timeouts.push(tid);
+                                }).catch(function() {
+                                    var tid = setTimeout(trySelect, 800);
+                                    respState.timeouts.push(tid);
+                                });
+                                return;
+                            } else {
+                                addLogMessage('selectResponsibilitiesByNumbers: max retries reached, giving up', 'error');
+                                resolve();
+                                return;
+                            }
+                        }
+                        var items = container.querySelectorAll('li');
+                        if (items.length === 0) {
+                            addLogMessage('selectResponsibilitiesByNumbers: no items found, may need to reopen dropdown', 'warn');
+                            if (retryCount < maxRetries && columnEl) {
+                                retryCount++;
+                                addLogMessage('selectResponsibilitiesByNumbers: reopening responsibilities dropdown, attempt ' + retryCount, 'log');
+                                openResponsibilitiesDropdown(columnEl).then(function(newMenu) {
+                                    menuEl = newMenu;
+                                    var tid = setTimeout(trySelect, 800);
+                                    respState.timeouts.push(tid);
+                                }).catch(function() {
+                                    var tid = setTimeout(trySelect, 800);
+                                    respState.timeouts.push(tid);
+                                });
+                                return;
+                            } else {
+                                addLogMessage('selectResponsibilitiesByNumbers: max retries reached, giving up', 'error');
+                                resolve();
+                                return;
+                            }
+                        }
+                        addLogMessage('selectResponsibilitiesByNumbers: ' + items.length + ' visible items, ' + remaining.size + ' remaining', 'log');
+                        var idx = 0;
+
+                        function nextItem() {
+                            if (respState.stopRequested) {
+                                callback();
+                                return;
+                            }
+                            if (idx >= items.length) {
+                                callback();
+                                return;
+                            }
+                            var item = items[idx];
+                            var text = (item.textContent || '').trim();
+                            var numMatch = text.match(/(\d+)/);
+                            if (numMatch) {
+                                var num = parseInt(numMatch[1], 10);
+                                if (remaining.has(num)) {
+                                    var checkbox = item.querySelector('input[type="checkbox"]');
+                                    if (checkbox && !checkbox.checked) {
+                                        addLogMessage('selectResponsibilitiesByNumbers: toggling checkbox for ' + num, 'log');
+                                        checkbox.click();
+                                        remaining.delete(num);
+                                        idx++;
+                                        var tid = setTimeout(nextItem, RESP_TIMEOUTS.waitAfterToggleResponsibilityMs);
+                                        respState.timeouts.push(tid);
+                                        return;
+                                    } else if (checkbox && checkbox.checked) {
+                                        addLogMessage('selectResponsibilitiesByNumbers: ' + num + ' already checked', 'log');
+                                        remaining.delete(num);
+                                    } else if (!checkbox) {
+                                        addLogMessage('selectResponsibilitiesByNumbers: no checkbox for ' + num + ', clicking item', 'log');
+                                        item.click();
+                                        remaining.delete(num);
+                                        idx++;
+                                        var tid2 = setTimeout(nextItem, RESP_TIMEOUTS.waitAfterToggleResponsibilityMs);
+                                        respState.timeouts.push(tid2);
+                                        return;
+                                    }
+                                }
+                            }
+                            idx++;
+                            var tid3 = setTimeout(nextItem, 20);
+                            respState.timeouts.push(tid3);
+                        }
+                        nextItem();
+                    }
+
+                    function scrollAndProcess() {
+                        if (respState.stopRequested || remaining.size === 0) {
+                            addLogMessage('selectResponsibilitiesByNumbers: done, remaining=' + remaining.size, 'log');
+                            resolve();
+                            return;
+                        }
+                        if (scrollPassCount >= maxScrollPasses) {
+                            addLogMessage('selectResponsibilitiesByNumbers: max scroll passes, remaining=' + remaining.size + ', may need to reopen dropdown', 'warn');
+                            if (retryCount < maxRetries && columnEl) {
+                                retryCount++;
+                                addLogMessage('selectResponsibilitiesByNumbers: reopening responsibilities dropdown, attempt ' + retryCount, 'log');
+                                openResponsibilitiesDropdown(columnEl).then(function(newMenu) {
+                                    menuEl = newMenu;
+                                    var tid = setTimeout(trySelect, 800);
+                                    respState.timeouts.push(tid);
+                                }).catch(function() {
+                                    var tid = setTimeout(trySelect, 800);
+                                    respState.timeouts.push(tid);
+                                });
+                                return;
+                            } else {
+                                addLogMessage('selectResponsibilitiesByNumbers: max retries reached, giving up', 'error');
+                                resolve();
+                                return;
+                            }
+                        }
+                        processVisibleItems(function() {
+                            if (remaining.size === 0) {
+                                addLogMessage('selectResponsibilitiesByNumbers: all selected', 'log');
+                                resolve();
+                                return;
+                            }
+                            var menuEl = getMenuContainer();
+                            if (!menuEl) {
+                                addLogMessage('selectResponsibilitiesByNumbers: menu gone during processing, resolving', 'warn');
+                                resolve();
+                                return;
+                            }
+                            var items = menuEl.querySelectorAll('li');
+                            var snap = '';
+                            for (var si = 0; si < items.length; si++) {
+                                snap += (items[si].textContent || '').trim() + '|';
+                            }
+                            if (snap === lastSnapshot) {
+                                scrollPassCount++;
+                                addLogMessage('selectResponsibilitiesByNumbers: no new items pass ' + scrollPassCount, 'log');
+                            }
+                            lastSnapshot = snap;
+                            var scrollStep = Math.round(menuEl.clientHeight * 0.7);
+                            if (scrollStep < 50) {
+                                scrollStep = 200;
+                            }
+                            var maxScroll = menuEl.scrollHeight - menuEl.clientHeight;
+                            var newTop = Math.min(menuEl.scrollTop + scrollStep, maxScroll);
+                            if (newTop <= menuEl.scrollTop && maxScroll > 0) {
+                                addLogMessage('selectResponsibilitiesByNumbers: at bottom of menu, done scrolling', 'log');
+                                resolve();
+                                return;
+                            }
+                            menuEl.scrollTop = newTop;
+                            addLogMessage('selectResponsibilitiesByNumbers: scrolled menu to ' + newTop + ' (max=' + maxScroll + ')', 'log');
+                            scrollPassCount++;
+                            var tid4 = setTimeout(scrollAndProcess, RESP_TIMEOUTS.settleAfterScrollMs);
+                            respState.timeouts.push(tid4);
+                        });
+                    }
+                    scrollAndProcess();
+                } catch (error) {
+                    addLogMessage('selectResponsibilitiesByNumbers: error: ' + error.message, 'error');
+                    if (retryCount < maxRetries && columnEl) {
+                        retryCount++;
+                        addLogMessage('selectResponsibilitiesByNumbers: error occurred, reopening dropdown, attempt ' + retryCount, 'log');
+                        openResponsibilitiesDropdown(columnEl).then(function(newMenu) {
+                            menuEl = newMenu;
+                            var tid = setTimeout(trySelect, 800);
+                            respState.timeouts.push(tid);
+                        }).catch(function() {
+                            var tid = setTimeout(trySelect, 800);
+                            respState.timeouts.push(tid);
+                        });
+                    } else {
+                        resolve();
+                    }
+                }
+            }
+            trySelect();
+        });
+    }
+
+    function clickAddStudyRole() {
+        addLogMessage('clickAddStudyRole: clicking', 'log');
+        return new Promise(function(resolve) {
+            var retries = 0;
+
+            function tryClick() {
+                if (respState.stopRequested) {
+                    resolve(false);
+                    return;
+                }
+                var addBtn = document.querySelector(RESP_SELECTORS.addStudyRoleBtn);
+                if (!addBtn) {
+                    addLogMessage('clickAddStudyRole: button not found', 'warn');
+                    resolve(false);
+                    return;
+                }
+                if (addBtn.disabled || addBtn.getAttribute('disabled') !== null) {
+                    if (retries < RESP_RETRY.addRoleRetries) {
+                        retries++;
+                        addLogMessage('clickAddStudyRole: button disabled, retry ' + retries, 'log');
+                        var tid = setTimeout(tryClick, 1000);
+                        respState.timeouts.push(tid);
+                        return;
+                    }
+                    addLogMessage('clickAddStudyRole: button still disabled after retries', 'warn');
+                    resolve(false);
+                    return;
+                }
+                addBtn.click();
+                addLogMessage('clickAddStudyRole: clicked, waiting for result', 'log');
+                var wt = setTimeout(function() {
+                    resolve(true);
+                }, RESP_TIMEOUTS.waitAddRoleResultMs);
+                respState.timeouts.push(wt);
+            }
+            tryClick();
+        });
+    }
+
+    function respSetAriaBusyOn() {
+        var target = document.querySelector(RESP_ATTRS.ariaBusyTarget);
+        if (target) {
+            respState.prevAriaBusy = target.getAttribute(RESP_ATTRS.ariaBusyAttr);
+            target.setAttribute(RESP_ATTRS.ariaBusyAttr, 'true');
+            addLogMessage('respSetAriaBusyOn: set aria-busy=true', 'log');
+        }
+    }
+
+    function respSetAriaBusyOff() {
+        var target = document.querySelector(RESP_ATTRS.ariaBusyTarget);
+        if (target) {
+            if (respState.prevAriaBusy !== null) {
+                target.setAttribute(RESP_ATTRS.ariaBusyAttr, respState.prevAriaBusy);
+            } else {
+                target.removeAttribute(RESP_ATTRS.ariaBusyAttr);
+            }
+            respState.prevAriaBusy = null;
+            addLogMessage('respSetAriaBusyOff: restored aria-busy', 'log');
+        }
+    }
+
+    function processRolesWorkflow(rolesData) {
+        addLogMessage('processRolesWorkflow: starting with ' + rolesData.length + ' roles', 'log');
+        respState.isRunning = true;
+        respState.stopRequested = false;
+        respSetAriaBusyOn();
+        updateRespAriaLive(RESP_LABELS.scanningExisting);
+        scanExistingCompletedRoles();
+        var roleIndex = 0;
+
+        function processNextRole() {
+            if (respState.stopRequested) {
+                addLogMessage('processRolesWorkflow: stop requested, marking remaining roles', 'log');
+                for (var si = roleIndex; si < rolesData.length; si++) {
+                    if (rolesData[si].status === RESP_LABELS.statusPending) {
+                        rolesData[si].status = RESP_LABELS.statusStopped;
+                        respState.counters.pending--;
+                        updateRespRoleStatus(rolesData[si].key, RESP_LABELS.statusStopped, '');
+                    }
+                }
+                updateRespSummary();
+                respSetAriaBusyOff();
+                var t1 = document.getElementById('resp-progress-title');
+                if (t1) {
+                    t1.textContent = 'Set Responsibilities - Stopped';
+                }
+                var b1 = document.getElementById('resp-status-badge');
+                if (b1) {
+                    b1.textContent = 'Stopped';
+                    b1.style.color = '#aaa';
+                }
+                updateRespAriaLive('Process stopped');
+                respState.isRunning = false;
+                return;
+            }
+            if (roleIndex >= rolesData.length) {
+                addLogMessage('processRolesWorkflow: all roles processed', 'log');
+                respSetAriaBusyOff();
+                respState.isRunning = false;
+                var t2 = document.getElementById('resp-progress-title');
+                if (t2) {
+                    t2.textContent = 'Set Responsibilities - Complete';
+                }
+                var b2 = document.getElementById('resp-status-badge');
+                if (b2) {
+                    b2.textContent = 'Complete';
+                    b2.style.background = 'rgba(107, 207, 127, 0.3)';
+                    b2.style.color = '#6bcf7f';
+                }
+                updateRespSummary();
+                updateRespAriaLive('Complete. Done: ' + respState.counters.completed + ', Failed: ' + respState.counters.failed);
+                return;
+            }
+            var role = rolesData[roleIndex];
+            if (role.status !== RESP_LABELS.statusPending) {
+                addLogMessage('processRolesWorkflow: skipping ' + role.displayRole + ' (status=' + role.status + ')', 'log');
+                roleIndex++;
+                var sk = setTimeout(processNextRole, 50);
+                respState.timeouts.push(sk);
+                return;
+            }
+            addLogMessage('processRolesWorkflow: processing role ' + (roleIndex + 1) + '/' + rolesData.length + ': ' + role.displayRole, 'log');
+            updateRespAriaLive(RESP_LABELS.selectingRole + ': ' + role.displayRole);
+            var currentColumnEl = null;
+
+            findAvailableRoleColumn()
+                .then(function(columnEl) {
+                currentColumnEl = columnEl;
+                if (respState.stopRequested) {
+                    throw new Error('Stopped');
+                }
+                addLogMessage('processRolesWorkflow: got column for ' + role.displayRole, 'log');
+                return ensureRoleListOpenForColumn(columnEl);
+            })
+                .then(function() {
+                if (respState.stopRequested) {
+                    throw new Error('Stopped');
+                }
+                addLogMessage('processRolesWorkflow: list open, attempting scroll select for ' + role.displayRole, 'log');
+                return attemptSelectByScrollingForRole(currentColumnEl, role.displayRole, role.key);
+            })
+                .then(function(selected) {
+                if (respState.stopRequested) {
+                    throw new Error('Stopped');
+                }
+                if (!selected) {
+                    addLogMessage('processRolesWorkflow: role not found in dropdown: ' + role.displayRole, 'warn');
+                    role.status = RESP_LABELS.statusFailed;
+                    role.reason = 'Role not in dropdown';
+                    respState.counters.failed++;
+                    respState.counters.pending--;
+                    updateRespRoleStatus(role.key, RESP_LABELS.statusFailed, 'Role not in dropdown');
+                    updateRespSummary();
+                    roleIndex++;
+                    var ft = setTimeout(processNextRole, 200);
+                    respState.timeouts.push(ft);
+                    return;
+                }
+                addLogMessage('processRolesWorkflow: role selected, opening responsibilities for ' + role.displayRole, 'log');
+                updateRespAriaLive(RESP_LABELS.selectingResponsibilities + ': ' + role.displayRole);
+                return openResponsibilitiesDropdown(currentColumnEl)
+                    .then(function(menu) {
+                    if (respState.stopRequested) {
+                        throw new Error('Stopped');
+                    }
+                    addLogMessage('processRolesWorkflow: responsibilities menu open for ' + role.displayRole, 'log');
+                    return selectResponsibilitiesByNumbers(role.intersection, menu, currentColumnEl);
+                })
+                    .then(function() {
+                    if (respState.stopRequested) {
+                        throw new Error('Stopped');
+                    }
+                    addLogMessage('processRolesWorkflow: responsibilities selected, clicking Add Study Role for ' + role.displayRole, 'log');
+                    updateRespAriaLive(RESP_LABELS.addingRole + ': ' + role.displayRole);
+                    return dismissExistingResponsibilitiesMenu();
+                })
+                    .then(function() {
+                    if (respState.stopRequested) {
+                        throw new Error('Stopped');
+                    }
+                    return clickAddStudyRole();
+                })
+                    .then(function(addOk) {
+                    if (addOk) {
+                        addLogMessage('processRolesWorkflow: ' + role.displayRole + ' completed', 'log');
+                        role.status = RESP_LABELS.statusCompleted;
+                        respState.counters.completed++;
+                        respState.counters.pending--;
+                        updateRespRoleStatus(role.key, RESP_LABELS.statusCompleted, '');
+                    } else {
+                        addLogMessage('processRolesWorkflow: ' + role.displayRole + ' add failed', 'warn');
+                        role.status = RESP_LABELS.statusFailed;
+                        role.reason = 'Add Study Role failed';
+                        respState.counters.failed++;
+                        respState.counters.pending--;
+                        updateRespRoleStatus(role.key, RESP_LABELS.statusFailed, 'Add Study Role failed');
+                    }
+                    updateRespSummary();
+                    roleIndex++;
+                    var nt = setTimeout(processNextRole, 200);
+                    respState.timeouts.push(nt);
+                });
+            })
+                .catch(function(err) {
+                addLogMessage('processRolesWorkflow: error for ' + role.displayRole + ': ' + err.message, 'error');
+                if (respState.stopRequested) {
+                    role.status = RESP_LABELS.statusStopped;
+                    updateRespRoleStatus(role.key, RESP_LABELS.statusStopped, '');
+                    respState.counters.pending--;
+                } else {
+                    role.status = RESP_LABELS.statusFailed;
+                    role.reason = err.message;
+                    respState.counters.failed++;
+                    respState.counters.pending--;
+                    updateRespRoleStatus(role.key, RESP_LABELS.statusFailed, err.message);
+                }
+                updateRespSummary();
+                roleIndex++;
+                var et = setTimeout(processNextRole, 200);
+                respState.timeouts.push(et);
+            });
+        }
+        processNextRole();
+    }
+
+    function stopResponsibilities() {
+        addLogMessage('stopResponsibilities: stopping', 'log');
+        respState.stopRequested = true;
+        respState.isRunning = false;
+        for (var i = 0; i < respState.idleCallbackIds.length; i++) {
+            try {
+                if (typeof cancelIdleCallback === 'function') {
+                    cancelIdleCallback(respState.idleCallbackIds[i]);
+                }
+            } catch (e) {
+                addLogMessage('stopResponsibilities: error canceling idle callback: ' + e, 'error');
+            }
+        }
+        respState.idleCallbackIds = [];
+        for (var i2 = 0; i2 < respState.observers.length; i2++) {
+            try {
+                respState.observers[i2].disconnect();
+            } catch (e2) {
+                addLogMessage('stopResponsibilities: error disconnecting observer: ' + e2, 'error');
+            }
+        }
+        respState.observers = [];
+        for (var i3 = 0; i3 < respState.timeouts.length; i3++) {
+            try {
+                clearTimeout(respState.timeouts[i3]);
+            } catch (e3) {
+                addLogMessage('stopResponsibilities: error clearing timeout: ' + e3, 'error');
+            }
+        }
+        respState.timeouts = [];
+        for (var i4 = 0; i4 < respState.intervals.length; i4++) {
+            try {
+                clearInterval(respState.intervals[i4]);
+            } catch (e4) {
+                addLogMessage('stopResponsibilities: error clearing interval: ' + e4, 'error');
+            }
+        }
+        respState.intervals = [];
+        for (var i5 = 0; i5 < respState.eventListeners.length; i5++) {
+            try {
+                var l = respState.eventListeners[i5];
+                l.element.removeEventListener(l.type, l.handler);
+            } catch (e5) {
+                addLogMessage('stopResponsibilities: error removing listener: ' + e5, 'error');
+            }
+        }
+        respState.eventListeners = [];
+        respSetAriaBusyOff();
+        var im = document.getElementById('resp-input-modal');
+        if (im && im.parentNode) {
+            im.parentNode.removeChild(im);
+        }
+        var pm = document.getElementById('resp-progress-modal');
+        if (pm && pm.parentNode) {
+            pm.parentNode.removeChild(pm);
+        }
+        var wm = document.getElementById('resp-warning-modal');
+        if (wm && wm.parentNode) {
+            wm.parentNode.removeChild(wm);
+        }
+        if (respState.focusReturnElement) {
+            respState.focusReturnElement.focus();
+        }
+        resetRespState();
+        addLogMessage('stopResponsibilities: cleanup complete', 'log');
+    }
+
+
+
+    //==========================
+    // TRAINING ELOG FUNCTIONS
+    //==========================
+    // This section contains functions to handle Training ELogs feature.
+    // This includes a UI user input, parsing a list of names, and adding entries on webpages.
+    //==========================
+
+    const ELOG_SELECTORS = {
+        mainTable: '.document-log-entries.document-log-entries__table',
+        gridTable: '.document-log-entries__grid-table[role="table"]',
+        row: 'log-entry-row[role="row"], .document-log-entries__grid-table__row[role="row"]',
+        cell: '[role="cell"]',
+        nameCellIndex: 3,
+        namePrimary: '.u-text-overflow-ellipsis',
+        nameFallback: '.test-logEntrySignature span'
+    };
+
+    const ELOG_TIMEOUTS = {
+        waitTableMs: 10000,
+        waitGridMs: 10000
+    };
+
+    const ELOG_CSS_CLASSNAMES = {
+        panelOverlay: 'elog-panel-overlay',
+        inputPanel: 'elog-input-panel',
+        progressPanel: 'elog-progress-panel',
+        warningPanel: 'elog-warning-panel',
+        subpanelLeft: 'elog-subpanel-left',
+        subpanelRight: 'elog-subpanel-right',
+        searchInput: 'elog-search-input',
+        listItem: 'elog-list-item',
+        statusPending: 'elog-status-pending',
+        statusFound: 'elog-status-found',
+        statusNotFound: 'elog-status-notfound',
+        statusDuplicate: 'elog-status-duplicate'
+    };
+
+    const ELOG_SCROLL = {
+        stepPx: 600,
+        idleDelayMs: 80,
+        settleDelayMs: 250,
+        maxDurationMs: 120000,
+        maxNoProgressIterations: 8,
+        userScrollPauseMs: 800,
+        viewportOverscanPx: 400,
+        retryScanAttempts: 3,
+        retryScanDelayMs: 200
+    };
+
+    const ELOG_ATTRS = {
+        ariaBusyTarget: 'body',
+        ariaBusyAttr: 'aria-busy'
+    };
+
+    const ELOG_LABELS = {
+        progressComplete: 'Scan complete',
+        progressNoMore: 'End of list reached',
+        progressRescanning: 'Re-scanning',
+        progressStopped: 'Scan stopped'
+    };
+
+    const ELOG_FORM_SELECTORS = {
+        addEntryBtn: '.test-createLogEntryBtn',
+        memberInput: '#filtered-select-input.filtered-select__input',
+        listContainer: 'ul.filtered-select__list.u-z-index-1060, ul.filtered-select__list',
+        virtualViewport: '.filtered-select__list, .cdk-virtual-scroll-viewport',
+        optionItem: '.filtered-select__list [role="option"], .filtered-select__list li, .cdk-virtual-scroll-viewport [role="option"], .cdk-virtual-scroll-viewport li',
+        saveAndAddAnotherBtn: 'button.btn.btn-primary',
+        modalOrFormRoot: '.modal.show, .document-log-entries, body'
+    };
+
+    const ELOG_FORM_TIMEOUTS = {
+        waitOpenMs: 10000,
+        waitListMs: 6000,
+        waitOptionRenderMs: 3000,
+        waitSaveAfterClickMs: 8000,
+        scrollIdleMs: 120,
+        settleMs: 250,
+        maxSelectDurationMs: 45000
+    };
+
+    const ELOG_FORM_RETRY = {
+        openListRetries: 4,
+        selectRetriesPerScroll: 2,
+        maxScrollPasses: 8,
+        saveRetries: 2
+    };
+
+    const ELOG_RUN_LABELS = {
+        statusPending: 'Pending',
+        statusAlready: 'Already Exist',
+        statusAdded: 'Added',
+        statusNotInDropdown: 'Not In Dropdown',
+        statusSelectionFailed: 'Selection Failed',
+        statusSaveFailed: 'Save Failed',
+        statusStopped: 'Stopped'
+    };
 
     let elogState = {
         isRunning: false,
@@ -2026,1674 +3838,6 @@
         resetELogState();
         addLogMessage('stopELog: cleanup complete', 'log');
     }
-
-    function resetRespState() {
-        addLogMessage('resetRespState: resetting state', 'log');
-        respState.isRunning = false;
-        respState.stopRequested = false;
-        respState.observers = [];
-        respState.timeouts = [];
-        respState.intervals = [];
-        respState.eventListeners = [];
-        respState.idleCallbackIds = [];
-        respState.prevAriaBusy = null;
-        respState.parsedRoles = null;
-        respState.rolesData = [];
-        respState.counters = { total: 0, completed: 0, failed: 0, pending: 0 };
-        respState.listScrollTop = 0;
-        respState.userScrollHandler = null;
-        respState.userScrollPaused = false;
-    }
-
-    function respWaitForElement(selector, timeout) {
-        addLogMessage('respWaitForElement: waiting for ' + selector, 'log');
-        return new Promise(function(resolve, reject) {
-            var element = document.querySelector(selector);
-            if (element) {
-                addLogMessage('respWaitForElement: found immediately', 'log');
-                resolve(element);
-                return;
-            }
-            var observer = new MutationObserver(function(mutations, obs) {
-                var el = document.querySelector(selector);
-                if (el) {
-                    obs.disconnect();
-                    var idx = respState.observers.indexOf(obs);
-                    if (idx > -1) {
-                        respState.observers.splice(idx, 1);
-                    }
-                    resolve(el);
-                }
-            });
-            observer.observe(document.body, { childList: true, subtree: true });
-            respState.observers.push(observer);
-            var timeoutId = setTimeout(function() {
-                observer.disconnect();
-                var idx = respState.observers.indexOf(observer);
-                if (idx > -1) {
-                    respState.observers.splice(idx, 1);
-                }
-                addLogMessage('respWaitForElement: timeout for ' + selector, 'warn');
-                reject(new Error('Timeout waiting for ' + selector));
-            }, timeout);
-            respState.timeouts.push(timeoutId);
-        });
-    }
-
-    function respDelay(ms) {
-        return new Promise(function(resolve) {
-            var tid = setTimeout(resolve, ms);
-            respState.timeouts.push(tid);
-        });
-    }
-
-    function normalizeRoleName(s) {
-        if (!s) {
-            return { display: '', key: '' };
-        }
-        var cleaned = s.trim();
-        cleaned = cleaned.replace(RESP_REGEX.quoteCleanup, '');
-        cleaned = cleaned.replace(RESP_REGEX.hyphenBreak, '-');
-        cleaned = cleaned.replace(RESP_REGEX.lineBreakInRole, ' ');
-        cleaned = cleaned.replace(RESP_REGEX.whitespace, ' ');
-        cleaned = cleaned.trim();
-        var display = cleaned;
-        var key = cleaned.toLowerCase();
-        if (RESP_ROLE_ALIASES[key]) {
-            display = RESP_ROLE_ALIASES[key];
-            key = display.toLowerCase();
-        }
-        addLogMessage('normalizeRoleName: display=' + display + ' key=' + key, 'log');
-        return { display: display, key: key };
-    }
-
-    function expandRanges(tokens) {
-        addLogMessage('expandRanges: tokens=' + JSON.stringify(tokens), 'log');
-        var result = new Set();
-        var i = 0;
-        while (i < tokens.length) {
-            var current = tokens[i];
-            if (i + 2 < tokens.length && /^(to)$/i.test(tokens[i + 1])) {
-                var start = parseInt(current, 10);
-                var end = parseInt(tokens[i + 2], 10);
-                if (!isNaN(start) && !isNaN(end)) {
-                    var lo = Math.min(start, end);
-                    var hi = Math.max(start, end);
-                    for (var n = lo; n <= hi; n++) {
-                        result.add(n);
-                    }
-                    i += 3;
-                    continue;
-                }
-            }
-            var num = parseInt(current, 10);
-            if (!isNaN(num)) {
-                result.add(num);
-            }
-            i++;
-        }
-        addLogMessage('expandRanges: result size=' + result.size, 'log');
-        return result;
-    }
-
-    function parseResponsibilitiesInput(rawText) {
-        addLogMessage('parseResponsibilitiesInput: starting parse', 'log');
-        try {
-            if (!rawText || !rawText.trim()) {
-                addLogMessage('parseResponsibilitiesInput: empty input', 'warn');
-                return null;
-            }
-            var text = rawText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-            text = text.replace(/[\u201c\u201d\u201e\u201f\u2018\u2019]+/g, '"');
-            text = text.replace(/-\s*\n\s*/g, '-');
-            var rawLines = text.split('\n');
-            var mergedLines = [];
-            var pendingQuote = false;
-            var buffer = '';
-            for (var li = 0; li < rawLines.length; li++) {
-                var line = rawLines[li];
-                if (pendingQuote) {
-                    buffer = buffer + ' ' + line;
-                    var quoteCount = 0;
-                    for (var ci = 0; ci < buffer.length; ci++) {
-                        if (buffer[ci] === '"') {
-                            quoteCount++;
-                        }
-                    }
-                    if (quoteCount % 2 === 0) {
-                        pendingQuote = false;
-                        mergedLines.push(buffer);
-                        buffer = '';
-                    }
-                    continue;
-                }
-                var qc = 0;
-                for (var ci2 = 0; ci2 < line.length; ci2++) {
-                    if (line[ci2] === '"') {
-                        qc++;
-                    }
-                }
-                if (qc % 2 !== 0) {
-                    pendingQuote = true;
-                    buffer = line;
-                    continue;
-                }
-                mergedLines.push(line);
-            }
-            if (buffer) {
-                mergedLines.push(buffer);
-            }
-            addLogMessage('parseResponsibilitiesInput: merged into ' + mergedLines.length + ' lines', 'log');
-            var parsedMap = {};
-            for (var mi = 0; mi < mergedLines.length; mi++) {
-                var mline = mergedLines[mi].trim();
-                if (!mline) {
-                    continue;
-                }
-                mline = mline.replace(/"+/g, '');
-                var parts = mline.split(/\t+/);
-                var rolePart = '';
-                var numberPart = '';
-                if (parts.length >= 2) {
-                    rolePart = parts[0].trim();
-                    numberPart = parts.slice(1).join(' ');
-                } else {
-                    var firstNumMatch = mline.match(/\d/);
-                    if (firstNumMatch) {
-                        var idx = mline.indexOf(firstNumMatch[0]);
-                        var beforeNum = mline.substring(0, idx).trim();
-                        var afterNum = mline.substring(idx).trim();
-                        if (beforeNum) {
-                            rolePart = beforeNum;
-                            numberPart = afterNum;
-                        } else {
-                            addLogMessage('parseResponsibilitiesInput: line ' + mi + ' no role part, skip', 'warn');
-                            continue;
-                        }
-                    } else {
-                        addLogMessage('parseResponsibilitiesInput: line ' + mi + ' no numbers, skip', 'warn');
-                        continue;
-                    }
-                }
-                rolePart = rolePart.replace(/"+/g, '').trim();
-                if (!rolePart) {
-                    addLogMessage('parseResponsibilitiesInput: line ' + mi + ' empty role, skip', 'warn');
-                    continue;
-                }
-                var normalized = normalizeRoleName(rolePart);
-                if (!normalized.key) {
-                    addLogMessage('parseResponsibilitiesInput: line ' + mi + ' normalize fail, skip', 'warn');
-                    continue;
-                }
-                var numTokens = numberPart.replace(/,/g, ' ').split(/\s+/).filter(function(t) {
-                    return t.length > 0;
-                });
-                var numbers = expandRanges(numTokens);
-                if (numbers.size === 0) {
-                    addLogMessage('parseResponsibilitiesInput: line ' + mi + ' no numbers for ' + normalized.display, 'warn');
-                    continue;
-                }
-                if (!parsedMap[normalized.key]) {
-                    parsedMap[normalized.key] = { displayRole: normalized.display, occurrences: [], union: new Set(), intersection: null, excluded: new Set() };
-                }
-                parsedMap[normalized.key].occurrences.push(numbers);
-                addLogMessage('parseResponsibilitiesInput: role=' + normalized.display + ' occ#' + parsedMap[normalized.key].occurrences.length + ' nums=' + Array.from(numbers).join(','), 'log');
-            }
-            addLogMessage('parseResponsibilitiesInput: parsed ' + Object.keys(parsedMap).length + ' unique roles', 'log');
-            return parsedMap;
-        } catch (error) {
-            addLogMessage('parseResponsibilitiesInput: error: ' + error.message, 'error');
-            return null;
-        }
-    }
-
-    function computeRoleCommonAndExcluded(parsedMap) {
-        addLogMessage('computeRoleCommonAndExcluded: computing sets', 'log');
-        var rolesData = [];
-        var keys = Object.keys(parsedMap);
-        for (var ki = 0; ki < keys.length; ki++) {
-            var key = keys[ki];
-            var entry = parsedMap[key];
-            var union = new Set();
-            var intersection = null;
-            for (var oi = 0; oi < entry.occurrences.length; oi++) {
-                var occ = entry.occurrences[oi];
-                occ.forEach(function(n) {
-                    union.add(n);
-                });
-                if (intersection === null) {
-                    intersection = new Set(occ);
-                } else {
-                    var newInt = new Set();
-                    intersection.forEach(function(n) {
-                        if (occ.has(n)) {
-                            newInt.add(n);
-                        }
-                    });
-                    intersection = newInt;
-                }
-            }
-            if (intersection === null) {
-                intersection = new Set();
-            }
-            var excluded = new Set();
-            union.forEach(function(n) {
-                if (!intersection.has(n)) {
-                    excluded.add(n);
-                }
-            });
-            entry.union = union;
-            entry.intersection = intersection;
-            entry.excluded = excluded;
-            var status = RESP_LABELS.statusPending;
-            if (intersection.size === 0) {
-                status = RESP_LABELS.statusFailed;
-                addLogMessage('computeRoleCommonAndExcluded: role=' + entry.displayRole + ' empty intersection', 'warn');
-            }
-            rolesData.push({
-                key: key,
-                displayRole: entry.displayRole,
-                common: Array.from(intersection).sort(function(a, b) {
-                    return a - b;
-                }),
-                excluded: Array.from(excluded).sort(function(a, b) {
-                    return a - b;
-                }),
-                intersection: intersection,
-                status: status,
-                reason: intersection.size === 0 ? 'No common numbers across occurrences' : ''
-            });
-            addLogMessage('computeRoleCommonAndExcluded: role=' + entry.displayRole + ' common=[' + rolesData[rolesData.length - 1].common.join(',') + '] excluded=[' + rolesData[rolesData.length - 1].excluded.join(',') + ']', 'log');
-        }
-        return rolesData;
-    }
-
-    function setResponsibilitiesInit() {
-        addLogMessage('setResponsibilitiesInit: starting feature', 'log');
-        respState.focusReturnElement = document.getElementById('resp-set-btn');
-        resetRespState();
-        var pageStep = document.querySelector(RESP_SELECTORS.pageStepRoot);
-        addLogMessage('setResponsibilitiesInit: checking for page step root', 'log');
-        if (!pageStep) {
-            addLogMessage('setResponsibilitiesInit: not on Study Role Page', 'warn');
-            showRespWarning();
-            return;
-        }
-        addLogMessage('setResponsibilitiesInit: on Study Role Page', 'log');
-        showResponsibilitiesInputPanel();
-    }
-
-    function showRespWarning() {
-        addLogMessage('showRespWarning: creating warning popup', 'log');
-        var modal = document.createElement('div');
-        modal.id = 'resp-warning-modal';
-        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 30000; display: flex; align-items: center; justify-content: center;';
-        var container = document.createElement('div');
-        container.style.cssText = 'background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); border-radius: 12px; padding: 24px; width: 450px; max-width: 90%; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); position: relative;';
-        container.setAttribute('role', 'alertdialog');
-        container.setAttribute('aria-modal', 'true');
-        container.setAttribute('aria-labelledby', 'resp-warning-title');
-        container.setAttribute('aria-describedby', 'resp-warning-message');
-        var header = document.createElement('div');
-        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;';
-        var title = document.createElement('h3');
-        title.id = 'resp-warning-title';
-        title.textContent = 'Study Role Page Not Found';
-        title.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600;';
-        var closeButton = document.createElement('button');
-        closeButton.innerHTML = '\u2715';
-        closeButton.setAttribute('aria-label', 'Close warning');
-        closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
-        closeButton.onmouseover = function() {
-            closeButton.style.background = 'rgba(255, 255, 255, 0.3)';
-        };
-        closeButton.onmouseout = function() {
-            closeButton.style.background = 'rgba(255, 255, 255, 0.2)';
-        };
-        var closeWarning = function() {
-            addLogMessage('showRespWarning: closing warning', 'log');
-            if (modal.parentNode) {
-                document.body.removeChild(modal);
-            }
-            if (respState.focusReturnElement) {
-                respState.focusReturnElement.focus();
-            }
-        };
-        closeButton.onclick = closeWarning;
-        header.appendChild(title);
-        header.appendChild(closeButton);
-        var messageDiv = document.createElement('p');
-        messageDiv.id = 'resp-warning-message';
-        messageDiv.textContent = RESP_LABELS.notOnPageWarning + ' Please navigate to the Study Roles step before using this feature.';
-        messageDiv.style.cssText = 'color: rgba(255, 255, 255, 0.9); margin: 0; font-size: 14px; line-height: 1.5;';
-        var okButton = document.createElement('button');
-        okButton.textContent = 'OK';
-        okButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: 2px solid rgba(255, 255, 255, 0.3); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.3s ease; margin-top: 20px; width: 100%;';
-        okButton.onmouseover = function() {
-            okButton.style.background = 'rgba(255, 255, 255, 0.3)';
-        };
-        okButton.onmouseout = function() {
-            okButton.style.background = 'rgba(255, 255, 255, 0.2)';
-        };
-        okButton.onclick = closeWarning;
-        var keyHandler = function(e) {
-            if (e.key === 'Escape') {
-                closeWarning();
-            }
-        };
-        document.addEventListener('keydown', keyHandler);
-        respState.eventListeners.push({ element: document, type: 'keydown', handler: keyHandler });
-        container.appendChild(header);
-        container.appendChild(messageDiv);
-        container.appendChild(okButton);
-        modal.appendChild(container);
-        container.style.position = 'fixed';
-        container.style.top = '50%';
-        container.style.left = '50%';
-        container.style.transform = 'translate(-50%, -50%)';
-        modal.style.pointerEvents = 'none';
-        container.style.pointerEvents = 'auto';
-        makeDraggable(container, header);
-        document.body.appendChild(modal);
-        okButton.focus();
-        addLogMessage('showRespWarning: warning displayed', 'log');
-    }
-
-    function showResponsibilitiesInputPanel() {
-        addLogMessage('showResponsibilitiesInputPanel: creating input panel', 'log');
-        var modal = document.createElement('div');
-        modal.id = 'resp-input-modal';
-        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 20000; display: flex; align-items: center; justify-content: center;';
-        var container = document.createElement('div');
-        container.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; width: 550px; max-width: 90%; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); position: relative;';
-        container.setAttribute('role', 'dialog');
-        container.setAttribute('aria-modal', 'true');
-        container.setAttribute('aria-labelledby', 'resp-input-title');
-        var header = document.createElement('div');
-        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;';
-        var titleEl = document.createElement('h3');
-        titleEl.id = 'resp-input-title';
-        titleEl.textContent = 'Set Responsibilities';
-        titleEl.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600; letter-spacing: 0.2px;';
-        var closeButton = document.createElement('button');
-        closeButton.innerHTML = '\u2715';
-        closeButton.setAttribute('aria-label', 'Close panel');
-        closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
-        closeButton.onmouseover = function() {
-            closeButton.style.background = 'rgba(255, 67, 54, 0.8)';
-        };
-        closeButton.onmouseout = function() {
-            closeButton.style.background = 'rgba(255, 255, 255, 0.2)';
-        };
-        closeButton.onclick = function() {
-            addLogMessage('showResponsibilitiesInputPanel: closed by user', 'warn');
-            if (modal.parentNode) {
-                document.body.removeChild(modal);
-            }
-            stopResponsibilities();
-        };
-        header.appendChild(titleEl);
-        header.appendChild(closeButton);
-        var description = document.createElement('p');
-        description.style.cssText = 'color: rgba(255, 255, 255, 0.9); margin: 0 0 12px 0; font-size: 14px; line-height: 1.4;';
-        description.append("Rules:");
-        description.appendChild(document.createElement('br'));
-        var lines = [
-            'Make sure the Study Responsibilities Identifier are set to Numbers and NOT Letters',
-            'Paste role-to-responsibility assignments below.',
-            'Each line should contain the role name, followed by a tab, then the responsibility numbers.',
-            'Ranges such as "1 to 8" are supported.',
-            'Ensure that no existing Study Roles are already added on the page.',
-            'After clicking Confirm, do not click anywhere else on the page, as this will impact the process.'
-        ];
-
-        for (var i = 0; i < lines.length; i++) {
-            description.appendChild(document.createTextNode('• ' + lines[i]));
-            if (i < lines.length - 1) {
-                description.appendChild(document.createElement('br'));
-            }
-        }
-        var textarea = document.createElement('textarea');
-        textarea.id = 'resp-input-textarea';
-        textarea.placeholder = 'PI  1 to 8  13  14  17  21\nStudy Coordinator  1 6 7 8 10 12 13 14 17 33';
-        textarea.setAttribute('aria-label', 'Role responsibilities input');
-        textarea.style.cssText = 'width: 100%; height: 200px; padding: 12px 14px; border: 2px solid rgba(255, 255, 255, 0.35); border-radius: 10px; background: rgba(255, 255, 255, 0.95); color: #1e293b; font-size: 14px; font-family: Segoe UI, Tahoma, Geneva, Verdana, sans-serif; resize: vertical; outline: none; transition: all 0.25s ease; box-shadow: 0 2px 0 rgba(0,0,0,0.04) inset; box-sizing: border-box;';
-        textarea.onfocus = function() {
-            textarea.style.borderColor = '#8ea0ff';
-            textarea.style.boxShadow = '0 0 0 4px rgba(102, 126, 234, 0.25)';
-        };
-        textarea.onblur = function() {
-            textarea.style.borderColor = 'rgba(255, 255, 255, 0.35)';
-            textarea.style.boxShadow = '0 2px 0 rgba(0,0,0,0.04) inset';
-        };
-        var confirmButton = document.createElement('button');
-        confirmButton.textContent = 'Confirm';
-        confirmButton.disabled = true;
-        confirmButton.style.cssText = 'background: linear-gradient(135deg, #28a745 0%, #20c997 100%); border: 2px solid rgba(255, 255, 255, 0.35); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; letter-spacing: 0.2px; transition: all 0.25s ease; opacity: 0.5;';
-        textarea.oninput = function() {
-            if (textarea.value.trim().length > 0) {
-                confirmButton.disabled = false;
-                confirmButton.style.opacity = '1';
-                confirmButton.style.cursor = 'pointer';
-            } else {
-                confirmButton.disabled = true;
-                confirmButton.style.opacity = '0.5';
-                confirmButton.style.cursor = 'not-allowed';
-            }
-        };
-        confirmButton.onmouseover = function() {
-            if (!confirmButton.disabled) {
-                confirmButton.style.background = 'linear-gradient(135deg, #218838 0%, #1ea085 100%)';
-            }
-        };
-        confirmButton.onmouseout = function() {
-            confirmButton.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
-        };
-        confirmButton.onclick = function() {
-            addLogMessage('showResponsibilitiesInputPanel: Confirm clicked', 'log');
-            var parsedMap = parseResponsibilitiesInput(textarea.value);
-            if (!parsedMap || Object.keys(parsedMap).length === 0) {
-                addLogMessage('showResponsibilitiesInputPanel: no valid roles', 'warn');
-                return;
-            }
-            respState.parsedRoles = parsedMap;
-            var rd = computeRoleCommonAndExcluded(parsedMap);
-            respState.rolesData = rd;
-            addLogMessage('showResponsibilitiesInputPanel: parsed ' + rd.length + ' roles', 'log');
-            if (modal.parentNode) {
-                document.body.removeChild(modal);
-            }
-            showResponsibilitiesProgressPanel(rd);
-            processRolesWorkflow(rd);
-        };
-        var clearButton = document.createElement('button');
-        clearButton.textContent = 'Clear All';
-        clearButton.style.cssText = 'background: rgba(255, 255, 255, 0.18); border: 2px solid rgba(255, 255, 255, 0.35); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.25s ease;';
-        clearButton.onmouseover = function() {
-            clearButton.style.background = 'rgba(255, 255, 255, 0.28)';
-        };
-        clearButton.onmouseout = function() {
-            clearButton.style.background = 'rgba(255, 255, 255, 0.18)';
-        };
-        clearButton.onclick = function() {
-            addLogMessage('showResponsibilitiesInputPanel: Clear All clicked', 'log');
-            textarea.value = '';
-            respState.parsedRoles = null;
-            confirmButton.disabled = true;
-            confirmButton.style.opacity = '0.5';
-            confirmButton.style.cursor = 'not-allowed';
-        };
-        var buttonContainer = document.createElement('div');
-        buttonContainer.style.cssText = 'display: flex; gap: 12px; margin-top: 20px; justify-content: flex-end;';
-        buttonContainer.appendChild(clearButton);
-        buttonContainer.appendChild(confirmButton);
-        container.appendChild(header);
-        container.appendChild(description);
-        container.appendChild(textarea);
-        container.appendChild(buttonContainer);
-        modal.appendChild(container);
-        container.style.position = 'fixed';
-        container.style.top = '50%';
-        container.style.left = '50%';
-        container.style.transform = 'translate(-50%, -50%)';
-        modal.style.pointerEvents = 'none';
-        container.style.pointerEvents = 'auto';
-        makeDraggable(container, header);
-        document.body.appendChild(modal);
-        textarea.focus();
-        addLogMessage('showResponsibilitiesInputPanel: displayed', 'log');
-    }
-
-    function getRespBadgeColors(status) {
-        if (status === RESP_LABELS.statusCompleted) {
-            return { color: '#6bcf7f', bg: 'rgba(107, 207, 127, 0.2)' };
-        }
-        if (status === RESP_LABELS.statusFailed) {
-            return { color: '#ff6b6b', bg: 'rgba(255, 107, 107, 0.2)' };
-        }
-        if (status === RESP_LABELS.statusStopped) {
-            return { color: '#aaa', bg: 'rgba(170, 170, 170, 0.2)' };
-        }
-        return { color: '#ffd93d', bg: 'rgba(255, 217, 61, 0.2)' };
-    }
-
-    function createRespRoleRow(roleData, index) {
-        var item = document.createElement('div');
-        item.className = 'resp-role-item';
-        item.setAttribute('data-role-key', roleData.key);
-        item.style.cssText = 'display: flex; flex-direction: column; padding: 10px 12px; margin: 4px 0; background: rgba(255, 255, 255, 0.08); border-radius: 6px; transition: background 0.2s ease;';
-        item.onmouseover = function() {
-            item.style.background = 'rgba(255, 255, 255, 0.12)';
-        };
-        item.onmouseout = function() {
-            item.style.background = 'rgba(255, 255, 255, 0.08)';
-        };
-        var topRow = document.createElement('div');
-        topRow.style.cssText = 'display: flex; justify-content: space-between; align-items: center;';
-        var leftSection = document.createElement('div');
-        leftSection.style.cssText = 'display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;';
-        var indexBadge = document.createElement('span');
-        indexBadge.textContent = String(index + 1);
-        indexBadge.style.cssText = 'background: rgba(255, 255, 255, 0.15); color: rgba(255, 255, 255, 0.7); font-size: 11px; font-weight: 600; min-width: 24px; height: 24px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;';
-        var nameText = document.createElement('span');
-        nameText.textContent = roleData.displayRole;
-        nameText.style.cssText = 'color: white; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;';
-        leftSection.appendChild(indexBadge);
-        leftSection.appendChild(nameText);
-        var statusBadge = document.createElement('span');
-        statusBadge.className = 'resp-status-badge';
-        statusBadge.textContent = roleData.status;
-        var badgeColors = getRespBadgeColors(roleData.status);
-        statusBadge.style.cssText = 'color: ' + badgeColors.color + '; background: ' + badgeColors.bg + '; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 10px; white-space: nowrap; flex-shrink: 0;';
-        topRow.appendChild(leftSection);
-        topRow.appendChild(statusBadge);
-        var detailRow = document.createElement('div');
-        detailRow.className = 'resp-detail-row';
-        detailRow.style.cssText = 'margin-top: 6px; font-size: 11px; color: rgba(255, 255, 255, 0.7); line-height: 1.4;';
-        var commonLabel = document.createElement('div');
-        commonLabel.innerHTML = '<strong style="color: rgba(255,255,255,0.85);">Common:</strong> ' + (roleData.common.length > 0 ? roleData.common.join(', ') : 'None');
-        detailRow.appendChild(commonLabel);
-        if (roleData.excluded.length > 0) {
-            var excludedLabel = document.createElement('div');
-            excludedLabel.innerHTML = '<strong style="color: rgba(255,255,255,0.85);">Excluded:</strong> ' + roleData.excluded.join(', ');
-            detailRow.appendChild(excludedLabel);
-        }
-        if (roleData.reason) {
-            var reasonLabel = document.createElement('div');
-            reasonLabel.style.cssText = 'color: #ff6b6b; margin-top: 2px;';
-            reasonLabel.textContent = roleData.reason;
-            detailRow.appendChild(reasonLabel);
-        }
-        var liveRegion = document.createElement('span');
-        liveRegion.setAttribute('aria-live', 'polite');
-        liveRegion.style.cssText = 'position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;';
-        item.appendChild(topRow);
-        item.appendChild(detailRow);
-        item.appendChild(liveRegion);
-        return item;
-    }
-function showResponsibilitiesProgressPanel(rolesData) {
-    addLogMessage('showResponsibilitiesProgressPanel: creating', 'log');
-    respState.isRunning = true;
-    respState.stopRequested = false;
-    respState.counters = { total: rolesData.length, completed: 0, failed: 0, pending: 0 };
-    for (var ci = 0; ci < rolesData.length; ci++) {
-        if (rolesData[ci].status === RESP_LABELS.statusPending) {
-            respState.counters.pending++;
-        } else if (rolesData[ci].status === RESP_LABELS.statusFailed) {
-            respState.counters.failed++;
-        } else if (rolesData[ci].status === RESP_LABELS.statusCompleted) {
-            respState.counters.completed++;
-        }
-    }
-    var modal = document.createElement('div');
-    modal.id = 'resp-progress-modal';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 20000; display: flex; align-items: center; justify-content: center;';
-    var container = document.createElement('div');
-    container.id = 'resp-progress-container';
-    container.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; width: 750px; max-width: 95%; max-height: 80vh; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); position: relative; display: flex; flex-direction: column;';
-    container.setAttribute('role', 'dialog');
-    container.setAttribute('aria-modal', 'true');
-    container.setAttribute('aria-labelledby', 'resp-progress-title');
-    var header = document.createElement('div');
-    header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-shrink: 0; order: 0;';
-    var titleContainer = document.createElement('div');
-    titleContainer.style.cssText = 'display: flex; align-items: center; gap: 12px;';
-    var title = document.createElement('h3');
-    title.id = 'resp-progress-title';
-    title.textContent = 'Set Responsibilities - Processing';
-    title.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600;';
-    var statusBadge = document.createElement('span');
-    statusBadge.id = 'resp-status-badge';
-    statusBadge.textContent = 'In Progress';
-    statusBadge.style.cssText = 'background: rgba(255, 255, 255, 0.3); color: #ffd93d; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 12px;';
-    titleContainer.appendChild(title);
-    titleContainer.appendChild(statusBadge);
-    var closeButton = document.createElement('button');
-    closeButton.innerHTML = '\u2715';
-    closeButton.setAttribute('aria-label', 'Close and stop');
-    closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
-    closeButton.onmouseover = function() {
-        closeButton.style.background = 'rgba(255, 67, 54, 0.8)';
-    };
-    closeButton.onmouseout = function() {
-        closeButton.style.background = 'rgba(255, 255, 255, 0.2)';
-    };
-    closeButton.onclick = function() {
-        addLogMessage('showResponsibilitiesProgressPanel: closed', 'warn');
-        stopResponsibilities();
-    };
-    header.appendChild(titleContainer);
-    header.appendChild(closeButton);
-    container.appendChild(header);
-    addLogMessage('showResponsibilitiesProgressPanel: header appended', 'log');
-
-    var descriptionContainer = document.createElement('div');
-    descriptionContainer.style.cssText = 'margin-bottom: 12px; padding: 8px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);';
-    var description = document.createElement('div');
-    var bulletPoints = [
-        'Do not click anywhere on the page or outside of the page. It will affect the process as doing so closes the dropdown menu.',
-        'Note: The Connect Responsibilities dropdown menu will be LOCKED after completion.',
-        'If you need to make changes, do it at the end of the process: delete the role and create another one.'
-    ];
-    description.innerHTML = bulletPoints.map(function(point) {
-        return '• ' + point;
-    }).join('<br>');
-    description.style.cssText = 'color: rgba(255, 255, 255, 0.85); font-size: 13px; line-height: 1.4; font-weight: 400;';
-    descriptionContainer.appendChild(description);
-    container.appendChild(descriptionContainer);
-    addLogMessage('showResponsibilitiesProgressPanel: description appended', 'log');
-
-    var searchInput = document.createElement('input');
-    searchInput.type = 'text';
-    searchInput.id = 'resp-progress-search';
-    searchInput.placeholder = 'Search roles...';
-    searchInput.setAttribute('aria-label', 'Search roles');
-    searchInput.style.cssText = 'width: 100%; padding: 8px 12px; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px; background: rgba(255, 255, 255, 0.1); color: white; font-size: 13px; outline: none; box-sizing: border-box; margin-bottom: 12px; flex-shrink: 0;';
-    searchInput.oninput = function() {
-        var term = searchInput.value.toLowerCase().trim();
-        var items = document.querySelectorAll('.resp-role-item');
-        for (var si = 0; si < items.length; si++) {
-            var text = items[si].textContent.toLowerCase();
-            if (!term || text.indexOf(term) !== -1) {
-                items[si].style.display = 'flex';
-            } else {
-                items[si].style.display = 'none';
-            }
-        }
-    };
-    container.appendChild(searchInput);
-    addLogMessage('showResponsibilitiesProgressPanel: search input appended', 'log');
-
-    var listContainer = document.createElement('div');
-    listContainer.id = 'resp-roles-list';
-    listContainer.style.cssText = 'flex: 1; overflow-y: auto; min-height: 150px; max-height: 400px;';
-    for (var ri = 0; ri < rolesData.length; ri++) {
-        listContainer.appendChild(createRespRoleRow(rolesData[ri], ri));
-    }
-    container.appendChild(listContainer);
-    addLogMessage('showResponsibilitiesProgressPanel: list appended', 'log');
-
-    var summaryFooter = document.createElement('div');
-    summaryFooter.id = 'resp-summary-footer';
-    summaryFooter.style.cssText = 'display: flex; justify-content: space-around; align-items: center; padding: 10px 16px; background: rgba(0, 0, 0, 0.2); border-radius: 8px; margin-top: 12px; flex-shrink: 0;';
-    var summaryItems = [
-        { id: 'resp-summary-total', label: 'Total', value: String(respState.counters.total) },
-        { id: 'resp-summary-completed', label: 'Completed', value: String(respState.counters.completed) },
-        { id: 'resp-summary-failed', label: 'Failed', value: String(respState.counters.failed) },
-        { id: 'resp-summary-pending', label: 'Pending', value: String(respState.counters.pending) },
-        { id: 'resp-summary-percent', label: 'Progress', value: '0%' }
-    ];
-    for (var si2 = 0; si2 < summaryItems.length; si2++) {
-        var sItem = document.createElement('div');
-        sItem.style.cssText = 'text-align: center;';
-        var vSpan = document.createElement('span');
-        vSpan.id = summaryItems[si2].id;
-        vSpan.textContent = summaryItems[si2].value;
-        vSpan.style.cssText = 'display: block; color: white; font-size: 16px; font-weight: 700;';
-        var lSpan = document.createElement('span');
-        lSpan.textContent = summaryItems[si2].label;
-        lSpan.style.cssText = 'display: block; color: rgba(255, 255, 255, 0.6); font-size: 11px; font-weight: 500; margin-top: 2px;';
-        sItem.appendChild(vSpan);
-        sItem.appendChild(lSpan);
-        summaryFooter.appendChild(sItem);
-    }
-    container.appendChild(summaryFooter);
-    addLogMessage('showResponsibilitiesProgressPanel: summary appended', 'log');
-
-    var ariaLiveRegion = document.createElement('div');
-    ariaLiveRegion.id = 'resp-aria-live';
-    ariaLiveRegion.setAttribute('aria-live', 'polite');
-    ariaLiveRegion.setAttribute('aria-atomic', 'true');
-    ariaLiveRegion.style.cssText = 'position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;';
-    container.appendChild(ariaLiveRegion);
-    addLogMessage('showResponsibilitiesProgressPanel: aria-live appended', 'log');
-
-    modal.appendChild(container);
-    container.style.position = 'fixed';
-    container.style.top = '50%';
-    container.style.left = '50%';
-    container.style.transform = 'translate(-50%, -50%)';
-    modal.style.pointerEvents = 'none';
-    container.style.pointerEvents = 'auto';
-    makeDraggable(container, header);
-    document.body.appendChild(modal);
-    closeButton.focus();
-    addLogMessage('showResponsibilitiesProgressPanel: displayed', 'log');
-}
-
-
-    function updateRespRoleStatus(roleKey, newStatus, reason) {
-        addLogMessage('updateRespRoleStatus: role=' + roleKey + ' status=' + newStatus, 'log');
-        var items = document.querySelectorAll('.resp-role-item');
-        for (var i = 0; i < items.length; i++) {
-            if (items[i].getAttribute('data-role-key') === roleKey) {
-                var badge = items[i].querySelector('.resp-status-badge');
-                if (badge) {
-                    badge.textContent = newStatus;
-                    var colors = getRespBadgeColors(newStatus);
-                    badge.style.color = colors.color;
-                    badge.style.background = colors.bg;
-                }
-                if (reason) {
-                    var dr = items[i].querySelector('.resp-detail-row');
-                    if (dr) {
-                        var re = document.createElement('div');
-                        re.style.cssText = 'color: #ff6b6b; margin-top: 2px;';
-                        re.textContent = reason;
-                        dr.appendChild(re);
-                    }
-                }
-                var lr = items[i].querySelector('[aria-live]');
-                if (lr) {
-                    lr.textContent = roleKey + ' ' + newStatus;
-                }
-                break;
-            }
-        }
-    }
-
-    function updateRespSummary() {
-        addLogMessage('updateRespSummary: t=' + respState.counters.total + ' c=' + respState.counters.completed + ' f=' + respState.counters.failed + ' p=' + respState.counters.pending, 'log');
-        var el1 = document.getElementById('resp-summary-total');
-        var el2 = document.getElementById('resp-summary-completed');
-        var el3 = document.getElementById('resp-summary-failed');
-        var el4 = document.getElementById('resp-summary-pending');
-        var el5 = document.getElementById('resp-summary-percent');
-        if (el1) {
-            el1.textContent = String(respState.counters.total);
-        }
-        if (el2) {
-            el2.textContent = String(respState.counters.completed);
-        }
-        if (el3) {
-            el3.textContent = String(respState.counters.failed);
-        }
-        if (el4) {
-            el4.textContent = String(respState.counters.pending);
-        }
-        if (el5) {
-            var processed = respState.counters.completed + respState.counters.failed;
-            var pct = respState.counters.total > 0 ? Math.round((processed / respState.counters.total) * 100) : 0;
-            el5.textContent = pct + '%';
-        }
-        updateRespAriaLive('Completed: ' + respState.counters.completed + ', Failed: ' + respState.counters.failed + ', Pending: ' + respState.counters.pending);
-    }
-
-    function updateRespAriaLive(message) {
-        var lr = document.getElementById('resp-aria-live');
-        if (lr) {
-            lr.textContent = message;
-        }
-    }
-
-    function scanExistingCompletedRoles() {
-        addLogMessage('scanExistingCompletedRoles: scanning', 'log');
-        try {
-            var dropList = document.querySelector(RESP_SELECTORS.dropListContainer);
-            if (!dropList) {
-                addLogMessage('scanExistingCompletedRoles: no drop list container', 'warn');
-                return;
-            }
-            var columns = dropList.querySelectorAll(RESP_SELECTORS.roleColumns);
-            addLogMessage('scanExistingCompletedRoles: ' + columns.length + ' columns', 'log');
-            for (var colIdx = 0; colIdx < columns.length; colIdx++) {
-                var checked = columns[colIdx].querySelectorAll(RESP_SELECTORS.selectedRoleCheckboxInColumn);
-                for (var bi = 0; bi < checked.length; bi++) {
-                    var ariaLabel = checked[bi].getAttribute('aria-label') || '';
-                    var parentItem = checked[bi].closest('.filtered-select__list__item');
-                    var roleText = ariaLabel || (parentItem ? parentItem.textContent || '' : '');
-                    if (!roleText) {
-                        continue;
-                    }
-                    var normalized = normalizeRoleName(roleText);
-                    for (var ri = 0; ri < respState.rolesData.length; ri++) {
-                        if (respState.rolesData[ri].key === normalized.key && respState.rolesData[ri].status === RESP_LABELS.statusPending) {
-                            respState.rolesData[ri].status = RESP_LABELS.statusCompleted;
-                            respState.counters.completed++;
-                            respState.counters.pending--;
-                            updateRespRoleStatus(respState.rolesData[ri].key, RESP_LABELS.statusCompleted, '');
-                            addLogMessage('scanExistingCompletedRoles: ' + normalized.display + ' already done', 'log');
-                        }
-                    }
-                }
-            }
-            updateRespSummary();
-            updateRespAriaLive('Existing roles scanned');
-        } catch (error) {
-            addLogMessage('scanExistingCompletedRoles: error: ' + error.message, 'error');
-        }
-    }
-
-    function findAvailableRoleColumn() {
-        addLogMessage('findAvailableRoleColumn: searching for last empty column', 'log');
-        return new Promise(function(resolve, reject) {
-            if (respState.stopRequested) {
-                reject(new Error('Stopped'));
-                return;
-            }
-            var dropList = document.querySelector(RESP_SELECTORS.dropListContainer);
-            if (!dropList) {
-                addLogMessage('findAvailableRoleColumn: drop list container not found', 'warn');
-                reject(new Error('Drop list container not found'));
-                return;
-            }
-            var columns = dropList.querySelectorAll(RESP_SELECTORS.roleColumns);
-            addLogMessage('findAvailableRoleColumn: found ' + columns.length + ' columns in drop list', 'log');
-            var lastEmpty = null;
-            for (var ci = columns.length - 1; ci >= 0; ci--) {
-                var selectedCheckbox = columns[ci].querySelector(RESP_SELECTORS.selectedRoleCheckboxInColumn);
-                if (!selectedCheckbox) {
-                    lastEmpty = columns[ci];
-                    addLogMessage('findAvailableRoleColumn: last empty column at index ' + ci, 'log');
-                    break;
-                }
-            }
-            if (lastEmpty) {
-                resolve(lastEmpty);
-                return;
-            }
-            addLogMessage('findAvailableRoleColumn: no empty columns, clicking Add Study Role', 'log');
-            var addBtn = document.querySelector(RESP_SELECTORS.addStudyRoleBtn);
-            if (!addBtn) {
-                reject(new Error('Add Study Role button not found'));
-                return;
-            }
-            addBtn.click();
-            var waitTid = setTimeout(function() {
-                var updatedColumns = dropList.querySelectorAll(RESP_SELECTORS.roleColumns);
-                addLogMessage('findAvailableRoleColumn: after add, ' + updatedColumns.length + ' columns', 'log');
-                if (updatedColumns.length === 0) {
-                    reject(new Error('No columns found after adding study role'));
-                    return;
-                }
-                var lastCol = updatedColumns[updatedColumns.length - 1];
-                var sel = lastCol.querySelector(RESP_SELECTORS.selectedRoleCheckboxInColumn);
-                if (!sel) {
-                    addLogMessage('findAvailableRoleColumn: new last column at index ' + (updatedColumns.length - 1), 'log');
-                    resolve(lastCol);
-                    return;
-                }
-                reject(new Error('No empty column after adding study role'));
-            }, RESP_TIMEOUTS.waitAddRoleResultMs);
-            respState.timeouts.push(waitTid);
-        });
-    }
-
-    function ensureRoleListOpenForColumn(columnEl) {
-        addLogMessage('ensureRoleListOpenForColumn: ensuring open in target column', 'log');
-        return new Promise(function(resolve, reject) {
-            var retries = 0;
-            function tryOpen() {
-                if (respState.stopRequested) {
-                    reject(new Error('Stopped'));
-                    return;
-                }
-                addLogMessage('ensureRoleListOpenForColumn: attempt ' + (retries + 1), 'log');
-                var globalList = document.querySelector(RESP_SELECTORS.roleListContainer);
-                if (globalList) {
-                    addLogMessage('ensureRoleListOpenForColumn: global list already open', 'log');
-                    resolve(globalList);
-                    return;
-                }
-                var inputEl = columnEl.querySelector(RESP_SELECTORS.roleSearchInput);
-                if (!inputEl) {
-                    inputEl = columnEl.querySelector('.filtered-select__input, input[placeholder*="Search"]');
-                }
-                if (!inputEl) {
-                    var allInputs = columnEl.querySelectorAll('input');
-                    if (allInputs.length > 0) {
-                        inputEl = allInputs[0];
-                    }
-                }
-                if (inputEl) {
-                    addLogMessage('ensureRoleListOpenForColumn: clicking input in column', 'log');
-                    inputEl.click();
-                    inputEl.focus();
-                } else {
-                    addLogMessage('ensureRoleListOpenForColumn: no input found in column, clicking column itself', 'warn');
-                    columnEl.click();
-                }
-                var waitStart = Date.now();
-                function pollForList() {
-                    var el = document.querySelector(RESP_SELECTORS.roleListContainer);
-                    if (el) {
-                        addLogMessage('ensureRoleListOpenForColumn: global list appeared', 'log');
-                        resolve(el);
-                        return;
-                    }
-                    var vp = document.querySelector('cdk-virtual-scroll-viewport');
-                    if (vp && vp.scrollHeight > 0 && vp.clientHeight > 0) {
-                        addLogMessage('ensureRoleListOpenForColumn: found active viewport as list proxy', 'log');
-                        resolve(vp);
-                        return;
-                    }
-                    if (Date.now() - waitStart > RESP_TIMEOUTS.waitListOpenMs) {
-                        retries++;
-                        if (retries < RESP_RETRY.openListRetries) {
-                            var tid = setTimeout(tryOpen, 300);
-                            respState.timeouts.push(tid);
-                        } else {
-                            reject(new Error('Could not open role list in column'));
-                        }
-                        return;
-                    }
-                    var pt = setTimeout(pollForList, 200);
-                    respState.timeouts.push(pt);
-                }
-                pollForList();
-            }
-            tryOpen();
-        });
-    }
-
-    function findRoleListViewport() {
-        var allViewports = document.querySelectorAll('cdk-virtual-scroll-viewport');
-        addLogMessage('findRoleListViewport: found ' + allViewports.length + ' global cdk-virtual-scroll-viewport elements', 'log');
-        if (allViewports.length > 0) {
-            var best = null;
-            for (var vi = allViewports.length - 1; vi >= 0; vi--) {
-                var vp = allViewports[vi];
-                if (vp.scrollHeight > 0 && vp.clientHeight > 0) {
-                    best = vp;
-                    addLogMessage('findRoleListViewport: using viewport index ' + vi + ' scrollH=' + vp.scrollHeight + ' clientH=' + vp.clientHeight, 'log');
-                    break;
-                }
-            }
-            if (best) {
-                return best;
-            }
-            var last = allViewports[allViewports.length - 1];
-            addLogMessage('findRoleListViewport: fallback to last viewport index ' + (allViewports.length - 1) + ' scrollH=' + last.scrollHeight + ' clientH=' + last.clientHeight, 'log');
-            return last;
-        }
-        var listEl = document.querySelector(RESP_SELECTORS.roleListContainer);
-        if (listEl) {
-            addLogMessage('findRoleListViewport: fallback to global list container scrollH=' + listEl.scrollHeight + ' clientH=' + listEl.clientHeight, 'log');
-            return listEl;
-        }
-        addLogMessage('findRoleListViewport: no viewport found anywhere', 'warn');
-        return null;
-    }
-
-    function respRememberListScrollPosition(viewportEl) {
-        if (viewportEl) {
-            respState.listScrollTop = viewportEl.scrollTop;
-            addLogMessage('respRememberScroll: ' + respState.listScrollTop, 'log');
-        }
-    }
-
-    function respRestoreListScrollPosition(viewportEl) {
-        if (viewportEl && respState.listScrollTop > 0) {
-            viewportEl.scrollTop = respState.listScrollTop;
-            addLogMessage('respRestoreScroll: ' + respState.listScrollTop, 'log');
-        }
-    }
-
-    function attemptSelectByScrollingForRole(columnEl, targetRoleDisplay, targetRoleKey) {
-        addLogMessage('attemptSelectByScrollingForRole: target=' + targetRoleDisplay + ' key=' + targetRoleKey, 'log');
-        return new Promise(function(resolve) {
-            var viewportEl = findRoleListViewport();
-            if (!viewportEl) {
-                addLogMessage('attemptSelectByScrollingForRole: no viewport found', 'error');
-                resolve(false);
-                return;
-            }
-            addLogMessage('attemptSelectByScrollingForRole: viewport scrollH=' + viewportEl.scrollHeight + ' clientH=' + viewportEl.clientHeight, 'log');
-            viewportEl.scrollTop = 0;
-            var passCount = 0;
-            var lastScrollTop = -1;
-            var lastSnapshot = '';
-            var startTime = Date.now();
-
-            function scanAndScroll() {
-                if (respState.stopRequested) {
-                    respRememberListScrollPosition(viewportEl);
-                    resolve(false);
-                    return;
-                }
-                if (Date.now() - startTime > RESP_TIMEOUTS.maxSelectRoleDurationMs) {
-                    addLogMessage('attemptSelectByScrollingForRole: max duration exceeded', 'warn');
-                    respRememberListScrollPosition(viewportEl);
-                    resolve(false);
-                    return;
-                }
-                if (passCount >= RESP_RETRY.maxScrollPasses) {
-                    addLogMessage('attemptSelectByScrollingForRole: max passes reached (' + passCount + ')', 'warn');
-                    respRememberListScrollPosition(viewportEl);
-                    resolve(false);
-                    return;
-                }
-                var options = document.querySelectorAll(RESP_SELECTORS.roleOptionItem);
-                var retryCount = 0;
-
-                function tryScan() {
-                    options = document.querySelectorAll(RESP_SELECTORS.roleOptionItem);
-                    if (options.length === 0 && retryCount < RESP_RETRY.optionScanRetries) {
-                        retryCount++;
-                        addLogMessage('attemptSelectByScrollingForRole: empty render, retry ' + retryCount, 'log');
-                        var rtid = setTimeout(tryScan, RESP_TIMEOUTS.waitOptionRenderMs);
-                        respState.timeouts.push(rtid);
-                        return;
-                    }
-                    addLogMessage('attemptSelectByScrollingForRole: scanning ' + options.length + ' options at scrollTop=' + viewportEl.scrollTop, 'log');
-                    var found = false;
-                    var optTexts = [];
-                    for (var oi = 0; oi < options.length; oi++) {
-                        var textEl = options[oi].querySelector(RESP_SELECTORS.roleOptionText);
-                        var optText = textEl ? textEl.textContent.trim() : (options[oi].textContent || '').trim();
-                        optTexts.push(optText);
-                        var norm = normalizeRoleName(optText);
-                        if (norm.key === targetRoleKey) {
-                            addLogMessage('attemptSelectByScrollingForRole: MATCH at index ' + oi + ' text=' + optText, 'log');
-                            var cb = options[oi].querySelector(RESP_SELECTORS.roleOptionCheckboxTri);
-                            if (cb) {
-                                cb.click();
-                                addLogMessage('attemptSelectByScrollingForRole: clicked checkbox tristate', 'log');
-                            } else {
-                                options[oi].click();
-                                addLogMessage('attemptSelectByScrollingForRole: clicked option item directly', 'log');
-                            }
-                            found = true;
-                            respRememberListScrollPosition(viewportEl);
-                            var vt = setTimeout(function() {
-                                addLogMessage('attemptSelectByScrollingForRole: closing role dropdown after selection', 'log');
-                                document.body.click();
-                                var closeTid = setTimeout(function() {
-                                    resolve(true);
-                                }, 300);
-                                respState.timeouts.push(closeTid);
-                            }, RESP_TIMEOUTS.waitAfterSelectRoleMs);
-                            respState.timeouts.push(vt);
-                            break;
-                        }
-                    }
-                    if (!found) {
-                        var snap = optTexts.join('|');
-                        var curTop = viewportEl.scrollTop;
-                        if (curTop === lastScrollTop && snap === lastSnapshot) {
-                            passCount++;
-                            addLogMessage('attemptSelectByScrollingForRole: no progress pass ' + passCount + ' opts=' + options.length, 'log');
-                        }
-                        lastScrollTop = curTop;
-                        lastSnapshot = snap;
-                        var step = Math.round(viewportEl.clientHeight * RESP_SCROLL.stepRatio);
-                        if (step < 50) {
-                            step = 200;
-                            addLogMessage('attemptSelectByScrollingForRole: step too small, using fallback 200px', 'warn');
-                        }
-                        var maxS = viewportEl.scrollHeight - viewportEl.clientHeight;
-                        var newTop = Math.min(curTop + step, maxS);
-                        if (newTop <= curTop && curTop > 0) {
-                            addLogMessage('attemptSelectByScrollingForRole: at bottom, wrapping to top', 'log');
-                            newTop = 0;
-                            lastScrollTop = -1;
-                            lastSnapshot = '';
-                            passCount++;
-                        }
-                        viewportEl.scrollTop = newTop;
-                        addLogMessage('attemptSelectByScrollingForRole: scrolled to ' + newTop + ' (max=' + maxS + ' step=' + step + ')', 'log');
-                        var st = setTimeout(scanAndScroll, RESP_TIMEOUTS.idleBetweenScrollsMs);
-                        respState.timeouts.push(st);
-                    }
-                }
-                tryScan();
-            }
-            var initTid = setTimeout(scanAndScroll, RESP_TIMEOUTS.settleAfterScrollMs);
-            respState.timeouts.push(initTid);
-        });
-    }
-
-    function dismissExistingResponsibilitiesMenu() {
-        return new Promise(function(resolve) {
-            var allMenus = document.querySelectorAll(RESP_SELECTORS.responsibilitiesMenu);
-            if (allMenus.length === 0) {
-                resolve();
-                return;
-            }
-            addLogMessage('dismissExistingResponsibilitiesMenu: found ' + allMenus.length + ' open menu(s), closing', 'log');
-            var allToggles = document.querySelectorAll(RESP_SELECTORS.responsibilitiesToggleBtn);
-            for (var ti = 0; ti < allToggles.length; ti++) {
-                var btn = allToggles[ti];
-                var expanded = btn.getAttribute('aria-expanded');
-                if (expanded === 'true') {
-                    addLogMessage('dismissExistingResponsibilitiesMenu: clicking expanded toggle at index ' + ti, 'log');
-                    btn.click();
-                }
-            }
-            if (allToggles.length === 0) {
-                document.body.click();
-            }
-            var attempts = 0;
-            function waitGone() {
-                var still = document.querySelectorAll(RESP_SELECTORS.responsibilitiesMenu);
-                if (still.length === 0) {
-                    addLogMessage('dismissExistingResponsibilitiesMenu: all menus closed', 'log');
-                    resolve();
-                    return;
-                }
-                attempts++;
-                if (attempts >= 10) {
-                    addLogMessage('dismissExistingResponsibilitiesMenu: menus still visible after retries, clicking body to close', 'warn');
-                    document.body.click();
-                    var finalTid = setTimeout(function() {
-                        addLogMessage('dismissExistingResponsibilitiesMenu: proceeding after final close attempt', 'log');
-                        resolve();
-                    }, 300);
-                    respState.timeouts.push(finalTid);
-                    return;
-                }
-                if (attempts === 5) {
-                    addLogMessage('dismissExistingResponsibilitiesMenu: mid-retry body click', 'log');
-                    document.body.click();
-                }
-                var tid = setTimeout(waitGone, 200);
-                respState.timeouts.push(tid);
-            }
-            var initTid = setTimeout(waitGone, 300);
-            respState.timeouts.push(initTid);
-        });
-    }
-
-    function openResponsibilitiesDropdown(columnEl) {
-        addLogMessage('openResponsibilitiesDropdown: opening responsibilities dropdown', 'log');
-        return dismissExistingResponsibilitiesMenu().then(function() {
-            return new Promise(function(resolve, reject) {
-                try {
-                    var targetColumn = columnEl;
-                    addLogMessage('openResponsibilitiesDropdown: using passed columnEl directly', 'log');
-                    var toggleBtn = targetColumn.querySelector(RESP_SELECTORS.responsibilitiesToggleBtn);
-                    if (!toggleBtn) {
-                        toggleBtn = targetColumn.querySelector('button[dropdowntoggle]');
-                    }
-                    if (!toggleBtn) {
-                        toggleBtn = targetColumn.querySelector('.roles__select-options-dropdown-button');
-                    }
-                    if (!toggleBtn) {
-                        var allToggles = document.querySelectorAll(RESP_SELECTORS.responsibilitiesToggleBtn);
-                        if (allToggles.length > 0) {
-                            toggleBtn = allToggles[allToggles.length - 1];
-                            addLogMessage('openResponsibilitiesDropdown: using last global toggle button', 'log');
-                        }
-                    }
-                    if (!toggleBtn) {
-                        addLogMessage('openResponsibilitiesDropdown: toggle button not found anywhere', 'error');
-                        reject(new Error('Responsibilities toggle button not found'));
-                        return;
-                    }
-                    var menusBefore = document.querySelectorAll(RESP_SELECTORS.responsibilitiesMenu).length;
-                    addLogMessage('openResponsibilitiesDropdown: menus before click: ' + menusBefore + ', clicking toggle button', 'log');
-                    toggleBtn.click();
-
-                    function waitForLastMenu(timeoutMs, retryClick) {
-                        var elapsed = 0;
-                        var interval = 100;
-                        function poll() {
-                            var allMenus = document.querySelectorAll(RESP_SELECTORS.responsibilitiesMenu);
-                            var lastMenu = allMenus.length > 0 ? allMenus[allMenus.length - 1] : null;
-                            if (allMenus.length > menusBefore && lastMenu) {
-                                addLogMessage('openResponsibilitiesDropdown: new menu appeared (count ' + menusBefore + ' -> ' + allMenus.length + ')', 'log');
-                                resolve(lastMenu);
-                                return;
-                            }
-                            if (lastMenu && allMenus.length >= 1) {
-                                var isVisible = lastMenu.offsetParent !== null || lastMenu.offsetHeight > 0;
-                                if (isVisible) {
-                                    addLogMessage('openResponsibilitiesDropdown: last menu is visible (count=' + allMenus.length + ')', 'log');
-                                    resolve(lastMenu);
-                                    return;
-                                }
-                            }
-                            elapsed += interval;
-                            if (elapsed >= timeoutMs) {
-                                if (retryClick) {
-                                    addLogMessage('openResponsibilitiesDropdown: timeout, retrying click', 'warn');
-                                    toggleBtn.click();
-                                    waitForLastMenu(timeoutMs, false);
-                                } else {
-                                    if (lastMenu) {
-                                        addLogMessage('openResponsibilitiesDropdown: timeout but using last menu', 'warn');
-                                        resolve(lastMenu);
-                                    } else {
-                                        reject(new Error('Timeout waiting for responsibilities menu'));
-                                    }
-                                }
-                                return;
-                            }
-                            var tid = setTimeout(poll, interval);
-                            respState.timeouts.push(tid);
-                        }
-                        var initTid = setTimeout(poll, interval);
-                        respState.timeouts.push(initTid);
-                    }
-                    waitForLastMenu(RESP_TIMEOUTS.waitResponsibilitiesMenuMs, true);
-                } catch (error) {
-                    addLogMessage('openResponsibilitiesDropdown: error: ' + error.message, 'error');
-                    reject(error);
-                }
-            });
-        });
-    }
-
-    function selectResponsibilitiesByNumbers(numbersSet, menuEl) {
-        addLogMessage('selectResponsibilitiesByNumbers: selecting ' + numbersSet.size + ' numbers: [' + Array.from(numbersSet).join(',') + ']', 'log');
-        return new Promise(function(resolve) {
-            try {
-                var remaining = new Set(numbersSet);
-                var scrollPassCount = 0;
-                var maxScrollPasses = 10;
-                var lastSnapshot = '';
-
-                function getMenuContainer() {
-                    if (menuEl && menuEl.isConnected) {
-                        return menuEl;
-                    }
-                    var allMenus = document.querySelectorAll(RESP_SELECTORS.responsibilitiesMenu);
-                    return allMenus.length > 0 ? allMenus[allMenus.length - 1] : null;
-                }
-
-                function processVisibleItems(callback) {
-                    var container = getMenuContainer();
-                    var items = container ? container.querySelectorAll('li') : document.querySelectorAll(RESP_SELECTORS.responsibilitiesItem);
-                    addLogMessage('selectResponsibilitiesByNumbers: ' + items.length + ' visible items, ' + remaining.size + ' remaining', 'log');
-                    var idx = 0;
-
-                    function nextItem() {
-                        if (respState.stopRequested) {
-                            callback();
-                            return;
-                        }
-                        if (idx >= items.length) {
-                            callback();
-                            return;
-                        }
-                        var item = items[idx];
-                        var text = (item.textContent || '').trim();
-                        var numMatch = text.match(/(\d+)/);
-                        if (numMatch) {
-                            var num = parseInt(numMatch[1], 10);
-                            if (remaining.has(num)) {
-                                var checkbox = item.querySelector('input[type="checkbox"]');
-                                if (checkbox && !checkbox.checked) {
-                                    addLogMessage('selectResponsibilitiesByNumbers: toggling checkbox for ' + num, 'log');
-                                    checkbox.click();
-                                    remaining.delete(num);
-                                    idx++;
-                                    var tid = setTimeout(nextItem, RESP_TIMEOUTS.waitAfterToggleResponsibilityMs);
-                                    respState.timeouts.push(tid);
-                                    return;
-                                } else if (checkbox && checkbox.checked) {
-                                    addLogMessage('selectResponsibilitiesByNumbers: ' + num + ' already checked', 'log');
-                                    remaining.delete(num);
-                                } else if (!checkbox) {
-                                    addLogMessage('selectResponsibilitiesByNumbers: no checkbox for ' + num + ', clicking item', 'log');
-                                    item.click();
-                                    remaining.delete(num);
-                                    idx++;
-                                    var tid2 = setTimeout(nextItem, RESP_TIMEOUTS.waitAfterToggleResponsibilityMs);
-                                    respState.timeouts.push(tid2);
-                                    return;
-                                }
-                            }
-                        }
-                        idx++;
-                        var tid3 = setTimeout(nextItem, 20);
-                        respState.timeouts.push(tid3);
-                    }
-                    nextItem();
-                }
-
-                function scrollAndProcess() {
-                    if (respState.stopRequested || remaining.size === 0) {
-                        addLogMessage('selectResponsibilitiesByNumbers: done, remaining=' + remaining.size, 'log');
-                        resolve();
-                        return;
-                    }
-                    if (scrollPassCount >= maxScrollPasses) {
-                        addLogMessage('selectResponsibilitiesByNumbers: max scroll passes, remaining=' + remaining.size, 'warn');
-                        resolve();
-                        return;
-                    }
-                    processVisibleItems(function() {
-                        if (remaining.size === 0) {
-                            addLogMessage('selectResponsibilitiesByNumbers: all selected', 'log');
-                            resolve();
-                            return;
-                        }
-                        var menuEl = getMenuContainer();
-                        if (!menuEl) {
-                            addLogMessage('selectResponsibilitiesByNumbers: menu gone, resolving', 'warn');
-                            resolve();
-                            return;
-                        }
-                        var items = menuEl.querySelectorAll('li');
-                        var snap = '';
-                        for (var si = 0; si < items.length; si++) {
-                            snap += (items[si].textContent || '').trim() + '|';
-                        }
-                        if (snap === lastSnapshot) {
-                            scrollPassCount++;
-                            addLogMessage('selectResponsibilitiesByNumbers: no new items pass ' + scrollPassCount, 'log');
-                        }
-                        lastSnapshot = snap;
-                        var scrollStep = Math.round(menuEl.clientHeight * 0.7);
-                        if (scrollStep < 50) {
-                            scrollStep = 200;
-                        }
-                        var maxScroll = menuEl.scrollHeight - menuEl.clientHeight;
-                        var newTop = Math.min(menuEl.scrollTop + scrollStep, maxScroll);
-                        if (newTop <= menuEl.scrollTop && maxScroll > 0) {
-                            addLogMessage('selectResponsibilitiesByNumbers: at bottom of menu, done scrolling', 'log');
-                            resolve();
-                            return;
-                        }
-                        menuEl.scrollTop = newTop;
-                        addLogMessage('selectResponsibilitiesByNumbers: scrolled menu to ' + newTop + ' (max=' + maxScroll + ')', 'log');
-                        scrollPassCount++;
-                        var tid4 = setTimeout(scrollAndProcess, RESP_TIMEOUTS.settleAfterScrollMs);
-                        respState.timeouts.push(tid4);
-                    });
-                }
-                scrollAndProcess();
-            } catch (error) {
-                addLogMessage('selectResponsibilitiesByNumbers: error: ' + error.message, 'error');
-                resolve();
-            }
-        });
-    }
-
-    function clickAddStudyRole() {
-        addLogMessage('clickAddStudyRole: clicking', 'log');
-        return new Promise(function(resolve) {
-            var retries = 0;
-
-            function tryClick() {
-                if (respState.stopRequested) {
-                    resolve(false);
-                    return;
-                }
-                var addBtn = document.querySelector(RESP_SELECTORS.addStudyRoleBtn);
-                if (!addBtn) {
-                    addLogMessage('clickAddStudyRole: button not found', 'warn');
-                    resolve(false);
-                    return;
-                }
-                if (addBtn.disabled || addBtn.getAttribute('disabled') !== null) {
-                    if (retries < RESP_RETRY.addRoleRetries) {
-                        retries++;
-                        addLogMessage('clickAddStudyRole: button disabled, retry ' + retries, 'log');
-                        var tid = setTimeout(tryClick, 1000);
-                        respState.timeouts.push(tid);
-                        return;
-                    }
-                    addLogMessage('clickAddStudyRole: button still disabled after retries', 'warn');
-                    resolve(false);
-                    return;
-                }
-                addBtn.click();
-                addLogMessage('clickAddStudyRole: clicked, waiting for result', 'log');
-                var wt = setTimeout(function() {
-                    resolve(true);
-                }, RESP_TIMEOUTS.waitAddRoleResultMs);
-                respState.timeouts.push(wt);
-            }
-            tryClick();
-        });
-    }
-
-    function respSetAriaBusyOn() {
-        var target = document.querySelector(RESP_ATTRS.ariaBusyTarget);
-        if (target) {
-            respState.prevAriaBusy = target.getAttribute(RESP_ATTRS.ariaBusyAttr);
-            target.setAttribute(RESP_ATTRS.ariaBusyAttr, 'true');
-            addLogMessage('respSetAriaBusyOn: set aria-busy=true', 'log');
-        }
-    }
-
-    function respSetAriaBusyOff() {
-        var target = document.querySelector(RESP_ATTRS.ariaBusyTarget);
-        if (target) {
-            if (respState.prevAriaBusy !== null) {
-                target.setAttribute(RESP_ATTRS.ariaBusyAttr, respState.prevAriaBusy);
-            } else {
-                target.removeAttribute(RESP_ATTRS.ariaBusyAttr);
-            }
-            respState.prevAriaBusy = null;
-            addLogMessage('respSetAriaBusyOff: restored aria-busy', 'log');
-        }
-    }
-
-    function processRolesWorkflow(rolesData) {
-        addLogMessage('processRolesWorkflow: starting with ' + rolesData.length + ' roles', 'log');
-        respState.isRunning = true;
-        respState.stopRequested = false;
-        respSetAriaBusyOn();
-        updateRespAriaLive(RESP_LABELS.scanningExisting);
-        scanExistingCompletedRoles();
-        var roleIndex = 0;
-
-        function processNextRole() {
-            if (respState.stopRequested) {
-                addLogMessage('processRolesWorkflow: stop requested, marking remaining roles', 'log');
-                for (var si = roleIndex; si < rolesData.length; si++) {
-                    if (rolesData[si].status === RESP_LABELS.statusPending) {
-                        rolesData[si].status = RESP_LABELS.statusStopped;
-                        respState.counters.pending--;
-                        updateRespRoleStatus(rolesData[si].key, RESP_LABELS.statusStopped, '');
-                    }
-                }
-                updateRespSummary();
-                respSetAriaBusyOff();
-                var t1 = document.getElementById('resp-progress-title');
-                if (t1) {
-                    t1.textContent = 'Set Responsibilities - Stopped';
-                }
-                var b1 = document.getElementById('resp-status-badge');
-                if (b1) {
-                    b1.textContent = 'Stopped';
-                    b1.style.color = '#aaa';
-                }
-                updateRespAriaLive('Process stopped');
-                respState.isRunning = false;
-                return;
-            }
-            if (roleIndex >= rolesData.length) {
-                addLogMessage('processRolesWorkflow: all roles processed', 'log');
-                respSetAriaBusyOff();
-                respState.isRunning = false;
-                var t2 = document.getElementById('resp-progress-title');
-                if (t2) {
-                    t2.textContent = 'Set Responsibilities - Complete';
-                }
-                var b2 = document.getElementById('resp-status-badge');
-                if (b2) {
-                    b2.textContent = 'Complete';
-                    b2.style.background = 'rgba(107, 207, 127, 0.3)';
-                    b2.style.color = '#6bcf7f';
-                }
-                updateRespSummary();
-                updateRespAriaLive('Complete. Done: ' + respState.counters.completed + ', Failed: ' + respState.counters.failed);
-                return;
-            }
-            var role = rolesData[roleIndex];
-            if (role.status !== RESP_LABELS.statusPending) {
-                addLogMessage('processRolesWorkflow: skipping ' + role.displayRole + ' (status=' + role.status + ')', 'log');
-                roleIndex++;
-                var sk = setTimeout(processNextRole, 50);
-                respState.timeouts.push(sk);
-                return;
-            }
-            addLogMessage('processRolesWorkflow: processing role ' + (roleIndex + 1) + '/' + rolesData.length + ': ' + role.displayRole, 'log');
-            updateRespAriaLive(RESP_LABELS.selectingRole + ': ' + role.displayRole);
-            var currentColumnEl = null;
-
-            findAvailableRoleColumn()
-                .then(function(columnEl) {
-                currentColumnEl = columnEl;
-                if (respState.stopRequested) {
-                    throw new Error('Stopped');
-                }
-                addLogMessage('processRolesWorkflow: got column for ' + role.displayRole, 'log');
-                return ensureRoleListOpenForColumn(columnEl);
-            })
-                .then(function() {
-                if (respState.stopRequested) {
-                    throw new Error('Stopped');
-                }
-                addLogMessage('processRolesWorkflow: list open, attempting scroll select for ' + role.displayRole, 'log');
-                return attemptSelectByScrollingForRole(currentColumnEl, role.displayRole, role.key);
-            })
-                .then(function(selected) {
-                if (respState.stopRequested) {
-                    throw new Error('Stopped');
-                }
-                if (!selected) {
-                    addLogMessage('processRolesWorkflow: role not found in dropdown: ' + role.displayRole, 'warn');
-                    role.status = RESP_LABELS.statusFailed;
-                    role.reason = 'Role not in dropdown';
-                    respState.counters.failed++;
-                    respState.counters.pending--;
-                    updateRespRoleStatus(role.key, RESP_LABELS.statusFailed, 'Role not in dropdown');
-                    updateRespSummary();
-                    roleIndex++;
-                    var ft = setTimeout(processNextRole, 200);
-                    respState.timeouts.push(ft);
-                    return;
-                }
-                addLogMessage('processRolesWorkflow: role selected, opening responsibilities for ' + role.displayRole, 'log');
-                updateRespAriaLive(RESP_LABELS.selectingResponsibilities + ': ' + role.displayRole);
-                return openResponsibilitiesDropdown(currentColumnEl)
-                    .then(function(menu) {
-                    if (respState.stopRequested) {
-                        throw new Error('Stopped');
-                    }
-                    addLogMessage('processRolesWorkflow: responsibilities menu open for ' + role.displayRole, 'log');
-                    return selectResponsibilitiesByNumbers(role.intersection, menu);
-                })
-                    .then(function() {
-                    if (respState.stopRequested) {
-                        throw new Error('Stopped');
-                    }
-                    addLogMessage('processRolesWorkflow: responsibilities selected, clicking Add Study Role for ' + role.displayRole, 'log');
-                    updateRespAriaLive(RESP_LABELS.addingRole + ': ' + role.displayRole);
-                    return dismissExistingResponsibilitiesMenu();
-                })
-                    .then(function() {
-                    if (respState.stopRequested) {
-                        throw new Error('Stopped');
-                    }
-                    return clickAddStudyRole();
-                })
-                    .then(function(addOk) {
-                    if (addOk) {
-                        addLogMessage('processRolesWorkflow: ' + role.displayRole + ' completed', 'log');
-                        role.status = RESP_LABELS.statusCompleted;
-                        respState.counters.completed++;
-                        respState.counters.pending--;
-                        updateRespRoleStatus(role.key, RESP_LABELS.statusCompleted, '');
-                    } else {
-                        addLogMessage('processRolesWorkflow: ' + role.displayRole + ' add failed', 'warn');
-                        role.status = RESP_LABELS.statusFailed;
-                        role.reason = 'Add Study Role failed';
-                        respState.counters.failed++;
-                        respState.counters.pending--;
-                        updateRespRoleStatus(role.key, RESP_LABELS.statusFailed, 'Add Study Role failed');
-                    }
-                    updateRespSummary();
-                    roleIndex++;
-                    var nt = setTimeout(processNextRole, 200);
-                    respState.timeouts.push(nt);
-                });
-            })
-                .catch(function(err) {
-                addLogMessage('processRolesWorkflow: error for ' + role.displayRole + ': ' + err.message, 'error');
-                if (respState.stopRequested) {
-                    role.status = RESP_LABELS.statusStopped;
-                    updateRespRoleStatus(role.key, RESP_LABELS.statusStopped, '');
-                    respState.counters.pending--;
-                } else {
-                    role.status = RESP_LABELS.statusFailed;
-                    role.reason = err.message;
-                    respState.counters.failed++;
-                    respState.counters.pending--;
-                    updateRespRoleStatus(role.key, RESP_LABELS.statusFailed, err.message);
-                }
-                updateRespSummary();
-                roleIndex++;
-                var et = setTimeout(processNextRole, 200);
-                respState.timeouts.push(et);
-            });
-        }
-        processNextRole();
-    }
-
-    function stopResponsibilities() {
-        addLogMessage('stopResponsibilities: stopping', 'log');
-        respState.stopRequested = true;
-        respState.isRunning = false;
-        for (var i = 0; i < respState.idleCallbackIds.length; i++) {
-            try {
-                if (typeof cancelIdleCallback === 'function') {
-                    cancelIdleCallback(respState.idleCallbackIds[i]);
-                }
-            } catch (e) {
-                addLogMessage('stopResponsibilities: error canceling idle callback: ' + e, 'error');
-            }
-        }
-        respState.idleCallbackIds = [];
-        for (var i2 = 0; i2 < respState.observers.length; i2++) {
-            try {
-                respState.observers[i2].disconnect();
-            } catch (e2) {
-                addLogMessage('stopResponsibilities: error disconnecting observer: ' + e2, 'error');
-            }
-        }
-        respState.observers = [];
-        for (var i3 = 0; i3 < respState.timeouts.length; i3++) {
-            try {
-                clearTimeout(respState.timeouts[i3]);
-            } catch (e3) {
-                addLogMessage('stopResponsibilities: error clearing timeout: ' + e3, 'error');
-            }
-        }
-        respState.timeouts = [];
-        for (var i4 = 0; i4 < respState.intervals.length; i4++) {
-            try {
-                clearInterval(respState.intervals[i4]);
-            } catch (e4) {
-                addLogMessage('stopResponsibilities: error clearing interval: ' + e4, 'error');
-            }
-        }
-        respState.intervals = [];
-        for (var i5 = 0; i5 < respState.eventListeners.length; i5++) {
-            try {
-                var l = respState.eventListeners[i5];
-                l.element.removeEventListener(l.type, l.handler);
-            } catch (e5) {
-                addLogMessage('stopResponsibilities: error removing listener: ' + e5, 'error');
-            }
-        }
-        respState.eventListeners = [];
-        respSetAriaBusyOff();
-        var im = document.getElementById('resp-input-modal');
-        if (im && im.parentNode) {
-            im.parentNode.removeChild(im);
-        }
-        var pm = document.getElementById('resp-progress-modal');
-        if (pm && pm.parentNode) {
-            pm.parentNode.removeChild(pm);
-        }
-        var wm = document.getElementById('resp-warning-modal');
-        if (wm && wm.parentNode) {
-            wm.parentNode.removeChild(wm);
-        }
-        if (respState.focusReturnElement) {
-            respState.focusReturnElement.focus();
-        }
-        resetRespState();
-        addLogMessage('stopResponsibilities: cleanup complete', 'log');
-    }
-
 
     //==========================
     // SHARED GUI AND PANEL FUNCTIONS

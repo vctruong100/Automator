@@ -33,29 +33,38 @@ const attachedItemCodeList = [
 
 // Inclusive
 var sys_min_range = 90;
-var sys_max_range = 140;
+var sys_max_range = 169;
 
 var dia_min_range = 50
-var dia_max_range = 90;
+var dia_max_range = 99;
 
 var hr_min_range = 60;
 var hr_max_range = 100;
 
-var temp_min_range = 35.6;
-var temp_max_range = 37.4;
+var temp_min_range = 35.8;
+var temp_max_range = 37.6;
 
-var rr_min_range = 8;
+var rr_min_range = 10;
 var rr_max_range = 20;
 
-var sys = pullItemFromForm(formJson, sysItems);
-var dia = pullItemFromForm(formJson, diaItems);
-var hr = pullItemFromForm(formJson, hrItems);
-var temp = pullItemFromForm(formJson, tempItems);
-var rr = pullItemFromForm(formJson, rrItems);
+var item = itemJson.item;
+
+var isRepeat = isItemInRepeat(formJson);
+
+if (isRepeat) {
+    var sys = pullItemFromLast(formJson, sysItems);
+    var dia = pullItemFromLast(formJson, diaItems);
+    var hr = pullItemFromLast(formJson, hrItems);
+}
+else {
+    var sys = pullItemFromFirst(formJson, sysItems);
+    var dia = pullItemFromFirst(formJson, diaItems);
+    var hr = pullItemFromFirst(formJson, hrItems);
+}
 
 log();
 
-if (!sys || sys === null || !dia || dia == null || !hr || hr == null || !temp || temp == null || !rr || rr == null) return attachedItemCodeList[0]
+if (!sys || sys === null || !dia || dia == null || !hr || hr == null) return attachedItemCodeList[0]
 
 // OOR
 if (
@@ -64,23 +73,15 @@ if (
     dia > dia_max_range ||
     dia < dia_min_range ||
     hr > hr_max_range ||
-    hr < hr_min_range ||
-    temp > temp_max_range ||
-    temp < temp_min_range ||
-    rr > rr_max_range ||
-    rr < rr_min_range
+    hr < hr_min_range
 ) return attachedItemCodeList[3]; // Out of Normal Range
 else if ( // IR
-    sys <= sys_max_range &&
-    sys >= sys_min_range &&
-    dia <= dia_max_range &&
-    dia >= dia_min_range &&
-    hr <= hr_max_range &&
-    hr >= hr_min_range &&
-    temp <= temp_max_range &&
-    temp >= temp_min_range &&
-    rr <= rr_max_range &&
-    rr >= rr_min_range
+    sys <= sys_max_range ||
+    sys >= sys_min_range ||
+    dia <= dia_max_range ||
+    dia >= dia_min_range ||
+    hr <= hr_max_range ||
+    hr >= hr_min_range
 ) return attachedItemCodeList[4]; // Within Normal Range
 
 return attachedItemCodeList[0];
@@ -89,8 +90,6 @@ function log() {
     logger("sys: " + sys);
     logger("dia:  " + dia);
     logger("hr: " + hr);
-    logger("rr: " + rr);
-    logger("temp: " + temp);
 }
 
 function pullForm(studyeventList, formNameList) {
@@ -124,7 +123,24 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     return keepers;
 }
 
-function pullItemFromForm(form, targetItem) {
+function pullItemFromLast(form, targetItem) {
+    var itemGroups = form.form.itemGroups;
+    var group, items, item, i, j, value;
+    
+	if (!itemGroups || itemGroups.length < 1) return null;
+    
+    for (i = itemGroups.length - 1; i >= 0; i--) {
+        group = itemGroups[i];
+        if (!group || group.canceled) continue;
+        for (j = group.items.length - 1; j >= 0; j--) {
+            item = group.items[j];
+            if (targetItem.indexOf(item.name) !== -1 && item.value !== null) return item.value;
+        }
+    }
+    return null;
+}
+
+function pullItemFromFirst(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
     
@@ -141,6 +157,7 @@ function pullItemFromForm(form, targetItem) {
     return null;
 }
 
+
 function calculateAverage(values) {
     if (values.length === 0) return null;
     var sum = 0;
@@ -155,4 +172,29 @@ function calculateAverage(values) {
 
     var avg = sum / count;
     return avg;
+}
+
+function isItemInRepeat(form) {
+    for (var i = 0; i < form.form.itemGroups.length; i++) {
+        var group = form.form.itemGroups[i];
+        var items = group.items;
+        if (!items || items.length < 1) continue;
+
+        for (var j = 0; j < items.length; j++) {
+            var it = items[j];
+            if (it.id === item.id) {
+                if (containsRepeat(group.name)) return true;
+            }
+        }
+    }
+    return false;
+}
+
+function containsRepeat(input) {
+    if (input == null) {
+        return false;
+    }
+
+    var value = input.toString().toLowerCase();
+    return value.indexOf("repeat") !== -1;
 }

@@ -15,10 +15,10 @@
   },
   {
     "id": "M-003",
-    "title": "Average DBP, SBP, Heart Rate (NON-REPEAT)",
+    "title": "Average DBP or DIA, SBP or SYS, Heart Rate (NON-REPEAT)",
     "tags": ["Average", "Vitals", "NON-REPEAT"],
-    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20DBP%2C%20SBP%2C%20Heart%20Rate%20(NON-REPEAT).md",
-    "updated": "2026-02-12"
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20DBP%20or%20DIA%2C%20SBP%20or%20SYS%2C%20Heart%20Rate%20(NON-REPEAT).md",
+    "updated": "2026-03-04"
   },
   {
     "id": "M-004",
@@ -418,5 +418,33 @@
     "tags": ["Void", "Check"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Tween-20%20datetime%20is%201%20hour%20after%20PCVOID.md",
     "updated": "2026-03-02"
+  },
+  {
+    "id": "M-061",
+    "title": "Average DBP or DIA, SBP or SYS, Heart Rate (REPEAT)",
+    "tags": ["Average"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20DBP%20or%20DIA%2C%20SBP%20or%20SYS%2C%20Heart%20Rate%20(REPEAT).md",
+    "updated": "2026-03-04"
+  },
+  {
+    "id": "M-062",
+    "title": "Protocol Check Average Vital Signs Range SYS, DIA (BOTH)",
+    "tags": ["Protocol", "Protocol"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Average%20Vital%20Signs%20Range%20SYS%2C%20DIA%2C%20(BOTH).md",
+    "updated": "2026-03-04"
+  },
+  {
+    "id": "M-062",
+    "title": "Protocol Check Average Vital Signs Range SYS, DIA, HR (NON-REPEAT)",
+    "tags": ["Protocol", "Protocol"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Average%20Vital%20Signs%20Range%20SYS%2C%20DIA%2C%20(NON-REPEAT).md",
+    "updated": "2026-03-04"
+  },
+  {
+    "id": "M-062",
+    "title": "Protocol Check Average Vital Signs Range SYS, DIA, HR (REPEAT)",
+    "tags": ["Protocol", "Protocol"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Average%20Vital%20Signs%20Range%20SYS%2C%20DIA%2C%20(REPEAT).md",
+    "updated": "2026-03-04"
   }
 ]

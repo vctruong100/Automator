@@ -1,3 +1,12 @@
+function containsValue(input, keyword) {
+    if (input == null) {
+        return false;
+    }
+
+    var value = input.toString().toLowerCase();
+    return value.indexOf(keyword) !== -1;
+}
+
 const sigfig = itemJson.item.significantDigits;
 
 // Function to pull a specific item from form (not by first item name)
