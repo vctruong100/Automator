@@ -53,15 +53,15 @@
     };
 
     const ELOG_SCROLL = {
-        stepPx: 600,
-        idleDelayMs: 80,
-        settleDelayMs: 250,
+        stepPx: 1000,
+        idleDelayMs: 30,
+        settleDelayMs: 100,
         maxDurationMs: 120000,
         maxNoProgressIterations: 8,
         userScrollPauseMs: 800,
         viewportOverscanPx: 400,
         retryScanAttempts: 3,
-        retryScanDelayMs: 200
+        retryScanDelayMs: 80
     };
 
     const ELOG_ATTRS = {
@@ -79,9 +79,9 @@
     const ELOG_FORM_SELECTORS = {
         addEntryBtn: '.test-createLogEntryBtn',
         memberInput: '#filtered-select-input.filtered-select__input',
-        listContainer: 'ul.filtered-select__list.u-z-index-1060, ul.filtered-select__list',
-        virtualViewport: '.filtered-select__list, .cdk-virtual-scroll-viewport',
-        optionItem: '.filtered-select__list [role="option"], .filtered-select__list li, .cdk-virtual-scroll-viewport [role="option"], .cdk-virtual-scroll-viewport li',
+        listContainer: 'ul.filtered-select__list.u-z-index-1060, ul.filtered-select__list, cdk-virtual-scroll-viewport',
+        virtualViewport: 'cdk-virtual-scroll-viewport, .cdk-virtual-scroll-viewport',
+        optionItem: 'cdk-virtual-scroll-viewport li.filtered-select__list__item, cdk-virtual-scroll-viewport li, .filtered-select__list li, cdk-virtual-scroll-viewport [role="option"], .filtered-select__list [role="option"]',
         saveAndAddAnotherBtn: 'button.btn.btn-primary',
         modalOrFormRoot: '.modal.show, .document-log-entries, body'
     };
@@ -93,6 +93,7 @@
         waitSaveAfterClickMs: 8000,
         scrollIdleMs: 120,
         settleMs: 250,
+        waitFilterMs: 800,
         maxSelectDurationMs: 45000
     };
 
@@ -106,10 +107,63 @@
     const ELOG_RUN_LABELS = {
         statusPending: 'Pending',
         statusAlready: 'Already Exist',
-        statusAdded: 'Added',
+        statusAdded: 'Completed',
         statusNotInDropdown: 'Not In Dropdown',
         statusSelectionFailed: 'Selection Failed',
         statusSaveFailed: 'Save Failed',
+        statusStopped: 'Stopped'
+    };
+
+    const DOA_SELECTORS = {
+        addEntryBtn: '.test-createLogEntryBtn',
+        memberInput: '#filtered-select-input.filtered-select__input[placeholder*="Team Member"]',
+        listContainer: 'ul.filtered-select__list.u-z-index-1060, ul.filtered-select__list, cdk-virtual-scroll-viewport',
+        virtualViewport: 'cdk-virtual-scroll-viewport, .cdk-virtual-scroll-viewport',
+        optionItem: 'cdk-virtual-scroll-viewport li.filtered-select__list__item, cdk-virtual-scroll-viewport li, .filtered-select__list li, cdk-virtual-scroll-viewport [role="option"], .filtered-select__list [role="option"]',
+        roleSearchInput: '#filtered-select-input.filtered-select__input[placeholder*="Search"]',
+        roleOptionItem: '.filtered-select__list__item, [role="option"], .cdk-virtual-scroll-viewport .filtered-select__list__item',
+        roleOptionText: '.filtered-select__list__item__text',
+        tasksToggleBtn: 'button.dropdown-toggle.log-entry-form__select-options-dropdown-button',
+        tasksMenu: 'ul.dropdown-menu.log-entry-form__select-options-dropdown',
+        tasksItem: 'ul.dropdown-menu.log-entry-form__select-options-dropdown li',
+        tasksItemCheckbox: 'ul.dropdown-menu.log-entry-form__select-options-dropdown li input[type="checkbox"]',
+        mainGridTable: '.document-log-entries__grid-table[role="table"]',
+        mainGridRow: 'log-entry-row[role="row"], .document-log-entries__grid-table__row[role="row"]',
+        mainGridCell: '[role="cell"]',
+        mainTableContainer: '.document-log-entries.document-log-entries__table',
+        ariaLiveRegion: '.aria-live-region'
+    };
+
+    const DOA_TIMEOUTS = {
+        waitOpenMs: 10000,
+        waitListMs: 6000,
+        waitOptionRenderMs: 3000,
+        waitRoleListMs: 6000,
+        settleMs: 250,
+        waitFilterMs: 800,
+        waitTasksMenuMs: 5000,
+        waitAfterTasksToggleMs: 200,
+        maxSelectDurationMs: 45000,
+        scrollIdleMs: 140
+    };
+
+    const DOA_RETRY = {
+        openListRetries: 4,
+        selectRetriesPerScroll: 2,
+        maxScrollPasses: 8
+    };
+
+    const DOA_LABELS = {
+        featureButton: 'Add DoA Log Staff Entries',
+        statusPending: 'Pending',
+        statusDuplicate: 'Duplicate',
+        statusAlready: 'Already Exist',
+        statusAdded: 'Completed',
+        statusNotInDropdown: 'Not In Dropdown',
+        statusSelectionFailed: 'Selection Failed',
+        statusSaveFailed: 'Save Failed',
+        statusRoleNotFound: 'Role Not Found',
+        statusTasksApplied: 'Completed',
         statusStopped: 'Stopped'
     };
 
@@ -138,6 +192,35 @@
         existingPairs: new Set(),
         counters: { total: 0, added: 0, duplicates: 0, failures: 0, pending: 0 },
         listScrollTop: 0,
+        isAddingEntries: false
+    };
+
+    let doaState = {
+        isRunning: false,
+        observers: [],
+        timeouts: [],
+        intervals: [],
+        eventListeners: [],
+        idleCallbackIds: [],
+        parsedCandidates: [],
+        scannedNames: [],
+        focusReturnElement: null,
+        abortController: null,
+        seenNormalizedNames: new Set(),
+        prevAriaBusy: null,
+        scrollContainer: null,
+        prevScrollTop: 0,
+        userScrollHandler: null,
+        userScrollPaused: false,
+        idleCallbackId: null,
+        leftPanelRowIndex: 0,
+        lastAutoScrollTime: 0,
+        addQueue: [],
+        addQueueIndex: 0,
+        existingPairs: new Set(),
+        counters: { total: 0, added: 0, duplicates: 0, failures: 0, pending: 0 },
+        listScrollTop: 0,
+        roleListScrollTop: 0,
         isAddingEntries: false
     };
 
@@ -301,7 +384,9 @@
             elogState.parsedNames = parsed;
             addLogMessage('showELogInputPanel: parsed ' + parsed.length + ' unique names', 'log');
             if (modal.parentNode) { document.body.removeChild(modal); }
-            showELogProgressPanel();
+            elogState.isRunning = true;
+            showCollectingDataPanel('elog', 'Add Training Log Staff Entries');
+            startELogScan();
         };
         const clearButton = document.createElement('button');
         clearButton.textContent = 'Clear All';
@@ -391,7 +476,7 @@
         titleContainer.style.cssText = 'display: flex; align-items: center; gap: 12px;';
         const title = document.createElement('h3');
         title.id = 'elog-progress-title';
-        title.textContent = 'ELog Staff Entries - Scanning';
+        title.textContent = 'ELog Staff Entries - Review';
         title.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600;';
         const statusBadge = document.createElement('span');
         statusBadge.id = 'elog-status-badge';
@@ -476,9 +561,16 @@
         makeDraggable(container, header);
         document.body.appendChild(modal);
         initializeRightPanel();
+        populateELogLeftPanel();
+        finalizeELogRightPanelAfterScan();
         rescanButton.focus();
-        addLogMessage('showELogProgressPanel: progress panel displayed, starting scan', 'log');
-        startELogScan();
+        addLogMessage('showELogProgressPanel: progress panel displayed with all data populated', 'log');
+        updateScanStatus('Scan Complete', 'complete');
+        var progressTitle = document.getElementById('elog-progress-title');
+        if (progressTitle) {
+            progressTitle.textContent = 'ELog Staff Entries - Adding Entries';
+        }
+        beginAddNonDuplicateELogEntries();
     }
 
     function createSubpanel(titleText, listId, searchId) {
@@ -532,6 +624,7 @@
             const nameObj = elogState.parsedNames[i];
             const item = createListItem(nameObj.display, 'Pending', 'pending', i + 1);
             item.setAttribute('data-normalized', nameObj.normalized);
+            item.setAttribute('data-pairkey', normalizeFirstLastPair(nameObj.display));
             rightPanel.appendChild(item);
         }
         addLogMessage('initializeRightPanel: added ' + elogState.parsedNames.length + ' items', 'log');
@@ -572,6 +665,86 @@
         return item;
     }
 
+    function showCollectingDataPanel(featureId, featureName) {
+        addLogMessage('showCollectingDataPanel: showing for ' + featureId, 'log');
+        var existing = document.getElementById(featureId + '-collecting-modal');
+        if (existing && existing.parentNode) {
+            existing.parentNode.removeChild(existing);
+        }
+        var modal = document.createElement('div');
+        modal.id = featureId + '-collecting-modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 20000; display: flex; align-items: center; justify-content: center;';
+        var container = document.createElement('div');
+        container.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 36px 48px; max-width: 420px; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); text-align: center;';
+        container.setAttribute('role', 'dialog');
+        container.setAttribute('aria-modal', 'true');
+        container.setAttribute('aria-labelledby', featureId + '-collecting-title');
+        var spinner = document.createElement('div');
+        spinner.style.cssText = 'width: 48px; height: 48px; border: 4px solid rgba(255, 255, 255, 0.2); border-top-color: white; border-radius: 50%; margin: 0 auto 20px; animation: collectingSpin 0.8s linear infinite;';
+        var styleTag = document.getElementById('collecting-spinner-style');
+        if (!styleTag) {
+            styleTag = document.createElement('style');
+            styleTag.id = 'collecting-spinner-style';
+            styleTag.textContent = '@keyframes collectingSpin { to { transform: rotate(360deg); } }';
+            document.head.appendChild(styleTag);
+        }
+        var title = document.createElement('h3');
+        title.id = featureId + '-collecting-title';
+        title.textContent = featureName || 'Please wait';
+        title.style.cssText = 'margin: 0 0 8px 0; color: white; font-size: 18px; font-weight: 600;';
+        var message = document.createElement('p');
+        message.textContent = 'Please wait. Collecting data.';
+        message.style.cssText = 'margin: 0; color: rgba(255, 255, 255, 0.85); font-size: 15px; font-weight: 400;';
+        container.appendChild(spinner);
+        container.appendChild(title);
+        container.appendChild(message);
+        modal.appendChild(container);
+        document.body.appendChild(modal);
+        addLogMessage('showCollectingDataPanel: displayed for ' + featureId, 'log');
+    }
+
+    function removeCollectingDataPanel(featureId) {
+        addLogMessage('removeCollectingDataPanel: removing for ' + featureId, 'log');
+        var modal = document.getElementById(featureId + '-collecting-modal');
+        if (modal && modal.parentNode) {
+            modal.parentNode.removeChild(modal);
+        }
+    }
+
+    function populateELogLeftPanel() {
+        addLogMessage('populateELogLeftPanel: populating with ' + elogState.scannedNames.length + ' names', 'log');
+        var leftPanel = document.getElementById('elog-left-panel');
+        if (!leftPanel) {
+            addLogMessage('populateELogLeftPanel: left panel not found', 'error');
+            return;
+        }
+        leftPanel.innerHTML = '';
+        for (var i = 0; i < elogState.scannedNames.length; i++) {
+            var item = createListItem(elogState.scannedNames[i], null, null, i + 1);
+            leftPanel.appendChild(item);
+        }
+        addLogMessage('populateELogLeftPanel: populated ' + elogState.scannedNames.length + ' items', 'log');
+    }
+
+    function finalizeELogRightPanelAfterScan() {
+        addLogMessage('finalizeELogRightPanelAfterScan: updating right panel statuses', 'log');
+        var scannedNormSet = new Set();
+        for (var si = 0; si < elogState.scannedNames.length; si++) {
+            scannedNormSet.add(elogNormalizeName(elogState.scannedNames[si]));
+        }
+        for (var i = 0; i < elogState.parsedNames.length; i++) {
+            var nameObj = elogState.parsedNames[i];
+            if (scannedNormSet.has(nameObj.normalized)) {
+                nameObj.status = 'Found';
+                updateRightPanelItemStatus(nameObj.normalized, 'Found', 'found');
+            } else {
+                nameObj.status = 'Not Found';
+                updateRightPanelItemStatus(nameObj.normalized, 'Not Found', 'notfound');
+            }
+        }
+        addLogMessage('finalizeELogRightPanelAfterScan: completed', 'log');
+    }
+
     function startELogScan() {
         addLogMessage('startELogScan: beginning scan with auto-scroll', 'log');
         elogState.scannedNames = [];
@@ -592,13 +765,16 @@
                 },
                 onDone: function(data) {
                     addLogMessage('startELogScan: done - total=' + data.total + ' reason=' + data.reason, 'log');
+                    removeCollectingDataPanel('elog');
                     if (data.reason !== 'stopped' && elogState.isRunning) {
-                        addLogMessage('startELogScan: scan complete, starting add entries flow', 'log');
-                        beginAddNonDuplicateELogEntries();
+                        addLogMessage('startELogScan: scan complete, showing progress panel', 'log');
+                        showELogProgressPanel();
                     }
                 },
                 onError: function(error) {
                     addLogMessage('startELogScan: error - ' + error.message, 'error');
+                    removeCollectingDataPanel('elog');
+                    showELogProgressPanel();
                     updateScanStatus('Error', 'error');
                     showInlineNotice('Error during auto-scroll scan: ' + error.message);
                 }
@@ -606,6 +782,8 @@
         })
             .catch(function(error) {
             addLogMessage('startELogScan: error during scan: ' + error, 'error');
+            removeCollectingDataPanel('elog');
+            showELogProgressPanel();
             updateScanStatus('Error', 'error');
             showInlineNotice('An error occurred during scanning. The table may not be fully loaded.');
         });
@@ -640,29 +818,31 @@
     }
 
     function scanExistingStaffNames() {
-        addLogMessage('scanExistingStaffNames: starting row iteration', 'log');
-        if (!elogState.isRunning) { addLogMessage('scanExistingStaffNames: aborted, not running', 'warn'); return; }
+        if (!elogState.isRunning) { return; }
         try {
             const rows = document.querySelectorAll(ELOG_SELECTORS.row);
-            addLogMessage('scanExistingStaffNames: found ' + rows.length + ' rows', 'log');
             let rowIndex = 0;
             const processedNames = new Set();
-            const processNextRow = function() {
-                if (!elogState.isRunning) { addLogMessage('scanExistingStaffNames: stopped during processing', 'warn'); return; }
-                if (rowIndex >= rows.length) { addLogMessage('scanExistingStaffNames: completed scanning all rows', 'log'); finalizeScan(); return; }
-                const row = rows[rowIndex];
-                const extractedName = extractNameFromRow(row, rowIndex + 1);
-                if (extractedName && !processedNames.has(extractedName)) {
-                    processedNames.add(extractedName);
-                    elogState.scannedNames.push(extractedName);
-                    updateLeftPanelList(extractedName, rowIndex + 1);
-                    checkAndUpdateRightPanel(extractedName);
+            var batchSize = 10;
+            const processNextBatch = function() {
+                if (!elogState.isRunning) { return; }
+                if (rowIndex >= rows.length) { finalizeScan(); return; }
+                var end = Math.min(rowIndex + batchSize, rows.length);
+                for (var bi = rowIndex; bi < end; bi++) {
+                    const row = rows[bi];
+                    const extractedName = extractNameFromRow(row, bi + 1);
+                    if (extractedName && !processedNames.has(extractedName)) {
+                        processedNames.add(extractedName);
+                        elogState.scannedNames.push(extractedName);
+                        updateLeftPanelList(extractedName, bi + 1);
+                        checkAndUpdateRightPanel(extractedName);
+                    }
                 }
-                rowIndex++;
-                const timeoutId = setTimeout(processNextRow, 10);
+                rowIndex = end;
+                const timeoutId = setTimeout(processNextBatch, 0);
                 elogState.timeouts.push(timeoutId);
             };
-            processNextRow();
+            processNextBatch();
         } catch (error) {
             addLogMessage('scanExistingStaffNames: error: ' + error, 'error');
             showInlineNotice('Error scanning rows: ' + error.message);
@@ -670,7 +850,6 @@
     }
 
     function extractNameFromRow(row, rowNumber) {
-        addLogMessage('extractNameFromRow: processing row ' + rowNumber, 'log');
         try {
             const cells = row.querySelectorAll(ELOG_SELECTORS.cell);
             if (cells.length <= ELOG_SELECTORS.nameCellIndex) { addLogMessage('extractNameFromRow: not enough cells in row ' + rowNumber, 'warn'); return null; }
@@ -686,18 +865,17 @@
                         if (node.nodeType === Node.TEXT_NODE) { nameText += node.textContent; }
                     }
                     nameText = nameText.trim().replace(/\s+/g, ' ');
-                    if (nameText) { addLogMessage('extractNameFromRow: extracted (primary): ' + nameText, 'log'); return nameText; }
+                    if (nameText) { return nameText; }
                 } else {
                     let nameText = primaryElement.textContent.trim().replace(/\s+/g, ' ');
-                    if (nameText) { addLogMessage('extractNameFromRow: extracted (primary no br): ' + nameText, 'log'); return nameText; }
+                    if (nameText) { return nameText; }
                 }
             }
             const fallbackElement = targetCell.querySelector(ELOG_SELECTORS.nameFallback);
             if (fallbackElement) {
                 let nameText = fallbackElement.textContent.trim().replace(/\s+/g, ' ');
-                if (nameText) { addLogMessage('extractNameFromRow: extracted (fallback): ' + nameText, 'log'); return nameText; }
+                if (nameText) { return nameText; }
             }
-            addLogMessage('extractNameFromRow: no name found in row ' + rowNumber, 'warn');
             return null;
         } catch (error) {
             addLogMessage('extractNameFromRow: error in row ' + rowNumber + ': ' + error, 'error');
@@ -706,7 +884,6 @@
     }
 
     function updateLeftPanelList(name, rowNumber) {
-        addLogMessage('updateLeftPanelList: adding ' + name, 'log');
         const leftPanel = document.getElementById('elog-left-panel');
         if (!leftPanel) { addLogMessage('updateLeftPanelList: left panel not found', 'error'); return; }
         const item = createListItem(name, null, null, rowNumber);
@@ -716,20 +893,17 @@
     }
 
     function checkAndUpdateRightPanel(scannedName) {
-        addLogMessage('checkAndUpdateRightPanel: checking ' + scannedName, 'log');
         const normalizedScanned = elogNormalizeName(scannedName);
         for (let i = 0; i < elogState.parsedNames.length; i++) {
             const nameObj = elogState.parsedNames[i];
             if (nameObj.normalized === normalizedScanned && nameObj.status === 'Pending') {
                 nameObj.status = 'Found';
                 updateRightPanelItemStatus(nameObj.normalized, 'Found', 'found');
-                addLogMessage('checkAndUpdateRightPanel: match found for ' + scannedName, 'log');
             }
         }
     }
 
     function updateRightPanelItemStatus(normalized, statusText, statusType) {
-        addLogMessage('updateRightPanelItemStatus: updating ' + normalized + ' to ' + statusText, 'log');
         const rightPanel = document.getElementById('elog-right-panel');
         if (!rightPanel) { return; }
         const items = rightPanel.querySelectorAll('.' + ELOG_CSS_CLASSNAMES.listItem);
@@ -780,7 +954,6 @@
 
     function performRescan() {
         addLogMessage('performRescan: restarting scan with auto-scroll', 'log');
-        updateAriaLiveRegion(ELOG_LABELS.progressRescanning);
         for (let i = 0; i < elogState.observers.length; i++) {
             try {
                 elogState.observers[i].disconnect();
@@ -801,19 +974,21 @@
             cancelIdleCallback(elogState.idleCallbackId);
             elogState.idleCallbackId = null;
         }
-        const leftPanel = document.getElementById('elog-left-panel');
-        if (leftPanel) {
-            leftPanel.innerHTML = '';
-        }
         elogState.scannedNames = [];
         elogState.seenNormalizedNames = new Set();
         elogState.leftPanelRowIndex = 0;
         elogState.userScrollPaused = false;
-        updateScanStatus(ELOG_LABELS.progressRescanning, 'progress');
-        const title = document.getElementById('elog-progress-title');
-        if (title) {
-            title.textContent = 'ELog Staff Entries - ' + ELOG_LABELS.progressRescanning;
+        elogState.isAddingEntries = false;
+        elogState.addQueue = [];
+        elogState.addQueueIndex = 0;
+        for (let pi = 0; pi < elogState.parsedNames.length; pi++) {
+            elogState.parsedNames[pi].status = 'Pending';
         }
+        var progressModal = document.getElementById('elog-progress-modal');
+        if (progressModal && progressModal.parentNode) {
+            progressModal.parentNode.removeChild(progressModal);
+        }
+        showCollectingDataPanel('elog', 'Add Training Log Staff Entries');
         addLogMessage('performRescan: starting auto-scroll scan', 'log');
         autoScrollScan({
             onRow: function(name, normalized) {
@@ -824,13 +999,16 @@
             },
             onDone: function(data) {
                 addLogMessage('performRescan: done - total=' + data.total + ' reason=' + data.reason, 'log');
+                removeCollectingDataPanel('elog');
                 if (data.reason !== 'stopped' && elogState.isRunning) {
-                    addLogMessage('performRescan: re-scan complete, starting add entries flow', 'log');
-                    beginAddNonDuplicateELogEntries();
+                    addLogMessage('performRescan: re-scan complete, showing progress panel', 'log');
+                    showELogProgressPanel();
                 }
             },
             onError: function(error) {
                 addLogMessage('performRescan: error - ' + error.message, 'error');
+                removeCollectingDataPanel('elog');
+                showELogProgressPanel();
                 updateScanStatus('Error', 'error');
                 showInlineNotice('Error during re-scan: ' + error.message);
             }
@@ -851,9 +1029,7 @@
     }
 
     function getFirstAndLast(name) {
-        addLogMessage('getFirstAndLast: parsing ' + name, 'log');
         if (!name || !name.trim()) {
-            addLogMessage('getFirstAndLast: empty name', 'warn');
             return ['', ''];
         }
         const suffixPattern = /^(jr|sr|ii|iii|iv)\.?$/i;
@@ -866,29 +1042,22 @@
             }
         }
         if (filtered.length === 0) {
-            addLogMessage('getFirstAndLast: no tokens', 'warn');
             return ['', ''];
         }
         if (filtered.length === 1) {
-            addLogMessage('getFirstAndLast: single token=' + filtered[0], 'log');
             return [filtered[0], filtered[0]];
         }
         const first = filtered[0];
         let last = filtered[filtered.length - 1];
         if (filtered.length > 2 && suffixPattern.test(last)) {
-            addLogMessage('getFirstAndLast: stripping suffix=' + last, 'log');
             last = filtered[filtered.length - 2];
         }
-        addLogMessage('getFirstAndLast: first=' + first + ' last=' + last, 'log');
         return [first, last];
     }
 
     function normalizeFirstLastPair(name) {
-        addLogMessage('normalizeFirstLastPair: name=' + name, 'log');
         const pair = getFirstAndLast(name);
-        const result = elogNormalizeName(pair[0] + ' ' + pair[1]);
-        addLogMessage('normalizeFirstLastPair: result=' + result, 'log');
-        return result;
+        return elogNormalizeName(pair[0] + ' ' + pair[1]);
     }
 
     function buildExistingPairsFromScan(scannedNamesArray) {
@@ -952,11 +1121,10 @@
         const items = rightPanel.querySelectorAll('.' + ELOG_CSS_CLASSNAMES.listItem);
         for (let i = 0; i < items.length; i++) {
             const item = items[i];
-            const normalized = item.getAttribute('data-normalized');
-            if (!normalized) {
+            const itemPairKey = item.getAttribute('data-pairkey');
+            if (!itemPairKey) {
                 continue;
             }
-            const itemPairKey = normalizeFirstLastPair(item.querySelector('span') ? item.querySelector('span:not(.elog-status-badge)').textContent : '');
             if (itemPairKey === pairKey) {
                 const badge = item.querySelector('.elog-status-badge');
                 if (badge) {
@@ -1115,112 +1283,204 @@
         }
     }
 
+    function typeIntoFilteredInput(inputEl, text) {
+        addLogMessage('typeIntoFilteredInput: typing "' + text + '"', 'log');
+        inputEl.focus();
+        inputEl.value = text;
+        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+        inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    function clearFilteredInput(inputEl) {
+        addLogMessage('clearFilteredInput: clearing input', 'log');
+        inputEl.focus();
+        inputEl.value = '';
+        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+        inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    function scanFilteredOptionsForMatch(targetPairKey, selectorSet) {
+        var options = document.querySelectorAll(selectorSet.optionItem);
+        addLogMessage('scanFilteredOptionsForMatch: checking ' + options.length + ' options for pairKey=' + targetPairKey, 'log');
+        for (var oi = 0; oi < options.length; oi++) {
+            var optText = options[oi].getAttribute('aria-label') || (options[oi].textContent || '').trim();
+            optText = optText.trim();
+            var optPairKey = normalizeFirstLastPair(optText);
+            if (optPairKey === targetPairKey) {
+                addLogMessage('scanFilteredOptionsForMatch: exact match at index ' + oi + ' text=' + optText, 'log');
+                return { element: options[oi], matchType: 'exact' };
+            }
+        }
+        var targetParts = targetPairKey.split(' ');
+        for (var si = 0; si < options.length; si++) {
+            var sOptText = options[si].getAttribute('aria-label') || (options[si].textContent || '').trim();
+            sOptText = sOptText.trim();
+            var sOptPairKey = normalizeFirstLastPair(sOptText);
+            var optParts = sOptPairKey.split(' ');
+            if (targetParts.length >= 2 && optParts.length >= 2) {
+                if (targetParts[0] === optParts[0] && targetParts[targetParts.length - 1] === optParts[optParts.length - 1]) {
+                    addLogMessage('scanFilteredOptionsForMatch: similar match at index ' + si + ' text=' + sOptText, 'log');
+                    return { element: options[si], matchType: 'similar' };
+                }
+            }
+        }
+        addLogMessage('scanFilteredOptionsForMatch: no match found', 'log');
+        return null;
+    }
+
     function attemptSelectByScrollingForName(targetDisplay, targetPairKey) {
         addLogMessage('attemptSelectByScrollingForName: target=' + targetDisplay + ' pairKey=' + targetPairKey, 'log');
         return new Promise(function(resolve) {
-            var viewportEl = findDropdownViewportElement();
-            if (!viewportEl) {
-                addLogMessage('attemptSelectByScrollingForName: no viewport element', 'error');
+            var inputEl = document.querySelector(ELOG_FORM_SELECTORS.memberInput);
+            if (!inputEl) {
+                addLogMessage('attemptSelectByScrollingForName: member input not found', 'error');
                 resolve(false);
                 return;
             }
-            restoreListScrollPosition(viewportEl);
-            var passCount = 0;
-            var lastScrollTop = -1;
-            var lastOptionSnapshot = '';
-            var startTime = Date.now();
-
-            function scanAndScroll() {
+            var nameParts = getFirstAndLast(targetDisplay);
+            var firstName = nameParts[0];
+            var lastName = nameParts[1];
+            addLogMessage('attemptSelectByScrollingForName: firstName=' + firstName + ' lastName=' + lastName, 'log');
+            typeIntoFilteredInput(inputEl, firstName);
+            var firstNameTid = setTimeout(function() {
                 if (!elogState.isRunning) {
-                    addLogMessage('attemptSelectByScrollingForName: stopped', 'warn');
-                    rememberListScrollPosition(viewportEl);
+                    clearFilteredInput(inputEl);
                     resolve(false);
                     return;
                 }
-                if (Date.now() - startTime > ELOG_FORM_TIMEOUTS.maxSelectDurationMs) {
-                    addLogMessage('attemptSelectByScrollingForName: max duration exceeded', 'warn');
-                    rememberListScrollPosition(viewportEl);
-                    resolve(false);
+                var match = scanFilteredOptionsForMatch(targetPairKey, ELOG_FORM_SELECTORS);
+                if (match) {
+                    addLogMessage('attemptSelectByScrollingForName: found via firstName filter (' + match.matchType + ')', 'log');
+                    match.element.click();
+                    var verifyTid1 = setTimeout(function() {
+                        resolve(true);
+                    }, ELOG_FORM_TIMEOUTS.settleMs);
+                    elogState.timeouts.push(verifyTid1);
                     return;
                 }
-                if (passCount >= ELOG_FORM_RETRY.maxScrollPasses) {
-                    addLogMessage('attemptSelectByScrollingForName: max passes reached', 'warn');
-                    rememberListScrollPosition(viewportEl);
-                    resolve(false);
-                    return;
-                }
-                var options = document.querySelectorAll(ELOG_FORM_SELECTORS.optionItem);
-                var retryCount = 0;
-                function tryScanOptions() {
-                    options = document.querySelectorAll(ELOG_FORM_SELECTORS.optionItem);
-                    if (options.length === 0 && retryCount < ELOG_FORM_RETRY.selectRetriesPerScroll) {
-                        retryCount++;
-                        addLogMessage('attemptSelectByScrollingForName: empty render, retry ' + retryCount, 'log');
-                        var rtid = setTimeout(tryScanOptions, ELOG_FORM_TIMEOUTS.waitOptionRenderMs);
-                        elogState.timeouts.push(rtid);
-                        return;
-                    }
-                    var found = false;
-                    var optionTexts = [];
-                    for (var oi = 0; oi < options.length; oi++) {
-                        var optText = (options[oi].textContent || '').trim();
-                        optionTexts.push(optText);
-                        var optPairKey = normalizeFirstLastPair(optText);
-                        if (optPairKey === targetPairKey) {
-                            addLogMessage('attemptSelectByScrollingForName: match found at index ' + oi + ' text=' + optText, 'log');
-                            options[oi].click();
-                            found = true;
-                            rememberListScrollPosition(viewportEl);
-                            var verifyTid = setTimeout(function() {
-                                var inputEl = document.querySelector(ELOG_FORM_SELECTORS.memberInput);
-                                if (inputEl && inputEl.value && inputEl.value.trim()) {
-                                    addLogMessage('attemptSelectByScrollingForName: selection verified via input value', 'log');
-                                    resolve(true);
-                                } else {
-                                    var listGone = !document.querySelector(ELOG_FORM_SELECTORS.listContainer);
-                                    if (listGone) {
-                                        addLogMessage('attemptSelectByScrollingForName: selection verified via list close', 'log');
-                                        resolve(true);
-                                    } else {
-                                        addLogMessage('attemptSelectByScrollingForName: selection not verified, treating as success', 'log');
-                                        resolve(true);
-                                    }
-                                }
+                addLogMessage('attemptSelectByScrollingForName: not found with firstName, trying lastName', 'log');
+                if (lastName && lastName !== firstName) {
+                    typeIntoFilteredInput(inputEl, lastName);
+                    var lastNameTid = setTimeout(function() {
+                        if (!elogState.isRunning) {
+                            clearFilteredInput(inputEl);
+                            resolve(false);
+                            return;
+                        }
+                        var match2 = scanFilteredOptionsForMatch(targetPairKey, ELOG_FORM_SELECTORS);
+                        if (match2) {
+                            addLogMessage('attemptSelectByScrollingForName: found via lastName filter (' + match2.matchType + ')', 'log');
+                            match2.element.click();
+                            var verifyTid2 = setTimeout(function() {
+                                resolve(true);
                             }, ELOG_FORM_TIMEOUTS.settleMs);
-                            elogState.timeouts.push(verifyTid);
-                            break;
+                            elogState.timeouts.push(verifyTid2);
+                            return;
                         }
-                    }
-                    if (!found) {
-                        var currentSnapshot = optionTexts.join('|');
-                        var currentTop = viewportEl.scrollTop;
-                        var noProgress = (currentTop === lastScrollTop && currentSnapshot === lastOptionSnapshot);
-                        if (noProgress) {
-                            passCount++;
-                            addLogMessage('attemptSelectByScrollingForName: no progress pass ' + passCount, 'log');
-                        }
-                        lastScrollTop = currentTop;
-                        lastOptionSnapshot = currentSnapshot;
-                        var stepSize = Math.round(viewportEl.clientHeight * 0.7);
-                        var maxScroll = viewportEl.scrollHeight - viewportEl.clientHeight;
-                        var newTop = Math.min(currentTop + stepSize, maxScroll);
-                        if (newTop <= currentTop && currentTop > 0) {
-                            addLogMessage('attemptSelectByScrollingForName: at bottom, trying reverse', 'log');
-                            newTop = 0;
-                            lastScrollTop = -1;
-                            lastOptionSnapshot = '';
-                            passCount++;
-                        }
-                        viewportEl.scrollTop = newTop;
-                        var scrollTid = setTimeout(scanAndScroll, ELOG_FORM_TIMEOUTS.scrollIdleMs);
-                        elogState.timeouts.push(scrollTid);
+                        addLogMessage('attemptSelectByScrollingForName: not found with lastName, falling back to scroll', 'log');
+                        clearFilteredInput(inputEl);
+                        var scrollFallbackTid = setTimeout(function() {
+                            scrollSearchForName(targetPairKey, ELOG_FORM_SELECTORS, ELOG_FORM_TIMEOUTS, ELOG_FORM_RETRY, elogState, resolve);
+                        }, ELOG_FORM_TIMEOUTS.waitFilterMs);
+                        elogState.timeouts.push(scrollFallbackTid);
+                    }, ELOG_FORM_TIMEOUTS.waitFilterMs);
+                    elogState.timeouts.push(lastNameTid);
+                } else {
+                    addLogMessage('attemptSelectByScrollingForName: lastName same as firstName, falling back to scroll', 'log');
+                    clearFilteredInput(inputEl);
+                    var scrollTid = setTimeout(function() {
+                        scrollSearchForName(targetPairKey, ELOG_FORM_SELECTORS, ELOG_FORM_TIMEOUTS, ELOG_FORM_RETRY, elogState, resolve);
+                    }, ELOG_FORM_TIMEOUTS.waitFilterMs);
+                    elogState.timeouts.push(scrollTid);
+                }
+            }, ELOG_FORM_TIMEOUTS.waitFilterMs);
+            elogState.timeouts.push(firstNameTid);
+        });
+    }
+
+    function scrollSearchForName(targetPairKey, selectors, timeouts, retryConfig, state, resolve) {
+        addLogMessage('scrollSearchForName: fallback scroll for pairKey=' + targetPairKey, 'log');
+        var viewportEl = document.querySelector(selectors.virtualViewport);
+        if (!viewportEl) {
+            addLogMessage('scrollSearchForName: no viewport element', 'error');
+            resolve(false);
+            return;
+        }
+        var passCount = 0;
+        var lastScrollTop = -1;
+        var lastOptionSnapshot = '';
+        var startTime = Date.now();
+        function scanAndScroll() {
+            if (!state.isRunning) {
+                resolve(false);
+                return;
+            }
+            if (Date.now() - startTime > timeouts.maxSelectDurationMs) {
+                addLogMessage('scrollSearchForName: max duration exceeded', 'warn');
+                resolve(false);
+                return;
+            }
+            if (passCount >= retryConfig.maxScrollPasses) {
+                addLogMessage('scrollSearchForName: max passes reached', 'warn');
+                resolve(false);
+                return;
+            }
+            var options = document.querySelectorAll(selectors.optionItem);
+            var retryCount = 0;
+            function tryScanOptions() {
+                options = document.querySelectorAll(selectors.optionItem);
+                if (options.length === 0 && retryCount < retryConfig.selectRetriesPerScroll) {
+                    retryCount++;
+                    var rtid = setTimeout(tryScanOptions, timeouts.waitOptionRenderMs);
+                    state.timeouts.push(rtid);
+                    return;
+                }
+                var found = false;
+                var optionTexts = [];
+                for (var oi = 0; oi < options.length; oi++) {
+                    var optText = options[oi].getAttribute('aria-label') || (options[oi].textContent || '').trim();
+                    optText = optText.trim();
+                    optionTexts.push(optText);
+                    var optPairKey = normalizeFirstLastPair(optText);
+                    if (optPairKey === targetPairKey) {
+                        addLogMessage('scrollSearchForName: match found at index ' + oi + ' text=' + optText, 'log');
+                        options[oi].click();
+                        found = true;
+                        var verifyTid = setTimeout(function() {
+                            resolve(true);
+                        }, timeouts.settleMs);
+                        state.timeouts.push(verifyTid);
+                        break;
                     }
                 }
-                tryScanOptions();
+                if (!found) {
+                    var currentSnapshot = optionTexts.join('|');
+                    var currentTop = viewportEl.scrollTop;
+                    var noProgress = (currentTop === lastScrollTop && currentSnapshot === lastOptionSnapshot);
+                    if (noProgress) {
+                        passCount++;
+                        addLogMessage('scrollSearchForName: no progress pass ' + passCount, 'log');
+                    }
+                    lastScrollTop = currentTop;
+                    lastOptionSnapshot = currentSnapshot;
+                    var stepSize = Math.round(viewportEl.clientHeight * 0.7);
+                    var maxScroll = viewportEl.scrollHeight - viewportEl.clientHeight;
+                    var newTop = Math.min(currentTop + stepSize, maxScroll);
+                    if (newTop <= currentTop && currentTop > 0) {
+                        newTop = 0;
+                        lastScrollTop = -1;
+                        lastOptionSnapshot = '';
+                        passCount++;
+                    }
+                    viewportEl.scrollTop = newTop;
+                    var scrollTid = setTimeout(scanAndScroll, timeouts.scrollIdleMs);
+                    state.timeouts.push(scrollTid);
+                }
             }
-            var initTid = setTimeout(scanAndScroll, ELOG_FORM_TIMEOUTS.scrollIdleMs);
-            elogState.timeouts.push(initTid);
-        });
+            tryScanOptions();
+        }
+        var initTid = setTimeout(scanAndScroll, timeouts.scrollIdleMs);
+        state.timeouts.push(initTid);
     }
 
     function clickSaveAndAddAnother() {
@@ -1307,6 +1567,24 @@
             }
             updateRightPanelSummary(elogState.counters);
             updateAriaLiveRegion('Processing complete. Added: ' + elogState.counters.added + ', Duplicates: ' + elogState.counters.duplicates + ', Failures: ' + elogState.counters.failures);
+            if (elogState.counters.added > 0) {
+                var existingBtn = document.getElementById('elog-select-checkboxes-btn');
+                if (!existingBtn) {
+                    var btnContainer = document.getElementById('elog-right-panel');
+                    if (btnContainer) {
+                        var selectBtn = document.createElement('button');
+                        selectBtn.id = 'elog-select-checkboxes-btn';
+                        selectBtn.textContent = 'Select Checkboxes';
+                        selectBtn.style.cssText = 'display: block; width: 100%; margin-top: 12px; padding: 10px 16px; background: rgba(100, 149, 237, 0.3); color: #6495ed; border: 1px solid rgba(100, 149, 237, 0.4); border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.2s ease;';
+                        selectBtn.onmouseover = function() { selectBtn.style.background = 'rgba(100, 149, 237, 0.45)'; };
+                        selectBtn.onmouseout = function() { selectBtn.style.background = 'rgba(100, 149, 237, 0.3)'; };
+                        selectBtn.onclick = function() {
+                            selectCheckboxesForAddedNames();
+                        };
+                        btnContainer.parentElement.appendChild(selectBtn);
+                    }
+                }
+            }
             var memberInput = document.querySelector(ELOG_FORM_SELECTORS.memberInput);
             if (memberInput) {
                 memberInput.focus();
@@ -1469,8 +1747,105 @@
         processNextStaffFromQueue();
     }
 
+    function selectCheckboxesForAddedNames() {
+        addLogMessage('selectCheckboxesForAddedNames: starting', 'log');
+        var addedPairKeys = new Set();
+        for (var qi = 0; qi < elogState.addQueue.length; qi++) {
+            if (elogState.addQueue[qi].status === ELOG_RUN_LABELS.statusAdded) {
+                addedPairKeys.add(elogState.addQueue[qi].pairKey);
+            }
+        }
+        addLogMessage('selectCheckboxesForAddedNames: addedPairKeys count=' + addedPairKeys.size, 'log');
+        if (addedPairKeys.size === 0) {
+            addLogMessage('selectCheckboxesForAddedNames: no added entries to select', 'warn');
+            return;
+        }
+        var gridTable = document.querySelector(ELOG_SELECTORS.gridTable);
+        if (!gridTable) {
+            addLogMessage('selectCheckboxesForAddedNames: grid table not found', 'error');
+            return;
+        }
+        var container = findScrollableContainer(gridTable);
+        if (!container) {
+            addLogMessage('selectCheckboxesForAddedNames: scrollable container not found', 'error');
+            return;
+        }
+        var btn = document.getElementById('elog-select-checkboxes-btn');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Selecting...';
+        }
+        var checkedPairKeys = new Set();
+        var noProgress = 0;
+        var lastScrollTop = -1;
+        var lastRowSnapshot = '';
+        container.scrollTo({ top: 0, behavior: 'auto' });
+        function scanAndCheck() {
+            var rows = gridTable.querySelectorAll(ELOG_SELECTORS.row);
+            var rowTexts = [];
+            for (var ri = 0; ri < rows.length; ri++) {
+                var row = rows[ri];
+                if (row.getAttribute('role') === 'columnheader') { continue; }
+                var name = extractNameFromRow(row, ri + 1);
+                if (!name) { continue; }
+                rowTexts.push(name);
+                var pk = normalizeFirstLastPair(name);
+                if (addedPairKeys.has(pk) && !checkedPairKeys.has(pk)) {
+                    var checkbox = row.querySelector('i[role="checkbox"]');
+                    if (checkbox && checkbox.getAttribute('aria-checked') === 'false') {
+                        addLogMessage('selectCheckboxesForAddedNames: clicking checkbox for ' + name, 'log');
+                        checkbox.click();
+                        checkedPairKeys.add(pk);
+                    } else if (checkbox && checkbox.getAttribute('aria-checked') === 'true') {
+                        addLogMessage('selectCheckboxesForAddedNames: already checked for ' + name, 'log');
+                        checkedPairKeys.add(pk);
+                    }
+                }
+            }
+            return rowTexts.join('|');
+        }
+        var initialSnapshot = scanAndCheck();
+        function scrollLoop() {
+            if (checkedPairKeys.size >= addedPairKeys.size) {
+                addLogMessage('selectCheckboxesForAddedNames: all checkboxes selected (' + checkedPairKeys.size + ')', 'log');
+                finishSelection();
+                return;
+            }
+            var currTop = container.scrollTop;
+            var maxScroll = container.scrollHeight - container.clientHeight;
+            var newTop = Math.min(currTop + ELOG_SCROLL.stepPx, maxScroll);
+            container.scrollTo({ top: newTop, behavior: 'auto' });
+            setTimeout(function() {
+                var snapshot = scanAndCheck();
+                var currentTop = container.scrollTop;
+                if (currentTop === lastScrollTop && snapshot === lastRowSnapshot) {
+                    noProgress++;
+                } else {
+                    noProgress = 0;
+                }
+                lastScrollTop = currentTop;
+                lastRowSnapshot = snapshot;
+                if (noProgress >= ELOG_SCROLL.maxNoProgressIterations || currentTop >= maxScroll) {
+                    addLogMessage('selectCheckboxesForAddedNames: end of table reached, checked=' + checkedPairKeys.size + ' of ' + addedPairKeys.size, 'log');
+                    finishSelection();
+                    return;
+                }
+                scrollLoop();
+            }, ELOG_SCROLL.settleDelayMs);
+        }
+        function finishSelection() {
+            addLogMessage('selectCheckboxesForAddedNames: finished, checked ' + checkedPairKeys.size + ' checkboxes', 'log');
+            if (btn) {
+                btn.textContent = 'Done (' + checkedPairKeys.size + ' selected)';
+                btn.disabled = true;
+                btn.style.background = 'rgba(107, 207, 127, 0.3)';
+                btn.style.color = '#6bcf7f';
+            }
+        }
+        setTimeout(scrollLoop, ELOG_SCROLL.settleDelayMs);
+    }
+
     function findScrollableContainer(gridEl) {
-        addLogMessage('findScrollableContainer: searching for scrollable ancestor', 'log');
         if (!gridEl) {
             addLogMessage('findScrollableContainer: gridEl is null', 'warn');
             return null;
@@ -1480,19 +1855,15 @@
             const style = window.getComputedStyle(current);
             const overflowY = style.overflowY;
             const scrollDiff = current.scrollHeight - current.clientHeight;
-            addLogMessage('findScrollableContainer: checking ' + (current.className || current.tagName) + ' scrollDiff=' + scrollDiff + ' overflowY=' + overflowY, 'log');
             if (scrollDiff >= 20 && (overflowY === 'scroll' || overflowY === 'auto')) {
-                addLogMessage('findScrollableContainer: found scrollable container', 'log');
                 return current;
             }
             current = current.parentElement;
         }
-        addLogMessage('findScrollableContainer: no scrollable ancestor, using gridEl', 'warn');
         return gridEl;
     }
 
     function getRenderedRowCount() {
-        addLogMessage('getRenderedRowCount: counting rows', 'log');
         const gridTable = document.querySelector(ELOG_SELECTORS.gridTable);
         if (!gridTable) {
             addLogMessage('getRenderedRowCount: grid not found', 'warn');
@@ -1505,12 +1876,10 @@
                 count++;
             }
         }
-        addLogMessage('getRenderedRowCount: count=' + count, 'log');
         return count;
     }
 
     function getRenderedLastRowKey() {
-        addLogMessage('getRenderedLastRowKey: computing key', 'log');
         const gridTable = document.querySelector(ELOG_SELECTORS.gridTable);
         if (!gridTable) {
             addLogMessage('getRenderedLastRowKey: grid not found', 'warn');
@@ -1532,7 +1901,6 @@
         if (cells.length > 0) {
             const firstCellText = cells[0].textContent.trim();
             if (firstCellText) {
-                addLogMessage('getRenderedLastRowKey: key=' + firstCellText, 'log');
                 return firstCellText;
             }
         }
@@ -1543,12 +1911,10 @@
             hash = hash & hash;
         }
         const key = 'hash_' + hash;
-        addLogMessage('getRenderedLastRowKey: hash key=' + key, 'log');
         return key;
     }
 
     function awaitSettle(container) {
-        addLogMessage('awaitSettle: waiting for settle', 'log');
         return new Promise(function(resolve) {
             const gridTable = document.querySelector(ELOG_SELECTORS.gridTable);
             let resolved = false;
@@ -1563,7 +1929,6 @@
                             elogState.observers.splice(idx, 1);
                         }
                     }
-                    addLogMessage('awaitSettle: timeout after ' + ELOG_SCROLL.settleDelayMs + 'ms', 'log');
                     resolve();
                 }
             }, ELOG_SCROLL.settleDelayMs);
@@ -1578,7 +1943,6 @@
                         if (idx > -1) {
                             elogState.observers.splice(idx, 1);
                         }
-                        addLogMessage('awaitSettle: mutation detected', 'log');
                         resolve();
                     }
                 });
@@ -1589,17 +1953,14 @@
     }
 
     function setAriaBusyOn() {
-        addLogMessage('setAriaBusyOn: setting aria-busy', 'log');
         const target = document.querySelector(ELOG_ATTRS.ariaBusyTarget);
         if (target) {
             elogState.prevAriaBusy = target.getAttribute(ELOG_ATTRS.ariaBusyAttr);
             target.setAttribute(ELOG_ATTRS.ariaBusyAttr, 'true');
-            addLogMessage('setAriaBusyOn: prev=' + elogState.prevAriaBusy, 'log');
         }
     }
 
     function setAriaBusyOff() {
-        addLogMessage('setAriaBusyOff: restoring aria-busy', 'log');
         const target = document.querySelector(ELOG_ATTRS.ariaBusyTarget);
         if (target) {
             if (elogState.prevAriaBusy !== null) {
@@ -1612,12 +1973,10 @@
     }
 
     function computeEndReached(container, noProgress) {
-        addLogMessage('computeEndReached: checking end', 'log');
         if (!container) {
             return true;
         }
         const atBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 1;
-        addLogMessage('computeEndReached: atBottom=' + atBottom + ' noProgress=' + noProgress, 'log');
         if (atBottom && noProgress >= 1) {
             return true;
         }
@@ -1625,7 +1984,6 @@
     }
 
     function restoreViewport(container, prevTop) {
-        addLogMessage('restoreViewport: prevTop=' + prevTop, 'log');
         if (!container) {
             return;
         }
@@ -1644,10 +2002,8 @@
         elogState.userScrollHandler = function() {
             const timeSinceAuto = Date.now() - elogState.lastAutoScrollTime;
             if (timeSinceAuto > 50 && !elogState.userScrollPaused) {
-                addLogMessage('observeUserScrollPause: user scroll detected, pausing', 'log');
                 elogState.userScrollPaused = true;
                 const resumeTimeout = setTimeout(function() {
-                    addLogMessage('observeUserScrollPause: resuming', 'log');
                     elogState.userScrollPaused = false;
                 }, ELOG_SCROLL.userScrollPauseMs);
                 elogState.timeouts.push(resumeTimeout);
@@ -1658,7 +2014,6 @@
     }
 
     function scanVisibleRowsOnce(onRow) {
-        addLogMessage('scanVisibleRowsOnce: scanning', 'log');
         const gridTable = document.querySelector(ELOG_SELECTORS.gridTable);
         if (!gridTable) {
             addLogMessage('scanVisibleRowsOnce: grid not found', 'warn');
@@ -1682,17 +2037,14 @@
             elogState.seenNormalizedNames.add(normalized);
             elogState.scannedNames.push(extractedName);
             newCount++;
-            addLogMessage('scanVisibleRowsOnce: new name: ' + extractedName, 'log');
             if (onRow) {
                 onRow(extractedName, normalized);
             }
         }
-        addLogMessage('scanVisibleRowsOnce: newCount=' + newCount, 'log');
         return newCount;
     }
 
     function updateAriaLiveRegion(message) {
-        addLogMessage('updateAriaLiveRegion: ' + message, 'log');
         const liveRegion = document.getElementById('elog-aria-live');
         if (liveRegion) {
             liveRegion.textContent = message;
@@ -1725,29 +2077,21 @@
         observeUserScrollPause(container);
         const startTime = Date.now();
         let noProgress = 0;
-        addLogMessage('autoScrollScan: initial scan', 'log');
         scanVisibleRowsOnce(function(name) {
             elogState.leftPanelRowIndex++;
-            updateLeftPanelList(name, elogState.leftPanelRowIndex);
-            checkAndUpdateRightPanel(name);
         });
         onProgress({ scanned: elogState.scannedNames.length });
-        updateAriaLiveRegion('Scanning: ' + elogState.scannedNames.length + ' names');
         function scrollLoop() {
-            addLogMessage('autoScrollScan: loop iteration', 'log');
             if (!elogState.isRunning) {
-                addLogMessage('autoScrollScan: stopped', 'warn');
                 updateAriaLiveRegion(ELOG_LABELS.progressStopped);
                 finishScan(ELOG_LABELS.progressStopped, 'stopped');
                 return;
             }
             if (Date.now() - startTime > ELOG_SCROLL.maxDurationMs) {
-                addLogMessage('autoScrollScan: timeout', 'warn');
                 finishScan(ELOG_LABELS.progressComplete, 'timeout');
                 return;
             }
             if (elogState.userScrollPaused) {
-                addLogMessage('autoScrollScan: paused by user', 'log');
                 const pt = setTimeout(scrollLoop, 100);
                 elogState.timeouts.push(pt);
                 return;
@@ -1757,7 +2101,6 @@
             const currTop = container.scrollTop;
             const maxScroll = container.scrollHeight - container.clientHeight;
             const newTop = Math.min(currTop + ELOG_SCROLL.stepPx, maxScroll);
-            addLogMessage('autoScrollScan: scroll ' + currTop + ' -> ' + newTop, 'log');
             elogState.lastAutoScrollTime = Date.now();
             container.scrollTo({ top: newTop, behavior: 'auto' });
             awaitSettle(container).then(function() {
@@ -1766,33 +2109,26 @@
                     const rc = getRenderedRowCount();
                     if (rc === 0 && attempts < ELOG_SCROLL.retryScanAttempts) {
                         attempts++;
-                        addLogMessage('autoScrollScan: zero rows, retry ' + attempts, 'log');
                         const rt = setTimeout(attemptScan, ELOG_SCROLL.retryScanDelayMs);
                         elogState.timeouts.push(rt);
                         return;
                     }
                     scanVisibleRowsOnce(function(name) {
                         elogState.leftPanelRowIndex++;
-                        updateLeftPanelList(name, elogState.leftPanelRowIndex);
-                        checkAndUpdateRightPanel(name);
                     });
                     onProgress({ scanned: elogState.scannedNames.length });
-                    updateAriaLiveRegion('Scanning: ' + elogState.scannedNames.length + ' names');
                     const currKey = getRenderedLastRowKey();
                     const currCount = getRenderedRowCount();
                     if (currKey === priorKey && currCount === priorCount) {
                         noProgress++;
-                        addLogMessage('autoScrollScan: no progress ' + noProgress, 'log');
                     } else {
                         noProgress = 0;
                     }
                     if (computeEndReached(container, noProgress)) {
-                        addLogMessage('autoScrollScan: end reached', 'log');
                         finishScan(ELOG_LABELS.progressNoMore, 'endReached');
                         return;
                     }
                     if (noProgress >= ELOG_SCROLL.maxNoProgressIterations) {
-                        addLogMessage('autoScrollScan: max no-progress', 'log');
                         finishScan(ELOG_LABELS.progressNoMore, 'noProgress');
                         return;
                     }
@@ -1810,25 +2146,8 @@
             });
         }
         function finishScan(label, reason) {
-            addLogMessage('autoScrollScan: finish reason=' + reason, 'log');
-            for (let i = 0; i < elogState.parsedNames.length; i++) {
-                const nameObj = elogState.parsedNames[i];
-                if (nameObj.status === 'Pending') {
-                    nameObj.status = 'Not Found';
-                    updateRightPanelItemStatus(nameObj.normalized, 'Not Found', 'notfound');
-                }
-            }
-            if (reason === 'stopped') {
-                updateScanStatus(ELOG_LABELS.progressStopped, 'stopped');
-            } else {
-                updateScanStatus(ELOG_LABELS.progressComplete, 'complete');
-            }
-            const title = document.getElementById('elog-progress-title');
-            if (title) {
-                title.textContent = 'ELog Staff Entries - ' + label;
-            }
+            addLogMessage('autoScrollScan: done reason=' + reason + ' total=' + elogState.scannedNames.length, 'log');
             setAriaBusyOff();
-            addLogMessage('autoScrollScan: total=' + elogState.scannedNames.length, 'log');
             onDone({ total: elogState.scannedNames.length, reason: reason });
         }
         const initTimeout = setTimeout(scrollLoop, ELOG_SCROLL.idleDelayMs);
@@ -1910,6 +2229,7 @@
         if (progressModal && progressModal.parentNode) {
             progressModal.parentNode.removeChild(progressModal);
         }
+        removeCollectingDataPanel('elog');
         resetELogState();
         addLogMessage('stopELog: cleanup complete', 'log');
     }
@@ -4411,6 +4731,1733 @@ function showResponsibilitiesProgressPanel(rolesData) {
         addLogMessage('stopCleanResponsibility: cleanup complete', 'log');
     }
 
+    function resetDoAState() {
+        addLogMessage('resetDoAState: resetting state', 'log');
+        doaState.isRunning = false;
+        doaState.observers = [];
+        doaState.timeouts = [];
+        doaState.intervals = [];
+        doaState.eventListeners = [];
+        doaState.idleCallbackIds = [];
+        doaState.parsedCandidates = [];
+        doaState.scannedNames = [];
+        doaState.seenNormalizedNames = new Set();
+        doaState.prevAriaBusy = null;
+        doaState.scrollContainer = null;
+        doaState.prevScrollTop = 0;
+        doaState.userScrollHandler = null;
+        doaState.userScrollPaused = false;
+        doaState.idleCallbackId = null;
+        doaState.leftPanelRowIndex = 0;
+        doaState.lastAutoScrollTime = 0;
+        doaState.addQueue = [];
+        doaState.addQueueIndex = 0;
+        doaState.existingPairs = new Set();
+        doaState.counters = { total: 0, added: 0, duplicates: 0, failures: 0, pending: 0 };
+        doaState.listScrollTop = 0;
+        doaState.roleListScrollTop = 0;
+        doaState.isAddingEntries = false;
+    }
+
+    function doaSetAriaBusyOn() {
+        addLogMessage('doaSetAriaBusyOn: setting aria-busy', 'log');
+        var target = document.querySelector(ELOG_ATTRS.ariaBusyTarget);
+        if (target) {
+            doaState.prevAriaBusy = target.getAttribute(ELOG_ATTRS.ariaBusyAttr);
+            target.setAttribute(ELOG_ATTRS.ariaBusyAttr, 'true');
+            addLogMessage('doaSetAriaBusyOn: prev=' + doaState.prevAriaBusy, 'log');
+        }
+    }
+
+    function doaSetAriaBusyOff() {
+        addLogMessage('doaSetAriaBusyOff: restoring aria-busy', 'log');
+        var target = document.querySelector(ELOG_ATTRS.ariaBusyTarget);
+        if (target) {
+            if (doaState.prevAriaBusy !== null) {
+                target.setAttribute(ELOG_ATTRS.ariaBusyAttr, doaState.prevAriaBusy);
+            } else {
+                target.removeAttribute(ELOG_ATTRS.ariaBusyAttr);
+            }
+            doaState.prevAriaBusy = null;
+        }
+    }
+
+    function doaWaitForElement(selector, timeout) {
+        addLogMessage('doaWaitForElement: waiting for ' + selector, 'log');
+        return new Promise(function(resolve, reject) {
+            var element = document.querySelector(selector);
+            if (element) {
+                addLogMessage('doaWaitForElement: found immediately', 'log');
+                resolve(element);
+                return;
+            }
+            var observer = new MutationObserver(function(mutations, obs) {
+                var el = document.querySelector(selector);
+                if (el) {
+                    obs.disconnect();
+                    var idx = doaState.observers.indexOf(obs);
+                    if (idx > -1) {
+                        doaState.observers.splice(idx, 1);
+                    }
+                    resolve(el);
+                }
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+            doaState.observers.push(observer);
+            var timeoutId = setTimeout(function() {
+                observer.disconnect();
+                var idx = doaState.observers.indexOf(observer);
+                if (idx > -1) {
+                    doaState.observers.splice(idx, 1);
+                }
+                addLogMessage('doaWaitForElement: timeout for ' + selector, 'warn');
+                reject(new Error('Timeout waiting for ' + selector));
+            }, timeout);
+            doaState.timeouts.push(timeoutId);
+        });
+    }
+
+    function doaDelay(ms) {
+        return new Promise(function(resolve) {
+            var tid = setTimeout(resolve, ms);
+            doaState.timeouts.push(tid);
+        });
+    }
+
+    function updateDoAAriaLive(message) {
+        addLogMessage('updateDoAAriaLive: ' + message, 'log');
+        var liveRegion = document.getElementById('doa-aria-live');
+        if (liveRegion) {
+            liveRegion.textContent = message;
+        }
+    }
+
+    function expandResponsibilityTokensToSet(tokens) {
+        addLogMessage('expandResponsibilityTokensToSet: tokens count=' + tokens.length, 'log');
+        var result = new Set();
+        var i = 0;
+        while (i < tokens.length) {
+            var current = tokens[i];
+            if (i + 2 < tokens.length && /^(to)$/i.test(tokens[i + 1])) {
+                var start = parseInt(current, 10);
+                var end = parseInt(tokens[i + 2], 10);
+                if (!isNaN(start) && !isNaN(end)) {
+                    var lo = Math.min(start, end);
+                    var hi = Math.max(start, end);
+                    for (var n = lo; n <= hi; n++) {
+                        result.add(n);
+                    }
+                    i += 3;
+                    continue;
+                }
+            }
+            if (i + 1 < tokens.length) {
+                var dashMatch = (current + tokens[i + 1]).match(/^(\d+)[\-\u2013\u2014](\d+)$/);
+                if (dashMatch) {
+                    var dStart = parseInt(dashMatch[1], 10);
+                    var dEnd = parseInt(dashMatch[2], 10);
+                    if (!isNaN(dStart) && !isNaN(dEnd)) {
+                        var dLo = Math.min(dStart, dEnd);
+                        var dHi = Math.max(dStart, dEnd);
+                        for (var dn = dLo; dn <= dHi; dn++) {
+                            result.add(dn);
+                        }
+                        i += 2;
+                        continue;
+                    }
+                }
+            }
+            var singleDash = current.match(/^(\d+)[\-\u2013\u2014](\d+)$/);
+            if (singleDash) {
+                var sdStart = parseInt(singleDash[1], 10);
+                var sdEnd = parseInt(singleDash[2], 10);
+                if (!isNaN(sdStart) && !isNaN(sdEnd)) {
+                    var sdLo = Math.min(sdStart, sdEnd);
+                    var sdHi = Math.max(sdStart, sdEnd);
+                    for (var sdn = sdLo; sdn <= sdHi; sdn++) {
+                        result.add(sdn);
+                    }
+                    i++;
+                    continue;
+                }
+            }
+            var num = parseInt(current, 10);
+            if (!isNaN(num)) {
+                result.add(num);
+            }
+            i++;
+        }
+        addLogMessage('expandResponsibilityTokensToSet: result size=' + result.size, 'log');
+        return result;
+    }
+
+    function parseDoAEntriesInput(rawText) {
+        addLogMessage('parseDoAEntriesInput: starting parse', 'log');
+        if (!rawText || !rawText.trim()) {
+            addLogMessage('parseDoAEntriesInput: empty input', 'warn');
+            return [];
+        }
+        var text = rawText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        text = text.replace(/[\u201c\u201d\u201e\u201f\u2018\u2019]+/g, '"');
+        text = text.replace(/-\s*\n\s*/g, '-');
+        var rawLines = text.split('\n');
+        var mergedLines = [];
+        var pendingQuote = false;
+        var buffer = '';
+        for (var li = 0; li < rawLines.length; li++) {
+            var line = rawLines[li];
+            if (pendingQuote) {
+                buffer = buffer + ' ' + line;
+                var quoteCount = 0;
+                for (var ci = 0; ci < buffer.length; ci++) {
+                    if (buffer[ci] === '"') {
+                        quoteCount++;
+                    }
+                }
+                if (quoteCount % 2 === 0) {
+                    pendingQuote = false;
+                    mergedLines.push(buffer);
+                    buffer = '';
+                }
+                continue;
+            }
+            var qc = 0;
+            for (var ci2 = 0; ci2 < line.length; ci2++) {
+                if (line[ci2] === '"') {
+                    qc++;
+                }
+            }
+            if (qc % 2 !== 0) {
+                pendingQuote = true;
+                buffer = line;
+                continue;
+            }
+            mergedLines.push(line);
+        }
+        if (buffer) {
+            mergedLines.push(buffer);
+        }
+        addLogMessage('parseDoAEntriesInput: merged into ' + mergedLines.length + ' lines', 'log');
+        var results = [];
+        var seenPairKeys = new Set();
+        for (var mi = 0; mi < mergedLines.length; mi++) {
+            var mline = mergedLines[mi].trim();
+            if (!mline) {
+                continue;
+            }
+            mline = mline.replace(/"+/g, '');
+            var parts = mline.split(/\t+/);
+            if (parts.length < 2) {
+                addLogMessage('parseDoAEntriesInput: line ' + mi + ' too few columns, skip', 'log');
+                continue;
+            }
+            var emailIdx = -1;
+            for (var pi = 0; pi < parts.length; pi++) {
+                if (parts[pi].indexOf('@') !== -1) {
+                    emailIdx = pi;
+                    break;
+                }
+            }
+            if (emailIdx === -1 || emailIdx + 1 >= parts.length) {
+                addLogMessage('parseDoAEntriesInput: line ' + mi + ' no email column or no role after email, skip', 'log');
+                continue;
+            }
+            var namePart = parts[0].trim();
+            if (!namePart) {
+                addLogMessage('parseDoAEntriesInput: line ' + mi + ' empty name, skip', 'log');
+                continue;
+            }
+            var rolePart = parts[emailIdx + 1].trim();
+            if (!rolePart) {
+                addLogMessage('parseDoAEntriesInput: line ' + mi + ' empty role, skip', 'log');
+                continue;
+            }
+            var numberPart = parts.slice(emailIdx + 2).join(' ');
+            var numTokens = numberPart.replace(/,/g, ' ').split(/\s+/).filter(function(t) {
+                return t.length > 0;
+            });
+            var numbersSet = expandResponsibilityTokensToSet(numTokens);
+            if (numbersSet.size === 0) {
+                addLogMessage('parseDoAEntriesInput: line ' + mi + ' no numbers for ' + namePart + ', skip', 'log');
+                continue;
+            }
+            var displayName = namePart.replace(/\s+/g, ' ').trim();
+            var nameTokens = displayName.split(' ');
+            var normalizedDisplay = [];
+            for (var nt = 0; nt < nameTokens.length; nt++) {
+                var token = nameTokens[nt];
+                if (token) {
+                    normalizedDisplay.push(token.charAt(0).toUpperCase() + token.slice(1).toLowerCase());
+                }
+            }
+            displayName = normalizedDisplay.join(' ');
+            var normalized = elogNormalizeName(displayName);
+            var pairKey = normalizeFirstLastPair(displayName);
+            var roleNorm = normalizeRoleName(rolePart);
+            if (!roleNorm.key) {
+                addLogMessage('parseDoAEntriesInput: line ' + mi + ' role normalize failed for ' + rolePart + ', skip', 'log');
+                continue;
+            }
+            var sortedNums = Array.from(numbersSet).sort(function(a, b) {
+                return a - b;
+            });
+            addLogMessage('parseDoAEntriesInput: line ' + mi + ' name=' + displayName + ' role=' + roleNorm.display + ' nums=[' + sortedNums.join(',') + ']', 'log');
+            results.push({
+                display: displayName,
+                normalized: normalized,
+                pairKey: pairKey,
+                roleDisplay: roleNorm.display,
+                roleKey: roleNorm.key,
+                numbersSet: numbersSet
+            });
+        }
+        addLogMessage('parseDoAEntriesInput: parsed ' + results.length + ' candidates', 'log');
+        return results;
+    }
+
+    function buildDoAQueueSorted(parsedCandidates) {
+        addLogMessage('buildDoAQueueSorted: building from ' + parsedCandidates.length + ' candidates', 'log');
+        var seenPairKeys = new Set();
+        var unique = [];
+        var duplicateIndices = [];
+        for (var i = 0; i < parsedCandidates.length; i++) {
+            var candidate = parsedCandidates[i];
+            if (seenPairKeys.has(candidate.pairKey)) {
+                addLogMessage('buildDoAQueueSorted: input duplicate pairKey=' + candidate.pairKey + ' display=' + candidate.display, 'log');
+                duplicateIndices.push(i);
+                continue;
+            }
+            seenPairKeys.add(candidate.pairKey);
+            unique.push({
+                display: candidate.display,
+                normalized: candidate.normalized,
+                pairKey: candidate.pairKey,
+                roleDisplay: candidate.roleDisplay,
+                roleKey: candidate.roleKey,
+                numbersSet: candidate.numbersSet,
+                status: DOA_LABELS.statusPending
+            });
+        }
+        unique.sort(function(a, b) {
+            var aPair = getFirstAndLast(a.display);
+            var bPair = getFirstAndLast(b.display);
+            var firstCmp = aPair[0].localeCompare(bPair[0], undefined, { sensitivity: 'base', numeric: true });
+            if (firstCmp !== 0) {
+                return firstCmp;
+            }
+            var lastCmp = aPair[1].localeCompare(bPair[1], undefined, { sensitivity: 'base', numeric: true });
+            if (lastCmp !== 0) {
+                return lastCmp;
+            }
+            return a.display.localeCompare(b.display, undefined, { sensitivity: 'base', numeric: true });
+        });
+        addLogMessage('buildDoAQueueSorted: unique=' + unique.length + ' duplicates=' + duplicateIndices.length, 'log');
+        return { queue: unique, duplicateIndices: duplicateIndices };
+    }
+
+    function showDoAInputPanel() {
+        addLogMessage('showDoAInputPanel: creating input panel', 'log');
+        var modal = document.createElement('div');
+        modal.id = 'doa-input-modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 20000; display: flex; align-items: center; justify-content: center;';
+        var container = document.createElement('div');
+        container.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; width: 600px; max-width: 90%; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); position: relative;';
+        container.setAttribute('role', 'dialog');
+        container.setAttribute('aria-modal', 'true');
+        container.setAttribute('aria-labelledby', 'doa-input-title');
+        var header = document.createElement('div');
+        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;';
+        var title = document.createElement('h3');
+        title.id = 'doa-input-title';
+        title.textContent = DOA_LABELS.featureButton;
+        title.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600; letter-spacing: 0.2px;';
+        var closeButton = document.createElement('button');
+        closeButton.innerHTML = '\u2715';
+        closeButton.setAttribute('aria-label', 'Close panel');
+        closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
+        closeButton.onmouseover = function() {
+            closeButton.style.background = 'rgba(255, 67, 54, 0.8)';
+        };
+        closeButton.onmouseout = function() {
+            closeButton.style.background = 'rgba(255, 255, 255, 0.2)';
+        };
+        closeButton.onclick = function() {
+            addLogMessage('showDoAInputPanel: closed by user', 'warn');
+            if (modal.parentNode) {
+                document.body.removeChild(modal);
+            }
+            stopDoA();
+            if (doaState.focusReturnElement) {
+                doaState.focusReturnElement.focus();
+            }
+        };
+        header.appendChild(title);
+        header.appendChild(closeButton);
+        var description = document.createElement('p');
+        description.textContent = 'Paste the DoA staff table below. Each row should contain name, codes, degree, email, role, and responsibility numbers (tab-separated).';
+        description.style.cssText = 'color: rgba(255, 255, 255, 0.9); margin: 0 0 12px 0; font-size: 14px; line-height: 1.4;';
+        var textarea = document.createElement('textarea');
+        textarea.id = 'doa-entries-input';
+        textarea.placeholder = 'Paste tab-separated staff table here...\nExample:\nPETER WINKLE\tPW\tMD\tp.winkle@cenexel.com\tPrincipal Investigator\tPI\t1 to 8\t13\t14';
+        textarea.setAttribute('aria-label', 'DoA staff entries input');
+        textarea.style.cssText = 'width: 100%; height: 200px; padding: 12px 14px; border: 2px solid rgba(255, 255, 255, 0.35); border-radius: 10px; background: rgba(255, 255, 255, 0.95); color: #1e293b; font-size: 13px; font-family: Consolas, monospace, Segoe UI, Tahoma, Geneva, Verdana, sans-serif; resize: vertical; outline: none; transition: all 0.25s ease; box-shadow: 0 2px 0 rgba(0,0,0,0.04) inset; box-sizing: border-box;';
+        textarea.onfocus = function() {
+            textarea.style.borderColor = '#8ea0ff';
+            textarea.style.boxShadow = '0 0 0 4px rgba(102, 126, 234, 0.25)';
+        };
+        textarea.onblur = function() {
+            textarea.style.borderColor = 'rgba(255, 255, 255, 0.35)';
+            textarea.style.boxShadow = '0 2px 0 rgba(0,0,0,0.04) inset';
+        };
+        var confirmButton = document.createElement('button');
+        confirmButton.textContent = 'Confirm';
+        confirmButton.disabled = true;
+        confirmButton.style.cssText = 'background: linear-gradient(135deg, #28a745 0%, #20c997 100%); border: 2px solid rgba(255, 255, 255, 0.35); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; letter-spacing: 0.2px; transition: all 0.25s ease; opacity: 0.5;';
+        var updateConfirmState = function() {
+            var parsed = parseDoAEntriesInput(textarea.value);
+            if (parsed.length > 0) {
+                confirmButton.disabled = false;
+                confirmButton.style.opacity = '1';
+                confirmButton.style.cursor = 'pointer';
+            } else {
+                confirmButton.disabled = true;
+                confirmButton.style.opacity = '0.5';
+                confirmButton.style.cursor = 'not-allowed';
+            }
+        };
+        textarea.oninput = updateConfirmState;
+        confirmButton.onmouseover = function() {
+            if (!confirmButton.disabled) {
+                confirmButton.style.background = 'linear-gradient(135deg, #218838 0%, #1ea085 100%)';
+            }
+        };
+        confirmButton.onmouseout = function() {
+            confirmButton.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
+        };
+        confirmButton.onclick = function() {
+            addLogMessage('showDoAInputPanel: Confirm clicked', 'log');
+            var parsed = parseDoAEntriesInput(textarea.value);
+            if (parsed.length === 0) {
+                addLogMessage('showDoAInputPanel: no valid entries parsed', 'warn');
+                return;
+            }
+            doaState.parsedCandidates = parsed;
+            addLogMessage('showDoAInputPanel: parsed ' + parsed.length + ' candidates', 'log');
+            if (modal.parentNode) {
+                document.body.removeChild(modal);
+            }
+            doaState.isRunning = true;
+            showCollectingDataPanel('doa', DOA_LABELS.featureButton);
+            startDoAScan();
+        };
+        var clearButton = document.createElement('button');
+        clearButton.textContent = 'Clear All';
+        clearButton.style.cssText = 'background: rgba(255, 255, 255, 0.18); border: 2px solid rgba(255, 255, 255, 0.35); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.25s ease; backdrop-filter: blur(2px);';
+        clearButton.onmouseover = function() {
+            clearButton.style.background = 'rgba(255, 255, 255, 0.28)';
+        };
+        clearButton.onmouseout = function() {
+            clearButton.style.background = 'rgba(255, 255, 255, 0.18)';
+        };
+        clearButton.onclick = function() {
+            addLogMessage('showDoAInputPanel: Clear All clicked', 'log');
+            textarea.value = '';
+            doaState.parsedCandidates = [];
+            confirmButton.disabled = true;
+            confirmButton.style.opacity = '0.5';
+            confirmButton.style.cursor = 'not-allowed';
+        };
+        var keyHandler = function(e) {
+            if (e.key === 'Escape') {
+                addLogMessage('showDoAInputPanel: Escape pressed', 'log');
+                if (modal.parentNode) {
+                    document.body.removeChild(modal);
+                }
+                stopDoA();
+                if (doaState.focusReturnElement) {
+                    doaState.focusReturnElement.focus();
+                }
+            }
+        };
+        document.addEventListener('keydown', keyHandler);
+        doaState.eventListeners.push({ element: document, type: 'keydown', handler: keyHandler });
+        var buttonContainer = document.createElement('div');
+        buttonContainer.style.cssText = 'display: flex; gap: 12px; margin-top: 20px; justify-content: flex-end;';
+        buttonContainer.appendChild(clearButton);
+        buttonContainer.appendChild(confirmButton);
+        container.appendChild(header);
+        container.appendChild(description);
+        container.appendChild(textarea);
+        container.appendChild(buttonContainer);
+        modal.appendChild(container);
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        modal.style.pointerEvents = 'none';
+        container.style.pointerEvents = 'auto';
+        makeDraggable(container, header);
+        document.body.appendChild(modal);
+        textarea.focus();
+        addLogMessage('showDoAInputPanel: input panel displayed', 'log');
+    }
+
+    function initializeDoARightPanel() {
+        addLogMessage('initializeDoARightPanel: initializing with parsed candidates', 'log');
+        var rightPanel = document.getElementById('doa-right-panel');
+        if (!rightPanel) {
+            addLogMessage('initializeDoARightPanel: right panel not found', 'error');
+            return;
+        }
+        rightPanel.innerHTML = '';
+        for (var i = 0; i < doaState.parsedCandidates.length; i++) {
+            var candidate = doaState.parsedCandidates[i];
+            var numsArr = Array.from(candidate.numbersSet).sort(function(a, b) {
+                return a - b;
+            });
+            var labelText = candidate.display + ' | ' + candidate.roleDisplay + ' | [' + numsArr.join(', ') + ']';
+            var item = createListItem(labelText, DOA_LABELS.statusPending, 'pending', i + 1);
+            item.setAttribute('data-pairkey', candidate.pairKey);
+            rightPanel.appendChild(item);
+        }
+        addLogMessage('initializeDoARightPanel: added ' + doaState.parsedCandidates.length + ' items', 'log');
+    }
+
+    function updateDoARightPanelStatus(pairKey, newStatus) {
+        addLogMessage('updateDoARightPanelStatus: pairKey=' + pairKey + ' status=' + newStatus, 'log');
+        var rightPanel = document.getElementById('doa-right-panel');
+        if (!rightPanel) {
+            addLogMessage('updateDoARightPanelStatus: right panel not found', 'error');
+            return;
+        }
+        var items = rightPanel.querySelectorAll('.' + ELOG_CSS_CLASSNAMES.listItem);
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            if (item.getAttribute('data-pairkey') === pairKey) {
+                var badge = item.querySelector('.elog-status-badge');
+                if (badge) {
+                    badge.textContent = newStatus;
+                    var badgeColor = 'rgba(255, 255, 255, 0.7)';
+                    var badgeBg = 'rgba(255, 255, 255, 0.1)';
+                    if (newStatus === DOA_LABELS.statusAdded) {
+                        badgeColor = '#6bcf7f';
+                        badgeBg = 'rgba(107, 207, 127, 0.2)';
+                    } else if (newStatus === DOA_LABELS.statusAlready) {
+                        badgeColor = '#ffa500';
+                        badgeBg = 'rgba(255, 165, 0, 0.2)';
+                    } else if (newStatus === DOA_LABELS.statusDuplicate) {
+                        badgeColor = '#ffa500';
+                        badgeBg = 'rgba(255, 165, 0, 0.2)';
+                    } else if (newStatus === DOA_LABELS.statusNotInDropdown || newStatus === DOA_LABELS.statusSelectionFailed || newStatus === DOA_LABELS.statusSaveFailed || newStatus === DOA_LABELS.statusRoleNotFound) {
+                        badgeColor = '#ff6b6b';
+                        badgeBg = 'rgba(255, 107, 107, 0.2)';
+                    } else if (newStatus === DOA_LABELS.statusTasksApplied) {
+                        badgeColor = '#6bcf7f';
+                        badgeBg = 'rgba(107, 207, 127, 0.2)';
+                    } else if (newStatus === DOA_LABELS.statusStopped) {
+                        badgeColor = '#aaa';
+                        badgeBg = 'rgba(170, 170, 170, 0.2)';
+                    } else if (newStatus === DOA_LABELS.statusPending) {
+                        badgeColor = '#ffd93d';
+                        badgeBg = 'rgba(255, 217, 61, 0.2)';
+                    }
+                    badge.style.color = badgeColor;
+                    badge.style.background = badgeBg;
+                }
+                break;
+            }
+        }
+    }
+
+    function updateDoARightPanelSummary(counters) {
+        addLogMessage('updateDoARightPanelSummary: total=' + counters.total + ' added=' + counters.added + ' dup=' + counters.duplicates + ' fail=' + counters.failures + ' pending=' + counters.pending, 'log');
+        var totalEl = document.getElementById('doa-summary-total');
+        var addedEl = document.getElementById('doa-summary-added');
+        var dupEl = document.getElementById('doa-summary-duplicates');
+        var failEl = document.getElementById('doa-summary-failures');
+        var pendingEl = document.getElementById('doa-summary-pending');
+        var percentEl = document.getElementById('doa-summary-percent');
+        if (totalEl) {
+            totalEl.textContent = String(counters.total);
+        }
+        if (addedEl) {
+            addedEl.textContent = String(counters.added);
+        }
+        if (dupEl) {
+            dupEl.textContent = String(counters.duplicates);
+        }
+        if (failEl) {
+            failEl.textContent = String(counters.failures);
+        }
+        if (pendingEl) {
+            pendingEl.textContent = String(counters.pending);
+        }
+        if (percentEl) {
+            var processed = counters.total - counters.pending;
+            var pct = counters.total > 0 ? Math.round((processed / counters.total) * 100) : 0;
+            percentEl.textContent = pct + '%';
+        }
+        updateDoAAriaLive('Added: ' + counters.added + ', Duplicates: ' + counters.duplicates + ', Pending: ' + counters.pending);
+    }
+
+    function updateDoAScanStatus(statusText, statusType) {
+        addLogMessage('updateDoAScanStatus: ' + statusText, 'log');
+        var badge = document.getElementById('doa-status-badge');
+        var titleEl = document.getElementById('doa-progress-title');
+        if (badge) {
+            badge.textContent = statusText;
+            if (statusType === 'complete') {
+                badge.style.background = 'rgba(107, 207, 127, 0.3)';
+                badge.style.color = '#6bcf7f';
+            } else if (statusType === 'error') {
+                badge.style.background = 'rgba(255, 107, 107, 0.3)';
+                badge.style.color = '#ff6b6b';
+            } else if (statusType === 'stopped') {
+                badge.style.background = 'rgba(170, 170, 170, 0.3)';
+                badge.style.color = '#aaa';
+            } else {
+                badge.style.background = 'rgba(255, 217, 61, 0.3)';
+                badge.style.color = '#ffd93d';
+            }
+        }
+        if (titleEl && statusType === 'complete') {
+            titleEl.textContent = 'DoA Log Staff Entries - Complete';
+        }
+    }
+
+    function showDoAProgressPanel() {
+        addLogMessage('showDoAProgressPanel: creating progress panel', 'log');
+        doaState.isRunning = true;
+        var modal = document.createElement('div');
+        modal.id = 'doa-progress-modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 20000; display: flex; align-items: center; justify-content: center;';
+        var container = document.createElement('div');
+        container.id = 'doa-progress-container';
+        container.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; width: 900px; max-width: 95%; max-height: 80vh; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); position: relative; display: flex; flex-direction: column;';
+        container.setAttribute('role', 'dialog');
+        container.setAttribute('aria-modal', 'true');
+        container.setAttribute('aria-labelledby', 'doa-progress-title');
+        var header = document.createElement('div');
+        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-shrink: 0;';
+        var titleContainer = document.createElement('div');
+        titleContainer.style.cssText = 'display: flex; align-items: center; gap: 12px;';
+        var titleEl = document.createElement('h3');
+        titleEl.id = 'doa-progress-title';
+        titleEl.textContent = 'DoA Log Staff Entries - Review';
+        titleEl.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600;';
+        var statusBadge = document.createElement('span');
+        statusBadge.id = 'doa-status-badge';
+        statusBadge.textContent = 'In Progress';
+        statusBadge.style.cssText = 'background: rgba(255, 255, 255, 0.3); color: #ffd93d; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 12px;';
+        titleContainer.appendChild(titleEl);
+        titleContainer.appendChild(statusBadge);
+        var headerButtons = document.createElement('div');
+        headerButtons.style.cssText = 'display: flex; gap: 8px; align-items: center;';
+        var closeButton = document.createElement('button');
+        closeButton.innerHTML = '\u2715';
+        closeButton.setAttribute('aria-label', 'Close and stop');
+        closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
+        closeButton.onmouseover = function() {
+            closeButton.style.background = 'rgba(255, 67, 54, 0.8)';
+        };
+        closeButton.onmouseout = function() {
+            closeButton.style.background = 'rgba(255, 255, 255, 0.2)';
+        };
+        closeButton.onclick = function() {
+            addLogMessage('showDoAProgressPanel: closed by user', 'warn');
+            if (modal.parentNode) {
+                document.body.removeChild(modal);
+            }
+            stopDoA();
+            if (doaState.focusReturnElement) {
+                doaState.focusReturnElement.focus();
+            }
+        };
+        headerButtons.appendChild(closeButton);
+        header.appendChild(titleContainer);
+        header.appendChild(headerButtons);
+        var panelsContainer = document.createElement('div');
+        panelsContainer.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 16px; flex: 1; min-height: 0; overflow: hidden;';
+        var leftPanel = createSubpanel('Scanned Log Entries', 'doa-left-panel', 'doa-left-search');
+        var rightPanel = createSubpanel('DoA Entries Status', 'doa-right-panel', 'doa-right-search');
+        panelsContainer.appendChild(leftPanel);
+        panelsContainer.appendChild(rightPanel);
+        var summaryFooter = document.createElement('div');
+        summaryFooter.id = 'doa-summary-footer';
+        summaryFooter.setAttribute('aria-label', 'Processing summary');
+        summaryFooter.style.cssText = 'display: flex; justify-content: space-around; align-items: center; padding: 10px 16px; background: rgba(0, 0, 0, 0.2); border-radius: 8px; margin-top: 12px; flex-shrink: 0;';
+        var summaryItems = [
+            { id: 'doa-summary-total', label: 'Total', value: '0' },
+            { id: 'doa-summary-added', label: 'Added', value: '0' },
+            { id: 'doa-summary-duplicates', label: 'Duplicates', value: '0' },
+            { id: 'doa-summary-failures', label: 'Failures', value: '0' },
+            { id: 'doa-summary-pending', label: 'Pending', value: '0' },
+            { id: 'doa-summary-percent', label: 'Progress', value: '0%' }
+        ];
+        for (var si = 0; si < summaryItems.length; si++) {
+            var summaryItem = document.createElement('div');
+            summaryItem.style.cssText = 'text-align: center;';
+            var valSpan = document.createElement('span');
+            valSpan.id = summaryItems[si].id;
+            valSpan.textContent = summaryItems[si].value;
+            valSpan.style.cssText = 'display: block; color: white; font-size: 16px; font-weight: 700;';
+            var labelSpan = document.createElement('span');
+            labelSpan.textContent = summaryItems[si].label;
+            labelSpan.style.cssText = 'display: block; color: rgba(255, 255, 255, 0.6); font-size: 11px; font-weight: 500; margin-top: 2px;';
+            summaryItem.appendChild(valSpan);
+            summaryItem.appendChild(labelSpan);
+            summaryFooter.appendChild(summaryItem);
+        }
+        var ariaLiveRegion = document.createElement('div');
+        ariaLiveRegion.id = 'doa-aria-live';
+        ariaLiveRegion.setAttribute('aria-live', 'polite');
+        ariaLiveRegion.setAttribute('aria-atomic', 'true');
+        ariaLiveRegion.style.cssText = 'position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;';
+        container.appendChild(header);
+        container.appendChild(panelsContainer);
+        container.appendChild(summaryFooter);
+        container.appendChild(ariaLiveRegion);
+        modal.appendChild(container);
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        modal.style.pointerEvents = 'none';
+        container.style.pointerEvents = 'auto';
+        makeDraggable(container, header);
+        document.body.appendChild(modal);
+        initializeDoARightPanel();
+        populateDoALeftPanel();
+        closeButton.focus();
+        addLogMessage('showDoAProgressPanel: progress panel displayed with all data populated', 'log');
+        updateDoAScanStatus('Scan Complete', 'complete');
+        var progressTitle = document.getElementById('doa-progress-title');
+        if (progressTitle) {
+            progressTitle.textContent = 'DoA Log Staff Entries - Adding Entries';
+        }
+        beginAddDoALogEntries();
+    }
+
+    function updateDoALeftPanelList(name, rowNumber) {
+        var leftPanel = document.getElementById('doa-left-panel');
+        if (!leftPanel) {
+            return;
+        }
+        var item = createListItem(name, null, null, rowNumber);
+        leftPanel.appendChild(item);
+        var searchInput = document.getElementById('doa-left-search');
+        if (searchInput && searchInput.value.trim()) {
+            filterSubpanelList('doa-left-panel', searchInput.value);
+        }
+    }
+
+    function populateDoALeftPanel() {
+        addLogMessage('populateDoALeftPanel: populating with ' + doaState.scannedNames.length + ' names', 'log');
+        var leftPanel = document.getElementById('doa-left-panel');
+        if (!leftPanel) {
+            addLogMessage('populateDoALeftPanel: left panel not found', 'error');
+            return;
+        }
+        leftPanel.innerHTML = '';
+        for (var i = 0; i < doaState.scannedNames.length; i++) {
+            var item = createListItem(doaState.scannedNames[i], null, null, i + 1);
+            leftPanel.appendChild(item);
+        }
+        addLogMessage('populateDoALeftPanel: populated ' + doaState.scannedNames.length + ' items', 'log');
+    }
+
+    function checkAndUpdateDoARightPanel(scannedName) {
+    }
+
+    function doaScanVisibleRowsOnce(onRow) {
+        var gridTable = document.querySelector(DOA_SELECTORS.mainGridTable);
+        if (!gridTable) {
+            return 0;
+        }
+        var rows = gridTable.querySelectorAll(DOA_SELECTORS.mainGridRow);
+        var newCount = 0;
+        var batchNames = [];
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            if (row.getAttribute('role') === 'columnheader') {
+                continue;
+            }
+            var cells = row.querySelectorAll(DOA_SELECTORS.mainGridCell);
+            if (cells.length <= ELOG_SELECTORS.nameCellIndex) {
+                continue;
+            }
+            var targetCell = cells[ELOG_SELECTORS.nameCellIndex];
+            var primaryElement = targetCell.querySelector(ELOG_SELECTORS.namePrimary);
+            var extractedName = null;
+            if (primaryElement) {
+                var brElement = primaryElement.querySelector('br');
+                if (brElement) {
+                    var nameText = '';
+                    for (var ni = 0; ni < primaryElement.childNodes.length; ni++) {
+                        var node = primaryElement.childNodes[ni];
+                        if (node.nodeName === 'BR') {
+                            break;
+                        }
+                        if (node.nodeType === Node.TEXT_NODE) {
+                            nameText += node.textContent;
+                        }
+                    }
+                    extractedName = nameText.trim().replace(/\s+/g, ' ');
+                } else {
+                    extractedName = primaryElement.textContent.trim().replace(/\s+/g, ' ');
+                }
+            }
+            if (!extractedName) {
+                var fallbackElement = targetCell.querySelector(ELOG_SELECTORS.nameFallback);
+                if (fallbackElement) {
+                    extractedName = fallbackElement.textContent.trim().replace(/\s+/g, ' ');
+                }
+            }
+            if (!extractedName) {
+                continue;
+            }
+            var normalized = elogNormalizeName(extractedName);
+            if (doaState.seenNormalizedNames.has(normalized)) {
+                continue;
+            }
+            doaState.seenNormalizedNames.add(normalized);
+            doaState.scannedNames.push(extractedName);
+            newCount++;
+            batchNames.push(extractedName);
+            if (onRow) {
+                onRow(extractedName, normalized);
+            }
+        }
+        if (batchNames.length > 0) {
+            addLogMessage('doaScanVisibleRowsOnce: batch of ' + batchNames.length + ' new names', 'log');
+        }
+        return newCount;
+    }
+
+    function doaObserveUserScrollPause(container) {
+        if (!container || doaState.userScrollHandler) {
+            return;
+        }
+        doaState.userScrollHandler = function() {
+            var timeSinceAuto = Date.now() - doaState.lastAutoScrollTime;
+            if (timeSinceAuto > 50 && !doaState.userScrollPaused) {
+                doaState.userScrollPaused = true;
+                var resumeTimeout = setTimeout(function() {
+                    doaState.userScrollPaused = false;
+                }, ELOG_SCROLL.userScrollPauseMs);
+                doaState.timeouts.push(resumeTimeout);
+            }
+        };
+        container.addEventListener('scroll', doaState.userScrollHandler);
+        doaState.eventListeners.push({ element: container, type: 'scroll', handler: doaState.userScrollHandler });
+    }
+
+    function doaAwaitSettle(container) {
+        return new Promise(function(resolve) {
+            var gridTable = document.querySelector(DOA_SELECTORS.mainGridTable);
+            var resolved = false;
+            var observer = null;
+            var timeoutId = setTimeout(function() {
+                if (!resolved) {
+                    resolved = true;
+                    if (observer) {
+                        observer.disconnect();
+                        var idx = doaState.observers.indexOf(observer);
+                        if (idx > -1) {
+                            doaState.observers.splice(idx, 1);
+                        }
+                    }
+                    resolve();
+                }
+            }, ELOG_SCROLL.settleDelayMs);
+            doaState.timeouts.push(timeoutId);
+            if (gridTable) {
+                observer = new MutationObserver(function() {
+                    if (!resolved) {
+                        resolved = true;
+                        clearTimeout(timeoutId);
+                        observer.disconnect();
+                        var idx = doaState.observers.indexOf(observer);
+                        if (idx > -1) {
+                            doaState.observers.splice(idx, 1);
+                        }
+                        resolve();
+                    }
+                });
+                observer.observe(gridTable, { childList: true, subtree: true });
+                doaState.observers.push(observer);
+            }
+        });
+    }
+
+    function doaGetRenderedLastRowKey() {
+        var gridTable = document.querySelector(DOA_SELECTORS.mainGridTable);
+        if (!gridTable) {
+            return '';
+        }
+        var rows = gridTable.querySelectorAll(DOA_SELECTORS.mainGridRow);
+        var lastDataRow = null;
+        for (var i = rows.length - 1; i >= 0; i--) {
+            if (rows[i].getAttribute('role') !== 'columnheader') {
+                lastDataRow = rows[i];
+                break;
+            }
+        }
+        if (!lastDataRow) {
+            return '';
+        }
+        var cells = lastDataRow.querySelectorAll(DOA_SELECTORS.mainGridCell);
+        if (cells.length > 0) {
+            var firstCellText = cells[0].textContent.trim();
+            if (firstCellText) {
+                return firstCellText;
+            }
+        }
+        var hash = 0;
+        var content = lastDataRow.textContent || '';
+        for (var ci = 0; ci < content.length; ci++) {
+            hash = ((hash << 5) - hash) + content.charCodeAt(ci);
+            hash = hash & hash;
+        }
+        return 'hash_' + hash;
+    }
+
+    function doaGetRenderedRowCount() {
+        var gridTable = document.querySelector(DOA_SELECTORS.mainGridTable);
+        if (!gridTable) {
+            return 0;
+        }
+        var rows = gridTable.querySelectorAll(DOA_SELECTORS.mainGridRow);
+        var count = 0;
+        for (var i = 0; i < rows.length; i++) {
+            if (rows[i].getAttribute('role') !== 'columnheader') {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    function startDoAScan() {
+        addLogMessage('startDoAScan: beginning scan with auto-scroll', 'log');
+        doaState.scannedNames = [];
+        doaState.seenNormalizedNames = new Set();
+        doaWaitForElement(DOA_SELECTORS.mainTableContainer, ELOG_TIMEOUTS.waitTableMs)
+            .then(function() {
+            addLogMessage('startDoAScan: main table found', 'log');
+            return doaWaitForElement(DOA_SELECTORS.mainGridTable, ELOG_TIMEOUTS.waitGridMs);
+        })
+            .then(function(gridTable) {
+            addLogMessage('startDoAScan: grid table found, starting auto-scroll scan', 'log');
+            doaAutoScrollScan({
+                onRow: function(name, normalized) {
+                },
+                onProgress: function(data) {
+                },
+                onDone: function(data) {
+                    addLogMessage('startDoAScan: done - total=' + data.total + ' reason=' + data.reason, 'log');
+                    removeCollectingDataPanel('doa');
+                    if (data.reason !== 'stopped' && doaState.isRunning) {
+                        addLogMessage('startDoAScan: scan complete, showing progress panel', 'log');
+                        showDoAProgressPanel();
+                    }
+                },
+                onError: function(error) {
+                    addLogMessage('startDoAScan: error - ' + error.message, 'error');
+                    removeCollectingDataPanel('doa');
+                    showDoAProgressPanel();
+                    updateDoAScanStatus('Error', 'error');
+                }
+            });
+        })
+            .catch(function(error) {
+            addLogMessage('startDoAScan: error during scan: ' + error, 'error');
+            removeCollectingDataPanel('doa');
+            showDoAProgressPanel();
+            updateDoAScanStatus('Error', 'error');
+        });
+    }
+
+    function doaAutoScrollScan(options) {
+        addLogMessage('doaAutoScrollScan: starting', 'log');
+        var onRow = options.onRow || function() {};
+        var onProgress = options.onProgress || function() {};
+        var onDone = options.onDone || function() {};
+        var onError = options.onError || function() {};
+        var gridTable = document.querySelector(DOA_SELECTORS.mainGridTable);
+        if (!gridTable) {
+            addLogMessage('doaAutoScrollScan: grid not found', 'error');
+            onError(new Error('Grid table not found'));
+            return;
+        }
+        var container = findScrollableContainer(gridTable);
+        if (!container) {
+            addLogMessage('doaAutoScrollScan: container not found', 'error');
+            onError(new Error('Container not found'));
+            return;
+        }
+        doaState.scrollContainer = container;
+        doaState.prevScrollTop = container.scrollTop;
+        doaState.seenNormalizedNames = new Set();
+        doaState.leftPanelRowIndex = 0;
+        doaSetAriaBusyOn();
+        doaObserveUserScrollPause(container);
+        var startTime = Date.now();
+        var noProgress = 0;
+        doaScanVisibleRowsOnce(function(name) {
+            doaState.leftPanelRowIndex++;
+        });
+        onProgress({ scanned: doaState.scannedNames.length });
+        function scrollLoop() {
+            if (!doaState.isRunning) {
+                updateDoAAriaLive('Scan stopped');
+                finishScan('Scan stopped', 'stopped');
+                return;
+            }
+            if (Date.now() - startTime > ELOG_SCROLL.maxDurationMs) {
+                finishScan('Scan complete', 'timeout');
+                return;
+            }
+            if (doaState.userScrollPaused) {
+                var pt = setTimeout(scrollLoop, 100);
+                doaState.timeouts.push(pt);
+                return;
+            }
+            var priorKey = doaGetRenderedLastRowKey();
+            var priorCount = doaGetRenderedRowCount();
+            var currTop = container.scrollTop;
+            var maxScroll = container.scrollHeight - container.clientHeight;
+            var newTop = Math.min(currTop + ELOG_SCROLL.stepPx, maxScroll);
+            doaState.lastAutoScrollTime = Date.now();
+            container.scrollTo({ top: newTop, behavior: 'auto' });
+            doaAwaitSettle(container).then(function() {
+                var attempts = 0;
+                function attemptScan() {
+                    var rc = doaGetRenderedRowCount();
+                    if (rc === 0 && attempts < ELOG_SCROLL.retryScanAttempts) {
+                        attempts++;
+                        var rt = setTimeout(attemptScan, ELOG_SCROLL.retryScanDelayMs);
+                        doaState.timeouts.push(rt);
+                        return;
+                    }
+                    doaScanVisibleRowsOnce(function(name) {
+                        doaState.leftPanelRowIndex++;
+                    });
+                    onProgress({ scanned: doaState.scannedNames.length });
+                    var currKey = doaGetRenderedLastRowKey();
+                    var currCount = doaGetRenderedRowCount();
+                    if (currKey === priorKey && currCount === priorCount) {
+                        noProgress++;
+                    } else {
+                        noProgress = 0;
+                    }
+                    if (computeEndReached(container, noProgress)) {
+                        finishScan('Scan complete', 'endReached');
+                        return;
+                    }
+                    if (noProgress >= ELOG_SCROLL.maxNoProgressIterations) {
+                        finishScan('Scan complete', 'noProgress');
+                        return;
+                    }
+                    if (typeof requestIdleCallback === 'function') {
+                        var icbId = requestIdleCallback(function() {
+                            var idx = doaState.idleCallbackIds.indexOf(icbId);
+                            if (idx > -1) {
+                                doaState.idleCallbackIds.splice(idx, 1);
+                            }
+                            scrollLoop();
+                        }, { timeout: ELOG_SCROLL.idleDelayMs * 2 });
+                        doaState.idleCallbackIds.push(icbId);
+                    } else {
+                        var it = setTimeout(scrollLoop, ELOG_SCROLL.idleDelayMs);
+                        doaState.timeouts.push(it);
+                    }
+                }
+                attemptScan();
+            });
+        }
+        function finishScan(label, reason) {
+            addLogMessage('doaAutoScrollScan: done reason=' + reason + ' total=' + doaState.scannedNames.length, 'log');
+            doaSetAriaBusyOff();
+            onDone({ total: doaState.scannedNames.length, reason: reason });
+        }
+        var initTimeout = setTimeout(scrollLoop, ELOG_SCROLL.idleDelayMs);
+        doaState.timeouts.push(initTimeout);
+    }
+
+    function ensureDoAAddEntryFormOpen() {
+        addLogMessage('ensureDoAAddEntryFormOpen: checking form state', 'log');
+        return new Promise(function(resolve, reject) {
+            var memberInput = document.querySelector(DOA_SELECTORS.memberInput);
+            if (memberInput) {
+                addLogMessage('ensureDoAAddEntryFormOpen: member input already present', 'log');
+                resolve(memberInput);
+                return;
+            }
+            var addBtn = document.querySelector(DOA_SELECTORS.addEntryBtn);
+            if (addBtn) {
+                addLogMessage('ensureDoAAddEntryFormOpen: clicking Add Entry button', 'log');
+                addBtn.click();
+            } else {
+                addLogMessage('ensureDoAAddEntryFormOpen: Add Entry button not found', 'warn');
+            }
+            doaWaitForElement(DOA_SELECTORS.memberInput, DOA_TIMEOUTS.waitOpenMs)
+                .then(function(el) {
+                addLogMessage('ensureDoAAddEntryFormOpen: member input found', 'log');
+                resolve(el);
+            })
+                .catch(function(err) {
+                addLogMessage('ensureDoAAddEntryFormOpen: timeout: ' + err, 'error');
+                reject(err);
+            });
+        });
+    }
+
+    function ensureDoAMemberDropdownOpen() {
+        addLogMessage('ensureDoAMemberDropdownOpen: checking dropdown', 'log');
+        return new Promise(function(resolve, reject) {
+            var retries = 0;
+            function tryOpen() {
+                var listEl = document.querySelector(DOA_SELECTORS.listContainer);
+                if (listEl) {
+                    addLogMessage('ensureDoAMemberDropdownOpen: list already open', 'log');
+                    resolve(listEl);
+                    return;
+                }
+                var inputEl = document.querySelector(DOA_SELECTORS.memberInput);
+                if (inputEl) {
+                    addLogMessage('ensureDoAMemberDropdownOpen: clicking input to open list', 'log');
+                    inputEl.click();
+                    inputEl.focus();
+                }
+                doaWaitForElement(DOA_SELECTORS.listContainer, DOA_TIMEOUTS.waitListMs)
+                    .then(function(el) {
+                    addLogMessage('ensureDoAMemberDropdownOpen: list opened', 'log');
+                    resolve(el);
+                })
+                    .catch(function(err) {
+                    retries++;
+                    if (retries < DOA_RETRY.openListRetries) {
+                        addLogMessage('ensureDoAMemberDropdownOpen: retry ' + retries, 'warn');
+                        var tid = setTimeout(tryOpen, 300);
+                        doaState.timeouts.push(tid);
+                    } else {
+                        addLogMessage('ensureDoAMemberDropdownOpen: exhausted retries', 'error');
+                        reject(err);
+                    }
+                });
+            }
+            tryOpen();
+        });
+    }
+
+    function findDoADropdownViewportElement() {
+        var el = document.querySelector(DOA_SELECTORS.virtualViewport);
+        if (el) {
+            addLogMessage('findDoADropdownViewportElement: found', 'log');
+        } else {
+            addLogMessage('findDoADropdownViewportElement: not found', 'warn');
+        }
+        return el;
+    }
+
+    function rememberDoAListScrollPosition(viewportEl) {
+        if (viewportEl) {
+            doaState.listScrollTop = viewportEl.scrollTop;
+        }
+    }
+
+    function restoreDoAListScrollPosition(viewportEl) {
+        if (viewportEl && doaState.listScrollTop > 0) {
+            viewportEl.scrollTop = doaState.listScrollTop;
+        }
+    }
+
+    function attemptDoASelectByScrollingForName(targetDisplay, targetPairKey) {
+        addLogMessage('attemptDoASelectByScrollingForName: target=' + targetDisplay + ' pairKey=' + targetPairKey, 'log');
+        return new Promise(function(resolve) {
+            var inputEl = document.querySelector(DOA_SELECTORS.memberInput);
+            if (!inputEl) {
+                addLogMessage('attemptDoASelectByScrollingForName: member input not found', 'error');
+                resolve(false);
+                return;
+            }
+            var nameParts = getFirstAndLast(targetDisplay);
+            var firstName = nameParts[0];
+            var lastName = nameParts[1];
+            addLogMessage('attemptDoASelectByScrollingForName: firstName=' + firstName + ' lastName=' + lastName, 'log');
+            typeIntoFilteredInput(inputEl, firstName);
+            var firstNameTid = setTimeout(function() {
+                if (!doaState.isRunning) {
+                    clearFilteredInput(inputEl);
+                    resolve(false);
+                    return;
+                }
+                var match = scanFilteredOptionsForMatch(targetPairKey, DOA_SELECTORS);
+                if (match) {
+                    addLogMessage('attemptDoASelectByScrollingForName: found via firstName filter (' + match.matchType + ')', 'log');
+                    match.element.click();
+                    var verifyTid1 = setTimeout(function() {
+                        resolve(true);
+                    }, DOA_TIMEOUTS.settleMs);
+                    doaState.timeouts.push(verifyTid1);
+                    return;
+                }
+                addLogMessage('attemptDoASelectByScrollingForName: not found with firstName, trying lastName', 'log');
+                if (lastName && lastName !== firstName) {
+                    typeIntoFilteredInput(inputEl, lastName);
+                    var lastNameTid = setTimeout(function() {
+                        if (!doaState.isRunning) {
+                            clearFilteredInput(inputEl);
+                            resolve(false);
+                            return;
+                        }
+                        var match2 = scanFilteredOptionsForMatch(targetPairKey, DOA_SELECTORS);
+                        if (match2) {
+                            addLogMessage('attemptDoASelectByScrollingForName: found via lastName filter (' + match2.matchType + ')', 'log');
+                            match2.element.click();
+                            var verifyTid2 = setTimeout(function() {
+                                resolve(true);
+                            }, DOA_TIMEOUTS.settleMs);
+                            doaState.timeouts.push(verifyTid2);
+                            return;
+                        }
+                        addLogMessage('attemptDoASelectByScrollingForName: not found with lastName, falling back to scroll', 'log');
+                        clearFilteredInput(inputEl);
+                        var scrollFallbackTid = setTimeout(function() {
+                            scrollSearchForName(targetPairKey, DOA_SELECTORS, DOA_TIMEOUTS, DOA_RETRY, doaState, resolve);
+                        }, DOA_TIMEOUTS.waitFilterMs);
+                        doaState.timeouts.push(scrollFallbackTid);
+                    }, DOA_TIMEOUTS.waitFilterMs);
+                    doaState.timeouts.push(lastNameTid);
+                } else {
+                    addLogMessage('attemptDoASelectByScrollingForName: lastName same as firstName, falling back to scroll', 'log');
+                    clearFilteredInput(inputEl);
+                    var scrollTid = setTimeout(function() {
+                        scrollSearchForName(targetPairKey, DOA_SELECTORS, DOA_TIMEOUTS, DOA_RETRY, doaState, resolve);
+                    }, DOA_TIMEOUTS.waitFilterMs);
+                    doaState.timeouts.push(scrollTid);
+                }
+            }, DOA_TIMEOUTS.waitFilterMs);
+            doaState.timeouts.push(firstNameTid);
+        });
+    }
+
+    function selectRoleForCandidate(roleDisplay, roleKey) {
+        addLogMessage('selectRoleForCandidate: roleDisplay=' + roleDisplay + ' roleKey=' + roleKey, 'log');
+        return new Promise(function(resolve) {
+            var roleInput = document.querySelector(DOA_SELECTORS.roleSearchInput);
+            if (!roleInput) {
+                addLogMessage('selectRoleForCandidate: role search input not found', 'warn');
+                resolve(false);
+                return;
+            }
+            roleInput.click();
+            roleInput.focus();
+            doaWaitForElement(DOA_SELECTORS.listContainer, DOA_TIMEOUTS.waitRoleListMs)
+                .then(function() {
+                addLogMessage('selectRoleForCandidate: role list opened', 'log');
+                var viewportEl = document.querySelector(DOA_SELECTORS.virtualViewport);
+                if (viewportEl && doaState.roleListScrollTop > 0) {
+                    viewportEl.scrollTop = doaState.roleListScrollTop;
+                }
+                var passCount = 0;
+                var lastScrollTop = -1;
+                var lastOptionSnapshot = '';
+                var startTime = Date.now();
+                function scanRoles() {
+                    if (!doaState.isRunning) {
+                        resolve(false);
+                        return;
+                    }
+                    if (Date.now() - startTime > DOA_TIMEOUTS.maxSelectDurationMs) {
+                        addLogMessage('selectRoleForCandidate: max duration exceeded', 'warn');
+                        resolve(false);
+                        return;
+                    }
+                    if (passCount >= DOA_RETRY.maxScrollPasses) {
+                        addLogMessage('selectRoleForCandidate: max passes reached', 'warn');
+                        resolve(false);
+                        return;
+                    }
+                    var roleOptions = document.querySelectorAll(DOA_SELECTORS.roleOptionItem);
+                    var found = false;
+                    var optionTexts = [];
+                    for (var ri = 0; ri < roleOptions.length; ri++) {
+                        var textEl = roleOptions[ri].querySelector(DOA_SELECTORS.roleOptionText);
+                        var optText = textEl ? textEl.textContent.trim() : roleOptions[ri].textContent.trim();
+                        optionTexts.push(optText);
+                        var normalized = normalizeRoleName(optText);
+                        if (normalized.key === roleKey) {
+                            addLogMessage('selectRoleForCandidate: match found at index ' + ri + ' text=' + optText, 'log');
+                            roleOptions[ri].click();
+                            found = true;
+                            var vp = document.querySelector(DOA_SELECTORS.virtualViewport);
+                            if (vp) {
+                                doaState.roleListScrollTop = vp.scrollTop;
+                            }
+                            var verifyTid = setTimeout(function() {
+                                resolve(true);
+                            }, DOA_TIMEOUTS.settleMs);
+                            doaState.timeouts.push(verifyTid);
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        var vp2 = document.querySelector(DOA_SELECTORS.virtualViewport);
+                        if (!vp2) {
+                            addLogMessage('selectRoleForCandidate: no viewport for role scroll', 'warn');
+                            resolve(false);
+                            return;
+                        }
+                        var currentSnapshot = optionTexts.join('|');
+                        var currentTop = vp2.scrollTop;
+                        var noProgressFlag = (currentTop === lastScrollTop && currentSnapshot === lastOptionSnapshot);
+                        if (noProgressFlag) {
+                            passCount++;
+                        }
+                        lastScrollTop = currentTop;
+                        lastOptionSnapshot = currentSnapshot;
+                        var stepSize = Math.round(vp2.clientHeight * 0.7);
+                        var maxScroll = vp2.scrollHeight - vp2.clientHeight;
+                        var newTop = Math.min(currentTop + stepSize, maxScroll);
+                        if (newTop <= currentTop && currentTop > 0) {
+                            newTop = 0;
+                            lastScrollTop = -1;
+                            lastOptionSnapshot = '';
+                            passCount++;
+                        }
+                        vp2.scrollTop = newTop;
+                        var scrollTid = setTimeout(scanRoles, DOA_TIMEOUTS.scrollIdleMs);
+                        doaState.timeouts.push(scrollTid);
+                    }
+                }
+                var initTid = setTimeout(scanRoles, DOA_TIMEOUTS.scrollIdleMs);
+                doaState.timeouts.push(initTid);
+            })
+                .catch(function(err) {
+                addLogMessage('selectRoleForCandidate: timeout opening role list: ' + err, 'error');
+                resolve(false);
+            });
+        });
+    }
+
+    function openAndApplyStudyTasks(numbersSet) {
+        addLogMessage('openAndApplyStudyTasks: numbersSet size=' + numbersSet.size, 'log');
+        return new Promise(function(resolve) {
+            var toggleBtn = document.querySelector(DOA_SELECTORS.tasksToggleBtn);
+            if (!toggleBtn) {
+                addLogMessage('openAndApplyStudyTasks: toggle button not found', 'warn');
+                resolve(false);
+                return;
+            }
+            addLogMessage('openAndApplyStudyTasks: clicking toggle button', 'log');
+            toggleBtn.click();
+            doaWaitForElement(DOA_SELECTORS.tasksMenu, DOA_TIMEOUTS.waitTasksMenuMs)
+                .then(function(menu) {
+                addLogMessage('openAndApplyStudyTasks: tasks menu opened', 'log');
+                var items = menu.querySelectorAll(DOA_SELECTORS.tasksItem);
+                addLogMessage('openAndApplyStudyTasks: found ' + items.length + ' task items', 'log');
+                var toggleQueue = [];
+                for (var ti = 0; ti < items.length; ti++) {
+                    var itemText = items[ti].textContent.trim();
+                    var leadingNumMatch = itemText.match(/^(\d+)\./);
+                    if (!leadingNumMatch) {
+                        continue;
+                    }
+                    var taskNum = parseInt(leadingNumMatch[1], 10);
+                    var checkbox = items[ti].querySelector(DOA_SELECTORS.tasksItemCheckbox);
+                    if (!checkbox) {
+                        continue;
+                    }
+                    var isChecked = checkbox.checked;
+                    var shouldBeChecked = numbersSet.has(taskNum);
+                    if (shouldBeChecked && !isChecked) {
+                        toggleQueue.push({ element: checkbox, taskNum: taskNum, action: 'check' });
+                    } else if (!shouldBeChecked && isChecked) {
+                        toggleQueue.push({ element: checkbox, taskNum: taskNum, action: 'uncheck' });
+                    }
+                }
+                addLogMessage('openAndApplyStudyTasks: ' + toggleQueue.length + ' toggles needed', 'log');
+                var tqi = 0;
+                function processNextToggle() {
+                    if (!doaState.isRunning) {
+                        resolve(false);
+                        return;
+                    }
+                    if (tqi >= toggleQueue.length) {
+                        addLogMessage('openAndApplyStudyTasks: all toggles applied', 'log');
+                        var closeBtn = document.querySelector(DOA_SELECTORS.tasksToggleBtn);
+                        if (closeBtn) {
+                            closeBtn.click();
+                        }
+                        var closeTid = setTimeout(function() {
+                            resolve(true);
+                        }, DOA_TIMEOUTS.waitAfterTasksToggleMs);
+                        doaState.timeouts.push(closeTid);
+                        return;
+                    }
+                    var toggleItem = toggleQueue[tqi];
+                    toggleItem.element.click();
+                    tqi++;
+                    var nextTid = setTimeout(processNextToggle, DOA_TIMEOUTS.waitAfterTasksToggleMs);
+                    doaState.timeouts.push(nextTid);
+                }
+                var startTid = setTimeout(processNextToggle, DOA_TIMEOUTS.waitAfterTasksToggleMs);
+                doaState.timeouts.push(startTid);
+            })
+                .catch(function(err) {
+                addLogMessage('openAndApplyStudyTasks: timeout opening tasks menu: ' + err, 'error');
+                resolve(false);
+            });
+        });
+    }
+
+    function processNextDoAFromQueue() {
+        addLogMessage('processNextDoAFromQueue: index=' + doaState.addQueueIndex + ' of ' + doaState.addQueue.length, 'log');
+        if (!doaState.isRunning) {
+            addLogMessage('processNextDoAFromQueue: stopped, marking remaining as Stopped', 'warn');
+            for (var si = doaState.addQueueIndex; si < doaState.addQueue.length; si++) {
+                if (doaState.addQueue[si].status === DOA_LABELS.statusPending) {
+                    doaState.addQueue[si].status = DOA_LABELS.statusStopped;
+                    updateDoARightPanelStatus(doaState.addQueue[si].pairKey, DOA_LABELS.statusStopped);
+                    doaState.counters.pending--;
+                }
+            }
+            updateDoARightPanelSummary(doaState.counters);
+            doaState.isAddingEntries = false;
+            updateDoAScanStatus('Stopped', 'stopped');
+            var titleEl = document.getElementById('doa-progress-title');
+            if (titleEl) {
+                titleEl.textContent = 'DoA Log Staff Entries - Stopped';
+            }
+            return;
+        }
+        if (doaState.addQueueIndex >= doaState.addQueue.length) {
+            addLogMessage('processNextDoAFromQueue: all candidates processed', 'log');
+            doaState.isAddingEntries = false;
+            updateDoAScanStatus('Complete', 'complete');
+            var titleEl2 = document.getElementById('doa-progress-title');
+            if (titleEl2) {
+                titleEl2.textContent = 'DoA Log Staff Entries - Complete';
+            }
+            updateDoARightPanelSummary(doaState.counters);
+            updateDoAAriaLive('Processing complete. Added: ' + doaState.counters.added + ', Duplicates: ' + doaState.counters.duplicates + ', Failures: ' + doaState.counters.failures);
+            return;
+        }
+        var candidate = doaState.addQueue[doaState.addQueueIndex];
+        addLogMessage('processNextDoAFromQueue: processing ' + candidate.display + ' role=' + candidate.roleDisplay, 'log');
+        if (doaState.existingPairs.has(candidate.pairKey)) {
+            addLogMessage('processNextDoAFromQueue: already exists in table', 'log');
+            candidate.status = DOA_LABELS.statusAlready;
+            doaState.counters.duplicates++;
+            doaState.counters.pending--;
+            updateDoARightPanelStatus(candidate.pairKey, DOA_LABELS.statusAlready);
+            updateDoARightPanelSummary(doaState.counters);
+            doaState.addQueueIndex++;
+            var tid1 = setTimeout(processNextDoAFromQueue, 50);
+            doaState.timeouts.push(tid1);
+            return;
+        }
+        ensureDoAAddEntryFormOpen()
+            .then(function() {
+            addLogMessage('processNextDoAFromQueue: form open, opening dropdown', 'log');
+            return ensureDoAMemberDropdownOpen();
+        })
+            .then(function() {
+            addLogMessage('processNextDoAFromQueue: dropdown open, selecting name', 'log');
+            return attemptDoASelectByScrollingForName(candidate.display, candidate.pairKey);
+        })
+            .then(function(selected) {
+            if (!selected) {
+                addLogMessage('processNextDoAFromQueue: not found in dropdown', 'warn');
+                candidate.status = DOA_LABELS.statusNotInDropdown;
+                doaState.counters.failures++;
+                doaState.counters.pending--;
+                updateDoARightPanelStatus(candidate.pairKey, DOA_LABELS.statusNotInDropdown);
+                updateDoARightPanelSummary(doaState.counters);
+                doaState.addQueueIndex++;
+                var tid2 = setTimeout(processNextDoAFromQueue, 50);
+                doaState.timeouts.push(tid2);
+                return;
+            }
+            addLogMessage('processNextDoAFromQueue: name selected, selecting role', 'log');
+            return doaDelay(DOA_TIMEOUTS.settleMs).then(function() {
+                return selectRoleForCandidate(candidate.roleDisplay, candidate.roleKey);
+            }).then(function(roleSelected) {
+                if (!roleSelected) {
+                    addLogMessage('processNextDoAFromQueue: role not found', 'warn');
+                    candidate.status = DOA_LABELS.statusRoleNotFound;
+                    doaState.counters.failures++;
+                    doaState.counters.pending--;
+                    updateDoARightPanelStatus(candidate.pairKey, DOA_LABELS.statusRoleNotFound);
+                    updateDoARightPanelSummary(doaState.counters);
+                    doaState.addQueueIndex++;
+                    var tid3 = setTimeout(processNextDoAFromQueue, 50);
+                    doaState.timeouts.push(tid3);
+                    return;
+                }
+                addLogMessage('processNextDoAFromQueue: role selected, applying tasks', 'log');
+                return doaDelay(DOA_TIMEOUTS.settleMs).then(function() {
+                    return openAndApplyStudyTasks(candidate.numbersSet);
+                }).then(function(tasksApplied) {
+                    if (!tasksApplied) {
+                        addLogMessage('processNextDoAFromQueue: tasks failed', 'warn');
+                        candidate.status = DOA_LABELS.statusSelectionFailed;
+                        doaState.counters.failures++;
+                        doaState.counters.pending--;
+                        updateDoARightPanelStatus(candidate.pairKey, DOA_LABELS.statusSelectionFailed);
+                    } else {
+                        addLogMessage('processNextDoAFromQueue: tasks applied', 'log');
+                        candidate.status = DOA_LABELS.statusTasksApplied;
+                        doaState.counters.added++;
+                        doaState.counters.pending--;
+                        updateDoARightPanelStatus(candidate.pairKey, DOA_LABELS.statusTasksApplied);
+                    }
+                    updateDoARightPanelSummary(doaState.counters);
+                    doaState.addQueueIndex++;
+                    var tid4 = setTimeout(processNextDoAFromQueue, 50);
+                    doaState.timeouts.push(tid4);
+                });
+            });
+        })
+            .catch(function(err) {
+            addLogMessage('processNextDoAFromQueue: error: ' + err, 'error');
+            candidate.status = DOA_LABELS.statusSelectionFailed;
+            doaState.counters.failures++;
+            doaState.counters.pending--;
+            updateDoARightPanelStatus(candidate.pairKey, DOA_LABELS.statusSelectionFailed);
+            updateDoARightPanelSummary(doaState.counters);
+            doaState.addQueueIndex++;
+            var tid5 = setTimeout(processNextDoAFromQueue, 50);
+            doaState.timeouts.push(tid5);
+        });
+    }
+
+    function beginAddDoALogEntries() {
+        addLogMessage('beginAddDoALogEntries: starting', 'log');
+        doaState.existingPairs = buildExistingPairsFromScan(doaState.scannedNames);
+        addLogMessage('beginAddDoALogEntries: existingPairs count=' + doaState.existingPairs.size, 'log');
+        var result = buildDoAQueueSorted(doaState.parsedCandidates);
+        doaState.addQueue = result.queue;
+        doaState.addQueueIndex = 0;
+        doaState.listScrollTop = 0;
+        doaState.roleListScrollTop = 0;
+        doaState.isAddingEntries = true;
+        for (var di = 0; di < result.duplicateIndices.length; di++) {
+            var dupIdx = result.duplicateIndices[di];
+            var dupCandidate = doaState.parsedCandidates[dupIdx];
+            if (dupCandidate) {
+                updateDoARightPanelStatus(dupCandidate.pairKey, DOA_LABELS.statusDuplicate);
+            }
+        }
+        doaState.counters = {
+            total: doaState.addQueue.length,
+            added: 0,
+            duplicates: 0,
+            failures: 0,
+            pending: doaState.addQueue.length
+        };
+        updateDoARightPanelSummary(doaState.counters);
+        updateDoAScanStatus('Adding Entries', 'progress');
+        var titleEl = document.getElementById('doa-progress-title');
+        if (titleEl) {
+            titleEl.textContent = 'DoA Log Staff Entries - Adding Entries';
+        }
+        updateDoAAriaLive('Starting to add ' + doaState.addQueue.length + ' entries');
+        addLogMessage('beginAddDoALogEntries: queue size=' + doaState.addQueue.length + ', starting processing', 'log');
+        processNextDoAFromQueue();
+    }
+
+    function addDoALogStaffEntriesInit() {
+        addLogMessage('addDoALogStaffEntriesInit: starting feature', 'log');
+        doaState.focusReturnElement = document.getElementById('doa-staff-entries-btn');
+        doaState.abortController = new AbortController();
+        resetDoAState();
+        var mainTable = document.querySelector(DOA_SELECTORS.mainTableContainer);
+        addLogMessage('addDoALogStaffEntriesInit: checking for main table', 'log');
+        if (!mainTable) {
+            addLogMessage('addDoALogStaffEntriesInit: main table not found, showing warning', 'warn');
+            showDoAWarning();
+            return;
+        }
+        addLogMessage('addDoALogStaffEntriesInit: main table found, showing input panel', 'log');
+        showDoAInputPanel();
+    }
+
+    function showDoAWarning() {
+        addLogMessage('showDoAWarning: creating warning popup', 'log');
+        var modal = document.createElement('div');
+        modal.id = 'doa-warning-modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 30000; display: flex; align-items: center; justify-content: center;';
+        var container = document.createElement('div');
+        container.style.cssText = 'background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); border-radius: 12px; padding: 24px; width: 450px; max-width: 90%; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); position: relative;';
+        container.setAttribute('role', 'alertdialog');
+        container.setAttribute('aria-modal', 'true');
+        container.setAttribute('aria-labelledby', 'doa-warning-title');
+        container.setAttribute('aria-describedby', 'doa-warning-message');
+        var header = document.createElement('div');
+        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;';
+        var title = document.createElement('h3');
+        title.id = 'doa-warning-title';
+        title.textContent = 'Document Log Not Found';
+        title.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600;';
+        var closeButton = document.createElement('button');
+        closeButton.innerHTML = '\u2715';
+        closeButton.setAttribute('aria-label', 'Close warning');
+        closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
+        closeButton.onmouseover = function() {
+            closeButton.style.background = 'rgba(255, 255, 255, 0.3)';
+        };
+        closeButton.onmouseout = function() {
+            closeButton.style.background = 'rgba(255, 255, 255, 0.2)';
+        };
+        var closeWarning = function() {
+            addLogMessage('showDoAWarning: closing warning', 'log');
+            if (modal.parentNode) {
+                document.body.removeChild(modal);
+            }
+            stopDoA();
+            if (doaState.focusReturnElement) {
+                doaState.focusReturnElement.focus();
+            }
+        };
+        closeButton.onclick = closeWarning;
+        header.appendChild(title);
+        header.appendChild(closeButton);
+        var messageDiv = document.createElement('p');
+        messageDiv.id = 'doa-warning-message';
+        messageDiv.textContent = 'The current page does not contain the Document Log Entries table. Please navigate to a page with the DoA Log before using this feature.';
+        messageDiv.style.cssText = 'color: rgba(255, 255, 255, 0.9); margin: 0; font-size: 14px; line-height: 1.5;';
+        var okButton = document.createElement('button');
+        okButton.textContent = 'OK';
+        okButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: 2px solid rgba(255, 255, 255, 0.3); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.3s ease; margin-top: 20px; width: 100%;';
+        okButton.onmouseover = function() {
+            okButton.style.background = 'rgba(255, 255, 255, 0.3)';
+        };
+        okButton.onmouseout = function() {
+            okButton.style.background = 'rgba(255, 255, 255, 0.2)';
+        };
+        okButton.onclick = closeWarning;
+        var keyHandler = function(e) {
+            if (e.key === 'Escape') {
+                closeWarning();
+            }
+        };
+        document.addEventListener('keydown', keyHandler);
+        doaState.eventListeners.push({ element: document, type: 'keydown', handler: keyHandler });
+        container.appendChild(header);
+        container.appendChild(messageDiv);
+        container.appendChild(okButton);
+        modal.appendChild(container);
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        modal.style.pointerEvents = 'none';
+        container.style.pointerEvents = 'auto';
+        makeDraggable(container, header);
+        document.body.appendChild(modal);
+        okButton.focus();
+        addLogMessage('showDoAWarning: warning displayed', 'log');
+    }
+
+    function stopDoA() {
+        addLogMessage('stopDoA: stopping all DoA processes', 'log');
+        doaState.isRunning = false;
+        for (var i = 0; i < doaState.idleCallbackIds.length; i++) {
+            try {
+                if (typeof cancelIdleCallback === 'function') {
+                    cancelIdleCallback(doaState.idleCallbackIds[i]);
+                }
+            } catch (e) {
+                addLogMessage('stopDoA: error canceling idle callback: ' + e, 'error');
+            }
+        }
+        doaState.idleCallbackIds = [];
+        if (doaState.idleCallbackId && typeof cancelIdleCallback === 'function') {
+            cancelIdleCallback(doaState.idleCallbackId);
+            doaState.idleCallbackId = null;
+        }
+        for (var i2 = 0; i2 < doaState.observers.length; i2++) {
+            try {
+                doaState.observers[i2].disconnect();
+            } catch (e2) {
+                addLogMessage('stopDoA: error disconnecting observer: ' + e2, 'error');
+            }
+        }
+        doaState.observers = [];
+        for (var i3 = 0; i3 < doaState.timeouts.length; i3++) {
+            try {
+                clearTimeout(doaState.timeouts[i3]);
+            } catch (e3) {
+                addLogMessage('stopDoA: error clearing timeout: ' + e3, 'error');
+            }
+        }
+        doaState.timeouts = [];
+        for (var i4 = 0; i4 < doaState.intervals.length; i4++) {
+            try {
+                clearInterval(doaState.intervals[i4]);
+            } catch (e4) {
+                addLogMessage('stopDoA: error clearing interval: ' + e4, 'error');
+            }
+        }
+        doaState.intervals = [];
+        for (var i5 = 0; i5 < doaState.eventListeners.length; i5++) {
+            try {
+                var listener = doaState.eventListeners[i5];
+                listener.element.removeEventListener(listener.type, listener.handler);
+            } catch (e5) {
+                addLogMessage('stopDoA: error removing event listener: ' + e5, 'error');
+            }
+        }
+        doaState.eventListeners = [];
+        if (doaState.abortController) {
+            doaState.abortController.abort();
+            doaState.abortController = null;
+        }
+        doaSetAriaBusyOff();
+        if (doaState.scrollContainer && doaState.prevScrollTop !== undefined) {
+            addLogMessage('stopDoA: restoring viewport', 'log');
+            restoreViewport(doaState.scrollContainer, doaState.prevScrollTop);
+        }
+        doaState.scrollContainer = null;
+        doaState.userScrollHandler = null;
+        doaState.userScrollPaused = false;
+        if (doaState.isAddingEntries) {
+            addLogMessage('stopDoA: was adding entries, marking remaining as Stopped', 'log');
+            for (var qi = doaState.addQueueIndex; qi < doaState.addQueue.length; qi++) {
+                if (doaState.addQueue[qi].status === DOA_LABELS.statusPending) {
+                    doaState.addQueue[qi].status = DOA_LABELS.statusStopped;
+                    doaState.counters.pending--;
+                }
+            }
+            doaState.isAddingEntries = false;
+        }
+        doaState.addQueue = [];
+        doaState.addQueueIndex = 0;
+        doaState.existingPairs = new Set();
+        doaState.listScrollTop = 0;
+        doaState.roleListScrollTop = 0;
+        var inputModal = document.getElementById('doa-input-modal');
+        if (inputModal && inputModal.parentNode) {
+            inputModal.parentNode.removeChild(inputModal);
+        }
+        var progressModal = document.getElementById('doa-progress-modal');
+        if (progressModal && progressModal.parentNode) {
+            progressModal.parentNode.removeChild(progressModal);
+        }
+        var warningModal = document.getElementById('doa-warning-modal');
+        if (warningModal && warningModal.parentNode) {
+            warningModal.parentNode.removeChild(warningModal);
+        }
+        removeCollectingDataPanel('doa');
+        if (doaState.focusReturnElement) {
+            doaState.focusReturnElement.focus();
+        }
+        resetDoAState();
+        addLogMessage('stopDoA: cleanup complete', 'log');
+    }
+
     function stopResponsibilities() {
         addLogMessage('stopResponsibilities: stopping', 'log');
         respState.stopRequested = true;
@@ -4499,10 +6546,17 @@ function showResponsibilitiesProgressPanel(rolesData) {
     const originalError = console.error;
     const originalWarn = console.warn;
 
+    let logBoxPendingUpdate = false;
     function addLogMessage(message, type = 'log') {
         const timestamp = new Date().toLocaleTimeString();
         logMessages.push({ timestamp, message, type });
-        updateLogBox();
+        if (!logBoxPendingUpdate) {
+            logBoxPendingUpdate = true;
+            requestAnimationFrame(function() {
+                logBoxPendingUpdate = false;
+                updateLogBox();
+            });
+        }
     }
 
     console.log = function(...args) {
@@ -4784,14 +6838,15 @@ function showResponsibilitiesProgressPanel(rolesData) {
             } else if (i === 2) {
                 button.textContent = 'Add Training Log Staff Entries';
                 button.id = 'elog-staff-entries-btn';
-            } else if (i === 3) {
+            } else if (i === 5) {
                 button.textContent = 'Set Role Responsibilities';
                 button.id = 'resp-set-btn';
-            } else if (i === 4) {
+            } else if (i === 3) {
                 button.textContent = CLEAN_LABELS.featureButton;
                 button.id = 'clean-resp-btn';
-            } else {
-                button.textContent = `Placeholder ${i}`;
+            } else if (i === 4) {
+                button.textContent = DOA_LABELS.featureButton;
+                button.id = 'doa-staff-entries-btn';
             }
             button.style.cssText = `
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -4834,8 +6889,11 @@ function showResponsibilitiesProgressPanel(rolesData) {
                     console.log('Clean Responsibility button clicked');
                     cleanResponsibilityInit();
                 };
-            } else {
-                button.onclick = () => console.log(`Placeholder ${i} clicked`);
+            } else if (i === 5) {
+                button.onclick = () => {
+                    console.log('Add DoA Log Staff Entries button clicked');
+                    addDoALogStaffEntriesInit();
+                };
             }
 
             buttonsContainer.appendChild(button);
@@ -4939,15 +6997,16 @@ function showResponsibilitiesProgressPanel(rolesData) {
     function updateLogBox() {
         const logBox = document.getElementById('florence-log-box');
         if (!logBox) return;
-
-        logBox.innerHTML = logMessages.map(msg => {
-            const color = msg.type === 'error' ? '#ff6b6b' :
-            msg.type === 'warn' ? '#ffd93d' : '#6bcf7f';
-            return `<div style="color: ${color}; margin-bottom: 4px;">
-                <span style="opacity: 0.7;">[${msg.timestamp}]</span> ${msg.message}
-            </div>`;
-        }).join('');
-
+        var maxDisplay = 200;
+        var startIdx = Math.max(0, logMessages.length - maxDisplay);
+        var html = '';
+        for (var i = startIdx; i < logMessages.length; i++) {
+            var msg = logMessages[i];
+            var color = msg.type === 'error' ? '#ff6b6b' :
+                msg.type === 'warn' ? '#ffd93d' : '#6bcf7f';
+            html += '<div style="color: ' + color + '; margin-bottom: 4px;"><span style="opacity: 0.7;">[' + msg.timestamp + ']</span> ' + msg.message + '</div>';
+        }
+        logBox.innerHTML = html;
         logBox.scrollTop = logBox.scrollHeight;
     }
 

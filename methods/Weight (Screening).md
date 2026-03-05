@@ -14,13 +14,13 @@ const itemName = [
 var form = pullForm(studyevent, formName);
 if (!form) return null;
 
-var height = pullItemFromForm(form, itemName);
+var weight = pullItemFromForm(form, itemName);
 log();
 
-return height;
+return weight;
 
 function log() {
-    logger("Height: " + height);
+    logger("weight: " + weight);
 }
 
 function pullForm(studyeventList, formNameList) {
