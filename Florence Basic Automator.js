@@ -113,223 +113,6 @@
         statusStopped: 'Stopped'
     };
 
-    const RESP_SELECTORS = {
-        pageStepRoot: 'doa-log-template-study-roles-step',
-        dropListContainer: '.cdk-drop-list.doa-log-form-step__drop-list-container',
-        roleColumns: '.doa-log-form-step__column.roles__column',
-        roleSearchInput: '#filtered-select-input.filtered-select__input[placeholder*="Search"]',
-        roleListContainer: 'ul.filtered-select__list.u-z-index-1060, ul.filtered-select__list',
-        virtualViewport: 'cdk-virtual-scroll-viewport.cdk-virtual-scroll-viewport, .filtered-select__list',
-        roleOptionItem: '.filtered-select__list__item, [role="option"], .cdk-virtual-scroll-viewport .filtered-select__list__item',
-        roleOptionText: '.filtered-select__list__item__text',
-        roleOptionCheckboxTri: '.test-checkboxTristate[role="checkbox"]',
-        selectedRoleCheckboxInColumn: '[role="checkbox"][aria-checked="true"]',
-        responsibilitiesToggleBtn: 'button[dropdowntoggle][data-test="study-responsibilities-dropdown-toggle"].roles__select-options-dropdown-button',
-        responsibilitiesMenu: 'ul[role="menu"][data-test="study-responsibilities-list"]',
-        responsibilitiesItem: 'ul[role="menu"][data-test="study-responsibilities-list"] li',
-        responsibilitiesItemCheckbox: 'ul[role="menu"][data-test="study-responsibilities-list"] li input[type="checkbox"]',
-        addStudyRoleBtn: 'button[data-test="add-study-role-button"]',
-        mainPanelButtonTarget: '.main-gui-panel',
-        ariaLiveRegion: '.aria-live-region'
-    };
-
-    const RESP_TIMEOUTS = {
-        waitPageMs: 10000,
-        waitInputPanelMs: 10000,
-        waitProgressPanelMs: 10000,
-        waitListOpenMs: 4000,
-        waitOptionRenderMs: 1500,
-        waitAfterSelectRoleMs: 800,
-        waitResponsibilitiesMenuMs: 3000,
-        waitAfterToggleResponsibilityMs: 200,
-        waitAddRoleResultMs: 4000,
-        settleAfterScrollMs: 150,
-        idleBetweenScrollsMs: 80,
-        maxSelectRoleDurationMs: 30000
-    };
-
-    const RESP_RETRY = {
-        openListRetries: 4,
-        optionScanRetries: 2,
-        maxScrollPasses: 8,
-        addRoleRetries: 2
-    };
-
-    const RESP_LABELS = {
-        notOnPageWarning: 'You are not on the Study Role Page.',
-        statusPending: 'Pending',
-        statusCompleted: 'Completed',
-        statusFailed: 'Failed',
-        statusStopped: 'Stopped',
-        parsing: 'Parsing input',
-        scanningExisting: 'Scanning existing roles',
-        selectingRole: 'Selecting role',
-        selectingResponsibilities: 'Selecting responsibilities',
-        addingRole: 'Adding study role',
-        done: 'Completed'
-    };
-
-    const RESP_COUNTERS = {
-        total: 0,
-        completed: 0,
-        failed: 0,
-        pending: 0
-    };
-
-    const RESP_REGEX = {
-        range: /\b(\d+)\s*(?:to|\-|\u2013|\u2014)\s*(\d+)\b/i,
-        number: /\b\d+\b/g,
-        quoteCleanup: /["\u201c\u201d]+/g,
-        hyphenBreak: /-\s*\n\s*/g,
-        lineBreakInRole: /\n+/g,
-        whitespace: /\s+/g
-    };
-
-    const RESP_ROLE_ALIASES = {
-        'pi': 'Principal Investigator',
-        'principal investigator': 'Principal Investigator',
-        'sub investigator': 'Sub-Investigator',
-        'sub-investigator': 'Sub-Investigator',
-        'research nurse': 'Research Nurse',
-        'nurse': 'Research Nurse',
-        'nurse manager': 'Research Nurse',
-        'infusion nurse i': 'Research Nurse',
-        'infusion nurse ii': 'Research Nurse',
-        'research nurse i': 'Research Nurse',
-        'research nurse ii': 'Research Nurse',
-        'research assistant': 'Research Assistant',
-        'research assistant i': 'Research Assistant',
-        'research assistant ii': 'Research Assistant',
-        'study coordinator': 'Study Coordinator',
-        'crc i': 'Study Coordinator',
-        'crc ii': 'Study Coordinator',
-        'senior crc': 'Study Coordinator',
-        'clinical trial lead': 'Study Coordinator',
-        'pharmacy': 'Pharmacy',
-        'pharmacist': 'Pharmacy',
-        'pharmacy technician i': 'Pharmacy',
-        'pharmacy assistant': 'Pharmacy',
-        'quality assurance': 'Quality Assurance',
-        'qa manager': 'Quality Assurance',
-        'qa coordinator i': 'Quality Assurance',
-        'qa coordinator ii': 'Quality Assurance',
-        'qa admin assistant i': 'Quality Assurance',
-        'qa admin assistant ii': 'Quality Assurance',
-        'laboratory manager': 'Laboratory Technician',
-        'laboratory technician': 'Laboratory Technician',
-        'laboratory technician i': 'Laboratory Technician',
-        'laboratory technician ii': 'Laboratory Technician',
-        'data entry': 'Data Entry',
-        'data entry i': 'Data Entry',
-        'data entry ii': 'Data Entry',
-        'data entry manager': 'Data Entry',
-        'data coordinator i': 'Data Entry',
-        'regulatory specialist i': 'Regulatory Coordinator',
-        'regulatory specialist ii': 'Regulatory Coordinator',
-        'admin asst (regulatory)': 'Regulatory Coordinator',
-        'director of recruitment': 'Recruitment',
-        'senior recruitment specialist': 'Recruitment',
-        'recruitment specialist i': 'Recruitment',
-        'recruitment specialist ii': 'Recruitment',
-        'dietary aide': 'Dietary Aide',
-        'principle investigator': 'Principal Investigator',
-        'principal investigator': 'Principal Investigator',
-        'pi': 'Principal Investigator',
-        'sub-investigator': 'Sub-Investigator',
-        'sub investigator': 'Sub-Investigator',
-        'subinvestigator': 'Sub-Investigator',
-        'subinvestigator': 'Sub-Investigator',
-    };
-
-    const RESP_SCROLL = {
-        stepRatio: 0.7,
-        userPauseMs: 800
-    };
-
-    const RESP_ATTRS = {
-        ariaBusyTarget: 'body',
-        ariaBusyAttr: 'aria-busy'
-    };
-
-    const CLEAN_SELECTORS = {
-        mainPanelButtonTarget: '.main-gui-panel',
-        ariaLiveRegion: '.aria-live-region'
-    };
-
-    const CLEAN_TIMEOUTS = {
-        waitInputPanelMs: 10000,
-        waitResultsPanelMs: 10000
-    };
-
-    const CLEAN_LABELS = {
-        featureButton: 'Clean Study Task List',
-        inputTitle: 'Clean Study Task List Input',
-        resultsTitle: 'Cleaned Study Task List',
-        responsibilitiesHeader: 'Responsibilities',
-        confirm: 'Confirm',
-        clear: 'Clear All',
-        close: 'Close',
-        downloadXlsx: 'Download .xlsx',
-        downloadCsv: 'Download CSV',
-        parsing: 'Parsing and cleaning input',
-        done: 'Cleaning complete',
-        exportSuccess: 'Export file created',
-        exportFailed: 'Export failed'
-    };
-
-    const CLEAN_REGEX = {
-        itemStart: /(^|\s)(\d{1,3})([.)])\s+/g,
-        leadingToken: /^(\d{1,3})([.)])\s*/,
-        specialChars: /[\\\/:<>"|?*]/g,
-        standaloneAnd: /\b(and)\b/gi,
-        smartQuotes: /[\u201c\u201d]/g,
-        strayQuotes: /"+/g,
-        whitespace: /\s+/g,
-        duplicateCommas: /,\s*,+/g
-    };
-
-    const CLEAN_LIMITS = {
-        maxChars: 100
-    };
-
-    const CLEAN_ATTRS = {
-        ariaBusyTarget: 'body',
-        ariaBusyAttr: 'aria-busy'
-    };
-
-    var cleanState = {
-        isRunning: false,
-        stopRequested: false,
-        observers: [],
-        timeouts: [],
-        intervals: [],
-        eventListeners: [],
-        idleCallbackIds: [],
-        focusReturnElement: null,
-        prevAriaBusy: null,
-        parsedItems: null,
-        outputModel: null
-    };
-
-    var respState = {
-        isRunning: false,
-        stopRequested: false,
-        observers: [],
-        timeouts: [],
-        intervals: [],
-        eventListeners: [],
-        idleCallbackIds: [],
-        focusReturnElement: null,
-        prevAriaBusy: null,
-        parsedRoles: null,
-        rolesData: [],
-        counters: { total: 0, completed: 0, failed: 0, pending: 0 },
-        listScrollTop: 0,
-        userScrollHandler: null,
-        userScrollPaused: false
-    };
-
-
     let elogState = {
         isRunning: false,
         observers: [],
@@ -2130,6 +1913,228 @@
         resetELogState();
         addLogMessage('stopELog: cleanup complete', 'log');
     }
+
+    //==========================
+    // SET ROLE RESPONSIBILITIES FUNCTIONS
+    //==========================
+    // This section contains functions to handle Training ELogs feature.
+    // This includes a UI user input, parsing a list of names, and adding entries on webpages.
+    //==========================
+    const RESP_SELECTORS = {
+        pageStepRoot: 'doa-log-template-study-roles-step',
+        dropListContainer: '.cdk-drop-list.doa-log-form-step__drop-list-container',
+        roleColumns: '.doa-log-form-step__column.roles__column',
+        roleSearchInput: '#filtered-select-input.filtered-select__input[placeholder*="Search"]',
+        roleListContainer: 'ul.filtered-select__list.u-z-index-1060, ul.filtered-select__list',
+        virtualViewport: 'cdk-virtual-scroll-viewport.cdk-virtual-scroll-viewport, .filtered-select__list',
+        roleOptionItem: '.filtered-select__list__item, [role="option"], .cdk-virtual-scroll-viewport .filtered-select__list__item',
+        roleOptionText: '.filtered-select__list__item__text',
+        roleOptionCheckboxTri: '.test-checkboxTristate[role="checkbox"]',
+        selectedRoleCheckboxInColumn: '[role="checkbox"][aria-checked="true"]',
+        responsibilitiesToggleBtn: 'button[dropdowntoggle][data-test="study-responsibilities-dropdown-toggle"].roles__select-options-dropdown-button',
+        responsibilitiesMenu: 'ul[role="menu"][data-test="study-responsibilities-list"]',
+        responsibilitiesItem: 'ul[role="menu"][data-test="study-responsibilities-list"] li',
+        responsibilitiesItemCheckbox: 'ul[role="menu"][data-test="study-responsibilities-list"] li input[type="checkbox"]',
+        addStudyRoleBtn: 'button[data-test="add-study-role-button"]',
+        mainPanelButtonTarget: '.main-gui-panel',
+        ariaLiveRegion: '.aria-live-region'
+    };
+
+    const RESP_TIMEOUTS = {
+        waitPageMs: 10000,
+        waitInputPanelMs: 10000,
+        waitProgressPanelMs: 10000,
+        waitListOpenMs: 4000,
+        waitOptionRenderMs: 1500,
+        waitAfterSelectRoleMs: 800,
+        waitResponsibilitiesMenuMs: 3000,
+        waitAfterToggleResponsibilityMs: 200,
+        waitAddRoleResultMs: 4000,
+        settleAfterScrollMs: 150,
+        idleBetweenScrollsMs: 80,
+        maxSelectRoleDurationMs: 30000
+    };
+
+    const RESP_RETRY = {
+        openListRetries: 4,
+        optionScanRetries: 2,
+        maxScrollPasses: 8,
+        addRoleRetries: 2
+    };
+
+    const RESP_LABELS = {
+        notOnPageWarning: 'You are not on the Study Role Page.',
+        statusPending: 'Pending',
+        statusCompleted: 'Completed',
+        statusFailed: 'Failed',
+        statusStopped: 'Stopped',
+        parsing: 'Parsing input',
+        scanningExisting: 'Scanning existing roles',
+        selectingRole: 'Selecting role',
+        selectingResponsibilities: 'Selecting responsibilities',
+        addingRole: 'Adding study role',
+        done: 'Completed'
+    };
+
+    const RESP_COUNTERS = {
+        total: 0,
+        completed: 0,
+        failed: 0,
+        pending: 0
+    };
+
+    const RESP_REGEX = {
+        range: /\b(\d+)\s*(?:to|\-|\u2013|\u2014)\s*(\d+)\b/i,
+        number: /\b\d+\b/g,
+        quoteCleanup: /["\u201c\u201d]+/g,
+        hyphenBreak: /-\s*\n\s*/g,
+        lineBreakInRole: /\n+/g,
+        whitespace: /\s+/g
+    };
+
+    const RESP_ROLE_ALIASES = {
+        'pi': 'Principal Investigator',
+        'principal investigator': 'Principal Investigator',
+        'sub investigator': 'Sub-Investigator',
+        'sub-investigator': 'Sub-Investigator',
+        'research nurse': 'Research Nurse',
+        'nurse': 'Research Nurse',
+        'nurse manager': 'Research Nurse',
+        'infusion nurse i': 'Research Nurse',
+        'infusion nurse ii': 'Research Nurse',
+        'research nurse i': 'Research Nurse',
+        'research nurse ii': 'Research Nurse',
+        'research assistant': 'Research Assistant',
+        'research assistant i': 'Research Assistant',
+        'research assistant ii': 'Research Assistant',
+        'study coordinator': 'Study Coordinator',
+        'crc i': 'Study Coordinator',
+        'crc ii': 'Study Coordinator',
+        'senior crc': 'Study Coordinator',
+        'clinical trial lead': 'Study Coordinator',
+        'pharmacy': 'Pharmacy',
+        'pharmacist': 'Pharmacy',
+        'pharmacy technician i': 'Pharmacy',
+        'pharmacy assistant': 'Pharmacy',
+        'quality assurance': 'Quality Assurance',
+        'qa manager': 'Quality Assurance',
+        'qa coordinator i': 'Quality Assurance',
+        'qa coordinator ii': 'Quality Assurance',
+        'qa admin assistant i': 'Quality Assurance',
+        'qa admin assistant ii': 'Quality Assurance',
+        'laboratory manager': 'Laboratory Technician',
+        'laboratory technician': 'Laboratory Technician',
+        'laboratory technician i': 'Laboratory Technician',
+        'laboratory technician ii': 'Laboratory Technician',
+        'data entry': 'Data Entry',
+        'data entry i': 'Data Entry',
+        'data entry ii': 'Data Entry',
+        'data entry manager': 'Data Entry',
+        'data coordinator i': 'Data Entry',
+        'regulatory specialist i': 'Regulatory Coordinator',
+        'regulatory specialist ii': 'Regulatory Coordinator',
+        'admin asst (regulatory)': 'Regulatory Coordinator',
+        'director of recruitment': 'Recruitment',
+        'senior recruitment specialist': 'Recruitment',
+        'recruitment specialist i': 'Recruitment',
+        'recruitment specialist ii': 'Recruitment',
+        'dietary aide': 'Dietary Aide',
+        'principle investigator': 'Principal Investigator',
+        'principal investigator': 'Principal Investigator',
+        'pi': 'Principal Investigator',
+        'sub-investigator': 'Sub-Investigator',
+        'sub investigator': 'Sub-Investigator',
+        'subinvestigator': 'Sub-Investigator',
+        'subinvestigator': 'Sub-Investigator',
+    };
+
+    const RESP_SCROLL = {
+        stepRatio: 0.7,
+        userPauseMs: 800
+    };
+
+    const RESP_ATTRS = {
+        ariaBusyTarget: 'body',
+        ariaBusyAttr: 'aria-busy'
+    };
+
+    const CLEAN_SELECTORS = {
+        mainPanelButtonTarget: '.main-gui-panel',
+        ariaLiveRegion: '.aria-live-region'
+    };
+
+    const CLEAN_TIMEOUTS = {
+        waitInputPanelMs: 10000,
+        waitResultsPanelMs: 10000
+    };
+
+    const CLEAN_LABELS = {
+        featureButton: 'Clean Study Task List',
+        inputTitle: 'Clean Study Task List Input',
+        resultsTitle: 'Cleaned Study Task List',
+        responsibilitiesHeader: 'Responsibilities',
+        confirm: 'Confirm',
+        clear: 'Clear All',
+        close: 'Close',
+        downloadXlsx: 'Download .xlsx',
+        downloadCsv: 'Download CSV',
+        parsing: 'Parsing and cleaning input',
+        done: 'Cleaning complete',
+        exportSuccess: 'Export file created',
+        exportFailed: 'Export failed'
+    };
+
+    const CLEAN_REGEX = {
+        itemStart: /(^|\s)(\d{1,3})([.)])\s+/g,
+        leadingToken: /^(\d{1,3})([.)])\s*/,
+        specialChars: /[\\\/:<>"|?*]/g,
+        standaloneAnd: /\b(and)\b/gi,
+        smartQuotes: /[\u201c\u201d]/g,
+        strayQuotes: /"+/g,
+        whitespace: /\s+/g,
+        duplicateCommas: /,\s*,+/g
+    };
+
+    const CLEAN_LIMITS = {
+        maxChars: 100
+    };
+
+    const CLEAN_ATTRS = {
+        ariaBusyTarget: 'body',
+        ariaBusyAttr: 'aria-busy'
+    };
+
+    var cleanState = {
+        isRunning: false,
+        stopRequested: false,
+        observers: [],
+        timeouts: [],
+        intervals: [],
+        eventListeners: [],
+        idleCallbackIds: [],
+        focusReturnElement: null,
+        prevAriaBusy: null,
+        parsedItems: null,
+        outputModel: null
+    };
+
+    var respState = {
+        isRunning: false,
+        stopRequested: false,
+        observers: [],
+        timeouts: [],
+        intervals: [],
+        eventListeners: [],
+        idleCallbackIds: [],
+        focusReturnElement: null,
+        prevAriaBusy: null,
+        parsedRoles: null,
+        rolesData: [],
+        counters: { total: 0, completed: 0, failed: 0, pending: 0 },
+        listScrollTop: 0,
+        userScrollHandler: null,
+        userScrollPaused: false
+    };
 
     function resetRespState() {
         addLogMessage('resetRespState: resetting state', 'log');
@@ -4777,10 +4782,10 @@ function showResponsibilitiesProgressPanel(rolesData) {
             if (i === 1) {
                 button.textContent = 'Add Signatures';
             } else if (i === 2) {
-                button.textContent = 'Add ELog Staff Entries';
+                button.textContent = 'Add Training Log Staff Entries';
                 button.id = 'elog-staff-entries-btn';
             } else if (i === 3) {
-                button.textContent = 'Set Responsibilities';
+                button.textContent = 'Set Role Responsibilities';
                 button.id = 'resp-set-btn';
             } else if (i === 4) {
                 button.textContent = CLEAN_LABELS.featureButton;
@@ -4976,7 +4981,6 @@ function showResponsibilitiesProgressPanel(rolesData) {
     //==========================
     // This section contains functions used by Add Signatures feature
     //==========================
-
 
     function openSignaturesInputGUI() {
         addLogMessage('openSignaturesInputGUI: opening input modal', 'log');
