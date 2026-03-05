@@ -192,9 +192,53 @@
         'sub-investigator': 'Sub-Investigator',
         'research nurse': 'Research Nurse',
         'nurse': 'Research Nurse',
+        'nurse manager': 'Research Nurse',
+        'infusion nurse i': 'Research Nurse',
+        'infusion nurse ii': 'Research Nurse',
+        'research nurse i': 'Research Nurse',
+        'research nurse ii': 'Research Nurse',
         'research assistant': 'Research Assistant',
+        'research assistant i': 'Research Assistant',
+        'research assistant ii': 'Research Assistant',
         'study coordinator': 'Study Coordinator',
-        'pharmacy': 'Pharmacy'
+        'crc i': 'Study Coordinator',
+        'crc ii': 'Study Coordinator',
+        'senior crc': 'Study Coordinator',
+        'clinical trial lead': 'Study Coordinator',
+        'pharmacy': 'Pharmacy',
+        'pharmacist': 'Pharmacy',
+        'pharmacy technician i': 'Pharmacy',
+        'pharmacy assistant': 'Pharmacy',
+        'quality assurance': 'Quality Assurance',
+        'qa manager': 'Quality Assurance',
+        'qa coordinator i': 'Quality Assurance',
+        'qa coordinator ii': 'Quality Assurance',
+        'qa admin assistant i': 'Quality Assurance',
+        'qa admin assistant ii': 'Quality Assurance',
+        'laboratory manager': 'Laboratory Technician',
+        'laboratory technician': 'Laboratory Technician',
+        'laboratory technician i': 'Laboratory Technician',
+        'laboratory technician ii': 'Laboratory Technician',
+        'data entry': 'Data Entry',
+        'data entry i': 'Data Entry',
+        'data entry ii': 'Data Entry',
+        'data entry manager': 'Data Entry',
+        'data coordinator i': 'Data Entry',
+        'regulatory specialist i': 'Regulatory Coordinator',
+        'regulatory specialist ii': 'Regulatory Coordinator',
+        'admin asst (regulatory)': 'Regulatory Coordinator',
+        'director of recruitment': 'Recruitment',
+        'senior recruitment specialist': 'Recruitment',
+        'recruitment specialist i': 'Recruitment',
+        'recruitment specialist ii': 'Recruitment',
+        'dietary aide': 'Dietary Aide',
+        'principle investigator': 'Principal Investigator',
+        'principal investigator': 'Principal Investigator',
+        'pi': 'Principal Investigator',
+        'sub-investigator': 'Sub-Investigator',
+        'sub investigator': 'Sub-Investigator',
+        'subinvestigator': 'Sub-Investigator',
+        'subinvestigator': 'Sub-Investigator',
     };
 
     const RESP_SCROLL = {
@@ -205,6 +249,66 @@
     const RESP_ATTRS = {
         ariaBusyTarget: 'body',
         ariaBusyAttr: 'aria-busy'
+    };
+
+    const CLEAN_SELECTORS = {
+        mainPanelButtonTarget: '.main-gui-panel',
+        ariaLiveRegion: '.aria-live-region'
+    };
+
+    const CLEAN_TIMEOUTS = {
+        waitInputPanelMs: 10000,
+        waitResultsPanelMs: 10000
+    };
+
+    const CLEAN_LABELS = {
+        featureButton: 'Clean Study Task List',
+        inputTitle: 'Clean Study Task List Input',
+        resultsTitle: 'Cleaned Study Task List',
+        responsibilitiesHeader: 'Responsibilities',
+        confirm: 'Confirm',
+        clear: 'Clear All',
+        close: 'Close',
+        downloadXlsx: 'Download .xlsx',
+        downloadCsv: 'Download CSV',
+        parsing: 'Parsing and cleaning input',
+        done: 'Cleaning complete',
+        exportSuccess: 'Export file created',
+        exportFailed: 'Export failed'
+    };
+
+    const CLEAN_REGEX = {
+        itemStart: /(^|\s)(\d{1,3})([.)])\s+/g,
+        leadingToken: /^(\d{1,3})([.)])\s*/,
+        specialChars: /[\\\/:<>"|?*]/g,
+        standaloneAnd: /\b(and)\b/gi,
+        smartQuotes: /[\u201c\u201d]/g,
+        strayQuotes: /"+/g,
+        whitespace: /\s+/g,
+        duplicateCommas: /,\s*,+/g
+    };
+
+    const CLEAN_LIMITS = {
+        maxChars: 100
+    };
+
+    const CLEAN_ATTRS = {
+        ariaBusyTarget: 'body',
+        ariaBusyAttr: 'aria-busy'
+    };
+
+    var cleanState = {
+        isRunning: false,
+        stopRequested: false,
+        observers: [],
+        timeouts: [],
+        intervals: [],
+        eventListeners: [],
+        idleCallbackIds: [],
+        focusReturnElement: null,
+        prevAriaBusy: null,
+        parsedItems: null,
+        outputModel: null
     };
 
     var respState = {
@@ -2195,8 +2299,21 @@
                 var rolePart = '';
                 var numberPart = '';
                 if (parts.length >= 2) {
-                    rolePart = parts[0].trim();
-                    numberPart = parts.slice(1).join(' ');
+                    var emailIdx = -1;
+                    for (var pi = 0; pi < parts.length; pi++) {
+                        if (parts[pi].indexOf('@') !== -1) {
+                            emailIdx = pi;
+                            break;
+                        }
+                    }
+                    if (emailIdx !== -1 && emailIdx + 1 < parts.length) {
+                        rolePart = parts[emailIdx + 1].trim();
+                        numberPart = parts.slice(emailIdx + 2).join(' ');
+                        addLogMessage('parseResponsibilitiesInput: line ' + mi + ' staff table detected, role=' + rolePart, 'log');
+                    } else {
+                        rolePart = parts[0].trim();
+                        numberPart = parts.slice(1).join(' ');
+                    }
                 } else {
                     var firstNumMatch = mline.match(/\d/);
                     if (firstNumMatch) {
@@ -2673,7 +2790,6 @@ function showResponsibilitiesProgressPanel(rolesData) {
     var description = document.createElement('div');
     var bulletPoints = [
         'Do not click anywhere on the page or outside of the page. It will affect the process as doing so closes the dropdown menu.',
-        'Note: The Connect Responsibilities dropdown menu will be LOCKED after completion.',
         'If you need to make changes, do it at the end of the process: delete the role and create another one.'
     ];
     description.innerHTML = bulletPoints.map(function(point) {
@@ -3627,6 +3743,669 @@ function showResponsibilitiesProgressPanel(rolesData) {
         processNextRole();
     }
 
+    function resetCleanState() {
+        addLogMessage('resetCleanState: resetting state', 'log');
+        cleanState.isRunning = false;
+        cleanState.stopRequested = false;
+        cleanState.observers = [];
+        cleanState.timeouts = [];
+        cleanState.intervals = [];
+        cleanState.eventListeners = [];
+        cleanState.idleCallbackIds = [];
+        cleanState.prevAriaBusy = null;
+        cleanState.parsedItems = null;
+        cleanState.outputModel = null;
+    }
+
+    function cleanSetAriaBusyOn() {
+        addLogMessage('cleanSetAriaBusyOn: setting aria-busy', 'log');
+        var target = document.querySelector(CLEAN_ATTRS.ariaBusyTarget);
+        if (target) {
+            cleanState.prevAriaBusy = target.getAttribute(CLEAN_ATTRS.ariaBusyAttr);
+            target.setAttribute(CLEAN_ATTRS.ariaBusyAttr, 'true');
+            addLogMessage('cleanSetAriaBusyOn: prev=' + cleanState.prevAriaBusy, 'log');
+        }
+    }
+
+    function cleanSetAriaBusyOff() {
+        addLogMessage('cleanSetAriaBusyOff: restoring aria-busy', 'log');
+        var target = document.querySelector(CLEAN_ATTRS.ariaBusyTarget);
+        if (target) {
+            if (cleanState.prevAriaBusy !== null) {
+                target.setAttribute(CLEAN_ATTRS.ariaBusyAttr, cleanState.prevAriaBusy);
+            } else {
+                target.removeAttribute(CLEAN_ATTRS.ariaBusyAttr);
+            }
+            cleanState.prevAriaBusy = null;
+        }
+    }
+
+    function updateCleanAriaLive(message) {
+        addLogMessage('updateCleanAriaLive: ' + message, 'log');
+        var lr = document.getElementById('clean-aria-live');
+        if (lr) {
+            lr.textContent = message;
+        }
+    }
+
+    function normalizeItemText(s) {
+        addLogMessage('normalizeItemText: input length=' + s.length, 'log');
+        var result = s;
+        result = result.replace(CLEAN_REGEX.smartQuotes, '"');
+        result = result.replace(CLEAN_REGEX.strayQuotes, '');
+        result = result.replace(CLEAN_REGEX.whitespace, ' ');
+        result = result.trim();
+        addLogMessage('normalizeItemText: output length=' + result.length, 'log');
+        return result;
+    }
+
+    function replaceSpecialCharactersToComma(s) {
+        addLogMessage('replaceSpecialCharactersToComma: input length=' + s.length, 'log');
+        var count = 0;
+        var result = s.replace(CLEAN_REGEX.specialChars, function() {
+            count++;
+            return ',';
+        });
+        result = result.replace(CLEAN_REGEX.duplicateCommas, ',');
+        result = result.replace(/,\s*/g, ', ');
+        result = result.replace(/\s+/g, ' ');
+        result = result.trim();
+        addLogMessage('replaceSpecialCharactersToComma: replacements=' + count, 'log');
+        return result;
+    }
+
+    function replaceStandaloneAndWithAmpersand(s) {
+        addLogMessage('replaceStandaloneAndWithAmpersand: input length=' + s.length, 'log');
+        var count = 0;
+        var result = s.replace(CLEAN_REGEX.standaloneAnd, function() {
+            count++;
+            return '&';
+        });
+        addLogMessage('replaceStandaloneAndWithAmpersand: replacements=' + count, 'log');
+        return result;
+    }
+
+    function splitRawIntoItems(rawText) {
+        addLogMessage('splitRawIntoItems: starting split', 'log');
+        var items = [];
+        var normalized = rawText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        normalized = normalized.replace(CLEAN_REGEX.smartQuotes, '"');
+        normalized = normalized.replace(CLEAN_REGEX.strayQuotes, '');
+        var pattern = /(?:^|[\s"'])(\d{1,3})([.)])\s+/g;
+        var boundaries = [];
+        var match;
+        while ((match = pattern.exec(normalized)) !== null) {
+            var tokenStart = match.index;
+            if (match[1] !== undefined && match.index < normalized.length) {
+                var prefix = match[0];
+                var leadingWhitespace = prefix.length - prefix.trimStart().length;
+                tokenStart = match.index + leadingWhitespace;
+                if (/["'\s]/.test(normalized[match.index]) && match.index !== 0) {
+                    tokenStart = match.index + 1;
+                } else if (match.index === 0) {
+                    tokenStart = 0;
+                }
+            }
+            boundaries.push({
+                index: tokenStart,
+                number: match[1],
+                separator: match[2],
+                fullMatchEnd: match.index + match[0].length
+            });
+        }
+        addLogMessage('splitRawIntoItems: found ' + boundaries.length + ' boundaries', 'log');
+        for (var i = 0; i < boundaries.length; i++) {
+            var start = boundaries[i].fullMatchEnd;
+            var end;
+            if (i + 1 < boundaries.length) {
+                end = boundaries[i + 1].index;
+            } else {
+                end = normalized.length;
+            }
+            var text = normalized.substring(start, end).trim();
+            text = text.replace(/\n+/g, ' ');
+            text = text.replace(CLEAN_REGEX.whitespace, ' ');
+            items.push({
+                number: boundaries[i].number,
+                separator: boundaries[i].separator,
+                rawText: text
+            });
+        }
+        addLogMessage('splitRawIntoItems: extracted ' + items.length + ' items', 'log');
+        return items;
+    }
+
+    function parseAndCleanResponsibilities(rawText) {
+        addLogMessage('parseAndCleanResponsibilities: start', 'log');
+        try {
+            cleanSetAriaBusyOn();
+            updateCleanAriaLive(CLEAN_LABELS.parsing);
+            var rawItems = splitRawIntoItems(rawText);
+            var results = [];
+            var tooLongCount = 0;
+            var tooShortCount = 0;
+            for (var i = 0; i < rawItems.length; i++) {
+                var item = rawItems[i];
+                var cleaned = normalizeItemText(item.rawText);
+                cleaned = replaceSpecialCharactersToComma(cleaned);
+                cleaned = replaceStandaloneAndWithAmpersand(cleaned);
+                cleaned = cleaned.trim();
+                cleaned = cleaned.replace(CLEAN_REGEX.whitespace, ' ');
+                var numberToken = item.number + item.separator;
+                var fullText = numberToken + ' ' + cleaned;
+                var textLength = cleaned.length;
+                var isTooLong = textLength > CLEAN_LIMITS.maxChars;
+                var isTooShort = textLength < CLEAN_LIMITS.maxChars;
+                if (isTooLong) {
+                    tooLongCount++;
+                }
+                if (isTooShort) {
+                    tooShortCount++;
+                }
+                results.push({
+                    numberToken: numberToken,
+                    text: cleaned,
+                    fullTextWithNumber: fullText,
+                    tooLong: isTooLong,
+                    tooShort: isTooShort,
+                    length: textLength
+                });
+            }
+            addLogMessage('parseAndCleanResponsibilities: parsed ' + results.length + ' items, tooLong=' + tooLongCount + ', tooShort=' + tooShortCount, 'log');
+            updateCleanAriaLive(CLEAN_LABELS.done);
+            cleanSetAriaBusyOff();
+            return {
+                items: results,
+                summary: {
+                    total: results.length,
+                    tooLong: tooLongCount,
+                    tooShort: tooShortCount
+                }
+            };
+        } catch (e) {
+            addLogMessage('parseAndCleanResponsibilities: error: ' + e, 'error');
+            cleanSetAriaBusyOff();
+            return {
+                items: [],
+                summary: { total: 0, tooLong: 0, tooShort: 0 }
+            };
+        }
+    }
+
+    function buildOutputModel(items) {
+        addLogMessage('buildOutputModel: building model with ' + items.length + ' items', 'log');
+        var headerLine = CLEAN_LABELS.responsibilitiesHeader;
+        var cleanLines = [];
+        var flags = [];
+        var tooLongCount = 0;
+        var tooShortCount = 0;
+        for (var i = 0; i < items.length; i++) {
+            cleanLines.push(items[i].text);
+            flags.push({
+                tooLong: items[i].tooLong,
+                tooShort: items[i].tooShort,
+                length: items[i].length
+            });
+            if (items[i].tooLong) {
+                tooLongCount++;
+            }
+            if (items[i].tooShort) {
+                tooShortCount++;
+            }
+        }
+        addLogMessage('buildOutputModel: tooLong=' + tooLongCount + ', tooShort=' + tooShortCount, 'log');
+        return {
+            headerLine: headerLine,
+            cleanLines: cleanLines,
+            flags: flags,
+            copyText: headerLine + '\n' + cleanLines.join('\n'),
+            tooLongCount: tooLongCount,
+            tooShortCount: tooShortCount
+        };
+    }
+
+    function exportResponsibilitiesToXlsxOrCsv(model) {
+        addLogMessage('exportResponsibilitiesToXlsxOrCsv: starting export', 'log');
+        try {
+            if (typeof window.XLSX !== 'undefined' && window.XLSX) {
+                addLogMessage('exportResponsibilitiesToXlsxOrCsv: using XLSX library', 'log');
+                var wsData = [[model.headerLine]];
+                for (var i = 0; i < model.cleanLines.length; i++) {
+                    wsData.push([model.cleanLines[i]]);
+                }
+                var wb = window.XLSX.utils.book_new();
+                var ws = window.XLSX.utils.aoa_to_sheet(wsData);
+                window.XLSX.utils.book_append_sheet(wb, ws, 'Responsibilities');
+                var timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+                var filename = 'Responsibilities_' + timestamp + '.xlsx';
+                window.XLSX.writeFile(wb, filename);
+                addLogMessage('exportResponsibilitiesToXlsxOrCsv: xlsx exported as ' + filename, 'log');
+                updateCleanAriaLive(CLEAN_LABELS.exportSuccess);
+                return true;
+            } else {
+                addLogMessage('exportResponsibilitiesToXlsxOrCsv: XLSX not available, falling back to CSV', 'log');
+                var csvRows = [];
+                csvRows.push('"' + model.headerLine.replace(/"/g, '""') + '"');
+                for (var j = 0; j < model.cleanLines.length; j++) {
+                    csvRows.push('"' + model.cleanLines[j].replace(/"/g, '""') + '"');
+                }
+                var csvContent = csvRows.join('\r\n');
+                var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                var url = URL.createObjectURL(blob);
+                var timestamp2 = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+                var filename2 = 'Responsibilities_' + timestamp2 + '.csv';
+                var link = document.createElement('a');
+                link.href = url;
+                link.download = filename2;
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                addLogMessage('exportResponsibilitiesToXlsxOrCsv: csv exported as ' + filename2, 'log');
+                updateCleanAriaLive(CLEAN_LABELS.exportSuccess);
+                return true;
+            }
+        } catch (e) {
+            addLogMessage('exportResponsibilitiesToXlsxOrCsv: export failed: ' + e, 'error');
+            updateCleanAriaLive(CLEAN_LABELS.exportFailed);
+            return false;
+        }
+    }
+
+    function showCleanInputPanel() {
+        addLogMessage('showCleanInputPanel: creating input panel', 'log');
+        var modal = document.createElement('div');
+        modal.id = 'clean-input-modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 20000; display: flex; align-items: center; justify-content: center;';
+        var container = document.createElement('div');
+        container.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; width: 550px; max-width: 90%; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); position: relative;';
+        container.setAttribute('role', 'dialog');
+        container.setAttribute('aria-modal', 'true');
+        container.setAttribute('aria-labelledby', 'clean-input-title');
+        var header = document.createElement('div');
+        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;';
+        var title = document.createElement('h3');
+        title.id = 'clean-input-title';
+        title.textContent = CLEAN_LABELS.inputTitle;
+        title.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600; letter-spacing: 0.2px;';
+        var closeButton = document.createElement('button');
+        closeButton.innerHTML = '\u2715';
+        closeButton.setAttribute('aria-label', 'Close input panel');
+        closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
+        closeButton.onmouseover = function() {
+            closeButton.style.background = 'rgba(255, 67, 54, 0.8)';
+        };
+        closeButton.onmouseout = function() {
+            closeButton.style.background = 'rgba(255, 255, 255, 0.2)';
+        };
+        closeButton.onclick = function() {
+            addLogMessage('showCleanInputPanel: closed by user', 'log');
+            stopCleanResponsibility();
+        };
+        header.appendChild(title);
+        header.appendChild(closeButton);
+        var description = document.createElement('p');
+        description.textContent = 'Paste the raw responsibility list below. Items should start with a number followed by . or ) and text.';
+        description.style.cssText = 'color: rgba(255, 255, 255, 0.9); margin: 0 0 12px 0; font-size: 14px; line-height: 1.4;';
+        var textareaLabel = document.createElement('label');
+        textareaLabel.setAttribute('for', 'clean-input-textarea');
+        textareaLabel.textContent = 'Responsibilities text';
+        textareaLabel.style.cssText = 'position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;';
+        var textarea = document.createElement('textarea');
+        textarea.id = 'clean-input-textarea';
+        textarea.placeholder = '1. First responsibility\n2. Second responsibility\n3. Third responsibility';
+        textarea.style.cssText = 'width: 100%; height: 200px; padding: 12px 14px; border: 2px solid rgba(255, 255, 255, 0.35); border-radius: 10px; background: rgba(255, 255, 255, 0.95); color: #1e293b; font-size: 14px; font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; resize: vertical; outline: none; transition: all 0.25s ease; box-shadow: 0 2px 0 rgba(0,0,0,0.04) inset; box-sizing: border-box;';
+        textarea.onfocus = function() {
+            textarea.style.borderColor = '#8ea0ff';
+            textarea.style.boxShadow = '0 0 0 4px rgba(102, 126, 234, 0.25)';
+        };
+        textarea.onblur = function() {
+            textarea.style.borderColor = 'rgba(255, 255, 255, 0.35)';
+            textarea.style.boxShadow = '0 2px 0 rgba(0,0,0,0.04) inset';
+        };
+        var confirmButton = document.createElement('button');
+        confirmButton.textContent = CLEAN_LABELS.confirm;
+        confirmButton.disabled = true;
+        confirmButton.setAttribute('aria-label', 'Confirm and parse responsibilities');
+        confirmButton.style.cssText = 'background: linear-gradient(135deg, #28a745 0%, #20c997 100%); border: 2px solid rgba(255, 255, 255, 0.35); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; letter-spacing: 0.2px; transition: all 0.25s ease; opacity: 0.5;';
+        var updateConfirmState = function() {
+            var hasInput = textarea.value.trim().length > 0;
+            confirmButton.disabled = !hasInput;
+            if (hasInput) {
+                confirmButton.style.opacity = '1';
+                confirmButton.style.cursor = 'pointer';
+            } else {
+                confirmButton.style.opacity = '0.5';
+                confirmButton.style.cursor = 'not-allowed';
+            }
+        };
+        textarea.addEventListener('input', updateConfirmState);
+        cleanState.eventListeners.push({ element: textarea, type: 'input', handler: updateConfirmState });
+        confirmButton.onmouseover = function() {
+            if (!confirmButton.disabled) {
+                confirmButton.style.background = 'linear-gradient(135deg, #218838 0%, #1ea085 100%)';
+            }
+        };
+        confirmButton.onmouseout = function() {
+            confirmButton.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
+        };
+        confirmButton.onclick = function() {
+            if (confirmButton.disabled) {
+                return;
+            }
+            addLogMessage('showCleanInputPanel: Confirm clicked', 'log');
+            var rawText = textarea.value;
+            if (!rawText || !rawText.trim()) {
+                addLogMessage('showCleanInputPanel: empty input after confirm', 'warn');
+                return;
+            }
+            var parseResult = parseAndCleanResponsibilities(rawText);
+            if (parseResult.items.length === 0) {
+                addLogMessage('showCleanInputPanel: no items parsed, showing notice', 'warn');
+                var notice = document.createElement('div');
+                notice.textContent = 'No numbered items found. Ensure items start with a number followed by . or ) and text.';
+                notice.style.cssText = 'color: #ffd93d; font-size: 13px; margin-top: 8px; padding: 8px; background: rgba(255, 217, 61, 0.15); border-radius: 6px;';
+                notice.setAttribute('role', 'alert');
+                var existingNotice = container.querySelector('[role="alert"]');
+                if (existingNotice) {
+                    container.removeChild(existingNotice);
+                }
+                container.appendChild(notice);
+                return;
+            }
+            cleanState.parsedItems = parseResult;
+            var outputModel = buildOutputModel(parseResult.items);
+            cleanState.outputModel = outputModel;
+            if (modal.parentNode) {
+                modal.parentNode.removeChild(modal);
+            }
+            showCleanResultsPanel(outputModel);
+        };
+        var clearButton = document.createElement('button');
+        clearButton.textContent = CLEAN_LABELS.clear;
+        clearButton.setAttribute('aria-label', 'Clear all input');
+        clearButton.style.cssText = 'background: rgba(255, 255, 255, 0.18); border: 2px solid rgba(255, 255, 255, 0.35); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.25s ease; backdrop-filter: blur(2px);';
+        clearButton.onmouseover = function() {
+            clearButton.style.background = 'rgba(255, 255, 255, 0.28)';
+        };
+        clearButton.onmouseout = function() {
+            clearButton.style.background = 'rgba(255, 255, 255, 0.18)';
+        };
+        clearButton.onclick = function() {
+            addLogMessage('showCleanInputPanel: Clear All clicked', 'log');
+            textarea.value = '';
+            cleanState.parsedItems = null;
+            cleanState.outputModel = null;
+            updateConfirmState();
+            textarea.focus();
+        };
+        var buttonContainer = document.createElement('div');
+        buttonContainer.style.cssText = 'display: flex; gap: 12px; margin-top: 20px; justify-content: flex-end;';
+        buttonContainer.appendChild(clearButton);
+        buttonContainer.appendChild(confirmButton);
+        var ariaLiveRegion = document.createElement('div');
+        ariaLiveRegion.id = 'clean-aria-live';
+        ariaLiveRegion.setAttribute('aria-live', 'polite');
+        ariaLiveRegion.setAttribute('aria-atomic', 'true');
+        ariaLiveRegion.style.cssText = 'position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;';
+        container.appendChild(header);
+        container.appendChild(description);
+        container.appendChild(textareaLabel);
+        container.appendChild(textarea);
+        container.appendChild(buttonContainer);
+        container.appendChild(ariaLiveRegion);
+        modal.appendChild(container);
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        modal.style.pointerEvents = 'none';
+        container.style.pointerEvents = 'auto';
+        makeDraggable(container, header);
+        document.body.appendChild(modal);
+        textarea.focus();
+        addLogMessage('showCleanInputPanel: panel displayed', 'log');
+        var escHandler = function(e) {
+            if (e.key === 'Escape') {
+                addLogMessage('showCleanInputPanel: Escape pressed', 'log');
+                stopCleanResponsibility();
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+        cleanState.eventListeners.push({ element: document, type: 'keydown', handler: escHandler });
+    }
+
+    function showCleanResultsPanel(model) {
+        addLogMessage('showCleanResultsPanel: creating results panel', 'log');
+        var modal = document.createElement('div');
+        modal.id = 'clean-results-modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 20000; display: flex; align-items: center; justify-content: center;';
+        var container = document.createElement('div');
+        container.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; width: 650px; max-width: 90%; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); position: relative;';
+        container.setAttribute('role', 'dialog');
+        container.setAttribute('aria-modal', 'true');
+        container.setAttribute('aria-labelledby', 'clean-results-title');
+        var header = document.createElement('div');
+        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-shrink: 0;';
+        var title = document.createElement('h3');
+        title.id = 'clean-results-title';
+        title.textContent = CLEAN_LABELS.resultsTitle;
+        title.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600; letter-spacing: 0.2px;';
+        var closeButton = document.createElement('button');
+        closeButton.innerHTML = '\u2715';
+        closeButton.setAttribute('aria-label', 'Close results panel');
+        closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
+        closeButton.onmouseover = function() {
+            closeButton.style.background = 'rgba(255, 67, 54, 0.8)';
+        };
+        closeButton.onmouseout = function() {
+            closeButton.style.background = 'rgba(255, 255, 255, 0.2)';
+        };
+        closeButton.onclick = function() {
+            addLogMessage('showCleanResultsPanel: closed by user', 'log');
+            stopCleanResponsibility();
+        };
+        header.appendChild(title);
+        header.appendChild(closeButton);
+        var summaryBar = document.createElement('div');
+        summaryBar.style.cssText = 'display: flex; gap: 12px; margin-bottom: 12px; flex-shrink: 0; flex-wrap: wrap;';
+        var totalBadge = document.createElement('span');
+        totalBadge.textContent = 'Total: ' + model.cleanLines.length;
+        totalBadge.style.cssText = 'background: rgba(255, 255, 255, 0.15); color: white; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 12px;';
+        summaryBar.appendChild(totalBadge);
+        if (model.tooLongCount > 0) {
+            var longBadge = document.createElement('span');
+            longBadge.textContent = 'Over ' + CLEAN_LIMITS.maxChars + ' chars: ' + model.tooLongCount;
+            longBadge.style.cssText = 'background: rgba(255, 107, 107, 0.25); color: #ff6b6b; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 12px;';
+            summaryBar.appendChild(longBadge);
+        }
+        if (model.tooShortCount > 0) {
+            var shortBadge = document.createElement('span');
+            shortBadge.textContent = 'Under ' + CLEAN_LIMITS.maxChars + ' chars: ' + model.tooShortCount;
+            shortBadge.style.cssText = 'background: rgba(107, 207, 127, 0.25); color: #6bcf7f; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 12px;';
+            summaryBar.appendChild(shortBadge);
+        }
+        var outputScrollStyle = document.createElement('style');
+        outputScrollStyle.textContent = '.clean-results-output::-webkit-scrollbar { width: 6px; } .clean-results-output::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.1); border-radius: 3px; } .clean-results-output::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.3); border-radius: 3px; } .clean-results-output::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.5); } .clean-results-warning-icon { user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; pointer-events: auto; }';
+        document.head.appendChild(outputScrollStyle);
+        var outputArea = document.createElement('div');
+        outputArea.style.cssText = 'background: rgba(0, 0, 0, 0.2); border-radius: 8px; padding: 12px; overflow-y: auto; flex: 1; min-height: 100px; max-height: 400px;';
+        outputArea.className = 'clean-results-output';
+        var copyBlock = document.createElement('div');
+        copyBlock.id = 'clean-copy-block';
+        var headerLine = document.createElement('div');
+        headerLine.textContent = model.headerLine;
+        headerLine.style.cssText = 'color: white; font-size: 15px; font-weight: 700; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.2);';
+        copyBlock.appendChild(headerLine);
+        for (var i = 0; i < model.cleanLines.length; i++) {
+            var row = document.createElement('div');
+            row.style.cssText = 'display: flex; align-items: flex-start; gap: 6px; padding: 4px 0; color: white; font-size: 14px; line-height: 1.5;';
+            var textSpan = document.createElement('span');
+            textSpan.textContent = model.cleanLines[i];
+            textSpan.style.cssText = 'flex: 1; word-break: break-word;';
+            row.appendChild(textSpan);
+            if (model.flags[i].tooLong) {
+                var warnIcon = document.createElement('span');
+                warnIcon.className = 'clean-results-warning-icon';
+                warnIcon.textContent = '\u26A0';
+                warnIcon.setAttribute('aria-hidden', 'true');
+                warnIcon.setAttribute('title', 'Exceeds ' + CLEAN_LIMITS.maxChars + ' character limit. Length: ' + model.flags[i].length);
+                warnIcon.style.cssText = 'color: #ffd93d; font-size: 14px; flex-shrink: 0; cursor: help; user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none;';
+                row.appendChild(warnIcon);
+            }
+            outputArea.appendChild(row);
+        }
+        var hasXlsx = typeof window.XLSX !== 'undefined' && window.XLSX;
+        var downloadButton = document.createElement('button');
+        downloadButton.textContent = hasXlsx ? CLEAN_LABELS.downloadXlsx : CLEAN_LABELS.downloadCsv;
+        downloadButton.setAttribute('aria-label', hasXlsx ? 'Download as Excel file' : 'Download as CSV file');
+        downloadButton.style.cssText = 'background: linear-gradient(135deg, #28a745 0%, #20c997 100%); border: 2px solid rgba(255, 255, 255, 0.35); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; letter-spacing: 0.2px; transition: all 0.25s ease; flex: 1;';
+        downloadButton.onmouseover = function() {
+            downloadButton.style.background = 'linear-gradient(135deg, #218838 0%, #1ea085 100%)';
+        };
+        downloadButton.onmouseout = function() {
+            downloadButton.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
+        };
+        downloadButton.onclick = function() {
+            addLogMessage('showCleanResultsPanel: Download clicked', 'log');
+            var success = exportResponsibilitiesToXlsxOrCsv(model);
+            if (success) {
+                addLogMessage('showCleanResultsPanel: export succeeded', 'log');
+            } else {
+                addLogMessage('showCleanResultsPanel: export failed', 'error');
+                var exportNotice = document.createElement('div');
+                exportNotice.textContent = CLEAN_LABELS.exportFailed;
+                exportNotice.style.cssText = 'color: #ff6b6b; font-size: 13px; margin-top: 8px; padding: 8px; background: rgba(255, 107, 107, 0.15); border-radius: 6px;';
+                exportNotice.setAttribute('role', 'alert');
+                var existingNotice = container.querySelector('[role="alert"]');
+                if (existingNotice) {
+                    container.removeChild(existingNotice);
+                }
+                container.appendChild(exportNotice);
+            }
+        };
+        var closeBtn = document.createElement('button');
+        closeBtn.textContent = CLEAN_LABELS.close;
+        closeBtn.setAttribute('aria-label', 'Close results');
+        closeBtn.style.cssText = 'background: rgba(255, 255, 255, 0.18); border: 2px solid rgba(255, 255, 255, 0.35); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.25s ease; backdrop-filter: blur(2px); flex: 1;';
+        closeBtn.onmouseover = function() {
+            closeBtn.style.background = 'rgba(255, 255, 255, 0.28)';
+        };
+        closeBtn.onmouseout = function() {
+            closeBtn.style.background = 'rgba(255, 255, 255, 0.18)';
+        };
+        closeBtn.onclick = function() {
+            addLogMessage('showCleanResultsPanel: Close clicked', 'log');
+            stopCleanResponsibility();
+        };
+        var bottomButtons = document.createElement('div');
+        bottomButtons.style.cssText = 'display: flex; gap: 12px; margin-top: 16px; flex-shrink: 0;';
+        bottomButtons.appendChild(downloadButton);
+        bottomButtons.appendChild(closeBtn);
+        var ariaLiveRegion = document.createElement('div');
+        ariaLiveRegion.id = 'clean-aria-live';
+        ariaLiveRegion.setAttribute('aria-live', 'polite');
+        ariaLiveRegion.setAttribute('aria-atomic', 'true');
+        ariaLiveRegion.style.cssText = 'position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;';
+        container.appendChild(header);
+        container.appendChild(summaryBar);
+        container.appendChild(outputArea);
+        container.appendChild(bottomButtons);
+        container.appendChild(ariaLiveRegion);
+        modal.appendChild(container);
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        modal.style.pointerEvents = 'none';
+        container.style.pointerEvents = 'auto';
+        makeDraggable(container, header);
+        document.body.appendChild(modal);
+        downloadButton.focus();
+        addLogMessage('showCleanResultsPanel: panel displayed with ' + model.cleanLines.length + ' items', 'log');
+        var escHandler = function(e) {
+            if (e.key === 'Escape') {
+                addLogMessage('showCleanResultsPanel: Escape pressed', 'log');
+                stopCleanResponsibility();
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+        cleanState.eventListeners.push({ element: document, type: 'keydown', handler: escHandler });
+    }
+
+    function cleanResponsibilityInit() {
+        addLogMessage('cleanResponsibilityInit: starting feature', 'log');
+        cleanState.focusReturnElement = document.getElementById('clean-resp-btn');
+        resetCleanState();
+        cleanState.isRunning = true;
+        showCleanInputPanel();
+    }
+
+    function stopCleanResponsibility() {
+        addLogMessage('stopCleanResponsibility: stopping', 'log');
+        cleanState.stopRequested = true;
+        cleanState.isRunning = false;
+        for (var i = 0; i < cleanState.idleCallbackIds.length; i++) {
+            try {
+                if (typeof cancelIdleCallback === 'function') {
+                    cancelIdleCallback(cleanState.idleCallbackIds[i]);
+                }
+            } catch (e) {
+                addLogMessage('stopCleanResponsibility: error canceling idle callback: ' + e, 'error');
+            }
+        }
+        cleanState.idleCallbackIds = [];
+        for (var i2 = 0; i2 < cleanState.observers.length; i2++) {
+            try {
+                cleanState.observers[i2].disconnect();
+            } catch (e2) {
+                addLogMessage('stopCleanResponsibility: error disconnecting observer: ' + e2, 'error');
+            }
+        }
+        cleanState.observers = [];
+        for (var i3 = 0; i3 < cleanState.timeouts.length; i3++) {
+            try {
+                clearTimeout(cleanState.timeouts[i3]);
+            } catch (e3) {
+                addLogMessage('stopCleanResponsibility: error clearing timeout: ' + e3, 'error');
+            }
+        }
+        cleanState.timeouts = [];
+        for (var i4 = 0; i4 < cleanState.intervals.length; i4++) {
+            try {
+                clearInterval(cleanState.intervals[i4]);
+            } catch (e4) {
+                addLogMessage('stopCleanResponsibility: error clearing interval: ' + e4, 'error');
+            }
+        }
+        cleanState.intervals = [];
+        for (var i5 = 0; i5 < cleanState.eventListeners.length; i5++) {
+            try {
+                var l = cleanState.eventListeners[i5];
+                l.element.removeEventListener(l.type, l.handler);
+            } catch (e5) {
+                addLogMessage('stopCleanResponsibility: error removing listener: ' + e5, 'error');
+            }
+        }
+        cleanState.eventListeners = [];
+        cleanSetAriaBusyOff();
+        var im = document.getElementById('clean-input-modal');
+        if (im && im.parentNode) {
+            im.parentNode.removeChild(im);
+        }
+        var rm = document.getElementById('clean-results-modal');
+        if (rm && rm.parentNode) {
+            rm.parentNode.removeChild(rm);
+        }
+        if (cleanState.focusReturnElement) {
+            cleanState.focusReturnElement.focus();
+        }
+        updateCleanAriaLive('Clean Responsibility stopped');
+        resetCleanState();
+        addLogMessage('stopCleanResponsibility: cleanup complete', 'log');
+    }
+
     function stopResponsibilities() {
         addLogMessage('stopResponsibilities: stopping', 'log');
         respState.stopRequested = true;
@@ -3993,7 +4772,7 @@ function showResponsibilitiesProgressPanel(rolesData) {
         background: rgba(255, 255, 255, 0.05);
     `;
 
-        for (let i = 1; i <= 4; i++) {
+        for (let i = 1; i <= 5; i++) {
             const button = document.createElement('button');
             if (i === 1) {
                 button.textContent = 'Add Signatures';
@@ -4003,6 +4782,9 @@ function showResponsibilitiesProgressPanel(rolesData) {
             } else if (i === 3) {
                 button.textContent = 'Set Responsibilities';
                 button.id = 'resp-set-btn';
+            } else if (i === 4) {
+                button.textContent = CLEAN_LABELS.featureButton;
+                button.id = 'clean-resp-btn';
             } else {
                 button.textContent = `Placeholder ${i}`;
             }
@@ -4041,6 +4823,11 @@ function showResponsibilitiesProgressPanel(rolesData) {
                 button.onclick = () => {
                     console.log('Set Responsibilities button clicked');
                     setResponsibilitiesInit();
+                };
+            } else if (i === 4) {
+                button.onclick = () => {
+                    console.log('Clean Responsibility button clicked');
+                    cleanResponsibilityInit();
                 };
             } else {
                 button.onclick = () => console.log(`Placeholder ${i} clicked`);
