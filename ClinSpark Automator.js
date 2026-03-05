@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.9.1
+// @version     1.9.2
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -183,6 +183,11 @@
     var ELIG_DROPBOX_CLASS = "ie-elig-dropbox";
     var ELIG_DRAG_TYPE = "application/x-elig-item-value";
     var ELIG_POOL_LABEL_WORD_LIMIT = 10;
+    var GENDER_BOTH = "Both";
+    var GENDER_MALE = "Male";
+    var GENDER_FEMALE = "Female";
+    var GENDER_CONTROL_CLASS = "ieGenderControl";
+    var CODE_VIEW_DUP_TOGGLE_BUTTON_ID = "ieCodeViewDupToggle";
 
     //==========================
     // PARSE DEVIATION FEATURE
@@ -9857,6 +9862,99 @@
         return false;
     }
 
+    async function loadAllSelect2Options(containerOrSelect, maxScrolls, timeoutMs) {
+        log("ImportIE: loadAllSelect2Options start maxScrolls=" + String(maxScrolls) + " timeout=" + String(timeoutMs));
+        var maxS = typeof maxScrolls === "number" ? maxScrolls : 20;
+        var maxT = typeof timeoutMs === "number" ? timeoutMs : 8000;
+        var startTime = Date.now();
+        var sel = null;
+        if (containerOrSelect && containerOrSelect.tagName && containerOrSelect.tagName.toLowerCase() === "select") {
+            sel = containerOrSelect;
+        } else if (typeof containerOrSelect === "string") {
+            sel = document.querySelector(containerOrSelect);
+        } else {
+            sel = containerOrSelect;
+        }
+        if (!sel) {
+            log("ImportIE: loadAllSelect2Options select element not found");
+            return false;
+        }
+        var s2Container = null;
+        var selId = sel.id || "";
+        if (selId.length > 0) {
+            s2Container = document.querySelector("div#s2id_" + selId);
+        }
+        if (!s2Container) {
+            s2Container = sel.closest(".select2-container");
+        }
+        if (!s2Container) {
+            log("ImportIE: loadAllSelect2Options no Select2 container found, reading options from native select");
+            var nativeOpts = sel.querySelectorAll("option");
+            log("ImportIE: loadAllSelect2Options native option count=" + String(nativeOpts.length));
+            return true;
+        }
+        var s2Link = s2Container.querySelector("a.select2-choice, span.select2-choice");
+        if (s2Link) {
+            s2Link.click();
+            log("ImportIE: loadAllSelect2Options opened dropdown via choice link");
+            await sleep(300);
+        } else {
+            var s2Arrow = s2Container.querySelector(".select2-arrow");
+            if (s2Arrow) {
+                s2Arrow.click();
+                log("ImportIE: loadAllSelect2Options opened dropdown via arrow");
+                await sleep(300);
+            }
+        }
+        var dropPanel = document.querySelector(".select2-drop:not(.select2-display-none) .select2-results");
+        if (!dropPanel) {
+            dropPanel = document.querySelector(".select2-results");
+        }
+        if (!dropPanel) {
+            log("ImportIE: loadAllSelect2Options no results panel found, returning native options");
+            var nativeOpts2 = sel.querySelectorAll("option");
+            log("ImportIE: loadAllSelect2Options native fallback count=" + String(nativeOpts2.length));
+            return true;
+        }
+        var prevCount = 0;
+        var scrollIdx = 0;
+        while (scrollIdx < maxS) {
+            if (Date.now() - startTime > maxT) {
+                log("ImportIE: loadAllSelect2Options timeout reached at scroll " + String(scrollIdx));
+                break;
+            }
+            var currentItems = dropPanel.querySelectorAll("li.select2-result");
+            var currentCount = currentItems.length;
+            log("ImportIE: loadAllSelect2Options scroll " + String(scrollIdx) + " items=" + String(currentCount));
+            if (currentCount === prevCount && scrollIdx > 0) {
+                log("ImportIE: loadAllSelect2Options no new items after scroll, stopping");
+                break;
+            }
+            prevCount = currentCount;
+            dropPanel.scrollTop = dropPanel.scrollHeight;
+            var scrollDelay = 150 + Math.floor(Math.random() * 200);
+            await sleep(scrollDelay);
+            scrollIdx = scrollIdx + 1;
+        }
+        var finalItems = dropPanel.querySelectorAll("li.select2-result");
+        log("ImportIE: loadAllSelect2Options final visible items=" + String(finalItems.length));
+        var closeBtn = document.querySelector(".select2-drop:not(.select2-display-none) .select2-search input");
+        if (closeBtn) {
+            closeBtn.blur();
+        }
+        var s2Mask = document.querySelector(".select2-drop-mask");
+        if (s2Mask) {
+            s2Mask.click();
+            await sleep(100);
+        } else {
+            document.body.click();
+            await sleep(100);
+        }
+        var finalNative = sel.querySelectorAll("option");
+        log("ImportIE: loadAllSelect2Options done nativeOptionCount=" + String(finalNative.length));
+        return true;
+    }
+
     async function waitForModalOpen(timeoutMs) {
         log("ImportIE: waitForModalOpen timeout=" + String(timeoutMs));
         var start = Date.now();
@@ -9951,6 +10049,60 @@
                 log("ImportIE: select2TriggerChange jQuery trigger error=" + String(e));
             }
         }
+    }
+
+    var _selectOptionMapCache = {};
+    var _selectOptionMapLengths = {};
+
+    function buildOrGetSelectOptionMap(selectEl) {
+        log("ImportIE: buildOrGetSelectOptionMap start");
+        if (!selectEl || !selectEl.id) {
+            log("ImportIE: buildOrGetSelectOptionMap no select or no id, building fresh map");
+            var freshMap = {};
+            var fOpts = selectEl ? selectEl.querySelectorAll("option") : [];
+            var fi = 0;
+            while (fi < fOpts.length) {
+                var fVal = (fOpts[fi].value + "").trim();
+                if (fVal.length > 0) {
+                    freshMap[fVal] = fOpts[fi];
+                }
+                fi = fi + 1;
+            }
+            log("ImportIE: buildOrGetSelectOptionMap fresh map size=" + String(Object.keys(freshMap).length));
+            return freshMap;
+        }
+        var cacheKey = selectEl.id;
+        var currentOpts = selectEl.querySelectorAll("option");
+        var currentLen = currentOpts.length;
+        if (_selectOptionMapCache.hasOwnProperty(cacheKey) && _selectOptionMapLengths[cacheKey] === currentLen) {
+            log("ImportIE: buildOrGetSelectOptionMap returning cached map for id=" + cacheKey + " size=" + String(Object.keys(_selectOptionMapCache[cacheKey]).length));
+            return _selectOptionMapCache[cacheKey];
+        }
+        var newMap = {};
+        var ni = 0;
+        while (ni < currentOpts.length) {
+            var nVal = (currentOpts[ni].value + "").trim();
+            if (nVal.length > 0) {
+                newMap[nVal] = currentOpts[ni];
+            }
+            ni = ni + 1;
+        }
+        _selectOptionMapCache[cacheKey] = newMap;
+        _selectOptionMapLengths[cacheKey] = currentLen;
+        log("ImportIE: buildOrGetSelectOptionMap built new map for id=" + cacheKey + " size=" + String(Object.keys(newMap).length));
+        return newMap;
+    }
+
+    function isCurrentSelectValue(selectEl, targetValue) {
+        log("ImportIE: isCurrentSelectValue target=" + String(targetValue));
+        if (!selectEl) {
+            return false;
+        }
+        var current = (selectEl.value + "").trim();
+        var target = (targetValue + "").trim();
+        var result = current === target;
+        log("ImportIE: isCurrentSelectValue current=" + current + " target=" + target + " match=" + String(result));
+        return result;
     }
 
     async function select2SelectByValue(containerOrSelect, value) {
@@ -10399,15 +10551,19 @@
     async function collectMappingsFromModal(existingCodeSet) {
         log("ImportIE: collectMappingsFromModal start");
         var mappings = [];
+        var seenKeys = {};
         var planSel = document.querySelector("select#activityPlan");
         if (!planSel) {
-            planSel = await waitForElement("select#activityPlan", 5000);
+            planSel = await waitForElement("select#activityPlan", 8000);
         }
         if (!planSel) {
             log("ImportIE: collectMappingsFromModal planSel not found");
             return mappings;
         }
+        log("ImportIE: collectMappingsFromModal loading all plan options");
+        await loadAllSelect2Options(planSel, 15, 6000);
         var planOpts = planSel.querySelectorAll("option");
+        log("ImportIE: collectMappingsFromModal plan option count=" + String(planOpts.length));
         var pi = 0;
         while (pi < planOpts.length) {
             var pVal = (planOpts[pi].value + "").trim();
@@ -10419,23 +10575,33 @@
             log("ImportIE: collectMappingsFromModal selecting plan='" + String(pTxt) + "' value='" + String(pVal) + "'");
             planSel.value = pVal;
             select2TriggerChange(planSel);
-            await sleep(200);
+            var planDelay = 200 + Math.floor(Math.random() * 250);
+            await sleep(planDelay);
             var schedSel = document.querySelector("select#scheduledActivity");
             if (!schedSel) {
-                schedSel = await waitForElement("select#scheduledActivity", 6000);
+                schedSel = await waitForElement("select#scheduledActivity", 8000);
             }
             if (!schedSel) {
                 log("ImportIE: collectMappingsFromModal schedSel not found for plan='" + String(pTxt) + "'");
                 pi = pi + 1;
                 continue;
             }
-            var hasSchedOpts = await waitForSelectOptions(schedSel, 1, 6000);
+            var hasSchedOpts = await waitForSelectOptions(schedSel, 1, 8000);
             if (!hasSchedOpts) {
-                log("ImportIE: collectMappingsFromModal no SA options for plan='" + String(pTxt) + "'");
-                pi = pi + 1;
-                continue;
+                log("ImportIE: collectMappingsFromModal no SA options for plan='" + String(pTxt) + "', retrying parent selection");
+                planSel.value = pVal;
+                select2TriggerChange(planSel);
+                await sleep(400 + Math.floor(Math.random() * 200));
+                hasSchedOpts = await waitForSelectOptions(schedSel, 1, 6000);
+                if (!hasSchedOpts) {
+                    log("ImportIE: collectMappingsFromModal SA still empty after retry for plan='" + String(pTxt) + "', skipping");
+                    pi = pi + 1;
+                    continue;
+                }
             }
+            await loadAllSelect2Options(schedSel, 10, 5000);
             var schedOpts = schedSel.querySelectorAll("option");
+            log("ImportIE: collectMappingsFromModal SA option count=" + String(schedOpts.length) + " for plan='" + String(pTxt) + "'");
             var si = 0;
             while (si < schedOpts.length) {
                 var sVal = (schedOpts[si].value + "").trim();
@@ -10448,28 +10614,68 @@
                 var prevItemSig = getItemRefOptionsSignature();
                 schedSel.value = sVal;
                 select2TriggerChange(schedSel);
-                await sleep(100);
+                var saDelay = 200 + Math.floor(Math.random() * 250);
+                await sleep(saDelay);
                 var itemRefSel = document.querySelector("select#itemRef");
                 if (!itemRefSel) {
-                    itemRefSel = await waitForElement("select#itemRef", 4000);
+                    itemRefSel = await waitForElement("select#itemRef", 6000);
                 }
                 if (!itemRefSel) {
                     log("ImportIE: collectMappingsFromModal itemRefSel not found for SA='" + String(sTxt) + "'");
                     si = si + 1;
                     continue;
                 }
-                var reloaded = await waitForItemRefReload(prevItemSig, 2000);
+                var reloaded = await waitForItemRefReload(prevItemSig, 4000);
                 if (!reloaded) {
                     log("ImportIE: collectMappingsFromModal itemRef did not reload for SA='" + String(sTxt) + "', checking current options");
                 }
-                await sleep(100);
+                await sleep(200);
+                var stabilizeAttempt = 0;
+                var stableCount1 = -1;
+                var stableCount2 = -2;
+                while (stabilizeAttempt < 5) {
+                    itemRefSel = document.querySelector("select#itemRef");
+                    if (!itemRefSel) {
+                        break;
+                    }
+                    stableCount1 = itemRefSel.querySelectorAll("option").length;
+                    await sleep(300);
+                    stableCount2 = itemRefSel.querySelectorAll("option").length;
+                    if (stableCount1 === stableCount2 && stableCount1 > 0) {
+                        log("ImportIE: collectMappingsFromModal itemRef stabilized at " + String(stableCount1) + " options after attempt " + String(stabilizeAttempt));
+                        break;
+                    }
+                    stabilizeAttempt = stabilizeAttempt + 1;
+                }
                 itemRefSel = document.querySelector("select#itemRef");
                 if (!itemRefSel) {
                     log("ImportIE: collectMappingsFromModal itemRefSel lost after wait");
                     si = si + 1;
                     continue;
                 }
+                if (stableCount1 <= 1 && stableCount2 <= 1) {
+                    log("ImportIE: collectMappingsFromModal itemRef has no items for SA='" + String(sTxt) + "', retrying parent");
+                    schedSel.value = sVal;
+                    select2TriggerChange(schedSel);
+                    await sleep(500);
+                    await waitForItemRefReload(getItemRefOptionsSignature(), 4000);
+                    await sleep(300);
+                    itemRefSel = document.querySelector("select#itemRef");
+                    if (!itemRefSel) {
+                        log("ImportIE: collectMappingsFromModal itemRefSel still missing after retry");
+                        si = si + 1;
+                        continue;
+                    }
+                }
+                await loadAllSelect2Options(itemRefSel, 15, 6000);
+                itemRefSel = document.querySelector("select#itemRef");
+                if (!itemRefSel) {
+                    log("ImportIE: collectMappingsFromModal itemRefSel gone after loadAll");
+                    si = si + 1;
+                    continue;
+                }
                 var itemOpts = itemRefSel.querySelectorAll("option");
+                log("ImportIE: collectMappingsFromModal CheckItem option count=" + String(itemOpts.length) + " for SA='" + String(sTxt) + "'");
                 var ii = 0;
                 while (ii < itemOpts.length) {
                     var iVal = (itemOpts[ii].value + "").trim();
@@ -10483,19 +10689,23 @@
                         ieCode = extractIECode(iTxt);
                     }
                     if (ieCode.length > 0) {
-                        var record = {
-                            activityPlanText: pTxt,
-                            scheduledActivityText: sTxt,
-                            checkItemText: iTxt,
-                            code: ieCode.toUpperCase(),
-                            ids: {
-                                activityPlanValue: pVal,
-                                scheduledActivityValue: sVal,
-                                checkItemValue: iVal
-                            }
-                        };
-                        log("ImportIE: collectMappingsFromModal found mapping code=" + String(record.code) + " plan='" + String(pTxt) + "' sa='" + String(sTxt) + "' item='" + String(iTxt) + "'");
-                        mappings.push(record);
+                        var dedupKey = pVal + "|" + sVal + "|" + iVal;
+                        if (!seenKeys.hasOwnProperty(dedupKey)) {
+                            seenKeys[dedupKey] = true;
+                            var record = {
+                                activityPlanText: pTxt,
+                                scheduledActivityText: sTxt,
+                                checkItemText: iTxt,
+                                code: ieCode.toUpperCase(),
+                                ids: {
+                                    activityPlanValue: pVal,
+                                    scheduledActivityValue: sVal,
+                                    checkItemValue: iVal
+                                }
+                            };
+                            log("ImportIE: collectMappingsFromModal found mapping code=" + String(record.code) + " plan='" + String(pTxt) + "' sa='" + String(sTxt) + "' item='" + String(iTxt) + "'");
+                            mappings.push(record);
+                        }
                     }
                     ii = ii + 1;
                 }
@@ -10846,6 +11056,163 @@
         var flatDataset = [];
         var flatCheckboxes = [];
         var selectionStateMap = {};
+        var duplicatesFilterActive = false;
+        var duplicatesSet = null;
+
+        function ensureGenderStateForKey(stateMap, key) {
+            log("ImportIE: ensureGenderStateForKey key=" + key);
+            if (!stateMap.hasOwnProperty(key)) {
+                stateMap[key] = { checked: true, selectedGender: GENDER_BOTH };
+                log("ImportIE: ensureGenderStateForKey created new entry for key=" + key);
+                return GENDER_BOTH;
+            }
+            var entry = stateMap[key];
+            if (typeof entry === "boolean") {
+                stateMap[key] = { checked: entry, selectedGender: GENDER_BOTH };
+                log("ImportIE: ensureGenderStateForKey converted boolean for key=" + key);
+                return GENDER_BOTH;
+            }
+            if (typeof entry === "object" && entry !== null) {
+                if (!entry.selectedGender) {
+                    entry.selectedGender = GENDER_BOTH;
+                    log("ImportIE: ensureGenderStateForKey added gender for key=" + key);
+                }
+                return entry.selectedGender;
+            }
+            stateMap[key] = { checked: true, selectedGender: GENDER_BOTH };
+            log("ImportIE: ensureGenderStateForKey reset entry for key=" + key);
+            return GENDER_BOTH;
+        }
+
+        function getCheckedFromState(stateMap, key) {
+            if (!stateMap.hasOwnProperty(key)) {
+                return true;
+            }
+            var entry = stateMap[key];
+            if (typeof entry === "boolean") {
+                return entry;
+            }
+            if (typeof entry === "object" && entry !== null) {
+                return !!entry.checked;
+            }
+            return true;
+        }
+
+        function setCheckedInState(stateMap, key, checked) {
+            var gender = ensureGenderStateForKey(stateMap, key);
+            stateMap[key] = { checked: checked, selectedGender: gender };
+        }
+
+        function setGenderInState(stateMap, key, gender) {
+            log("ImportIE: setGenderInState key=" + key + " gender=" + gender);
+            if (!stateMap.hasOwnProperty(key)) {
+                stateMap[key] = { checked: true, selectedGender: gender };
+            } else {
+                var entry = stateMap[key];
+                if (typeof entry === "boolean") {
+                    stateMap[key] = { checked: entry, selectedGender: gender };
+                } else if (typeof entry === "object" && entry !== null) {
+                    entry.selectedGender = gender;
+                } else {
+                    stateMap[key] = { checked: true, selectedGender: gender };
+                }
+            }
+        }
+
+        function renderRowGenderControl(rowElement, key, currentGender, disabled) {
+            log("ImportIE: renderRowGenderControl key=" + key + " gender=" + currentGender + " disabled=" + String(disabled));
+            var sel = document.createElement("select");
+            sel.className = GENDER_CONTROL_CLASS;
+            sel.style.background = "#222";
+            sel.style.color = "#ccc";
+            sel.style.border = "1px solid #555";
+            sel.style.borderRadius = "3px";
+            sel.style.fontSize = "10px";
+            sel.style.padding = "1px 2px";
+            sel.style.cursor = disabled ? "not-allowed" : "pointer";
+            sel.style.flexShrink = "0";
+            sel.style.minWidth = "52px";
+            sel.style.marginTop = "1px";
+            sel.tabIndex = disabled ? -1 : 0;
+            sel.title = "Gender for sex assignment";
+            if (disabled) {
+                sel.disabled = true;
+                sel.style.opacity = "0.5";
+            }
+            var optBoth = document.createElement("option");
+            optBoth.value = GENDER_BOTH;
+            optBoth.textContent = GENDER_BOTH;
+            var optMale = document.createElement("option");
+            optMale.value = GENDER_MALE;
+            optMale.textContent = GENDER_MALE;
+            var optFemale = document.createElement("option");
+            optFemale.value = GENDER_FEMALE;
+            optFemale.textContent = GENDER_FEMALE;
+            sel.appendChild(optBoth);
+            sel.appendChild(optMale);
+            sel.appendChild(optFemale);
+            sel.value = currentGender || GENDER_BOTH;
+            (function (capturedKey, capturedSel) {
+                capturedSel.addEventListener("change", function () {
+                    var newVal = capturedSel.value;
+                    log("ImportIE: genderControl changed key=" + capturedKey + " newGender=" + newVal);
+                    setGenderInState(selectionStateMap, capturedKey, newVal);
+                });
+            })(key, sel);
+            rowElement.appendChild(sel);
+            return sel;
+        }
+
+        function getDesiredSexForExecution(stateMap, key) {
+            log("ImportIE: getDesiredSexForExecution key=" + key);
+            var gender = ensureGenderStateForKey(stateMap, key);
+            if (gender === GENDER_MALE) {
+                log("ImportIE: getDesiredSexForExecution result=Male");
+                return "Male";
+            }
+            if (gender === GENDER_FEMALE) {
+                log("ImportIE: getDesiredSexForExecution result=Female");
+                return "Female";
+            }
+            log("ImportIE: getDesiredSexForExecution result=Both");
+            return "Both";
+        }
+
+        function filterFlatRowsToDuplicates(flatRows) {
+            log("ImportIE: filterFlatRowsToDuplicates start rows=" + String(flatRows.length));
+            var nameCounts = {};
+            var fri = 0;
+            while (fri < flatRows.length) {
+                var normalized = (flatRows[fri].checkItemText || "").trim().replace(/\s+/g, " ").toLowerCase();
+                if (!nameCounts.hasOwnProperty(normalized)) {
+                    nameCounts[normalized] = 0;
+                }
+                nameCounts[normalized] = nameCounts[normalized] + 1;
+                fri = fri + 1;
+            }
+            var dupNames = {};
+            var nameKeys = Object.keys(nameCounts);
+            var nki = 0;
+            while (nki < nameKeys.length) {
+                if (nameCounts[nameKeys[nki]] >= 2) {
+                    dupNames[nameKeys[nki]] = true;
+                }
+                nki = nki + 1;
+            }
+            var dupCount = Object.keys(dupNames).length;
+            log("ImportIE: filterFlatRowsToDuplicates found " + String(dupCount) + " duplicate names");
+            var filtered = [];
+            var fri2 = 0;
+            while (fri2 < flatRows.length) {
+                var norm2 = (flatRows[fri2].checkItemText || "").trim().replace(/\s+/g, " ").toLowerCase();
+                if (dupNames.hasOwnProperty(norm2)) {
+                    filtered.push(flatRows[fri2]);
+                }
+                fri2 = fri2 + 1;
+            }
+            log("ImportIE: filterFlatRowsToDuplicates filtered rows=" + String(filtered.length));
+            return { dupNamesSet: dupNames, filteredRows: filtered };
+        }
 
         function getMappingKey(m) {
             log("ImportIE: getMappingKey start");
@@ -10947,7 +11314,7 @@
                     key: stableKey,
                     typeUpper: parsed.typeUpper,
                     numberInt: parsed.numberInt,
-                    suffix: parsed.suffix,
+                    suffix: parsed.suffix || "",
                     codeDisplay: codeDisplay,
                     activityPlanText: apText,
                     scheduledActivityText: saText,
@@ -11027,8 +11394,9 @@
                     if (entry && entry.mapping && entry.cb) {
                         var mk = getMappingKey(entry.mapping);
                         if (!entry.cb.disabled) {
-                            selectionStateMap[mk] = entry.cb.checked;
-                            log("ImportIE: captureSelectionState hierarchy key=" + mk + " checked=" + String(entry.cb.checked));
+                            var existGender = ensureGenderStateForKey(selectionStateMap, mk);
+                            selectionStateMap[mk] = { checked: entry.cb.checked, selectedGender: existGender };
+                            log("ImportIE: captureSelectionState hierarchy key=" + mk + " checked=" + String(entry.cb.checked) + " gender=" + existGender);
                         }
                     }
                     hi = hi + 1;
@@ -11038,8 +11406,9 @@
                 while (fi < flatCheckboxes.length) {
                     var fEntry = flatCheckboxes[fi];
                     if (fEntry && fEntry.cb && !fEntry.cb.disabled) {
-                        selectionStateMap[fEntry.key] = fEntry.cb.checked;
-                        log("ImportIE: captureSelectionState flat key=" + fEntry.key + " checked=" + String(fEntry.cb.checked));
+                        var existGenderF = ensureGenderStateForKey(selectionStateMap, fEntry.key);
+                        selectionStateMap[fEntry.key] = { checked: fEntry.cb.checked, selectedGender: existGenderF };
+                        log("ImportIE: captureSelectionState flat key=" + fEntry.key + " checked=" + String(fEntry.cb.checked) + " gender=" + existGenderF);
                     }
                     fi = fi + 1;
                 }
@@ -11055,8 +11424,8 @@
                 if (entry && entry.mapping && entry.cb && !entry.cb.disabled) {
                     var mk = getMappingKey(entry.mapping);
                     if (selectionStateMap.hasOwnProperty(mk)) {
-                        entry.cb.checked = selectionStateMap[mk];
-                        log("ImportIE: restoreSelectionToHierarchy key=" + mk + " checked=" + String(selectionStateMap[mk]));
+                        entry.cb.checked = getCheckedFromState(selectionStateMap, mk);
+                        log("ImportIE: restoreSelectionToHierarchy key=" + mk + " checked=" + String(entry.cb.checked));
                     }
                 }
                 ri = ri + 1;
@@ -11071,8 +11440,8 @@
                 var fEntry = flatCheckboxes[fi];
                 if (fEntry && fEntry.cb && !fEntry.cb.disabled) {
                     if (selectionStateMap.hasOwnProperty(fEntry.key)) {
-                        fEntry.cb.checked = selectionStateMap[fEntry.key];
-                        log("ImportIE: restoreSelectionToFlat key=" + fEntry.key + " checked=" + String(selectionStateMap[fEntry.key]));
+                        fEntry.cb.checked = getCheckedFromState(selectionStateMap, fEntry.key);
+                        log("ImportIE: restoreSelectionToFlat key=" + fEntry.key + " checked=" + String(fEntry.cb.checked));
                     }
                 }
                 fi = fi + 1;
@@ -11103,6 +11472,7 @@
             while (fi < flatRows.length) {
                 var fr = flatRows[fi];
                 log("ImportIE: renderRightPanelFlatCodeView rendering row index=" + String(fi) + " code=" + fr.codeDisplay);
+                var isAlreadyExist = fr.status === "Already Exist";
 
                 var row = document.createElement("div");
                 row.style.display = "flex";
@@ -11128,14 +11498,18 @@
 
                 var cb = document.createElement("input");
                 cb.type = "checkbox";
-                cb.style.cursor = "pointer";
+                cb.style.cursor = isAlreadyExist ? "not-allowed" : "pointer";
                 cb.style.flexShrink = "0";
                 cb.style.marginTop = "3px";
-                if (targetSelectionState.hasOwnProperty(fr.key)) {
-                    cb.checked = targetSelectionState[fr.key];
+                if (isAlreadyExist) {
+                    cb.disabled = true;
+                    cb.checked = false;
+                } else if (targetSelectionState.hasOwnProperty(fr.key)) {
+                    cb.checked = getCheckedFromState(targetSelectionState, fr.key);
                 } else {
                     cb.checked = true;
                 }
+                ensureGenderStateForKey(targetSelectionState, fr.key);
 
                 var textBlock = document.createElement("div");
                 textBlock.style.flex = "1";
@@ -11164,7 +11538,7 @@
                 statusBadge.style.borderRadius = "3px";
                 statusBadge.style.flexShrink = "0";
                 statusBadge.style.marginTop = "2px";
-                if (fr.status === "Already Exist") {
+                if (isAlreadyExist) {
                     statusBadge.textContent = "Already Exist";
                     statusBadge.style.background = "#555";
                     statusBadge.style.color = "#aaa";
@@ -11175,10 +11549,12 @@
                 }
 
                 var flatDropbox = createDropbox(fr.mapping);
+                var currentGender = ensureGenderStateForKey(selectionStateMap, fr.key);
 
                 row.appendChild(cb);
                 row.appendChild(textBlock);
                 row.appendChild(flatDropbox);
+                renderRowGenderControl(row, fr.key, currentGender, isAlreadyExist);
                 row.appendChild(statusBadge);
 
                 var flatEntry = {
@@ -11200,7 +11576,7 @@
                     cb.addEventListener("change", function (e) {
                         e.stopPropagation();
                         log("ImportIE: flat checkbox changed key=" + capturedEntry.key + " checked=" + String(cb.checked));
-                        selectionStateMap[capturedEntry.key] = cb.checked;
+                        setCheckedInState(selectionStateMap, capturedEntry.key, cb.checked);
                         updateSelectedCountAndConfirmState();
                     });
                 })(flatEntry);
@@ -11209,6 +11585,12 @@
                 if (filterLower.length > 0) {
                     var combined = (fr.codeDisplay + " " + fr.activityPlanText + " " + fr.scheduledActivityText + " " + fr.checkItemText).replace(/\s+/g, " ").toLowerCase();
                     if (combined.indexOf(filterLower) < 0) {
+                        matchesFilter = false;
+                    }
+                }
+                if (matchesFilter && duplicatesFilterActive && duplicatesSet) {
+                    var normCI = (fr.checkItemText || "").trim().replace(/\s+/g, " ").toLowerCase();
+                    if (!duplicatesSet.hasOwnProperty(normCI)) {
                         matchesFilter = false;
                     }
                 }
@@ -11221,7 +11603,7 @@
         }
 
         function applySearchFilterToFlatView(searchText) {
-            log("ImportIE: applySearchFilterToFlatView start search=" + String(searchText));
+            log("ImportIE: applySearchFilterToFlatView start search=" + String(searchText) + " dupFilter=" + String(duplicatesFilterActive));
             var filterLower = (searchText || "").replace(/\s+/g, " ").trim().toLowerCase();
             var fi = 0;
             while (fi < flatCheckboxes.length) {
@@ -11233,11 +11615,37 @@
                         matchesFilter = false;
                     }
                 }
+                if (matchesFilter && duplicatesFilterActive && duplicatesSet) {
+                    var normCI = (fEntry.checkItemText || "").trim().replace(/\s+/g, " ").toLowerCase();
+                    if (!duplicatesSet.hasOwnProperty(normCI)) {
+                        matchesFilter = false;
+                    }
+                }
                 fEntry.row.style.display = matchesFilter ? "flex" : "none";
                 fi = fi + 1;
             }
             log("ImportIE: applySearchFilterToFlatView done");
             updateSelectedCountAndConfirmState();
+        }
+
+        function toggleDuplicatesFilterOnCodeView(enabled) {
+            log("ImportIE: toggleDuplicatesFilterOnCodeView enabled=" + String(enabled));
+            duplicatesFilterActive = enabled;
+            if (enabled) {
+                var dupResult = filterFlatRowsToDuplicates(flatDataset);
+                duplicatesSet = dupResult.dupNamesSet;
+                log("ImportIE: toggleDuplicatesFilterOnCodeView dupNames=" + String(Object.keys(duplicatesSet).length));
+            } else {
+                duplicatesSet = null;
+                log("ImportIE: toggleDuplicatesFilterOnCodeView cleared duplicates filter");
+            }
+            var currentSearch = rightSearch.value || "";
+            applySearchFilterToFlatView(currentSearch);
+        }
+
+        function reapplySearchFilterAfterToggle(searchText) {
+            log("ImportIE: reapplySearchFilterAfterToggle search=" + String(searchText));
+            applySearchFilterToFlatView(searchText);
         }
 
         function updateSelectedCountAndConfirmState() {
@@ -11516,6 +11924,8 @@
                     box.style.border = "1px solid #4a4";
                     box.style.color = "#6f6";
                     box.style.background = "rgba(30,80,30,0.3)";
+                    box.setAttribute("data-elig-value", currentAssigned);
+                    box.draggable = true;
                     log("ImportIE: createDropbox pre-filled mKey=" + mKey + " val=" + currentAssigned);
                 }
             }
@@ -11543,13 +11953,39 @@
                 e.stopPropagation();
                 var droppedValue = e.dataTransfer.getData(ELIG_DRAG_TYPE);
                 log("ImportIE: dropbox drop mKey=" + mKey + " droppedValue=" + String(droppedValue));
-                if (!droppedValue) { return; }
+                if (!droppedValue) {
+                    return;
+                }
                 var prev = assignedEligMap[mKey];
                 if (prev && prev !== droppedValue) {
+                    if (mappingRecord.eligibilityItemValue === prev) {
+                        delete mappingRecord.eligibilityItemValue;
+                    }
                     restoreToAvailablePool(prev);
                     log("ImportIE: dropbox replaced prev=" + String(prev));
                 }
+                var otherKeys = Object.keys(assignedEligMap);
+                var oki = 0;
+                while (oki < otherKeys.length) {
+                    if (otherKeys[oki] !== mKey && assignedEligMap[otherKeys[oki]] === droppedValue) {
+                        log("ImportIE: dropbox clearing cross-assignment from mKey=" + String(otherKeys[oki]));
+                        delete assignedEligMap[otherKeys[oki]];
+                        var mi3 = 0;
+                        while (mi3 < mappings.length) {
+                            if (getMappingKeyForPool(mappings[mi3]) === otherKeys[oki]) {
+                                if (mappings[mi3].eligibilityItemValue === droppedValue) {
+                                    delete mappings[mi3].eligibilityItemValue;
+                                    log("ImportIE: dropbox cross-assign cleared eligibilityItemValue on mapping key=" + String(otherKeys[oki]));
+                                }
+                            }
+                            mi3 = mi3 + 1;
+                        }
+                        break;
+                    }
+                    oki = oki + 1;
+                }
                 assignedEligMap[mKey] = droppedValue;
+                mappingRecord.eligibilityItemValue = droppedValue;
                 removeFromAvailablePool(droppedValue);
                 var entry = findPoolEntryByValue(droppedValue);
                 if (entry) {
@@ -11562,22 +11998,77 @@
                 box.style.border = "1px solid #4a4";
                 box.style.color = "#6f6";
                 box.style.background = "rgba(30,80,30,0.3)";
+                box.setAttribute("data-elig-value", droppedValue);
+                box.draggable = true;
                 renderPoolList();
-                log("ImportIE: dropbox assigned mKey=" + mKey + " val=" + droppedValue);
+                log("ImportIE: dropbox attach complete mKey=" + mKey + " val=" + droppedValue);
             });
             box.addEventListener("dblclick", function (e) {
                 e.stopPropagation();
                 var cur = assignedEligMap[mKey];
-                if (!cur) { return; }
+                if (!cur) {
+                    return;
+                }
                 log("ImportIE: dropbox dblclick detach mKey=" + mKey + " val=" + String(cur));
                 delete assignedEligMap[mKey];
+                if (mappingRecord.eligibilityItemValue === cur) {
+                    delete mappingRecord.eligibilityItemValue;
+                }
                 restoreToAvailablePool(cur);
                 box.textContent = "(drop elig. item)";
                 box.title = "";
                 box.style.border = "1px dashed #666";
                 box.style.color = "#aaa";
                 box.style.background = "transparent";
+                box.removeAttribute("data-elig-value");
+                box.draggable = false;
                 renderPoolList();
+                log("ImportIE: dropbox dblclick detach complete mKey=" + mKey);
+            });
+            box.addEventListener("dragstart", function (e) {
+                var currentVal = box.getAttribute("data-elig-value");
+                if (!currentVal || currentVal.length === 0) {
+                    e.preventDefault();
+                    return;
+                }
+                e.dataTransfer.setData(ELIG_DRAG_TYPE, currentVal);
+                e.dataTransfer.effectAllowed = "move";
+                log("ImportIE: dropbox dragstart detaching eligValue=" + String(currentVal) + " from mKey=" + mKey);
+            });
+            box.addEventListener("dragend", function (e) {
+                var currentVal = box.getAttribute("data-elig-value");
+                if (!currentVal || currentVal.length === 0) {
+                    return;
+                }
+                var stillAssigned = assignedEligMap[mKey] === currentVal;
+                if (!stillAssigned) {
+                    log("ImportIE: dropbox dragend item reassigned elsewhere mKey=" + mKey + " eligValue=" + String(currentVal));
+                    box.textContent = "(drop elig. item)";
+                    box.title = "";
+                    box.style.color = "#aaa";
+                    box.style.border = "1px dashed #666";
+                    box.style.background = "transparent";
+                    box.removeAttribute("data-elig-value");
+                    box.draggable = false;
+                    return;
+                }
+                if (e.dataTransfer.dropEffect === "none" || e.dataTransfer.dropEffect === "" || !e.dataTransfer.dropEffect) {
+                    log("ImportIE: dropbox dragend no valid drop, restoring eligValue=" + String(currentVal) + " to pool from mKey=" + mKey);
+                    delete assignedEligMap[mKey];
+                    if (mappingRecord.eligibilityItemValue === currentVal) {
+                        delete mappingRecord.eligibilityItemValue;
+                    }
+                    restoreToAvailablePool(currentVal);
+                    box.textContent = "(drop elig. item)";
+                    box.title = "";
+                    box.style.color = "#aaa";
+                    box.style.border = "1px dashed #666";
+                    box.style.background = "transparent";
+                    box.removeAttribute("data-elig-value");
+                    box.draggable = false;
+                    renderPoolList();
+                    log("ImportIE: dropbox dragend restore complete mKey=" + mKey);
+                }
             });
 
             return box;
@@ -11675,9 +12166,21 @@
 
                         var itemCb = document.createElement("input");
                         itemCb.type = "checkbox";
-                        itemCb.style.cursor = "pointer";
                         itemCb.style.flexShrink = "0";
-                        itemCb.checked = true;
+                        if (alreadyExists) {
+                            itemCb.disabled = true;
+                            itemCb.checked = false;
+                            itemCb.style.cursor = "not-allowed";
+                        } else {
+                            itemCb.style.cursor = "pointer";
+                            var hierKey = getMappingKey(item);
+                            if (selectionStateMap.hasOwnProperty(hierKey)) {
+                                itemCb.checked = getCheckedFromState(selectionStateMap, hierKey);
+                            } else {
+                                itemCb.checked = true;
+                            }
+                            ensureGenderStateForKey(selectionStateMap, hierKey);
+                        }
 
                         var itemLabel = document.createElement("span");
                         itemLabel.textContent = "-- " + item.checkItemText;
@@ -11701,10 +12204,13 @@
                         statusBadge.style.whiteSpace = "nowrap";
 
                         var itemDropbox = createDropbox(item);
+                        var hierItemKey = getMappingKey(item);
+                        var hierItemGender = ensureGenderStateForKey(selectionStateMap, hierItemKey);
 
                         itemRow.appendChild(itemCb);
                         itemRow.appendChild(itemLabel);
                         itemRow.appendChild(itemDropbox);
+                        renderRowGenderControl(itemRow, hierItemKey, hierItemGender, alreadyExists);
                         itemRow.appendChild(statusBadge);
 
                         var itemEntry = { cb: itemCb, mapping: item, row: itemRow, planIdx: planIdx, saIdx: saIdx, dropbox: itemDropbox };
@@ -11856,20 +12362,46 @@
             poolList.style.background = "#0d0d0d";
             var droppedValue = e.dataTransfer.getData(ELIG_DRAG_TYPE);
             log("ImportIE: poolList drop return droppedValue=" + String(droppedValue));
-            if (!droppedValue) { return; }
+            if (!droppedValue) {
+                return;
+            }
             var foundKey = null;
             var keys = Object.keys(assignedEligMap);
             var ki = 0;
             while (ki < keys.length) {
-                if (assignedEligMap[keys[ki]] === droppedValue) { foundKey = keys[ki]; break; }
+                if (assignedEligMap[keys[ki]] === droppedValue) {
+                    foundKey = keys[ki];
+                    break;
+                }
                 ki = ki + 1;
             }
             if (foundKey !== null) {
                 delete assignedEligMap[foundKey];
+                var mi2 = 0;
+                while (mi2 < mappings.length) {
+                    if (getMappingKeyForPool(mappings[mi2]) === foundKey) {
+                        if (mappings[mi2].eligibilityItemValue === droppedValue) {
+                            delete mappings[mi2].eligibilityItemValue;
+                            log("ImportIE: poolList drop cleared eligibilityItemValue from mapping key=" + String(foundKey));
+                        }
+                    }
+                    mi2 = mi2 + 1;
+                }
                 restoreToAvailablePool(droppedValue);
-                renderRightList(rightSearch.value);
+                if (currentRightPanelMode === RIGHT_PANEL_MODE.CODE) {
+                    captureSelectionState();
+                    flatDataset = buildFlatCodeOrderedDataset(mappings, existingCodeSet);
+                    sortFlatDataset(flatDataset);
+                    renderRightPanelFlatCodeView(flatDataset, selectionStateMap, rightSearch.value || "");
+                    restoreSelectionToFlat();
+                } else {
+                    captureSelectionState();
+                    renderRightList(rightSearch.value);
+                    restoreSelectionToHierarchy();
+                }
                 renderPoolList();
-                log("ImportIE: poolList drop detached from mKey=" + foundKey);
+                updateSelectedCountAndConfirmState();
+                log("ImportIE: poolList drop detached from mKey=" + String(foundKey));
             }
         });
 
@@ -11904,6 +12436,10 @@
                         e.dataTransfer.setData(ELIG_DRAG_TYPE, capturedValue);
                         e.dataTransfer.effectAllowed = "move";
                         log("ImportIE: pool dragstart value=" + capturedValue);
+                    });
+                    poolRow.addEventListener("dragend", function (e) {
+                        log("ImportIE: pool dragend value=" + capturedValue + " dropEffect=" + String(e.dataTransfer.dropEffect));
+                        renderPoolList();
                     });
                 })(pItem.value);
 
@@ -11974,8 +12510,9 @@
             while (xi < itemCheckboxes.length) {
                 if (!itemCheckboxes[xi].cb.disabled && itemCheckboxes[xi].row && itemCheckboxes[xi].row.style.display !== "none") {
                     itemCheckboxes[xi].cb.checked = true;
-                    if (currentRightPanelMode === RIGHT_PANEL_MODE.CODE && itemCheckboxes[xi].key) {
-                        selectionStateMap[itemCheckboxes[xi].key] = true;
+                    var saKey = itemCheckboxes[xi].key || (itemCheckboxes[xi].mapping ? getMappingKey(itemCheckboxes[xi].mapping) : null);
+                    if (saKey) {
+                        setCheckedInState(selectionStateMap, saKey, true);
                     }
                 }
                 xi = xi + 1;
@@ -12039,8 +12576,9 @@
                 while (fi < itemCheckboxes.length) {
                     if (!itemCheckboxes[fi].cb.disabled && itemCheckboxes[fi].row && itemCheckboxes[fi].row.style.display !== "none") {
                         itemCheckboxes[fi].cb.checked = false;
-                        if (itemCheckboxes[fi].key) {
-                            selectionStateMap[itemCheckboxes[fi].key] = false;
+                        var clrKey = itemCheckboxes[fi].key || (itemCheckboxes[fi].mapping ? getMappingKey(itemCheckboxes[fi].mapping) : null);
+                        if (clrKey) {
+                            setCheckedInState(selectionStateMap, clrKey, false);
                         }
                     }
                     fi = fi + 1;
@@ -12051,6 +12589,7 @@
 
         confirmBtn.addEventListener("click", function () {
             log("ImportIE: Confirm clicked in review panel");
+            captureSelectionState();
             var selected = [];
             var gi = 0;
             while (gi < itemCheckboxes.length) {
@@ -12062,6 +12601,10 @@
                         selMapping.eligibilityItemValue = assignedVal;
                         log("ImportIE: confirm attach eligibilityItemValue=" + String(assignedVal) + " to key=" + selKey);
                     }
+                    var genderKey = itemCheckboxes[gi].key || getMappingKey(selMapping);
+                    var desiredSex = getDesiredSexForExecution(selectionStateMap, genderKey);
+                    selMapping.desiredSex = desiredSex;
+                    log("ImportIE: confirm attach desiredSex=" + desiredSex + " to genderKey=" + genderKey);
                     selected.push(selMapping);
                 }
                 gi = gi + 1;
@@ -12096,6 +12639,43 @@
             log("ImportIE: no valid code tokens found, toggle button disabled");
         }
 
+        var dupToggleBtn = document.createElement("button");
+        dupToggleBtn.id = CODE_VIEW_DUP_TOGGLE_BUTTON_ID;
+        dupToggleBtn.textContent = "Show Duplicates";
+        dupToggleBtn.style.background = "#2a2a2a";
+        dupToggleBtn.style.color = "#fff";
+        dupToggleBtn.style.border = "1px solid #444";
+        dupToggleBtn.style.padding = "8px 16px";
+        dupToggleBtn.style.borderRadius = "4px";
+        dupToggleBtn.style.cursor = "pointer";
+        dupToggleBtn.style.transition = "background 0.15s";
+        dupToggleBtn.style.display = "none";
+        dupToggleBtn.addEventListener("mouseenter", function () {
+            dupToggleBtn.style.background = "#3a3a3a";
+        });
+        dupToggleBtn.addEventListener("mouseleave", function () {
+            if (duplicatesFilterActive) {
+                dupToggleBtn.style.background = "#1a4a1a";
+            } else {
+                dupToggleBtn.style.background = "#2a2a2a";
+            }
+        });
+        dupToggleBtn.addEventListener("click", function () {
+            log("ImportIE: dupToggleBtn clicked, currently active=" + String(duplicatesFilterActive));
+            if (duplicatesFilterActive) {
+                duplicatesFilterActive = false;
+                dupToggleBtn.textContent = "Show Duplicates";
+                dupToggleBtn.style.background = "#2a2a2a";
+                dupToggleBtn.style.border = "1px solid #444";
+            } else {
+                duplicatesFilterActive = true;
+                dupToggleBtn.textContent = "Show All";
+                dupToggleBtn.style.background = "#1a4a1a";
+                dupToggleBtn.style.border = "1px solid #4a4";
+            }
+            toggleDuplicatesFilterOnCodeView(duplicatesFilterActive);
+        });
+
         codeSortToggleBtn.addEventListener("click", async function () {
             if (codeSortToggleBtn.disabled) {
                 return;
@@ -12104,8 +12684,15 @@
             if (currentRightPanelMode === RIGHT_PANEL_MODE.HIERARCHY) {
                 await toggleRightPanelViewMode(RIGHT_PANEL_MODE.CODE);
                 codeSortToggleBtn.textContent = "Hierarchical View";
+                dupToggleBtn.style.display = "inline-block";
                 log("ImportIE: toggled to code view, button now says Hierarchical View");
             } else {
+                duplicatesFilterActive = false;
+                duplicatesSet = null;
+                dupToggleBtn.textContent = "Show Duplicates";
+                dupToggleBtn.style.background = "#2a2a2a";
+                dupToggleBtn.style.border = "1px solid #444";
+                dupToggleBtn.style.display = "none";
                 await toggleRightPanelViewMode(RIGHT_PANEL_MODE.HIERARCHY);
                 codeSortToggleBtn.textContent = "Sort by Code";
                 log("ImportIE: toggled to hierarchy view, button now says Sort by Code");
@@ -12114,6 +12701,7 @@
 
         footerBar.appendChild(selectAllBtn);
         footerBar.appendChild(codeSortToggleBtn);
+        footerBar.appendChild(dupToggleBtn);
         footerBar.appendChild(clearAllBtn);
         footerBar.appendChild(confirmBtn);
         container.appendChild(footerBar);
@@ -12245,7 +12833,7 @@
 
     async function executeSelectedMappings(selectedMappings, existingCodeSet) {
         log("ImportIE: executeSelectedMappings start count=" + String(selectedMappings.length));
-        IMPORT_IE_CANCELED = false; 
+        IMPORT_IE_CANCELED = false;
         var progress = buildProgressPopup(selectedMappings);
         var successes = 0;
         var failures = 0;
@@ -12402,13 +12990,26 @@
             }
 
             log("ImportIE: step c - setting sex option");
-            var eligItemText = (bestMatch.textContent + "").trim();
-            var sex = parseSexFromEligibilityText(eligItemText);
+            var sex = mapping.desiredSex || GENDER_BOTH;
             var sexSel = document.querySelector("select#sexOption");
             if (sexSel) {
+                var sexOptFound = false;
+                var sxOpts = sexSel.querySelectorAll("option");
+                var sxi = 0;
+                while (sxi < sxOpts.length) {
+                    if ((sxOpts[sxi].value + "").trim() === sex) {
+                        sexOptFound = true;
+                        break;
+                    }
+                    sxi = sxi + 1;
+                }
+                if (!sexOptFound) {
+                    log("ImportIE: desired sex value '" + sex + "' not found in sexOption, falling back to GENDER_BOTH");
+                    sex = GENDER_BOTH;
+                }
                 sexSel.value = sex;
                 select2TriggerChange(sexSel);
-                log("ImportIE: sex set to '" + String(sex) + "'");
+                log("ImportIE: sex set to '" + String(sex) + "' (from mapping.desiredSex)");
                 await sleep(importIERandomDelay());
             } else {
                 log("ImportIE: sexOption select not found, skipping sex step");
@@ -12634,7 +13235,7 @@
             if (dots > 3) {
                 dots = 1;
             }
-            var t = "Please wait. Collecting Data";
+            var t = " Please wait. Collecting Data";
             var di = 0;
             while (di < dots) {
                 t = t + ".";
@@ -12738,8 +13339,6 @@
             }
         }, 300);
     }
-
-
     // ======================
     // ======================
     function setPanelHidden(flag) {
