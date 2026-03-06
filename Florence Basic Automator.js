@@ -94,6 +94,7 @@
         scrollIdleMs: 120,
         settleMs: 250,
         waitFilterMs: 800,
+        waitLastNameFilterMs: 4000,
         maxSelectDurationMs: 45000
     };
 
@@ -143,6 +144,7 @@
         waitRoleListMs: 6000,
         settleMs: 250,
         waitFilterMs: 800,
+        waitLastNameFilterMs: 2000,
         waitTasksMenuMs: 5000,
         waitAfterTasksToggleMs: 200,
         maxSelectDurationMs: 45000,
@@ -517,6 +519,7 @@
         panelsContainer.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 16px; flex: 1; min-height: 0; overflow: hidden;';
         const leftPanel = createSubpanel('Scanned Log Entries', 'elog-left-panel', 'elog-left-search');
         const rightPanel = createSubpanel('User Names Status', 'elog-right-panel', 'elog-right-search');
+        addSortToggleToSubpanel(rightPanel, 'elog-right-panel', 'elog-sort-toggle');
         panelsContainer.appendChild(leftPanel);
         panelsContainer.appendChild(rightPanel);
         const summaryFooter = document.createElement('div');
@@ -618,6 +621,82 @@
         }
     }
 
+    function addSortToggleToSubpanel(subpanelEl, listId, toggleId) {
+        addLogMessage('addSortToggleToSubpanel: adding toggle for ' + listId, 'log');
+        var panelHeader = subpanelEl.firstElementChild;
+        if (!panelHeader) {
+            return;
+        }
+        var titleEl = panelHeader.querySelector('h4');
+        if (!titleEl) {
+            return;
+        }
+        var titleRow = document.createElement('div');
+        titleRow.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;';
+        titleEl.style.cssText = 'margin: 0; color: white; font-size: 14px; font-weight: 600;';
+        panelHeader.removeChild(titleEl);
+        titleRow.appendChild(titleEl);
+        var toggleBtn = document.createElement('button');
+        toggleBtn.id = toggleId;
+        toggleBtn.textContent = 'A-Z';
+        toggleBtn.setAttribute('aria-label', 'Toggle alphabetical sort');
+        toggleBtn.setAttribute('aria-pressed', 'false');
+        toggleBtn.style.cssText = 'background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.25); color: rgba(255, 255, 255, 0.7); padding: 2px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s ease; flex-shrink: 0;';
+        toggleBtn.onmouseover = function() {
+            toggleBtn.style.background = 'rgba(255, 255, 255, 0.25)';
+        };
+        toggleBtn.onmouseout = function() {
+            var pressed = toggleBtn.getAttribute('aria-pressed') === 'true';
+            toggleBtn.style.background = pressed ? 'rgba(255, 255, 255, 0.3)' : 'rgba(255, 255, 255, 0.15)';
+        };
+        toggleBtn.onclick = function() {
+            var isPressed = toggleBtn.getAttribute('aria-pressed') === 'true';
+            var newPressed = !isPressed;
+            toggleBtn.setAttribute('aria-pressed', String(newPressed));
+            if (newPressed) {
+                toggleBtn.style.background = 'rgba(255, 255, 255, 0.3)';
+                toggleBtn.style.color = 'white';
+                toggleBtn.style.borderColor = 'rgba(255, 255, 255, 0.5)';
+            } else {
+                toggleBtn.style.background = 'rgba(255, 255, 255, 0.15)';
+                toggleBtn.style.color = 'rgba(255, 255, 255, 0.7)';
+                toggleBtn.style.borderColor = 'rgba(255, 255, 255, 0.25)';
+            }
+            sortPanelList(listId, newPressed);
+            addLogMessage('addSortToggleToSubpanel: toggled sort for ' + listId + ' alphabetical=' + newPressed, 'log');
+        };
+        titleRow.appendChild(toggleBtn);
+        panelHeader.insertBefore(titleRow, panelHeader.firstChild);
+    }
+
+    function sortPanelList(listId, alphabetical) {
+        addLogMessage('sortPanelList: listId=' + listId + ' alphabetical=' + alphabetical, 'log');
+        var list = document.getElementById(listId);
+        if (!list) {
+            return;
+        }
+        var items = Array.from(list.querySelectorAll('.' + ELOG_CSS_CLASSNAMES.listItem));
+        if (items.length === 0) {
+            return;
+        }
+        if (alphabetical) {
+            items.sort(function(a, b) {
+                var textA = (a.getAttribute('data-sort-name') || '').toLowerCase();
+                var textB = (b.getAttribute('data-sort-name') || '').toLowerCase();
+                return textA.localeCompare(textB);
+            });
+        } else {
+            items.sort(function(a, b) {
+                var orderA = parseInt(a.getAttribute('data-input-order'), 10) || 0;
+                var orderB = parseInt(b.getAttribute('data-input-order'), 10) || 0;
+                return orderA - orderB;
+            });
+        }
+        for (var i = 0; i < items.length; i++) {
+            list.appendChild(items[i]);
+        }
+    }
+
     function initializeRightPanel() {
         addLogMessage('initializeRightPanel: initializing with parsed names', 'log');
         const rightPanel = document.getElementById('elog-right-panel');
@@ -628,6 +707,8 @@
             const item = createListItem(nameObj.display, 'Pending', 'pending', i + 1);
             item.setAttribute('data-normalized', nameObj.normalized);
             item.setAttribute('data-pairkey', normalizeFirstLastPair(nameObj.display));
+            item.setAttribute('data-input-order', String(i + 1));
+            item.setAttribute('data-sort-name', nameObj.display);
             rightPanel.appendChild(item);
         }
         addLogMessage('initializeRightPanel: added ' + elogState.parsedNames.length + ' items', 'log');
@@ -1363,31 +1444,35 @@
                 }
                 addLogMessage('attemptSelectByScrollingForName: not found with firstName, trying lastName', 'log');
                 if (lastName && lastName !== firstName) {
-                    typeIntoFilteredInput(inputEl, lastName);
-                    var lastNameTid = setTimeout(function() {
-                        if (!elogState.isRunning) {
+                    clearFilteredInput(inputEl);
+                    var clearTid1 = setTimeout(function() {
+                        typeIntoFilteredInput(inputEl, lastName);
+                        var lastNameTid = setTimeout(function() {
+                            if (!elogState.isRunning) {
+                                clearFilteredInput(inputEl);
+                                resolve(false);
+                                return;
+                            }
+                            var match2 = scanFilteredOptionsForMatch(targetPairKey, ELOG_FORM_SELECTORS);
+                            if (match2) {
+                                addLogMessage('attemptSelectByScrollingForName: found via lastName filter (' + match2.matchType + ')', 'log');
+                                match2.element.click();
+                                var verifyTid2 = setTimeout(function() {
+                                    resolve(true);
+                                }, ELOG_FORM_TIMEOUTS.settleMs);
+                                elogState.timeouts.push(verifyTid2);
+                                return;
+                            }
+                            addLogMessage('attemptSelectByScrollingForName: not found with lastName, falling back to scroll', 'log');
                             clearFilteredInput(inputEl);
-                            resolve(false);
-                            return;
-                        }
-                        var match2 = scanFilteredOptionsForMatch(targetPairKey, ELOG_FORM_SELECTORS);
-                        if (match2) {
-                            addLogMessage('attemptSelectByScrollingForName: found via lastName filter (' + match2.matchType + ')', 'log');
-                            match2.element.click();
-                            var verifyTid2 = setTimeout(function() {
-                                resolve(true);
-                            }, ELOG_FORM_TIMEOUTS.settleMs);
-                            elogState.timeouts.push(verifyTid2);
-                            return;
-                        }
-                        addLogMessage('attemptSelectByScrollingForName: not found with lastName, falling back to scroll', 'log');
-                        clearFilteredInput(inputEl);
-                        var scrollFallbackTid = setTimeout(function() {
-                            scrollSearchForName(targetPairKey, ELOG_FORM_SELECTORS, ELOG_FORM_TIMEOUTS, ELOG_FORM_RETRY, elogState, resolve);
-                        }, ELOG_FORM_TIMEOUTS.waitFilterMs);
-                        elogState.timeouts.push(scrollFallbackTid);
-                    }, ELOG_FORM_TIMEOUTS.waitFilterMs);
-                    elogState.timeouts.push(lastNameTid);
+                            var scrollFallbackTid = setTimeout(function() {
+                                scrollSearchForName(targetPairKey, ELOG_FORM_SELECTORS, ELOG_FORM_TIMEOUTS, ELOG_FORM_RETRY, elogState, resolve);
+                            }, ELOG_FORM_TIMEOUTS.waitFilterMs);
+                            elogState.timeouts.push(scrollFallbackTid);
+                        }, ELOG_FORM_TIMEOUTS.waitLastNameFilterMs);
+                        elogState.timeouts.push(lastNameTid);
+                    }, ELOG_FORM_TIMEOUTS.settleMs);
+                    elogState.timeouts.push(clearTid1);
                 } else {
                     addLogMessage('attemptSelectByScrollingForName: lastName same as firstName, falling back to scroll', 'log');
                     clearFilteredInput(inputEl);
@@ -2324,7 +2409,6 @@
         { keyword: 'clinical trial', role: 'Study Coordinator' },
         { keyword: 'clinical research', role: 'Research Nurse' },
         { keyword: 'crc', role: 'Study Coordinator' },
-        { keyword: 'coordinator', role: 'Study Coordinator' },
         { keyword: 'nurse', role: 'Research Nurse' },
         { keyword: 'qa', role: 'Quality Assurance' },
         { keyword: 'quality', role: 'Quality Assurance' },
@@ -5192,6 +5276,8 @@ function showResponsibilitiesProgressPanel(rolesData) {
             var labelText = candidate.display + ' | ' + candidate.roleDisplay + ' | [' + numsArr.join(', ') + ']';
             var item = createListItem(labelText, DOA_LABELS.statusPending, 'pending', i + 1);
             item.setAttribute('data-pairkey', candidate.pairKey);
+            item.setAttribute('data-input-order', String(i + 1));
+            item.setAttribute('data-sort-name', candidate.display);
             rightPanel.appendChild(item);
         }
         addLogMessage('initializeDoARightPanel: added ' + doaState.parsedCandidates.length + ' items', 'log');
@@ -5354,6 +5440,7 @@ function showResponsibilitiesProgressPanel(rolesData) {
         panelsContainer.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 16px; flex: 1; min-height: 0; overflow: hidden;';
         var leftPanel = createSubpanel('Scanned Log Entries', 'doa-left-panel', 'doa-left-search');
         var rightPanel = createSubpanel('DoA Entries Status', 'doa-right-panel', 'doa-right-search');
+        addSortToggleToSubpanel(rightPanel, 'doa-right-panel', 'doa-sort-toggle');
         panelsContainer.appendChild(leftPanel);
         panelsContainer.appendChild(rightPanel);
         var summaryFooter = document.createElement('div');
@@ -5878,31 +5965,35 @@ function showResponsibilitiesProgressPanel(rolesData) {
                 }
                 addLogMessage('attemptDoASelectByScrollingForName: not found with firstName, trying lastName', 'log');
                 if (lastName && lastName !== firstName) {
-                    typeIntoFilteredInput(inputEl, lastName);
-                    var lastNameTid = setTimeout(function() {
-                        if (!doaState.isRunning) {
+                    clearFilteredInput(inputEl);
+                    var clearTid1 = setTimeout(function() {
+                        typeIntoFilteredInput(inputEl, lastName);
+                        var lastNameTid = setTimeout(function() {
+                            if (!doaState.isRunning) {
+                                clearFilteredInput(inputEl);
+                                resolve(false);
+                                return;
+                            }
+                            var match2 = scanFilteredOptionsForMatch(targetPairKey, DOA_SELECTORS);
+                            if (match2) {
+                                addLogMessage('attemptDoASelectByScrollingForName: found via lastName filter (' + match2.matchType + ')', 'log');
+                                match2.element.click();
+                                var verifyTid2 = setTimeout(function() {
+                                    resolve(true);
+                                }, DOA_TIMEOUTS.settleMs);
+                                doaState.timeouts.push(verifyTid2);
+                                return;
+                            }
+                            addLogMessage('attemptDoASelectByScrollingForName: not found with lastName, falling back to scroll', 'log');
                             clearFilteredInput(inputEl);
-                            resolve(false);
-                            return;
-                        }
-                        var match2 = scanFilteredOptionsForMatch(targetPairKey, DOA_SELECTORS);
-                        if (match2) {
-                            addLogMessage('attemptDoASelectByScrollingForName: found via lastName filter (' + match2.matchType + ')', 'log');
-                            match2.element.click();
-                            var verifyTid2 = setTimeout(function() {
-                                resolve(true);
-                            }, DOA_TIMEOUTS.settleMs);
-                            doaState.timeouts.push(verifyTid2);
-                            return;
-                        }
-                        addLogMessage('attemptDoASelectByScrollingForName: not found with lastName, falling back to scroll', 'log');
-                        clearFilteredInput(inputEl);
-                        var scrollFallbackTid = setTimeout(function() {
-                            scrollSearchForName(targetPairKey, DOA_SELECTORS, DOA_TIMEOUTS, DOA_RETRY, doaState, resolve);
-                        }, DOA_TIMEOUTS.waitFilterMs);
-                        doaState.timeouts.push(scrollFallbackTid);
-                    }, DOA_TIMEOUTS.waitFilterMs);
-                    doaState.timeouts.push(lastNameTid);
+                            var scrollFallbackTid = setTimeout(function() {
+                                scrollSearchForName(targetPairKey, DOA_SELECTORS, DOA_TIMEOUTS, DOA_RETRY, doaState, resolve);
+                            }, DOA_TIMEOUTS.waitFilterMs);
+                            doaState.timeouts.push(scrollFallbackTid);
+                        }, DOA_TIMEOUTS.waitLastNameFilterMs);
+                        doaState.timeouts.push(lastNameTid);
+                    }, DOA_TIMEOUTS.settleMs);
+                    doaState.timeouts.push(clearTid1);
                 } else {
                     addLogMessage('attemptDoASelectByScrollingForName: lastName same as firstName, falling back to scroll', 'log');
                     clearFilteredInput(inputEl);
