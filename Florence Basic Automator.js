@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name Florence Automator
 // @namespace vinh.activity.plan.state
-// @version 1.3.0
+// @version 1.4.0
 // @description
 // @match https://us.v2.researchbinders.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/heads/main/Florence%20Basic%20Automator.js
@@ -2661,10 +2661,11 @@
         { keyword: 'clinical trial', role: 'Study Coordinator' },
         { keyword: 'clinical research', role: 'Research Nurse' },
         { keyword: 'crc', role: 'Study Coordinator' },
+        { keyword: 'infusion nurse', role: 'Research Nurse' },
         { keyword: 'nurse', role: 'Research Nurse' },
         { keyword: 'qa', role: 'Quality Assurance' },
         { keyword: 'quality', role: 'Quality Assurance' },
-        { keyword: 'assistant', role: 'Research Assistant' },
+        { keyword: 'research assistant', role: 'Research Assistant' },
         { keyword: 'pharm', role: 'Pharmacy' },
         { keyword: 'recruitment', role: 'Recruitment' },
         { keyword: 'laboratory', role: 'Laboratory Technician' },
@@ -3193,11 +3194,12 @@
         description.appendChild(document.createElement('br'));
         var lines = [
             'Make sure the Study Responsibilities Identifier are set to Numbers and NOT Letters',
-            'Paste role-to-responsibility assignments below.',
             'Each line should contain the role name, followed by a tab, then the responsibility numbers.',
             'Ranges such as "1 to 8" are supported.',
             'Ensure that no existing Study Roles are already added on the page.',
-            'After clicking Confirm, do not click anywhere else on the page, as this will impact the process.'
+            'Make sure the Staff Roles are spelled correctly.',
+            'After clicking Confirm, do not click anywhere else on the page, as this will impact the process.',
+            'Paste role-to-responsibility assignments below.',
         ];
 
         for (var i = 0; i < lines.length; i++) {
@@ -3672,9 +3674,71 @@ function showResponsibilitiesProgressPanel(rolesData) {
         });
     }
 
+    function dismissRoleListDropdown(columnEl) {
+        addLogMessage('dismissRoleListDropdown: attempting to close role dropdown', 'log');
+        return new Promise(function(resolve) {
+            var globalList = document.querySelector(RESP_SELECTORS.roleListContainer);
+            if (!globalList) {
+                addLogMessage('dismissRoleListDropdown: no role list open, nothing to close', 'log');
+                resolve();
+                return;
+            }
+            addLogMessage('dismissRoleListDropdown: role list is open, trying Escape key', 'log');
+            var escEvent = new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true, cancelable: true });
+            document.activeElement.dispatchEvent(escEvent);
+            document.dispatchEvent(escEvent);
+            var attempts = 0;
+            function waitClosed() {
+                var stillOpen = document.querySelector(RESP_SELECTORS.roleListContainer);
+                if (!stillOpen) {
+                    addLogMessage('dismissRoleListDropdown: role list closed successfully', 'log');
+                    resolve();
+                    return;
+                }
+                attempts++;
+                if (attempts === 1) {
+                    addLogMessage('dismissRoleListDropdown: Escape did not work, clicking input to toggle closed', 'log');
+                    if (columnEl) {
+                        var inputEl = columnEl.querySelector(RESP_SELECTORS.roleSearchInput);
+                        if (!inputEl) {
+                            inputEl = columnEl.querySelector('.filtered-select__input, input[placeholder*="Search"]');
+                        }
+                        if (inputEl) {
+                            inputEl.click();
+                        }
+                    }
+                }
+                if (attempts === 3) {
+                    addLogMessage('dismissRoleListDropdown: still open, clicking body and blurring', 'log');
+                    if (document.activeElement) {
+                        document.activeElement.blur();
+                    }
+                    document.body.click();
+                }
+                if (attempts === 5) {
+                    addLogMessage('dismissRoleListDropdown: clicking main panel area to dismiss', 'log');
+                    var mainPanel = document.querySelector(RESP_SELECTORS.mainPanelButtonTarget);
+                    if (mainPanel) {
+                        mainPanel.click();
+                    }
+                }
+                if (attempts >= 8) {
+                    addLogMessage('dismissRoleListDropdown: could not close after ' + attempts + ' attempts, proceeding anyway', 'warn');
+                    resolve();
+                    return;
+                }
+                var tid = setTimeout(waitClosed, 250);
+                respState.timeouts.push(tid);
+            }
+            var initTid = setTimeout(waitClosed, 300);
+            respState.timeouts.push(initTid);
+        });
+    }
+
     function ensureRoleListOpenForColumn(columnEl) {
         addLogMessage('ensureRoleListOpenForColumn: ensuring open in target column', 'log');
-        return new Promise(function(resolve, reject) {
+        return dismissRoleListDropdown(columnEl).then(function() {
+            return new Promise(function(resolve, reject) {
             var retries = 0;
             function tryOpen() {
                 if (respState.stopRequested) {
@@ -3736,6 +3800,7 @@ function showResponsibilitiesProgressPanel(rolesData) {
                 pollForList();
             }
             tryOpen();
+        });
         });
     }
 
@@ -3835,8 +3900,9 @@ function showResponsibilitiesProgressPanel(rolesData) {
                         var textEl = options[oi].querySelector(RESP_SELECTORS.roleOptionText);
                         var optText = textEl ? textEl.textContent.trim() : (options[oi].textContent || '').trim();
                         optTexts.push(optText);
-                        var norm = normalizeRoleName(optText);
-                        if (norm.key === targetRoleKey) {
+                        var optKey = optText.replace(RESP_REGEX.quoteCleanup, '').replace(RESP_REGEX.lineBreakInRole, ' ').replace(RESP_REGEX.whitespace, ' ').trim().toLowerCase();
+                        addLogMessage('attemptSelectByScrollingForRole: option[' + oi + '] text=' + optText + ' key=' + optKey, 'log');
+                        if (optKey === targetRoleKey) {
                             addLogMessage('attemptSelectByScrollingForRole: MATCH at index ' + oi + ' text=' + optText, 'log');
                             var cb = options[oi].querySelector(RESP_SELECTORS.roleOptionCheckboxTri);
                             if (cb) {
@@ -4300,17 +4366,18 @@ function showResponsibilitiesProgressPanel(rolesData) {
                     throw new Error('Stopped');
                 }
                 if (!selected) {
-                    addLogMessage('processRolesWorkflow: role not found in dropdown: ' + role.displayRole, 'warn');
+                    addLogMessage('processRolesWorkflow: role not found in dropdown: ' + role.displayRole + ', closing dropdown before continuing', 'warn');
                     role.status = RESP_LABELS.statusFailed;
-                    role.reason = 'Role not in dropdown';
+                    role.reason = 'Role not in dropdown, or dropdown menu failed to open.';
                     respState.counters.failed++;
                     respState.counters.pending--;
-                    updateRespRoleStatus(role.key, RESP_LABELS.statusFailed, 'Role not in dropdown');
+                    updateRespRoleStatus(role.key, RESP_LABELS.statusFailed, 'Role not in dropdown, or dropdown menu failed to open.');
                     updateRespSummary();
-                    roleIndex++;
-                    var ft = setTimeout(processNextRole, 200);
-                    respState.timeouts.push(ft);
-                    return;
+                    return dismissRoleListDropdown(currentColumnEl).then(function() {
+                        roleIndex++;
+                        var ft = setTimeout(processNextRole, 300);
+                        respState.timeouts.push(ft);
+                    });
                 }
                 addLogMessage('processRolesWorkflow: role selected, opening responsibilities for ' + role.displayRole, 'log');
                 updateRespAriaLive(RESP_LABELS.selectingResponsibilities + ': ' + role.displayRole);
@@ -4371,9 +4438,11 @@ function showResponsibilitiesProgressPanel(rolesData) {
                     updateRespRoleStatus(role.key, RESP_LABELS.statusFailed, err.message);
                 }
                 updateRespSummary();
-                roleIndex++;
-                var et = setTimeout(processNextRole, 200);
-                respState.timeouts.push(et);
+                dismissRoleListDropdown(currentColumnEl).then(function() {
+                    roleIndex++;
+                    var et = setTimeout(processNextRole, 300);
+                    respState.timeouts.push(et);
+                });
             });
         }
         processNextRole();
@@ -7089,6 +7158,7 @@ function showResponsibilitiesProgressPanel(rolesData) {
         statusAlready: 'Already Checked',
         statusNotInTable: 'Not In Table',
         statusFailed: 'Failed',
+        statusStrikethrough: 'Strikethrough',
         statusStopped: 'Stopped',
         parsing: 'Parsing input',
         scanning: 'Scanning table',
@@ -7101,6 +7171,7 @@ function showResponsibilitiesProgressPanel(rolesData) {
         selected: 0,
         alreadyChecked: 0,
         notFound: 0,
+        strikethrough: 0,
         failures: 0,
         pending: 0
     };
@@ -7151,7 +7222,7 @@ function showResponsibilitiesProgressPanel(rolesData) {
         cbSelectState.seenNormalizedNames = new Set();
         cbSelectState.targets = [];
         cbSelectState.targetIndex = 0;
-        cbSelectState.counters = { total: 0, selected: 0, alreadyChecked: 0, notFound: 0, failures: 0, pending: 0 };
+        cbSelectState.counters = { total: 0, selected: 0, alreadyChecked: 0, notFound: 0, strikethrough: 0, failures: 0, pending: 0 };
         cbSelectState.prevAriaBusy = null;
         cbSelectState.scrollContainer = null;
         cbSelectState.prevScrollTop = 0;
@@ -7318,7 +7389,7 @@ function showResponsibilitiesProgressPanel(rolesData) {
         header.appendChild(closeButton);
         var description = document.createElement('p');
         description.style.cssText = 'color: rgba(255, 255, 255, 0.9); margin: 0 0 12px 0; font-size: 14px; line-height: 1.4;';
-        description.append("Rules:"); 
+        description.append("Rules:");
         description.appendChild(document.createElement('br'));
         var lines = [
             'Enter names to select their checkboxes in the Document Log. Separate names with commas or place each name on a new line.',
@@ -7536,6 +7607,7 @@ function showResponsibilitiesProgressPanel(rolesData) {
             { id: 'cb-select-summary-selected', label: 'Selected', value: '0' },
             { id: 'cb-select-summary-already', label: 'Already', value: '0' },
             { id: 'cb-select-summary-notfound', label: 'Not Found', value: '0' },
+            { id: 'cb-select-summary-strikethrough', label: 'Strikethrough', value: '0' },
             { id: 'cb-select-summary-failures', label: 'Failed', value: '0' },
             { id: 'cb-select-summary-pending', label: 'Pending', value: '0' },
             { id: 'cb-select-summary-percent', label: 'Progress', value: '0%' }
@@ -7913,6 +7985,7 @@ function showResponsibilitiesProgressPanel(rolesData) {
         var el3 = document.getElementById('cb-select-summary-already');
         var el4 = document.getElementById('cb-select-summary-notfound');
         var el5 = document.getElementById('cb-select-summary-failures');
+        var elStrike = document.getElementById('cb-select-summary-strikethrough');
         var el6 = document.getElementById('cb-select-summary-pending');
         var el7 = document.getElementById('cb-select-summary-percent');
         if (el1) {
@@ -7930,11 +8003,14 @@ function showResponsibilitiesProgressPanel(rolesData) {
         if (el5) {
             el5.textContent = String(c.failures);
         }
+        if (elStrike) {
+            elStrike.textContent = String(c.strikethrough);
+        }
         if (el6) {
             el6.textContent = String(c.pending);
         }
         if (el7) {
-            var processed = c.selected + c.alreadyChecked + c.notFound + c.failures;
+            var processed = c.selected + c.alreadyChecked + c.notFound + c.strikethrough + c.failures;
             var pct = c.total > 0 ? Math.round((processed / c.total) * 100) : 0;
             el7.textContent = pct + '%';
         }
@@ -8171,6 +8247,18 @@ function showResponsibilitiesProgressPanel(rolesData) {
                 cbSelectState.targetIndex++;
                 var tid1 = setTimeout(processNextCheckboxTarget, 20);
                 cbSelectState.timeouts.push(tid1);
+                return;
+            }
+            if (target.rowEl && target.rowEl.querySelector('.log-entry--struckThrough')) {
+                addLogMessage('processNextCheckboxTarget: skipping strikethrough entry: ' + target.display, 'log');
+                target.status = CB_SELECT_LABELS.statusStrikethrough;
+                cbSelectState.counters.strikethrough++;
+                cbSelectState.counters.pending--;
+                cbUpdateRightPanelStatus(target.pairKey, CB_SELECT_LABELS.statusStrikethrough);
+                cbUpdateRightPanelSummary();
+                cbSelectState.targetIndex++;
+                var tidStrike = setTimeout(processNextCheckboxTarget, 20);
+                cbSelectState.timeouts.push(tidStrike);
                 return;
             }
             selectCheckboxForRow(target, 0, function(success) {
