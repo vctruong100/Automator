@@ -1,8 +1,8 @@
 ﻿
 // ==UserScript==
-// @name Florence Basic Automator
+// @name Florence Automator
 // @namespace vinh.activity.plan.state
-// @version 1.1.0
+// @version 1.3.0
 // @description
 // @match https://us.v2.researchbinders.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/heads/main/Florence%20Basic%20Automator.js
@@ -120,6 +120,7 @@
         listContainer: 'ul.filtered-select__list.u-z-index-1060, ul.filtered-select__list, cdk-virtual-scroll-viewport',
         virtualViewport: 'cdk-virtual-scroll-viewport, .cdk-virtual-scroll-viewport',
         optionItem: 'cdk-virtual-scroll-viewport li.filtered-select__list__item, cdk-virtual-scroll-viewport li, .filtered-select__list li, cdk-virtual-scroll-viewport [role="option"], .filtered-select__list [role="option"]',
+        roleClearBtn: 'i.fa-times.test-clearBtn',
         roleSearchInput: '#filtered-select-input.filtered-select__input[placeholder*="Search"]',
         roleOptionItem: '.filtered-select__list__item, [role="option"], .cdk-virtual-scroll-viewport .filtered-select__list__item',
         roleOptionText: '.filtered-select__list__item__text',
@@ -130,6 +131,7 @@
         mainGridTable: '.document-log-entries__grid-table[role="table"]',
         mainGridRow: 'log-entry-row[role="row"], .document-log-entries__grid-table__row[role="row"]',
         mainGridCell: '[role="cell"]',
+        saveAndAddAnotherBtn: 'button.btn.btn-primary',
         mainTableContainer: '.document-log-entries.document-log-entries__table',
         ariaLiveRegion: '.aria-live-region'
     };
@@ -144,7 +146,8 @@
         waitTasksMenuMs: 5000,
         waitAfterTasksToggleMs: 200,
         maxSelectDurationMs: 45000,
-        scrollIdleMs: 140
+        scrollIdleMs: 140,
+        waitAfterSaveMs: 1500
     };
 
     const DOA_RETRY = {
@@ -2312,61 +2315,29 @@
         whitespace: /\s+/g
     };
 
-    const RESP_ROLE_ALIASES = {
-        'pi': 'Principal Investigator',
-        'principal investigator': 'Principal Investigator',
-        'sub investigator': 'Sub-Investigator',
-        'sub-investigator': 'Sub-Investigator',
-        'research nurse': 'Research Nurse',
-        'nurse': 'Research Nurse',
-        'nurse manager': 'Research Nurse',
-        'infusion nurse i': 'Research Nurse',
-        'infusion nurse ii': 'Research Nurse',
-        'research nurse i': 'Research Nurse',
-        'research nurse ii': 'Research Nurse',
-        'research assistant': 'Research Assistant',
-        'research assistant i': 'Research Assistant',
-        'research assistant ii': 'Research Assistant',
-        'study coordinator': 'Study Coordinator',
-        'crc i': 'Study Coordinator',
-        'crc ii': 'Study Coordinator',
-        'senior crc': 'Study Coordinator',
-        'clinical trial lead': 'Study Coordinator',
-        'pharmacy': 'Pharmacy',
-        'pharmacist': 'Pharmacy',
-        'pharmacy technician i': 'Pharmacy',
-        'pharmacy assistant': 'Pharmacy',
-        'quality assurance': 'Quality Assurance',
-        'qa manager': 'Quality Assurance',
-        'qa coordinator i': 'Quality Assurance',
-        'qa coordinator ii': 'Quality Assurance',
-        'qa admin assistant i': 'Quality Assurance',
-        'qa admin assistant ii': 'Quality Assurance',
-        'laboratory manager': 'Laboratory Technician',
-        'laboratory technician': 'Laboratory Technician',
-        'laboratory technician i': 'Laboratory Technician',
-        'laboratory technician ii': 'Laboratory Technician',
-        'data entry': 'Data Entry',
-        'data entry i': 'Data Entry',
-        'data entry ii': 'Data Entry',
-        'data entry manager': 'Data Entry',
-        'data coordinator i': 'Data Entry',
-        'regulatory specialist i': 'Regulatory Coordinator',
-        'regulatory specialist ii': 'Regulatory Coordinator',
-        'admin asst (regulatory)': 'Regulatory Coordinator',
-        'director of recruitment': 'Recruitment',
-        'senior recruitment specialist': 'Recruitment',
-        'recruitment specialist i': 'Recruitment',
-        'recruitment specialist ii': 'Recruitment',
-        'dietary aide': 'Dietary Aide',
-        'principle investigator': 'Principal Investigator',
-        'principal investigator': 'Principal Investigator',
-        'pi': 'Principal Investigator',
-        'sub-investigator': 'Sub-Investigator',
-        'sub investigator': 'Sub-Investigator',
-        'subinvestigator': 'Sub-Investigator',
-        'subinvestigator': 'Sub-Investigator',
-    };
+    const RESP_ROLE_KEYWORD_MAP = [
+        { keyword: 'sub-investigator', role: 'Sub-Investigator' },
+        { keyword: 'sub investigator', role: 'Sub-Investigator' },
+        { keyword: 'subinvestigator', role: 'Sub-Investigator' },
+        { keyword: 'principal investigator', role: 'Principal Investigator' },
+        { keyword: 'principle investigator', role: 'Principal Investigator' },
+        { keyword: 'clinical trial', role: 'Study Coordinator' },
+        { keyword: 'clinical research', role: 'Research Nurse' },
+        { keyword: 'crc', role: 'Study Coordinator' },
+        { keyword: 'coordinator', role: 'Study Coordinator' },
+        { keyword: 'nurse', role: 'Research Nurse' },
+        { keyword: 'qa', role: 'Quality Assurance' },
+        { keyword: 'quality', role: 'Quality Assurance' },
+        { keyword: 'assistant', role: 'Research Assistant' },
+        { keyword: 'pharm', role: 'Pharmacy' },
+        { keyword: 'recruitment', role: 'Recruitment' },
+        { keyword: 'laboratory', role: 'Laboratory Technician' },
+        { keyword: 'lab tech', role: 'Laboratory Technician' },
+        { keyword: 'data', role: 'Data Entry' },
+        { keyword: 'regulatory', role: 'Regulatory Coordinator' },
+        { keyword: 'dietary', role: 'Dietary Aide' },
+        { keyword: 'pi', role: 'Principal Investigator' }
+    ];
 
     const RESP_SCROLL = {
         stepRatio: 0.7,
@@ -2528,9 +2499,12 @@
         cleaned = cleaned.trim();
         var display = cleaned;
         var key = cleaned.toLowerCase();
-        if (RESP_ROLE_ALIASES[key]) {
-            display = RESP_ROLE_ALIASES[key];
-            key = display.toLowerCase();
+        for (var ki = 0; ki < RESP_ROLE_KEYWORD_MAP.length; ki++) {
+            if (key.indexOf(RESP_ROLE_KEYWORD_MAP[ki].keyword) !== -1) {
+                display = RESP_ROLE_KEYWORD_MAP[ki].role;
+                key = display.toLowerCase();
+                break;
+            }
         }
         addLogMessage('normalizeRoleName: display=' + display + ' key=' + key, 'log');
         return { display: display, key: key };
@@ -5942,6 +5916,54 @@ function showResponsibilitiesProgressPanel(rolesData) {
         });
     }
 
+    function clearDoARoleSelection() {
+        addLogMessage('clearDoARoleSelection: looking for clear button in Study Role field', 'log');
+        var roleInput = document.querySelector(DOA_SELECTORS.roleSearchInput);
+        if (!roleInput) {
+            addLogMessage('clearDoARoleSelection: role search input not found, skipping', 'log');
+            return Promise.resolve();
+        }
+        var container = roleInput.closest('.filtered-select');
+        if (!container) {
+            addLogMessage('clearDoARoleSelection: filtered-select container not found, skipping', 'log');
+            return Promise.resolve();
+        }
+        var clearBtn = container.querySelector(DOA_SELECTORS.roleClearBtn);
+        if (clearBtn) {
+            addLogMessage('clearDoARoleSelection: clear button found in Study Role container, clicking', 'log');
+            clearBtn.click();
+            return doaDelay(DOA_TIMEOUTS.settleMs);
+        }
+        addLogMessage('clearDoARoleSelection: no clear button in Study Role container, skipping', 'log');
+        return Promise.resolve();
+    }
+
+    function clickDoASaveAndAddAnother() {
+        addLogMessage('clickDoASaveAndAddAnother: looking for Save & Add Another button', 'log');
+        return new Promise(function(resolve) {
+            var buttons = document.querySelectorAll(DOA_SELECTORS.saveAndAddAnotherBtn);
+            var saveBtn = null;
+            for (var bi = 0; bi < buttons.length; bi++) {
+                if (buttons[bi].textContent.trim().indexOf('Save') !== -1 && buttons[bi].textContent.trim().indexOf('Add Another') !== -1) {
+                    saveBtn = buttons[bi];
+                    break;
+                }
+            }
+            if (!saveBtn) {
+                addLogMessage('clickDoASaveAndAddAnother: button not found', 'warn');
+                resolve(false);
+                return;
+            }
+            addLogMessage('clickDoASaveAndAddAnother: button found, clicking', 'log');
+            saveBtn.click();
+            var saveTid = setTimeout(function() {
+                addLogMessage('clickDoASaveAndAddAnother: save settle complete', 'log');
+                resolve(true);
+            }, DOA_TIMEOUTS.waitAfterSaveMs);
+            doaState.timeouts.push(saveTid);
+        });
+    }
+
     function selectRoleForCandidate(roleDisplay, roleKey) {
         addLogMessage('selectRoleForCandidate: roleDisplay=' + roleDisplay + ' roleKey=' + roleKey, 'log');
         return new Promise(function(resolve) {
@@ -6180,8 +6202,11 @@ function showResponsibilitiesProgressPanel(rolesData) {
                 doaState.timeouts.push(tid2);
                 return;
             }
-            addLogMessage('processNextDoAFromQueue: name selected, selecting role', 'log');
+            addLogMessage('processNextDoAFromQueue: name selected, clearing role field', 'log');
             return doaDelay(DOA_TIMEOUTS.settleMs).then(function() {
+                return clearDoARoleSelection();
+            }).then(function() {
+                addLogMessage('processNextDoAFromQueue: role field cleared, selecting role', 'log');
                 return selectRoleForCandidate(candidate.roleDisplay, candidate.roleKey);
             }).then(function(roleSelected) {
                 if (!roleSelected) {
@@ -6206,17 +6231,32 @@ function showResponsibilitiesProgressPanel(rolesData) {
                         doaState.counters.failures++;
                         doaState.counters.pending--;
                         updateDoARightPanelStatus(candidate.pairKey, DOA_LABELS.statusSelectionFailed);
-                    } else {
-                        addLogMessage('processNextDoAFromQueue: tasks applied', 'log');
-                        candidate.status = DOA_LABELS.statusTasksApplied;
-                        doaState.counters.added++;
-                        doaState.counters.pending--;
-                        updateDoARightPanelStatus(candidate.pairKey, DOA_LABELS.statusTasksApplied);
+                        updateDoARightPanelSummary(doaState.counters);
+                        doaState.addQueueIndex++;
+                        var tid4a = setTimeout(processNextDoAFromQueue, 50);
+                        doaState.timeouts.push(tid4a);
+                        return;
                     }
-                    updateDoARightPanelSummary(doaState.counters);
-                    doaState.addQueueIndex++;
-                    var tid4 = setTimeout(processNextDoAFromQueue, 50);
-                    doaState.timeouts.push(tid4);
+                    addLogMessage('processNextDoAFromQueue: tasks applied, saving entry', 'log');
+                    return clickDoASaveAndAddAnother().then(function(saved) {
+                        if (!saved) {
+                            addLogMessage('processNextDoAFromQueue: save failed', 'warn');
+                            candidate.status = DOA_LABELS.statusSaveFailed;
+                            doaState.counters.failures++;
+                            doaState.counters.pending--;
+                            updateDoARightPanelStatus(candidate.pairKey, DOA_LABELS.statusSaveFailed);
+                        } else {
+                            addLogMessage('processNextDoAFromQueue: entry saved successfully', 'log');
+                            candidate.status = DOA_LABELS.statusTasksApplied;
+                            doaState.counters.added++;
+                            doaState.counters.pending--;
+                            updateDoARightPanelStatus(candidate.pairKey, DOA_LABELS.statusTasksApplied);
+                        }
+                        updateDoARightPanelSummary(doaState.counters);
+                        doaState.addQueueIndex++;
+                        var tid4b = setTimeout(processNextDoAFromQueue, 50);
+                        doaState.timeouts.push(tid4b);
+                    });
                 });
             });
         })
@@ -6525,6 +6565,1225 @@ function showResponsibilitiesProgressPanel(rolesData) {
         addLogMessage('stopResponsibilities: cleanup complete', 'log');
     }
 
+    //===========================
+    // SELECT CHECKBOXES FUNCTIONS
+    //===========================
+    // Contains constants and functions necessary for "Select Checkboxes" feature to work
+    //===========================
+    const CB_SELECT_SELECTORS = {
+        featureButtonTarget: '.main-gui-panel',
+        presenceCheck: '.document-log-entries.document-log-entries__table',
+        gridTable: '.document-log-entries__grid-table[role="table"]',
+        row: 'log-entry-row[role="row"], .document-log-entries__grid-table__row[role="row"]',
+        cell: '[role="cell"]',
+        nameCellIndex: 3,
+        namePrimary: '.u-text-overflow-ellipsis',
+        nameFallback: '.test-logEntrySignature span',
+        checkboxCellIndex: 1,
+        checkboxInCell: '[role="checkbox"], .checkbox-icon',
+        ariaLiveRegion: '.aria-live-region'
+    };
+
+    const CB_SELECT_TIMEOUTS = {
+        waitInputPanelMs: 10000,
+        waitProgressPanelMs: 10000,
+        scanSettleMs: 250,
+        idleBetweenBatchesMs: 140,
+        clickSettleMs: 200,
+        verifySettleMs: 200,
+        maxScanDurationMs: 120000
+    };
+
+    const CB_SELECT_RETRY = {
+        scanEmptyRetries: 2,
+        clickRetries: 2,
+        maxNoProgressIterations: 8
+    };
+
+    const CB_SELECT_SCROLL = {
+        stepPx: 500,
+        overscanPx: 400
+    };
+
+    const CB_SELECT_LABELS = {
+        featureButton: 'Select Checkboxes',
+        inputTitle: 'Select Checkboxes Input',
+        progressTitle: 'Selecting Checkboxes',
+        toggleSelectAll: 'Select All',
+        statusPending: 'Pending',
+        statusSelected: 'Selected',
+        statusAlready: 'Already Checked',
+        statusNotInTable: 'Not In Table',
+        statusFailed: 'Failed',
+        statusStopped: 'Stopped',
+        parsing: 'Parsing input',
+        scanning: 'Scanning table',
+        selecting: 'Selecting checkboxes',
+        done: 'Completed'
+    };
+
+    const CB_SELECT_COUNTERS = {
+        total: 0,
+        selected: 0,
+        alreadyChecked: 0,
+        notFound: 0,
+        failures: 0,
+        pending: 0
+    };
+
+    const CB_SELECT_ATTRS = {
+        ariaBusyTarget: 'body',
+        ariaBusyAttr: 'aria-busy'
+    };
+
+    let cbSelectState = {
+        isRunning: false,
+        stopRequested: false,
+        selectAllOn: false,
+        observers: [],
+        timeouts: [],
+        intervals: [],
+        eventListeners: [],
+        idleCallbackIds: [],
+        rafIds: [],
+        parsedNames: [],
+        scannedRows: [],
+        seenNormalizedNames: new Set(),
+        targets: [],
+        targetIndex: 0,
+        counters: { total: 0, selected: 0, alreadyChecked: 0, notFound: 0, failures: 0, pending: 0 },
+        focusReturnElement: null,
+        prevAriaBusy: null,
+        scrollContainer: null,
+        prevScrollTop: 0,
+        userScrollHandler: null,
+        userScrollPaused: false,
+        lastAutoScrollTime: 0,
+        leftPanelRowIndex: 0
+    };
+
+    function resetCbSelectState() {
+        cbSelectState.isRunning = false;
+        cbSelectState.stopRequested = false;
+        cbSelectState.selectAllOn = false;
+        cbSelectState.observers = [];
+        cbSelectState.timeouts = [];
+        cbSelectState.intervals = [];
+        cbSelectState.eventListeners = [];
+        cbSelectState.idleCallbackIds = [];
+        cbSelectState.rafIds = [];
+        cbSelectState.parsedNames = [];
+        cbSelectState.scannedRows = [];
+        cbSelectState.seenNormalizedNames = new Set();
+        cbSelectState.targets = [];
+        cbSelectState.targetIndex = 0;
+        cbSelectState.counters = { total: 0, selected: 0, alreadyChecked: 0, notFound: 0, failures: 0, pending: 0 };
+        cbSelectState.prevAriaBusy = null;
+        cbSelectState.scrollContainer = null;
+        cbSelectState.prevScrollTop = 0;
+        cbSelectState.userScrollHandler = null;
+        cbSelectState.userScrollPaused = false;
+        cbSelectState.lastAutoScrollTime = 0;
+        cbSelectState.leftPanelRowIndex = 0;
+    }
+
+    function selectCheckboxesInit() {
+        addLogMessage('selectCheckboxesInit: starting feature', 'log');
+        cbSelectState.focusReturnElement = document.getElementById('cb-select-btn');
+        resetCbSelectState();
+        var presenceEl = document.querySelector(CB_SELECT_SELECTORS.presenceCheck);
+        if (!presenceEl) {
+            addLogMessage('selectCheckboxesInit: page check failed', 'warn');
+            showCbSelectWarning();
+            return;
+        }
+        addLogMessage('selectCheckboxesInit: page valid, showing input panel', 'log');
+        showSelectCheckboxesInputPanel();
+    }
+
+    function showCbSelectWarning() {
+        addLogMessage('showCbSelectWarning: creating warning popup', 'log');
+        var modal = document.createElement('div');
+        modal.id = 'cb-select-warning-modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 30000; display: flex; align-items: center; justify-content: center;';
+        var container = document.createElement('div');
+        container.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; width: 450px; max-width: 90%; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); position: relative;';
+        container.setAttribute('role', 'alertdialog');
+        container.setAttribute('aria-modal', 'true');
+        container.setAttribute('aria-labelledby', 'cb-select-warning-title');
+        container.setAttribute('aria-describedby', 'cb-select-warning-message');
+        var header = document.createElement('div');
+        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;';
+        var title = document.createElement('h3');
+        title.id = 'cb-select-warning-title';
+        title.textContent = 'Document Log Not Found';
+        title.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600;';
+        var closeButton = document.createElement('button');
+        closeButton.innerHTML = '\u2715';
+        closeButton.setAttribute('aria-label', 'Close warning');
+        closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
+        closeButton.onmouseover = function() {
+            closeButton.style.background = 'rgba(255, 255, 255, 0.3)';
+        };
+        closeButton.onmouseout = function() {
+            closeButton.style.background = 'rgba(255, 255, 255, 0.2)';
+        };
+        var closeWarning = function() {
+            if (modal.parentNode) {
+                document.body.removeChild(modal);
+            }
+            stopCheckboxSelect();
+        };
+        closeButton.onclick = closeWarning;
+        header.appendChild(title);
+        header.appendChild(closeButton);
+        var messageDiv = document.createElement('p');
+        messageDiv.id = 'cb-select-warning-message';
+        messageDiv.textContent = 'You are not on the Document Log page. Please navigate to a page with the Document Log Entries grid before using this feature.';
+        messageDiv.style.cssText = 'color: rgba(255, 255, 255, 0.9); margin: 0; font-size: 14px; line-height: 1.5;';
+        var okButton = document.createElement('button');
+        okButton.textContent = 'OK';
+        okButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: 2px solid rgba(255, 255, 255, 0.3); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.3s ease; margin-top: 20px; width: 100%;';
+        okButton.onmouseover = function() {
+            okButton.style.background = 'rgba(255, 255, 255, 0.3)';
+        };
+        okButton.onmouseout = function() {
+            okButton.style.background = 'rgba(255, 255, 255, 0.2)';
+        };
+        okButton.onclick = closeWarning;
+        var keyHandler = function(e) {
+            if (e.key === 'Escape') {
+                closeWarning();
+            }
+        };
+        document.addEventListener('keydown', keyHandler);
+        cbSelectState.eventListeners.push({ element: document, type: 'keydown', handler: keyHandler });
+        container.appendChild(header);
+        container.appendChild(messageDiv);
+        container.appendChild(okButton);
+        modal.appendChild(container);
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        modal.style.pointerEvents = 'none';
+        container.style.pointerEvents = 'auto';
+        makeDraggable(container, header);
+        document.body.appendChild(modal);
+        okButton.focus();
+        addLogMessage('showCbSelectWarning: warning displayed', 'log');
+    }
+
+    function parseNamesInputForCheckboxSelect(text) {
+        if (!text || !text.trim()) {
+            return [];
+        }
+        var results = [];
+        var seenKeys = new Set();
+        var lines = text.split('\n');
+        for (var li = 0; li < lines.length; li++) {
+            var parts = lines[li].split(',');
+            for (var pi = 0; pi < parts.length; pi++) {
+                var name = parts[pi].trim().replace(/,+$/, '').trim();
+                if (!name) {
+                    continue;
+                }
+                name = name.replace(/\s+/g, ' ');
+                var pairKey = normalizeFirstLastPair(name);
+                if (!pairKey) {
+                    continue;
+                }
+                if (seenKeys.has(pairKey)) {
+                    continue;
+                }
+                seenKeys.add(pairKey);
+                results.push({
+                    display: name,
+                    pairKey: pairKey,
+                    status: CB_SELECT_LABELS.statusPending
+                });
+            }
+        }
+        return results;
+    }
+
+    function showSelectCheckboxesInputPanel() {
+        addLogMessage('showSelectCheckboxesInputPanel: creating input panel', 'log');
+        var modal = document.createElement('div');
+        modal.id = 'cb-select-input-modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 20000; display: flex; align-items: center; justify-content: center;';
+        var container = document.createElement('div');
+        container.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; width: 500px; max-width: 90%; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); position: relative;';
+        container.setAttribute('role', 'dialog');
+        container.setAttribute('aria-modal', 'true');
+        container.setAttribute('aria-labelledby', 'cb-select-input-title');
+        var header = document.createElement('div');
+        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;';
+        var titleEl = document.createElement('h3');
+        titleEl.id = 'cb-select-input-title';
+        titleEl.textContent = CB_SELECT_LABELS.inputTitle;
+        titleEl.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600; letter-spacing: 0.2px;';
+        var closeButton = document.createElement('button');
+        closeButton.innerHTML = '\u2715';
+        closeButton.setAttribute('aria-label', 'Close panel');
+        closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
+        closeButton.onmouseover = function() {
+            closeButton.style.background = 'rgba(255, 67, 54, 0.8)';
+        };
+        closeButton.onmouseout = function() {
+            closeButton.style.background = 'rgba(255, 255, 255, 0.2)';
+        };
+        closeButton.onclick = function() {
+            addLogMessage('showSelectCheckboxesInputPanel: closed by user', 'warn');
+            if (modal.parentNode) {
+                document.body.removeChild(modal);
+            }
+            stopCheckboxSelect();
+        };
+        header.appendChild(titleEl);
+        header.appendChild(closeButton);
+        var description = document.createElement('p');
+        description.textContent = 'Enter names to select their checkboxes in the Document Log. Separate names with commas or place each name on a new line. Use the Select All toggle to select all checkboxes instead.';
+        description.style.cssText = 'color: rgba(255, 255, 255, 0.9); margin: 0 0 12px 0; font-size: 14px; line-height: 1.4;';
+        var toggleContainer = document.createElement('div');
+        toggleContainer.style.cssText = 'display: flex; align-items: center; gap: 12px; margin-bottom: 12px; padding: 10px 14px; background: rgba(0, 0, 0, 0.15); border-radius: 8px;';
+        var toggleLabel = document.createElement('span');
+        toggleLabel.textContent = CB_SELECT_LABELS.toggleSelectAll;
+        toggleLabel.style.cssText = 'color: white; font-size: 14px; font-weight: 500;';
+        toggleLabel.id = 'cb-select-toggle-label';
+        var toggleSwitch = document.createElement('button');
+        toggleSwitch.id = 'cb-select-toggle';
+        toggleSwitch.setAttribute('role', 'switch');
+        toggleSwitch.setAttribute('aria-checked', 'false');
+        toggleSwitch.setAttribute('aria-labelledby', 'cb-select-toggle-label');
+        toggleSwitch.tabIndex = 0;
+        toggleSwitch.style.cssText = 'position: relative; width: 48px; height: 26px; border-radius: 13px; border: 2px solid rgba(255, 255, 255, 0.3); background: rgba(255, 255, 255, 0.15); cursor: pointer; transition: all 0.3s ease; padding: 0; flex-shrink: 0;';
+        var toggleKnob = document.createElement('span');
+        toggleKnob.style.cssText = 'position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: white; transition: transform 0.3s ease; pointer-events: none;';
+        toggleSwitch.appendChild(toggleKnob);
+        var selectAllOn = false;
+        var textarea = document.createElement('textarea');
+        textarea.id = 'cb-select-names-input';
+        textarea.placeholder = 'Name1, Name2, Name3\nor\nName1\nName2\nName3';
+        textarea.setAttribute('aria-label', 'Names input for checkbox selection');
+        textarea.style.cssText = 'width: 100%; height: 160px; padding: 12px 14px; border: 2px solid rgba(255, 255, 255, 0.35); border-radius: 10px; background: rgba(255, 255, 255, 0.95); color: #1e293b; font-size: 14px; font-family: Segoe UI, Tahoma, Geneva, Verdana, sans-serif; resize: vertical; outline: none; transition: all 0.25s ease; box-shadow: 0 2px 0 rgba(0,0,0,0.04) inset; box-sizing: border-box;';
+        textarea.onfocus = function() {
+            textarea.style.borderColor = '#8ea0ff';
+            textarea.style.boxShadow = '0 0 0 4px rgba(102, 126, 234, 0.25)';
+        };
+        textarea.onblur = function() {
+            textarea.style.borderColor = 'rgba(255, 255, 255, 0.35)';
+            textarea.style.boxShadow = '0 2px 0 rgba(0,0,0,0.04) inset';
+        };
+        var confirmButton = document.createElement('button');
+        confirmButton.textContent = 'Confirm';
+        confirmButton.disabled = true;
+        confirmButton.style.cssText = 'background: linear-gradient(135deg, #28a745 0%, #20c997 100%); border: 2px solid rgba(255, 255, 255, 0.35); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; letter-spacing: 0.2px; transition: all 0.25s ease; opacity: 0.5;';
+        var updateConfirmState = function() {
+            if (selectAllOn) {
+                confirmButton.disabled = false;
+                confirmButton.style.opacity = '1';
+                confirmButton.style.cursor = 'pointer';
+                return;
+            }
+            var parsed = parseNamesInputForCheckboxSelect(textarea.value);
+            if (parsed.length > 0) {
+                confirmButton.disabled = false;
+                confirmButton.style.opacity = '1';
+                confirmButton.style.cursor = 'pointer';
+            } else {
+                confirmButton.disabled = true;
+                confirmButton.style.opacity = '0.5';
+                confirmButton.style.cursor = 'not-allowed';
+            }
+        };
+        textarea.oninput = updateConfirmState;
+        toggleSwitch.onclick = function() {
+            selectAllOn = !selectAllOn;
+            toggleSwitch.setAttribute('aria-checked', String(selectAllOn));
+            if (selectAllOn) {
+                toggleSwitch.style.background = 'rgba(107, 207, 127, 0.6)';
+                toggleSwitch.style.borderColor = 'rgba(107, 207, 127, 0.8)';
+                toggleKnob.style.transform = 'translateX(22px)';
+                textarea.disabled = true;
+                textarea.style.opacity = '0.4';
+                textarea.style.cursor = 'not-allowed';
+            } else {
+                toggleSwitch.style.background = 'rgba(255, 255, 255, 0.15)';
+                toggleSwitch.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+                toggleKnob.style.transform = 'translateX(0)';
+                textarea.disabled = false;
+                textarea.style.opacity = '1';
+                textarea.style.cursor = 'text';
+            }
+            updateConfirmState();
+        };
+        toggleSwitch.onkeydown = function(e) {
+            if (e.key === ' ' || e.key === 'Enter') {
+                e.preventDefault();
+                toggleSwitch.click();
+            }
+        };
+        confirmButton.onmouseover = function() {
+            if (!confirmButton.disabled) {
+                confirmButton.style.background = 'linear-gradient(135deg, #218838 0%, #1ea085 100%)';
+            }
+        };
+        confirmButton.onmouseout = function() {
+            confirmButton.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
+        };
+        confirmButton.onclick = function() {
+            addLogMessage('showSelectCheckboxesInputPanel: Confirm clicked, selectAll=' + selectAllOn, 'log');
+            cbSelectState.selectAllOn = selectAllOn;
+            if (!selectAllOn) {
+                var parsed = parseNamesInputForCheckboxSelect(textarea.value);
+                if (parsed.length === 0) {
+                    addLogMessage('showSelectCheckboxesInputPanel: no valid names parsed', 'warn');
+                    return;
+                }
+                cbSelectState.parsedNames = parsed;
+                addLogMessage('showSelectCheckboxesInputPanel: parsed ' + parsed.length + ' names', 'log');
+            } else {
+                cbSelectState.parsedNames = [];
+            }
+            if (modal.parentNode) {
+                document.body.removeChild(modal);
+            }
+            cbSelectState.isRunning = true;
+            beginCheckboxSelectionRun();
+        };
+        var clearButton = document.createElement('button');
+        clearButton.textContent = 'Clear All';
+        clearButton.style.cssText = 'background: rgba(255, 255, 255, 0.18); border: 2px solid rgba(255, 255, 255, 0.35); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.25s ease;';
+        clearButton.onmouseover = function() {
+            clearButton.style.background = 'rgba(255, 255, 255, 0.28)';
+        };
+        clearButton.onmouseout = function() {
+            clearButton.style.background = 'rgba(255, 255, 255, 0.18)';
+        };
+        clearButton.onclick = function() {
+            addLogMessage('showSelectCheckboxesInputPanel: Clear All clicked', 'log');
+            textarea.value = '';
+            cbSelectState.parsedNames = [];
+            updateConfirmState();
+        };
+        toggleContainer.appendChild(toggleLabel);
+        toggleContainer.appendChild(toggleSwitch);
+        var buttonContainer = document.createElement('div');
+        buttonContainer.style.cssText = 'display: flex; gap: 12px; margin-top: 20px; justify-content: flex-end;';
+        buttonContainer.appendChild(clearButton);
+        buttonContainer.appendChild(confirmButton);
+        container.appendChild(header);
+        container.appendChild(description);
+        container.appendChild(toggleContainer);
+        container.appendChild(textarea);
+        container.appendChild(buttonContainer);
+        modal.appendChild(container);
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        modal.style.pointerEvents = 'none';
+        container.style.pointerEvents = 'auto';
+        makeDraggable(container, header);
+        document.body.appendChild(modal);
+        textarea.focus();
+        addLogMessage('showSelectCheckboxesInputPanel: input panel displayed', 'log');
+    }
+
+    function openCheckboxSelectProgressPanel() {
+        addLogMessage('openCheckboxSelectProgressPanel: creating progress panel', 'log');
+        var modal = document.createElement('div');
+        modal.id = 'cb-select-progress-modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 20000; display: flex; align-items: center; justify-content: center;';
+        var container = document.createElement('div');
+        container.id = 'cb-select-progress-container';
+        container.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; width: 900px; max-width: 95%; max-height: 80vh; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); position: relative; display: flex; flex-direction: column;';
+        container.setAttribute('role', 'dialog');
+        container.setAttribute('aria-modal', 'true');
+        container.setAttribute('aria-labelledby', 'cb-select-progress-title');
+        var header = document.createElement('div');
+        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-shrink: 0;';
+        var titleContainer = document.createElement('div');
+        titleContainer.style.cssText = 'display: flex; align-items: center; gap: 12px;';
+        var title = document.createElement('h3');
+        title.id = 'cb-select-progress-title';
+        title.textContent = CB_SELECT_LABELS.progressTitle;
+        title.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600;';
+        var statusBadge = document.createElement('span');
+        statusBadge.id = 'cb-select-status-badge';
+        statusBadge.textContent = 'In Progress';
+        statusBadge.style.cssText = 'background: rgba(255, 255, 255, 0.3); color: #ffd93d; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 12px;';
+        titleContainer.appendChild(title);
+        titleContainer.appendChild(statusBadge);
+        var closeButton = document.createElement('button');
+        closeButton.innerHTML = '\u2715';
+        closeButton.setAttribute('aria-label', 'Close and stop');
+        closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
+        closeButton.onmouseover = function() {
+            closeButton.style.background = 'rgba(255, 67, 54, 0.8)';
+        };
+        closeButton.onmouseout = function() {
+            closeButton.style.background = 'rgba(255, 255, 255, 0.2)';
+        };
+        closeButton.onclick = function() {
+            addLogMessage('openCheckboxSelectProgressPanel: closed by user', 'warn');
+            if (modal.parentNode) {
+                document.body.removeChild(modal);
+            }
+            stopCheckboxSelect();
+        };
+        header.appendChild(titleContainer);
+        header.appendChild(closeButton);
+        var panelsContainer = document.createElement('div');
+        panelsContainer.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 16px; flex: 1; min-height: 0; overflow: hidden;';
+        var leftPanel = createSubpanel('Scanned Log Entries', 'cb-select-left-panel', 'cb-select-left-search');
+        var rightPanel = createSubpanel('Checkbox Selection Status', 'cb-select-right-panel', 'cb-select-right-search');
+        panelsContainer.appendChild(leftPanel);
+        panelsContainer.appendChild(rightPanel);
+        var summaryFooter = document.createElement('div');
+        summaryFooter.id = 'cb-select-summary-footer';
+        summaryFooter.setAttribute('aria-label', 'Selection summary');
+        summaryFooter.style.cssText = 'display: flex; justify-content: space-around; align-items: center; padding: 10px 16px; background: rgba(0, 0, 0, 0.2); border-radius: 8px; margin-top: 12px; flex-shrink: 0;';
+        var summaryItems = [
+            { id: 'cb-select-summary-total', label: 'Total', value: '0' },
+            { id: 'cb-select-summary-selected', label: 'Selected', value: '0' },
+            { id: 'cb-select-summary-already', label: 'Already', value: '0' },
+            { id: 'cb-select-summary-notfound', label: 'Not Found', value: '0' },
+            { id: 'cb-select-summary-failures', label: 'Failed', value: '0' },
+            { id: 'cb-select-summary-pending', label: 'Pending', value: '0' },
+            { id: 'cb-select-summary-percent', label: 'Progress', value: '0%' }
+        ];
+        for (var si = 0; si < summaryItems.length; si++) {
+            var sItem = document.createElement('div');
+            sItem.style.cssText = 'text-align: center;';
+            var vSpan = document.createElement('span');
+            vSpan.id = summaryItems[si].id;
+            vSpan.textContent = summaryItems[si].value;
+            vSpan.style.cssText = 'display: block; color: white; font-size: 16px; font-weight: 700;';
+            var lSpan = document.createElement('span');
+            lSpan.textContent = summaryItems[si].label;
+            lSpan.style.cssText = 'display: block; color: rgba(255, 255, 255, 0.6); font-size: 11px; font-weight: 500; margin-top: 2px;';
+            sItem.appendChild(vSpan);
+            sItem.appendChild(lSpan);
+            summaryFooter.appendChild(sItem);
+        }
+        var ariaLiveRegion = document.createElement('div');
+        ariaLiveRegion.id = 'cb-select-aria-live';
+        ariaLiveRegion.setAttribute('aria-live', 'polite');
+        ariaLiveRegion.setAttribute('aria-atomic', 'true');
+        ariaLiveRegion.style.cssText = 'position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;';
+        container.appendChild(header);
+        container.appendChild(panelsContainer);
+        container.appendChild(summaryFooter);
+        container.appendChild(ariaLiveRegion);
+        modal.appendChild(container);
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        modal.style.pointerEvents = 'none';
+        container.style.pointerEvents = 'auto';
+        makeDraggable(container, header);
+        document.body.appendChild(modal);
+        closeButton.focus();
+        addLogMessage('openCheckboxSelectProgressPanel: displayed', 'log');
+    }
+
+    function cbStripEmailAndCleanName(rawName) {
+        if (!rawName) {
+            return '';
+        }
+        var cleaned = rawName.replace(/\S+@\S+\.\S+/g, '').trim();
+        cleaned = cleaned.replace(/\s+/g, ' ').trim();
+        return cleaned;
+    }
+
+    function mapRowToNameAndCheckbox(rowEl) {
+        try {
+            var cells = rowEl.querySelectorAll(CB_SELECT_SELECTORS.cell);
+            if (cells.length <= CB_SELECT_SELECTORS.nameCellIndex) {
+                return null;
+            }
+            var nameCell = cells[CB_SELECT_SELECTORS.nameCellIndex];
+            var extractedName = null;
+            var primaryEl = nameCell.querySelector(CB_SELECT_SELECTORS.namePrimary);
+            if (primaryEl) {
+                extractedName = primaryEl.textContent.trim().replace(/\s+/g, ' ');
+            }
+            if (!extractedName) {
+                var fallbackEl = nameCell.querySelector(CB_SELECT_SELECTORS.nameFallback);
+                if (fallbackEl) {
+                    extractedName = fallbackEl.textContent.trim().replace(/\s+/g, ' ');
+                }
+            }
+            if (!extractedName) {
+                return null;
+            }
+            var cleanedName = cbStripEmailAndCleanName(extractedName);
+            if (!cleanedName) {
+                return null;
+            }
+            var checkboxEl = null;
+            if (cells.length > CB_SELECT_SELECTORS.checkboxCellIndex) {
+                var cbCell = cells[CB_SELECT_SELECTORS.checkboxCellIndex];
+                checkboxEl = cbCell.querySelector(CB_SELECT_SELECTORS.checkboxInCell);
+            }
+            var isChecked = false;
+            if (checkboxEl) {
+                var ariaChecked = checkboxEl.getAttribute('aria-checked');
+                if (ariaChecked === 'true') {
+                    isChecked = true;
+                } else if (checkboxEl.classList && checkboxEl.classList.contains('checkbox-icon--selected')) {
+                    isChecked = true;
+                }
+            }
+            return {
+                display: cleanedName,
+                pairKey: normalizeFirstLastPair(cleanedName),
+                checkboxEl: checkboxEl,
+                checked: isChecked,
+                rowEl: rowEl
+            };
+        } catch (err) {
+            return null;
+        }
+    }
+
+    function cbScanVisibleRows(gridTable) {
+        var rows = gridTable.querySelectorAll(CB_SELECT_SELECTORS.row);
+        var leftPanel = document.getElementById('cb-select-left-panel');
+        var fragment = document.createDocumentFragment();
+        var newCount = 0;
+        for (var ri = 0; ri < rows.length; ri++) {
+            var row = rows[ri];
+            if (row.getAttribute('role') === 'columnheader') {
+                continue;
+            }
+            var mapped = mapRowToNameAndCheckbox(row);
+            if (!mapped) {
+                continue;
+            }
+            var normKey = elogNormalizeName(mapped.display);
+            if (cbSelectState.seenNormalizedNames.has(normKey)) {
+                continue;
+            }
+            cbSelectState.seenNormalizedNames.add(normKey);
+            cbSelectState.scannedRows.push(mapped);
+            newCount++;
+            cbSelectState.leftPanelRowIndex++;
+            if (leftPanel) {
+                var item = createListItem(mapped.display, null, null, cbSelectState.leftPanelRowIndex);
+                fragment.appendChild(item);
+            }
+        }
+        if (leftPanel && fragment.childNodes.length > 0) {
+            leftPanel.appendChild(fragment);
+        }
+        return newCount;
+    }
+
+    function cbGetRenderedRowCount(gridTable) {
+        var rows = gridTable.querySelectorAll(CB_SELECT_SELECTORS.row);
+        var count = 0;
+        for (var i = 0; i < rows.length; i++) {
+            if (rows[i].getAttribute('role') !== 'columnheader') {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    function cbGetRenderedLastRowKey(gridTable) {
+        var rows = gridTable.querySelectorAll(CB_SELECT_SELECTORS.row);
+        var lastDataRow = null;
+        for (var i = rows.length - 1; i >= 0; i--) {
+            if (rows[i].getAttribute('role') !== 'columnheader') {
+                lastDataRow = rows[i];
+                break;
+            }
+        }
+        if (!lastDataRow) {
+            return '';
+        }
+        var cells = lastDataRow.querySelectorAll(CB_SELECT_SELECTORS.cell);
+        if (cells.length > 0) {
+            var txt = cells[0].textContent.trim();
+            if (txt) {
+                return txt;
+            }
+        }
+        var hash = 0;
+        var content = lastDataRow.textContent || '';
+        for (var ci = 0; ci < content.length; ci++) {
+            hash = ((hash << 5) - hash) + content.charCodeAt(ci);
+            hash = hash & hash;
+        }
+        return 'hash_' + hash;
+    }
+
+    function cbAwaitSettle(gridTable) {
+        return new Promise(function(resolve) {
+            var resolved = false;
+            var observer = null;
+            var timeoutId = setTimeout(function() {
+                if (!resolved) {
+                    resolved = true;
+                    if (observer) {
+                        observer.disconnect();
+                        var idx = cbSelectState.observers.indexOf(observer);
+                        if (idx > -1) {
+                            cbSelectState.observers.splice(idx, 1);
+                        }
+                    }
+                    resolve();
+                }
+            }, CB_SELECT_TIMEOUTS.scanSettleMs);
+            cbSelectState.timeouts.push(timeoutId);
+            if (gridTable) {
+                observer = new MutationObserver(function() {
+                    if (!resolved) {
+                        resolved = true;
+                        clearTimeout(timeoutId);
+                        observer.disconnect();
+                        var idx = cbSelectState.observers.indexOf(observer);
+                        if (idx > -1) {
+                            cbSelectState.observers.splice(idx, 1);
+                        }
+                        resolve();
+                    }
+                });
+                observer.observe(gridTable, { childList: true, subtree: true });
+                cbSelectState.observers.push(observer);
+            }
+        });
+    }
+
+    function cbObserveUserScrollPause(container) {
+        if (!container || cbSelectState.userScrollHandler) {
+            return;
+        }
+        cbSelectState.userScrollHandler = function() {
+            var timeSinceAuto = Date.now() - cbSelectState.lastAutoScrollTime;
+            if (timeSinceAuto > 50 && !cbSelectState.userScrollPaused) {
+                cbSelectState.userScrollPaused = true;
+                var resumeTimeout = setTimeout(function() {
+                    cbSelectState.userScrollPaused = false;
+                }, 800);
+                cbSelectState.timeouts.push(resumeTimeout);
+            }
+        };
+        container.addEventListener('scroll', cbSelectState.userScrollHandler);
+        cbSelectState.eventListeners.push({ element: container, type: 'scroll', handler: cbSelectState.userScrollHandler });
+    }
+
+    function enqueueTargets(selectAllOn, parsedNames, discoveredRows) {
+        addLogMessage('enqueueTargets: selectAll=' + selectAllOn + ' parsed=' + parsedNames.length + ' discovered=' + discoveredRows.length, 'log');
+        var targets = [];
+        var seenKeys = new Set();
+        if (selectAllOn) {
+            for (var di = 0; di < discoveredRows.length; di++) {
+                var row = discoveredRows[di];
+                if (seenKeys.has(row.pairKey)) {
+                    continue;
+                }
+                seenKeys.add(row.pairKey);
+                targets.push({
+                    display: row.display,
+                    pairKey: row.pairKey,
+                    status: CB_SELECT_LABELS.statusPending,
+                    checkboxEl: row.checkboxEl,
+                    checked: row.checked,
+                    rowEl: row.rowEl
+                });
+            }
+        } else {
+            var discoveredMap = new Map();
+            for (var ri = 0; ri < discoveredRows.length; ri++) {
+                if (!discoveredMap.has(discoveredRows[ri].pairKey)) {
+                    discoveredMap.set(discoveredRows[ri].pairKey, discoveredRows[ri]);
+                }
+            }
+            for (var pi = 0; pi < parsedNames.length; pi++) {
+                var parsed = parsedNames[pi];
+                if (seenKeys.has(parsed.pairKey)) {
+                    continue;
+                }
+                seenKeys.add(parsed.pairKey);
+                var match = discoveredMap.get(parsed.pairKey);
+                if (match) {
+                    targets.push({
+                        display: parsed.display,
+                        pairKey: parsed.pairKey,
+                        status: CB_SELECT_LABELS.statusPending,
+                        checkboxEl: match.checkboxEl,
+                        checked: match.checked,
+                        rowEl: match.rowEl
+                    });
+                } else {
+                    targets.push({
+                        display: parsed.display,
+                        pairKey: parsed.pairKey,
+                        status: CB_SELECT_LABELS.statusNotInTable,
+                        checkboxEl: null,
+                        checked: false,
+                        rowEl: null
+                    });
+                }
+            }
+        }
+        addLogMessage('enqueueTargets: built ' + targets.length + ' targets', 'log');
+        return targets;
+    }
+
+    function selectCheckboxForRow(target, attempt, callback) {
+        if (!target.checkboxEl || !target.checkboxEl.isConnected) {
+            callback(false);
+            return;
+        }
+        if (target.checkboxEl.disabled || target.checkboxEl.getAttribute('aria-disabled') === 'true') {
+            callback(false);
+            return;
+        }
+        try {
+            target.checkboxEl.click();
+        } catch (err) {
+            addLogMessage('selectCheckboxForRow: click error: ' + err, 'error');
+            if (attempt < CB_SELECT_RETRY.clickRetries) {
+                var tid = setTimeout(function() {
+                    selectCheckboxForRow(target, attempt + 1, callback);
+                }, CB_SELECT_TIMEOUTS.clickSettleMs);
+                cbSelectState.timeouts.push(tid);
+                return;
+            }
+            callback(false);
+            return;
+        }
+        var verifyTid = setTimeout(function() {
+            var ariaChecked = target.checkboxEl.getAttribute('aria-checked');
+            if (ariaChecked === 'true') {
+                callback(true);
+                return;
+            }
+            if (target.checkboxEl.classList && target.checkboxEl.classList.contains('checkbox-icon--selected')) {
+                callback(true);
+                return;
+            }
+            if (attempt < CB_SELECT_RETRY.clickRetries) {
+                selectCheckboxForRow(target, attempt + 1, callback);
+                return;
+            }
+            callback(false);
+        }, CB_SELECT_TIMEOUTS.verifySettleMs);
+        cbSelectState.timeouts.push(verifyTid);
+    }
+
+    function cbUpdateRightPanelStatus(pairKey, newStatus) {
+        var rightPanel = document.getElementById('cb-select-right-panel');
+        if (!rightPanel) {
+            return;
+        }
+        var items = rightPanel.querySelectorAll('.' + ELOG_CSS_CLASSNAMES.listItem);
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            var itemPairKey = item.getAttribute('data-pairkey');
+            if (itemPairKey === pairKey) {
+                var badge = item.querySelector('.elog-status-badge');
+                if (badge) {
+                    badge.textContent = newStatus;
+                    var badgeColor = 'rgba(255, 255, 255, 0.7)';
+                    var badgeBg = 'rgba(255, 255, 255, 0.1)';
+                    if (newStatus === CB_SELECT_LABELS.statusPending) {
+                        badgeColor = '#ffd93d';
+                        badgeBg = 'rgba(255, 217, 61, 0.2)';
+                    } else if (newStatus === CB_SELECT_LABELS.statusSelected) {
+                        badgeColor = '#6bcf7f';
+                        badgeBg = 'rgba(107, 207, 127, 0.2)';
+                    } else if (newStatus === CB_SELECT_LABELS.statusAlready) {
+                        badgeColor = '#64b5f6';
+                        badgeBg = 'rgba(100, 181, 246, 0.2)';
+                    } else if (newStatus === CB_SELECT_LABELS.statusNotInTable) {
+                        badgeColor = '#ff6b6b';
+                        badgeBg = 'rgba(255, 107, 107, 0.2)';
+                    } else if (newStatus === CB_SELECT_LABELS.statusFailed) {
+                        badgeColor = '#ff6b6b';
+                        badgeBg = 'rgba(255, 107, 107, 0.2)';
+                    } else if (newStatus === CB_SELECT_LABELS.statusStopped) {
+                        badgeColor = '#ffa500';
+                        badgeBg = 'rgba(255, 165, 0, 0.2)';
+                    }
+                    badge.style.color = badgeColor;
+                    badge.style.background = badgeBg;
+                }
+                break;
+            }
+        }
+    }
+
+    function cbUpdateRightPanelSummary() {
+        var c = cbSelectState.counters;
+        var el1 = document.getElementById('cb-select-summary-total');
+        var el2 = document.getElementById('cb-select-summary-selected');
+        var el3 = document.getElementById('cb-select-summary-already');
+        var el4 = document.getElementById('cb-select-summary-notfound');
+        var el5 = document.getElementById('cb-select-summary-failures');
+        var el6 = document.getElementById('cb-select-summary-pending');
+        var el7 = document.getElementById('cb-select-summary-percent');
+        if (el1) {
+            el1.textContent = String(c.total);
+        }
+        if (el2) {
+            el2.textContent = String(c.selected);
+        }
+        if (el3) {
+            el3.textContent = String(c.alreadyChecked);
+        }
+        if (el4) {
+            el4.textContent = String(c.notFound);
+        }
+        if (el5) {
+            el5.textContent = String(c.failures);
+        }
+        if (el6) {
+            el6.textContent = String(c.pending);
+        }
+        if (el7) {
+            var processed = c.selected + c.alreadyChecked + c.notFound + c.failures;
+            var pct = c.total > 0 ? Math.round((processed / c.total) * 100) : 0;
+            el7.textContent = pct + '%';
+        }
+    }
+
+    function cbUpdateAriaLive(message) {
+        var lr = document.getElementById('cb-select-aria-live');
+        if (lr) {
+            lr.textContent = message;
+        }
+    }
+
+    function cbSetAriaBusyOn() {
+        var target = document.querySelector(CB_SELECT_ATTRS.ariaBusyTarget);
+        if (target) {
+            cbSelectState.prevAriaBusy = target.getAttribute(CB_SELECT_ATTRS.ariaBusyAttr);
+            target.setAttribute(CB_SELECT_ATTRS.ariaBusyAttr, 'true');
+        }
+    }
+
+    function cbSetAriaBusyOff() {
+        var target = document.querySelector(CB_SELECT_ATTRS.ariaBusyTarget);
+        if (target) {
+            if (cbSelectState.prevAriaBusy !== null) {
+                target.setAttribute(CB_SELECT_ATTRS.ariaBusyAttr, cbSelectState.prevAriaBusy);
+            } else {
+                target.removeAttribute(CB_SELECT_ATTRS.ariaBusyAttr);
+            }
+            cbSelectState.prevAriaBusy = null;
+        }
+    }
+
+    function beginCheckboxSelectionRun() {
+        addLogMessage('beginCheckboxSelectionRun: starting scan', 'log');
+        openCheckboxSelectProgressPanel();
+        cbSetAriaBusyOn();
+        cbUpdateAriaLive('Scan started');
+        if (!cbSelectState.selectAllOn) {
+            var rightPanel = document.getElementById('cb-select-right-panel');
+            if (rightPanel) {
+                rightPanel.innerHTML = '';
+                for (var ni = 0; ni < cbSelectState.parsedNames.length; ni++) {
+                    var nameObj = cbSelectState.parsedNames[ni];
+                    var item = createListItem(nameObj.display, CB_SELECT_LABELS.statusPending, 'pending', ni + 1);
+                    item.setAttribute('data-pairkey', nameObj.pairKey);
+                    rightPanel.appendChild(item);
+                }
+            }
+            cbSelectState.counters.total = cbSelectState.parsedNames.length;
+            cbSelectState.counters.pending = cbSelectState.parsedNames.length;
+            cbUpdateRightPanelSummary();
+        }
+        var gridTable = document.querySelector(CB_SELECT_SELECTORS.gridTable);
+        if (!gridTable) {
+            addLogMessage('beginCheckboxSelectionRun: grid table not found', 'error');
+            cbSetAriaBusyOff();
+            var badge = document.getElementById('cb-select-status-badge');
+            if (badge) {
+                badge.textContent = 'Error';
+                badge.style.color = '#ff6b6b';
+            }
+            cbUpdateAriaLive('Grid table not found');
+            return;
+        }
+        var scrollContainer = findScrollableContainer(gridTable);
+        if (!scrollContainer) {
+            addLogMessage('beginCheckboxSelectionRun: scrollable container not found', 'error');
+            cbSetAriaBusyOff();
+            return;
+        }
+        cbSelectState.scrollContainer = scrollContainer;
+        cbSelectState.prevScrollTop = scrollContainer.scrollTop;
+        cbSelectState.seenNormalizedNames = new Set();
+        cbSelectState.scannedRows = [];
+        cbSelectState.leftPanelRowIndex = 0;
+        cbObserveUserScrollPause(scrollContainer);
+        var startTime = Date.now();
+        var noProgress = 0;
+        cbScanVisibleRows(gridTable);
+        function scrollLoop() {
+            if (cbSelectState.stopRequested || !cbSelectState.isRunning) {
+                finishScan('stopped');
+                return;
+            }
+            if (Date.now() - startTime > CB_SELECT_TIMEOUTS.maxScanDurationMs) {
+                finishScan('timeout');
+                return;
+            }
+            if (cbSelectState.userScrollPaused) {
+                var pt = setTimeout(scrollLoop, 100);
+                cbSelectState.timeouts.push(pt);
+                return;
+            }
+            var priorKey = cbGetRenderedLastRowKey(gridTable);
+            var priorCount = cbGetRenderedRowCount(gridTable);
+            var currTop = scrollContainer.scrollTop;
+            var maxScroll = scrollContainer.scrollHeight - scrollContainer.clientHeight;
+            var newTop = Math.min(currTop + CB_SELECT_SCROLL.stepPx, maxScroll);
+            cbSelectState.lastAutoScrollTime = Date.now();
+            scrollContainer.scrollTo({ top: newTop, behavior: 'auto' });
+            cbAwaitSettle(gridTable).then(function() {
+                var attempts = 0;
+                function attemptScan() {
+                    var rc = cbGetRenderedRowCount(gridTable);
+                    if (rc === 0 && attempts < CB_SELECT_RETRY.scanEmptyRetries) {
+                        attempts++;
+                        var rt = setTimeout(attemptScan, CB_SELECT_TIMEOUTS.scanSettleMs);
+                        cbSelectState.timeouts.push(rt);
+                        return;
+                    }
+                    cbScanVisibleRows(gridTable);
+                    var currKey = cbGetRenderedLastRowKey(gridTable);
+                    var currCount = cbGetRenderedRowCount(gridTable);
+                    if (currKey === priorKey && currCount === priorCount) {
+                        noProgress++;
+                    } else {
+                        noProgress = 0;
+                    }
+                    var atBottom = scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 1;
+                    if (atBottom && noProgress >= 1) {
+                        finishScan('endReached');
+                        return;
+                    }
+                    if (noProgress >= CB_SELECT_RETRY.maxNoProgressIterations) {
+                        finishScan('noProgress');
+                        return;
+                    }
+                    if (typeof requestIdleCallback === 'function') {
+                        var icbId = requestIdleCallback(function() {
+                            var idx = cbSelectState.idleCallbackIds.indexOf(icbId);
+                            if (idx > -1) {
+                                cbSelectState.idleCallbackIds.splice(idx, 1);
+                            }
+                            scrollLoop();
+                        }, { timeout: CB_SELECT_TIMEOUTS.idleBetweenBatchesMs * 2 });
+                        cbSelectState.idleCallbackIds.push(icbId);
+                    } else {
+                        var it = setTimeout(scrollLoop, CB_SELECT_TIMEOUTS.idleBetweenBatchesMs);
+                        cbSelectState.timeouts.push(it);
+                    }
+                }
+                attemptScan();
+            });
+        }
+        function finishScan(reason) {
+            addLogMessage('beginCheckboxSelectionRun: scan done reason=' + reason + ' scanned=' + cbSelectState.scannedRows.length, 'log');
+            cbUpdateAriaLive('Scan complete, found ' + cbSelectState.scannedRows.length + ' rows');
+            var targets = enqueueTargets(cbSelectState.selectAllOn, cbSelectState.parsedNames, cbSelectState.scannedRows);
+            cbSelectState.targets = targets;
+            cbSelectState.targetIndex = 0;
+            if (cbSelectState.selectAllOn) {
+                var rPanel = document.getElementById('cb-select-right-panel');
+                if (rPanel) {
+                    rPanel.innerHTML = '';
+                    for (var ti = 0; ti < targets.length; ti++) {
+                        var tItem = createListItem(targets[ti].display, CB_SELECT_LABELS.statusPending, 'pending', ti + 1);
+                        tItem.setAttribute('data-pairkey', targets[ti].pairKey);
+                        rPanel.appendChild(tItem);
+                    }
+                }
+            } else {
+                for (var ti2 = 0; ti2 < targets.length; ti2++) {
+                    if (targets[ti2].status === CB_SELECT_LABELS.statusNotInTable) {
+                        cbUpdateRightPanelStatus(targets[ti2].pairKey, CB_SELECT_LABELS.statusNotInTable);
+                    }
+                }
+            }
+            var pendingCount = 0;
+            var notFoundCount = 0;
+            for (var ci = 0; ci < targets.length; ci++) {
+                if (targets[ci].status === CB_SELECT_LABELS.statusPending) {
+                    pendingCount++;
+                } else if (targets[ci].status === CB_SELECT_LABELS.statusNotInTable) {
+                    notFoundCount++;
+                }
+            }
+            cbSelectState.counters.total = targets.length;
+            cbSelectState.counters.pending = pendingCount;
+            cbSelectState.counters.notFound = notFoundCount;
+            cbUpdateRightPanelSummary();
+            if (cbSelectState.scrollContainer && cbSelectState.prevScrollTop !== undefined) {
+                cbSelectState.scrollContainer.scrollTo({ top: cbSelectState.prevScrollTop, behavior: 'auto' });
+            }
+            if (pendingCount > 0) {
+                addLogMessage('beginCheckboxSelectionRun: starting selection for ' + pendingCount + ' entries', 'log');
+                cbUpdateAriaLive('Starting checkbox selection for ' + pendingCount + ' entries');
+                processNextCheckboxTarget();
+            } else {
+                finishRun();
+            }
+        }
+        function processNextCheckboxTarget() {
+            if (cbSelectState.stopRequested || !cbSelectState.isRunning) {
+                markRemainingStopped();
+                finishRun();
+                return;
+            }
+            var target = null;
+            while (cbSelectState.targetIndex < cbSelectState.targets.length) {
+                var candidate = cbSelectState.targets[cbSelectState.targetIndex];
+                if (candidate.status === CB_SELECT_LABELS.statusPending) {
+                    target = candidate;
+                    break;
+                }
+                cbSelectState.targetIndex++;
+            }
+            if (!target) {
+                finishRun();
+                return;
+            }
+            if (target.checked || (target.checkboxEl && target.checkboxEl.getAttribute('aria-checked') === 'true')) {
+                target.status = CB_SELECT_LABELS.statusAlready;
+                cbSelectState.counters.alreadyChecked++;
+                cbSelectState.counters.pending--;
+                cbUpdateRightPanelStatus(target.pairKey, CB_SELECT_LABELS.statusAlready);
+                cbUpdateRightPanelSummary();
+                cbSelectState.targetIndex++;
+                var tid1 = setTimeout(processNextCheckboxTarget, 20);
+                cbSelectState.timeouts.push(tid1);
+                return;
+            }
+            selectCheckboxForRow(target, 0, function(success) {
+                if (success) {
+                    target.status = CB_SELECT_LABELS.statusSelected;
+                    cbSelectState.counters.selected++;
+                    cbSelectState.counters.pending--;
+                    cbUpdateRightPanelStatus(target.pairKey, CB_SELECT_LABELS.statusSelected);
+                } else {
+                    target.status = CB_SELECT_LABELS.statusFailed;
+                    cbSelectState.counters.failures++;
+                    cbSelectState.counters.pending--;
+                    cbUpdateRightPanelStatus(target.pairKey, CB_SELECT_LABELS.statusFailed);
+                }
+                cbUpdateRightPanelSummary();
+                cbSelectState.targetIndex++;
+                var tid2 = setTimeout(processNextCheckboxTarget, CB_SELECT_TIMEOUTS.clickSettleMs);
+                cbSelectState.timeouts.push(tid2);
+            });
+        }
+        function markRemainingStopped() {
+            for (var si2 = cbSelectState.targetIndex; si2 < cbSelectState.targets.length; si2++) {
+                if (cbSelectState.targets[si2].status === CB_SELECT_LABELS.statusPending) {
+                    cbSelectState.targets[si2].status = CB_SELECT_LABELS.statusStopped;
+                    cbSelectState.counters.pending--;
+                    cbUpdateRightPanelStatus(cbSelectState.targets[si2].pairKey, CB_SELECT_LABELS.statusStopped);
+                }
+            }
+            cbUpdateRightPanelSummary();
+        }
+        function finishRun() {
+            addLogMessage('beginCheckboxSelectionRun: finished - selected=' + cbSelectState.counters.selected + ' already=' + cbSelectState.counters.alreadyChecked + ' failed=' + cbSelectState.counters.failures + ' notFound=' + cbSelectState.counters.notFound, 'log');
+            cbSetAriaBusyOff();
+            var badge = document.getElementById('cb-select-status-badge');
+            if (badge) {
+                badge.textContent = CB_SELECT_LABELS.done;
+                badge.style.color = '#6bcf7f';
+            }
+            var titleEl = document.getElementById('cb-select-progress-title');
+            if (titleEl) {
+                titleEl.textContent = CB_SELECT_LABELS.progressTitle + ' - Complete';
+            }
+            cbUpdateAriaLive('Selection complete. Selected: ' + cbSelectState.counters.selected + ', Already checked: ' + cbSelectState.counters.alreadyChecked + ', Not found: ' + cbSelectState.counters.notFound + ', Failed: ' + cbSelectState.counters.failures);
+            cbSelectState.isRunning = false;
+        }
+        var initTimeout = setTimeout(scrollLoop, CB_SELECT_TIMEOUTS.idleBetweenBatchesMs);
+        cbSelectState.timeouts.push(initTimeout);
+    }
+
+    function stopCheckboxSelect() {
+        addLogMessage('stopCheckboxSelect: stopping', 'log');
+        cbSelectState.isRunning = false;
+        cbSelectState.stopRequested = true;
+        for (var i = 0; i < cbSelectState.idleCallbackIds.length; i++) {
+            if (typeof cancelIdleCallback === 'function') {
+                cancelIdleCallback(cbSelectState.idleCallbackIds[i]);
+            }
+        }
+        cbSelectState.idleCallbackIds = [];
+        for (var i2 = 0; i2 < cbSelectState.rafIds.length; i2++) {
+            cancelAnimationFrame(cbSelectState.rafIds[i2]);
+        }
+        cbSelectState.rafIds = [];
+        for (var i3 = 0; i3 < cbSelectState.observers.length; i3++) {
+            try {
+                cbSelectState.observers[i3].disconnect();
+            } catch (e) {
+                addLogMessage('stopCheckboxSelect: error disconnecting observer: ' + e, 'error');
+            }
+        }
+        cbSelectState.observers = [];
+        for (var i4 = 0; i4 < cbSelectState.timeouts.length; i4++) {
+            try {
+                clearTimeout(cbSelectState.timeouts[i4]);
+            } catch (e2) {
+                addLogMessage('stopCheckboxSelect: error clearing timeout: ' + e2, 'error');
+            }
+        }
+        cbSelectState.timeouts = [];
+        for (var i5 = 0; i5 < cbSelectState.intervals.length; i5++) {
+            try {
+                clearInterval(cbSelectState.intervals[i5]);
+            } catch (e3) {
+                addLogMessage('stopCheckboxSelect: error clearing interval: ' + e3, 'error');
+            }
+        }
+        cbSelectState.intervals = [];
+        for (var i6 = 0; i6 < cbSelectState.eventListeners.length; i6++) {
+            try {
+                var l = cbSelectState.eventListeners[i6];
+                l.element.removeEventListener(l.type, l.handler);
+            } catch (e4) {
+                addLogMessage('stopCheckboxSelect: error removing listener: ' + e4, 'error');
+            }
+        }
+        cbSelectState.eventListeners = [];
+        cbSetAriaBusyOff();
+        var inputModal = document.getElementById('cb-select-input-modal');
+        if (inputModal && inputModal.parentNode) {
+            inputModal.parentNode.removeChild(inputModal);
+        }
+        var progressModal = document.getElementById('cb-select-progress-modal');
+        if (progressModal && progressModal.parentNode) {
+            progressModal.parentNode.removeChild(progressModal);
+        }
+        var warningModal = document.getElementById('cb-select-warning-modal');
+        if (warningModal && warningModal.parentNode) {
+            warningModal.parentNode.removeChild(warningModal);
+        }
+        if (cbSelectState.focusReturnElement) {
+            cbSelectState.focusReturnElement.focus();
+        }
+        resetCbSelectState();
+        addLogMessage('stopCheckboxSelect: cleanup complete', 'log');
+    }
+
 
     //==========================
     // SHARED GUI AND PANEL FUNCTIONS
@@ -6831,22 +8090,25 @@ function showResponsibilitiesProgressPanel(rolesData) {
         background: rgba(255, 255, 255, 0.05);
     `;
 
-        for (let i = 1; i <= 5; i++) {
+        for (let i = 1; i <= 6; i++) {
             const button = document.createElement('button');
             if (i === 1) {
                 button.textContent = 'Add Signatures';
             } else if (i === 2) {
                 button.textContent = 'Add Training Log Staff Entries';
                 button.id = 'elog-staff-entries-btn';
-            } else if (i === 5) {
-                button.textContent = 'Set Role Responsibilities';
-                button.id = 'resp-set-btn';
             } else if (i === 3) {
                 button.textContent = CLEAN_LABELS.featureButton;
                 button.id = 'clean-resp-btn';
             } else if (i === 4) {
                 button.textContent = DOA_LABELS.featureButton;
                 button.id = 'doa-staff-entries-btn';
+            } else if (i === 5) {
+                button.textContent = 'Set Role Responsibilities';
+                button.id = 'resp-set-btn';
+            } else if (i === 6) {
+                button.textContent = CB_SELECT_LABELS.featureButton;
+                button.id = 'cb-select-btn';
             }
             button.style.cssText = `
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -6881,18 +8143,23 @@ function showResponsibilitiesProgressPanel(rolesData) {
                 };
             } else if (i === 3) {
                 button.onclick = () => {
-                    console.log('Set Responsibilities button clicked');
-                    setResponsibilitiesInit();
-                };
-            } else if (i === 4) {
-                button.onclick = () => {
                     console.log('Clean Responsibility button clicked');
                     cleanResponsibilityInit();
                 };
-            } else if (i === 5) {
+            } else if (i === 4) {
                 button.onclick = () => {
                     console.log('Add DoA Log Staff Entries button clicked');
                     addDoALogStaffEntriesInit();
+                };
+            } else if (i === 5) {
+                button.onclick = () => {
+                    console.log('Set Responsibilities button clicked');
+                    setResponsibilitiesInit();
+                };
+            } else if (i === 6) {
+                button.onclick = () => {
+                    console.log('Select Checkboxes button clicked');
+                    selectCheckboxesInit();
                 };
             }
 
@@ -8546,7 +9813,7 @@ function showResponsibilitiesProgressPanel(rolesData) {
             }
         });
 
-        console.log('Florence Basic Automator loaded. Press F2 to toggle GUI.');
+        console.log('Florence Automator loaded. Press F2 to toggle GUI.');
     }
 
     if (document.readyState === "loading") {
