@@ -7317,8 +7317,20 @@ function showResponsibilitiesProgressPanel(rolesData) {
         header.appendChild(titleEl);
         header.appendChild(closeButton);
         var description = document.createElement('p');
-        description.textContent = 'Enter names to select their checkboxes in the Document Log. Separate names with commas or place each name on a new line. Use the Select All toggle to select all checkboxes instead.';
         description.style.cssText = 'color: rgba(255, 255, 255, 0.9); margin: 0 0 12px 0; font-size: 14px; line-height: 1.4;';
+        description.append("Rules:"); 
+        description.appendChild(document.createElement('br'));
+        var lines = [
+            'Enter names to select their checkboxes in the Document Log. Separate names with commas or place each name on a new line.',
+            'Use the Select All toggle to select all checkboxes instead.',
+            'After clicking Confirm, do not click anywhere else on the page, as this will impact the process.'
+        ];
+        for (var i = 0; i < lines.length; i++) {
+            description.appendChild(document.createTextNode('• ' + lines[i]));
+            if (i < lines.length - 1) {
+                description.appendChild(document.createElement('br'));
+            }
+        }
         var toggleContainer = document.createElement('div');
         toggleContainer.style.cssText = 'display: flex; align-items: center; gap: 12px; margin-bottom: 12px; padding: 10px 14px; background: rgba(0, 0, 0, 0.15); border-radius: 8px;';
         var toggleLabel = document.createElement('span');
@@ -8001,7 +8013,13 @@ function showResponsibilitiesProgressPanel(rolesData) {
         cbObserveUserScrollPause(scrollContainer);
         var startTime = Date.now();
         var noProgress = 0;
-        cbScanVisibleRows(gridTable);
+        var prevScrollHeight = scrollContainer.scrollHeight;
+        function initialScan() {
+            cbScanVisibleRows(gridTable);
+            prevScrollHeight = scrollContainer.scrollHeight;
+            var initScrollTimeout = setTimeout(scrollLoop, CB_SELECT_TIMEOUTS.idleBetweenBatchesMs);
+            cbSelectState.timeouts.push(initScrollTimeout);
+        }
         function scrollLoop() {
             if (cbSelectState.stopRequested || !cbSelectState.isRunning) {
                 finishScan('stopped');
@@ -8015,6 +8033,12 @@ function showResponsibilitiesProgressPanel(rolesData) {
                 var pt = setTimeout(scrollLoop, 100);
                 cbSelectState.timeouts.push(pt);
                 return;
+            }
+            var currentScrollHeight = scrollContainer.scrollHeight;
+            if (currentScrollHeight > prevScrollHeight) {
+                addLogMessage('beginCheckboxSelectionRun: scrollHeight grew from ' + prevScrollHeight + ' to ' + currentScrollHeight + ', resetting noProgress', 'log');
+                noProgress = 0;
+                prevScrollHeight = currentScrollHeight;
             }
             var priorKey = cbGetRenderedLastRowKey(gridTable);
             var priorCount = cbGetRenderedRowCount(gridTable);
@@ -8036,13 +8060,18 @@ function showResponsibilitiesProgressPanel(rolesData) {
                     cbScanVisibleRows(gridTable);
                     var currKey = cbGetRenderedLastRowKey(gridTable);
                     var currCount = cbGetRenderedRowCount(gridTable);
-                    if (currKey === priorKey && currCount === priorCount) {
+                    var postScrollHeight = scrollContainer.scrollHeight;
+                    if (postScrollHeight > prevScrollHeight) {
+                        addLogMessage('beginCheckboxSelectionRun: scrollHeight grew after scan from ' + prevScrollHeight + ' to ' + postScrollHeight + ', resetting noProgress', 'log');
+                        noProgress = 0;
+                        prevScrollHeight = postScrollHeight;
+                    } else if (currKey === priorKey && currCount === priorCount) {
                         noProgress++;
                     } else {
                         noProgress = 0;
                     }
                     var atBottom = scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 1;
-                    if (atBottom && noProgress >= 1) {
+                    if (atBottom && noProgress >= 3) {
                         finishScan('endReached');
                         return;
                     }
@@ -8187,8 +8216,36 @@ function showResponsibilitiesProgressPanel(rolesData) {
             cbUpdateAriaLive('Selection complete. Selected: ' + cbSelectState.counters.selected + ', Already checked: ' + cbSelectState.counters.alreadyChecked + ', Not found: ' + cbSelectState.counters.notFound + ', Failed: ' + cbSelectState.counters.failures);
             cbSelectState.isRunning = false;
         }
-        var initTimeout = setTimeout(scrollLoop, CB_SELECT_TIMEOUTS.idleBetweenBatchesMs);
-        cbSelectState.timeouts.push(initTimeout);
+        function waitForStableScrollHeight(callback) {
+            var checks = 0;
+            var maxChecks = 5;
+            var lastHeight = scrollContainer.scrollHeight;
+            var stableCount = 0;
+            function checkHeight() {
+                if (!cbSelectState.isRunning) { return; }
+                var currentHeight = scrollContainer.scrollHeight;
+                if (currentHeight === lastHeight) {
+                    stableCount++;
+                } else {
+                    addLogMessage('beginCheckboxSelectionRun: scrollHeight changed from ' + lastHeight + ' to ' + currentHeight + ' during stabilization', 'log');
+                    stableCount = 0;
+                    lastHeight = currentHeight;
+                }
+                checks++;
+                if (stableCount >= 2 || checks >= maxChecks) {
+                    addLogMessage('beginCheckboxSelectionRun: scrollHeight stabilized at ' + currentHeight + ' after ' + checks + ' checks', 'log');
+                    callback();
+                    return;
+                }
+                var tid = setTimeout(checkHeight, 500);
+                cbSelectState.timeouts.push(tid);
+            }
+            var tid = setTimeout(checkHeight, 500);
+            cbSelectState.timeouts.push(tid);
+        }
+        waitForStableScrollHeight(function() {
+            initialScan();
+        });
     }
 
     function stopCheckboxSelect() {
