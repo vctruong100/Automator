@@ -23591,11 +23591,11 @@
         }
         var panel = document.createElement("div");
         panel.id = PANEL_ID;
-        panel.style.position = "fixed";
         var savedTop = getStoredPos("activityPlanState.panel.top", "20px");
         var savedRight = getStoredPos("activityPlanState.panel.right", "20px");
         var savedSize = getStoredPanelSize();
         panel.style.top = savedTop;
+        panel.style.position = "fixed";
         panel.style.right = savedRight;
         panel.style.zIndex = "999999";
         panel.style.background = "#111";
