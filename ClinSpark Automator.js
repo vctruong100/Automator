@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     1.9.2
+// @version     1.9.3
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -188,6 +188,1205 @@
     var GENDER_FEMALE = "Female";
     var GENDER_CONTROL_CLASS = "ieGenderControl";
     var CODE_VIEW_DUP_TOGGLE_BUTTON_ID = "ieCodeViewDupToggle";
+
+    
+    var BARCODE_SELECTORS = {
+        featureButtonTarget: '.main-gui-panel',
+        presenceCheckAnyIcon: 'i.fa-barcode, i.fa.fa-barcode',
+        barcodeIcon: 'i.fa-barcode[class*="itemDataBarcodeIcon_"], i.fa.fa-barcode[class*="itemDataBarcodeIcon_"]',
+        verifiedClass: 'barcodeVerifiedClass',
+        tooltipAttr: 'data-original-title',
+        modalInput: 'input.bootbox-input.bootbox-input-text.form-control',
+        modalConfirmPrimary: 'button[data-bb-handler="confirm"].btn.btn-primary',
+        modalAnyPrimary: 'div.bootbox.modal.in .modal-footer .btn.btn-primary, div.bootbox.modal.show .modal-footer .btn.btn-primary',
+        bootboxVisibleModal: 'div.bootbox.modal.in, div.bootbox.modal.show',
+        bootboxBody: '.bootbox-body',
+        bootboxOkBtn: 'button[data-bb-handler="ok"].btn.btn-primary',
+        itemRow: 'tr',
+        itemTextCell: 'td.itemText',
+        itemHelpText: '.itemHelpText',
+        ariaLiveRegion: '.aria-live-region'
+    };
+    var BARCODE_TIMEOUTS = {
+        waitProgressPanelMs: 10000,
+        waitCollectIconsMs: 8000,
+        waitModalOpenMs: 8000,
+        waitModalCloseMs: 6000,
+        waitSettleMs: 200,
+        waitVerifyIconMs: 1200,
+        idleBetweenItemsMs: 120,
+        maxTotalDurationMs: 300000
+    };
+    var BARCODE_RETRY = {
+        collectRetries: 2,
+        openModalRetries: 2,
+        fillConfirmRetries: 2,
+        verifyRetries: 2
+    };
+    var BARCODE_LABELS = {
+        featureButton: 'Pull Lab Barcode',
+        progressTitle: 'Pull Lab Barcode',
+        statusPending: 'Pending',
+        statusProcessing: 'Processing',
+        statusVerified: 'Verified',
+        statusSkippedVerified: 'Skipped (Already Verified)',
+        statusFailed: 'Failed',
+        statusInvalidBarcode: 'Failed (Invalid Barcode)',
+        statusStopped: 'Stopped',
+        scanning: 'Collecting barcode icons',
+        filling: 'Filling barcode',
+        confirming: 'Confirming',
+        verifying: 'Verifying',
+        done: 'Completed'
+    };
+    var BARCODE_COUNTERS = {
+        total: 0,
+        processed: 0,
+        verified: 0,
+        skipped: 0,
+        failures: 0,
+        pending: 0
+    };
+    var BARCODE_REGEX = {
+        barcodeClassToken: /\bitemDataBarcodeIcon_([A-Za-z0-9_-]+)\b/,
+        requiredPrefix: /^Scan Required:?/i,
+        verifiedPrefix: /^Verified:/i,
+        okText: /^(ok|confirm)$/i
+    };
+    var BARCODE_ATTRS = {
+        ariaBusyTarget: 'body',
+        ariaBusyAttr: 'aria-busy'
+    };
+    var PULL_LAB_BARCODE_STOPPED = false;
+    var PULL_LAB_BARCODE_RUNNING = false;
+    var PULL_LAB_BARCODE_POPUP_REF = null;
+    var PULL_LAB_BARCODE_TIMEOUTS_LIST = [];
+    var PULL_LAB_BARCODE_INTERVALS_LIST = [];
+    var PULL_LAB_BARCODE_OBSERVERS_LIST = [];
+    var PULL_LAB_BARCODE_RAF_IDS = [];
+    var PULL_LAB_BARCODE_IDLE_IDS = [];
+    var PULL_LAB_BARCODE_BUTTON_REF = null;
+    var PULL_LAB_BARCODE_ARIA_LIVE_EL = null;
+    var PULL_LAB_BARCODE_LEFT_LIST_EL = null;
+    var PULL_LAB_BARCODE_RIGHT_LIST_EL = null;
+    var PULL_LAB_BARCODE_SUMMARY_EL = null;
+    var PULL_LAB_BARCODE_STATUS_MAP = {};
+
+    //==================================================
+    // Pull Lab Barcode Feature
+    //==================================================
+    // 
+    //==================================================
+    function setAriaBusyOn() {
+        log("[PullLabBarcode] setAriaBusyOn: setting aria-busy on body");
+        try {
+            var target = document.querySelector(BARCODE_ATTRS.ariaBusyTarget);
+            if (target) {
+                target.setAttribute(BARCODE_ATTRS.ariaBusyAttr, "true");
+            }
+        } catch (e) {
+            log("[PullLabBarcode] setAriaBusyOn: error " + String(e));
+        }
+    }
+
+    function setAriaBusyOff() {
+        log("[PullLabBarcode] setAriaBusyOff: clearing aria-busy on body");
+        try {
+            var target = document.querySelector(BARCODE_ATTRS.ariaBusyTarget);
+            if (target) {
+                target.removeAttribute(BARCODE_ATTRS.ariaBusyAttr);
+            }
+        } catch (e) {
+            log("[PullLabBarcode] setAriaBusyOff: error " + String(e));
+        }
+    }
+
+    function stopPullLabBarcode() {
+        log("[PullLabBarcode] stopPullLabBarcode: initiating full teardown");
+        PULL_LAB_BARCODE_STOPPED = true;
+        PULL_LAB_BARCODE_RUNNING = false;
+        var i;
+        i = 0;
+        while (i < PULL_LAB_BARCODE_TIMEOUTS_LIST.length) {
+            try {
+                clearTimeout(PULL_LAB_BARCODE_TIMEOUTS_LIST[i]);
+            } catch (e) {}
+            i = i + 1;
+        }
+        PULL_LAB_BARCODE_TIMEOUTS_LIST = [];
+        i = 0;
+        while (i < PULL_LAB_BARCODE_INTERVALS_LIST.length) {
+            try {
+                clearInterval(PULL_LAB_BARCODE_INTERVALS_LIST[i]);
+            } catch (e) {}
+            i = i + 1;
+        }
+        PULL_LAB_BARCODE_INTERVALS_LIST = [];
+        i = 0;
+        while (i < PULL_LAB_BARCODE_OBSERVERS_LIST.length) {
+            try {
+                PULL_LAB_BARCODE_OBSERVERS_LIST[i].disconnect();
+            } catch (e) {}
+            i = i + 1;
+        }
+        PULL_LAB_BARCODE_OBSERVERS_LIST = [];
+        i = 0;
+        while (i < PULL_LAB_BARCODE_RAF_IDS.length) {
+            try {
+                cancelAnimationFrame(PULL_LAB_BARCODE_RAF_IDS[i]);
+            } catch (e) {}
+            i = i + 1;
+        }
+        PULL_LAB_BARCODE_RAF_IDS = [];
+        i = 0;
+        while (i < PULL_LAB_BARCODE_IDLE_IDS.length) {
+            try {
+                if (typeof cancelIdleCallback === "function") {
+                    cancelIdleCallback(PULL_LAB_BARCODE_IDLE_IDS[i]);
+                }
+            } catch (e) {}
+            i = i + 1;
+        }
+        PULL_LAB_BARCODE_IDLE_IDS = [];
+        try {
+            var openModal = document.querySelector(BARCODE_SELECTORS.bootboxVisibleModal);
+            if (openModal) {
+                var modalCloseBtn = openModal.querySelector(".bootbox-close-button, button[data-dismiss='modal']");
+                if (modalCloseBtn) {
+                    modalCloseBtn.click();
+                    log("[PullLabBarcode] stopPullLabBarcode: closed open bootbox modal");
+                }
+            }
+        } catch (e) {
+            log("[PullLabBarcode] stopPullLabBarcode: error closing bootbox modal " + String(e));
+        }
+        if (PULL_LAB_BARCODE_POPUP_REF) {
+            var popupToClose = PULL_LAB_BARCODE_POPUP_REF;
+            PULL_LAB_BARCODE_POPUP_REF = null;
+            try {
+                popupToClose.close();
+            } catch (e) {}
+        }
+        setAriaBusyOff();
+        PULL_LAB_BARCODE_STATUS_MAP = {};
+        PULL_LAB_BARCODE_LEFT_LIST_EL = null;
+        PULL_LAB_BARCODE_RIGHT_LIST_EL = null;
+        PULL_LAB_BARCODE_SUMMARY_EL = null;
+        PULL_LAB_BARCODE_ARIA_LIVE_EL = null;
+        BARCODE_COUNTERS.total = 0;
+        BARCODE_COUNTERS.processed = 0;
+        BARCODE_COUNTERS.verified = 0;
+        BARCODE_COUNTERS.skipped = 0;
+        BARCODE_COUNTERS.failures = 0;
+        BARCODE_COUNTERS.pending = 0;
+        if (PULL_LAB_BARCODE_BUTTON_REF) {
+            try {
+                PULL_LAB_BARCODE_BUTTON_REF.focus();
+                log("[PullLabBarcode] stopPullLabBarcode: focus restored to feature button");
+            } catch (e) {}
+        }
+        log("[PullLabBarcode] stopPullLabBarcode: teardown complete");
+    }
+
+    function extractBarcodeValue(iconEl) {
+        log("[PullLabBarcode] extractBarcodeValue: checking icon element");
+        if (!iconEl) {
+            log("[PullLabBarcode] extractBarcodeValue: icon element is null");
+            return null;
+        }
+        var className = iconEl.className || "";
+        var match = BARCODE_REGEX.barcodeClassToken.exec(className);
+        if (match && match[1]) {
+            var val = match[1].trim();
+            log("[PullLabBarcode] extractBarcodeValue: extracted '" + val + "' from class");
+            return val;
+        }
+        var tooltip = iconEl.getAttribute(BARCODE_SELECTORS.tooltipAttr) || "";
+        if (tooltip) {
+            var fallbackStr = tooltip.replace(/^(Scan Required:|Verified:)\s*/i, "").trim();
+            var tokens = fallbackStr.split(/\s+/);
+            if (tokens.length > 0 && tokens[0].length > 0) {
+                log("[PullLabBarcode] extractBarcodeValue: fallback extracted '" + tokens[0] + "' from tooltip");
+                return tokens[0];
+            }
+        }
+        log("[PullLabBarcode] extractBarcodeValue: no barcode found");
+        return null;
+    }
+
+    function announceBarcodeAriaLive(message) {
+        if (!PULL_LAB_BARCODE_ARIA_LIVE_EL) {
+            return;
+        }
+        try {
+            PULL_LAB_BARCODE_ARIA_LIVE_EL.textContent = message;
+        } catch (e) {}
+    }
+
+    function updateBarcodeRightPanelStatus(barcodeKey, newStatus, detailOptional) {
+        log("[PullLabBarcode] updateBarcodeRightPanelStatus: barcode='" + barcodeKey + "' status='" + newStatus + "'");
+        PULL_LAB_BARCODE_STATUS_MAP[barcodeKey] = newStatus;
+        if (!PULL_LAB_BARCODE_RIGHT_LIST_EL) {
+            return;
+        }
+        var statusColors = {};
+        statusColors[BARCODE_LABELS.statusPending] = "#888";
+        statusColors[BARCODE_LABELS.statusProcessing] = "#f0ad4e";
+        statusColors[BARCODE_LABELS.statusVerified] = "#5cb85c";
+        statusColors[BARCODE_LABELS.statusSkippedVerified] = "#5bc0de";
+        statusColors[BARCODE_LABELS.statusFailed] = "#d9534f";
+        statusColors[BARCODE_LABELS.statusStopped] = "#999";
+        var rafId = requestAnimationFrame(function () {
+            try {
+                var escapedKey = barcodeKey.replace(/['"\\]/g, "\\$&");
+                var existingRow = PULL_LAB_BARCODE_RIGHT_LIST_EL.querySelector("[data-barcode-key='" + escapedKey + "']");
+                if (existingRow) {
+                    var statusSpan = existingRow.querySelector("[data-barcode-status]");
+                    if (statusSpan) {
+                        statusSpan.textContent = newStatus;
+                        statusSpan.style.color = statusColors[newStatus] || "#fff";
+                    }
+                    if (detailOptional) {
+                        var detailSpan = existingRow.querySelector("[data-barcode-detail]");
+                        if (detailSpan) {
+                            detailSpan.textContent = detailOptional;
+                        } else {
+                            detailSpan = document.createElement("span");
+                            detailSpan.setAttribute("data-barcode-detail", "");
+                            detailSpan.style.fontSize = "11px";
+                            detailSpan.style.color = "#777";
+                            detailSpan.style.marginLeft = "6px";
+                            detailSpan.textContent = detailOptional;
+                            existingRow.appendChild(detailSpan);
+                        }
+                    }
+                } else {
+                    var row = document.createElement("div");
+                    row.setAttribute("data-barcode-right-item", "");
+                    row.setAttribute("data-barcode-key", barcodeKey);
+                    row.style.padding = "4px 10px";
+                    row.style.display = "flex";
+                    row.style.alignItems = "center";
+                    row.style.gap = "8px";
+                    row.style.fontSize = "12px";
+                    row.style.borderBottom = "1px solid #2a2a2a";
+                    var labelSpan = document.createElement("span");
+                    labelSpan.style.flex = "1";
+                    labelSpan.style.color = "#ddd";
+                    labelSpan.style.overflow = "hidden";
+                    labelSpan.style.textOverflow = "ellipsis";
+                    labelSpan.style.whiteSpace = "nowrap";
+                    labelSpan.textContent = barcodeKey;
+                    var newStatusSpan = document.createElement("span");
+                    newStatusSpan.setAttribute("data-barcode-status", "");
+                    newStatusSpan.style.fontWeight = "600";
+                    newStatusSpan.style.whiteSpace = "nowrap";
+                    newStatusSpan.textContent = newStatus;
+                    newStatusSpan.style.color = statusColors[newStatus] || "#fff";
+                    row.appendChild(labelSpan);
+                    row.appendChild(newStatusSpan);
+                    if (detailOptional) {
+                        var newDetailSpan = document.createElement("span");
+                        newDetailSpan.setAttribute("data-barcode-detail", "");
+                        newDetailSpan.style.fontSize = "11px";
+                        newDetailSpan.style.color = "#777";
+                        newDetailSpan.textContent = detailOptional;
+                        row.appendChild(newDetailSpan);
+                    }
+                    PULL_LAB_BARCODE_RIGHT_LIST_EL.appendChild(row);
+                }
+            } catch (e) {
+                log("[PullLabBarcode] updateBarcodeRightPanelStatus: error " + String(e));
+            }
+        });
+        PULL_LAB_BARCODE_RAF_IDS.push(rafId);
+        announceBarcodeAriaLive(barcodeKey + ": " + newStatus);
+    }
+
+    function updateBarcodeRightPanelSummary(counters) {
+        log("[PullLabBarcode] updateBarcodeRightPanelSummary: updating summary");
+        if (!PULL_LAB_BARCODE_SUMMARY_EL) {
+            return;
+        }
+        var pct = 0;
+        if (counters.total > 0) {
+            pct = Math.round(((counters.processed + counters.skipped) / counters.total) * 100);
+        }
+        var rafId = requestAnimationFrame(function () {
+            try {
+                PULL_LAB_BARCODE_SUMMARY_EL.innerHTML = "";
+                var items = [
+                    { label: "Total", value: counters.total, color: "#fff" },
+                    { label: "Processed", value: counters.processed, color: "#ccc" },
+                    { label: "Verified", value: counters.verified, color: "#5cb85c" },
+                    { label: "Skipped", value: counters.skipped, color: "#5bc0de" },
+                    { label: "Failed", value: counters.failures, color: "#d9534f" },
+                    { label: "Pending", value: counters.pending, color: "#888" }
+                ];
+                var si = 0;
+                while (si < items.length) {
+                    var span = document.createElement("span");
+                    span.style.color = items[si].color;
+                    span.textContent = items[si].label + ": " + items[si].value;
+                    PULL_LAB_BARCODE_SUMMARY_EL.appendChild(span);
+                    si = si + 1;
+                }
+                var pctSpan = document.createElement("span");
+                pctSpan.style.fontWeight = "600";
+                if (pct >= 100) {
+                    pctSpan.style.color = "#5cb85c";
+                } else {
+                    pctSpan.style.color = "#f0ad4e";
+                }
+                pctSpan.textContent = pct + "% complete";
+                PULL_LAB_BARCODE_SUMMARY_EL.appendChild(pctSpan);
+            } catch (e) {
+                log("[PullLabBarcode] updateBarcodeRightPanelSummary: error " + String(e));
+            }
+        });
+        PULL_LAB_BARCODE_RAF_IDS.push(rafId);
+    }
+
+    function barcodeYieldToUI() {
+        return new Promise(function (resolve) {
+            if (typeof requestIdleCallback === "function") {
+                var idleId = requestIdleCallback(function () {
+                    resolve();
+                });
+                PULL_LAB_BARCODE_IDLE_IDS.push(idleId);
+            } else {
+                var tid = setTimeout(function () {
+                    resolve();
+                }, BARCODE_TIMEOUTS.idleBetweenItemsMs);
+                PULL_LAB_BARCODE_TIMEOUTS_LIST.push(tid);
+            }
+        });
+    }
+
+    function openBarcodeProgressPanel() {
+        log("[PullLabBarcode] openBarcodeProgressPanel: building progress panel");
+        var container = document.createElement("div");
+        container.style.display = "flex";
+        container.style.flexDirection = "column";
+        container.style.gap = "12px";
+        container.style.height = "100%";
+        container.style.boxSizing = "border-box";
+
+        var ariaLive = document.createElement("div");
+        ariaLive.setAttribute("aria-live", "polite");
+        ariaLive.setAttribute("aria-atomic", "true");
+        ariaLive.setAttribute("role", "status");
+        ariaLive.style.position = "absolute";
+        ariaLive.style.width = "1px";
+        ariaLive.style.height = "1px";
+        ariaLive.style.overflow = "hidden";
+        ariaLive.style.clip = "rect(0,0,0,0)";
+        ariaLive.style.whiteSpace = "nowrap";
+        container.appendChild(ariaLive);
+        PULL_LAB_BARCODE_ARIA_LIVE_EL = ariaLive;
+
+        var splitContainer = document.createElement("div");
+        splitContainer.style.display = "flex";
+        splitContainer.style.gap = "12px";
+        splitContainer.style.flex = "1";
+        splitContainer.style.minHeight = "0";
+        splitContainer.style.overflow = "hidden";
+
+        var leftPanel = document.createElement("div");
+        leftPanel.style.flex = "1";
+        leftPanel.style.display = "flex";
+        leftPanel.style.flexDirection = "column";
+        leftPanel.style.border = "1px solid #333";
+        leftPanel.style.borderRadius = "6px";
+        leftPanel.style.background = "#1a1a1a";
+        leftPanel.style.overflow = "hidden";
+
+        var leftHeader = document.createElement("div");
+        leftHeader.textContent = "Discovered Icons";
+        leftHeader.style.padding = "8px 10px";
+        leftHeader.style.fontWeight = "600";
+        leftHeader.style.fontSize = "13px";
+        leftHeader.style.borderBottom = "1px solid #333";
+        leftHeader.style.color = "#ccc";
+        leftPanel.appendChild(leftHeader);
+
+        var leftSearch = document.createElement("input");
+        leftSearch.type = "text";
+        leftSearch.placeholder = "Search icons...";
+        leftSearch.setAttribute("aria-label", "Search discovered icons");
+        leftSearch.style.width = "100%";
+        leftSearch.style.padding = "6px 10px";
+        leftSearch.style.background = "#222";
+        leftSearch.style.color = "#fff";
+        leftSearch.style.border = "none";
+        leftSearch.style.borderBottom = "1px solid #333";
+        leftSearch.style.boxSizing = "border-box";
+        leftSearch.style.fontSize = "12px";
+        leftSearch.style.outline = "none";
+        leftPanel.appendChild(leftSearch);
+
+        var leftList = document.createElement("div");
+        leftList.style.flex = "1";
+        leftList.style.overflowY = "auto";
+        leftList.style.padding = "4px 0";
+        leftPanel.appendChild(leftList);
+        PULL_LAB_BARCODE_LEFT_LIST_EL = leftList;
+
+        leftSearch.addEventListener("input", function () {
+            var term = leftSearch.value.toLowerCase();
+            var items = leftList.querySelectorAll("[data-barcode-left-item]");
+            var si = 0;
+            while (si < items.length) {
+                var txt = (items[si].textContent || "").toLowerCase();
+                if (term === "" || txt.indexOf(term) !== -1) {
+                    items[si].style.display = "";
+                } else {
+                    items[si].style.display = "none";
+                }
+                si = si + 1;
+            }
+        });
+
+        var rightPanel = document.createElement("div");
+        rightPanel.style.flex = "1";
+        rightPanel.style.display = "flex";
+        rightPanel.style.flexDirection = "column";
+        rightPanel.style.border = "1px solid #333";
+        rightPanel.style.borderRadius = "6px";
+        rightPanel.style.background = "#1a1a1a";
+        rightPanel.style.overflow = "hidden";
+
+        var rightHeader = document.createElement("div");
+        rightHeader.textContent = "Status";
+        rightHeader.style.padding = "8px 10px";
+        rightHeader.style.fontWeight = "600";
+        rightHeader.style.fontSize = "13px";
+        rightHeader.style.borderBottom = "1px solid #333";
+        rightHeader.style.color = "#ccc";
+        rightPanel.appendChild(rightHeader);
+
+        var rightSearch = document.createElement("input");
+        rightSearch.type = "text";
+        rightSearch.placeholder = "Search status...";
+        rightSearch.setAttribute("aria-label", "Search item statuses");
+        rightSearch.style.width = "100%";
+        rightSearch.style.padding = "6px 10px";
+        rightSearch.style.background = "#222";
+        rightSearch.style.color = "#fff";
+        rightSearch.style.border = "none";
+        rightSearch.style.borderBottom = "1px solid #333";
+        rightSearch.style.boxSizing = "border-box";
+        rightSearch.style.fontSize = "12px";
+        rightSearch.style.outline = "none";
+        rightPanel.appendChild(rightSearch);
+
+        var rightList = document.createElement("div");
+        rightList.style.flex = "1";
+        rightList.style.overflowY = "auto";
+        rightList.style.padding = "4px 0";
+        rightPanel.appendChild(rightList);
+        PULL_LAB_BARCODE_RIGHT_LIST_EL = rightList;
+
+        rightSearch.addEventListener("input", function () {
+            var term = rightSearch.value.toLowerCase();
+            var items = rightList.querySelectorAll("[data-barcode-right-item]");
+            var si = 0;
+            while (si < items.length) {
+                var txt = (items[si].textContent || "").toLowerCase();
+                if (term === "" || txt.indexOf(term) !== -1) {
+                    items[si].style.display = "";
+                } else {
+                    items[si].style.display = "none";
+                }
+                si = si + 1;
+            }
+        });
+
+        splitContainer.appendChild(leftPanel);
+        splitContainer.appendChild(rightPanel);
+        container.appendChild(splitContainer);
+
+        var summaryFooter = document.createElement("div");
+        summaryFooter.style.padding = "8px 10px";
+        summaryFooter.style.background = "#1a1a1a";
+        summaryFooter.style.border = "1px solid #333";
+        summaryFooter.style.borderRadius = "6px";
+        summaryFooter.style.fontSize = "12px";
+        summaryFooter.style.color = "#ccc";
+        summaryFooter.style.display = "flex";
+        summaryFooter.style.flexWrap = "wrap";
+        summaryFooter.style.gap = "8px";
+        summaryFooter.style.justifyContent = "space-between";
+        summaryFooter.textContent = "Waiting to start...";
+        container.appendChild(summaryFooter);
+        PULL_LAB_BARCODE_SUMMARY_EL = summaryFooter;
+
+        var popup = createPopup({
+            title: BARCODE_LABELS.progressTitle,
+            content: container,
+            width: "700px",
+            height: "500px",
+            onClose: function () {
+                log("[PullLabBarcode] openBarcodeProgressPanel: popup close triggered");
+                stopPullLabBarcode();
+            }
+        });
+
+        PULL_LAB_BARCODE_POPUP_REF = popup;
+        try {
+            leftSearch.focus();
+        } catch (e) {}
+        log("[PullLabBarcode] openBarcodeProgressPanel: panel created");
+        return popup;
+    }
+
+    async function collectBarcodeIcons() {
+        log("[PullLabBarcode] collectBarcodeIcons: starting icon collection");
+        var attempts = 0;
+        var maxAttempts = BARCODE_RETRY.collectRetries;
+        var result = [];
+
+        while (attempts < maxAttempts) {
+            if (PULL_LAB_BARCODE_STOPPED) {
+                log("[PullLabBarcode] collectBarcodeIcons: stopped during collection");
+                return [];
+            }
+
+            var presenceCheck = document.querySelectorAll(BARCODE_SELECTORS.presenceCheckAnyIcon);
+            log("[PullLabBarcode] collectBarcodeIcons: attempt " + String(attempts + 1) + ", found " + String(presenceCheck.length) + " fa-barcode icons total");
+
+            if (presenceCheck.length === 0) {
+                attempts = attempts + 1;
+                if (attempts < maxAttempts) {
+                    log("[PullLabBarcode] collectBarcodeIcons: no icons found, retrying");
+                    await sleep(BARCODE_TIMEOUTS.waitCollectIconsMs / maxAttempts);
+                    continue;
+                }
+                log("[PullLabBarcode] collectBarcodeIcons: no barcode icons found after all retries");
+                return [];
+            }
+
+            var allIcons = document.querySelectorAll(BARCODE_SELECTORS.barcodeIcon);
+            log("[PullLabBarcode] collectBarcodeIcons: found " + String(allIcons.length) + " icons matching barcodeIcon selector");
+
+            result = [];
+
+            var ci = 0;
+            while (ci < allIcons.length) {
+                if (PULL_LAB_BARCODE_STOPPED) {
+                    log("[PullLabBarcode] collectBarcodeIcons: stopped during filtering");
+                    return [];
+                }
+
+                var icon = allIcons[ci];
+                var isVerifiedByClass = icon.classList.contains(BARCODE_SELECTORS.verifiedClass);
+                var tooltip = icon.getAttribute(BARCODE_SELECTORS.tooltipAttr) || "";
+                var isVerifiedByTooltip = BARCODE_REGEX.verifiedPrefix.test(tooltip);
+
+                if (isVerifiedByClass || isVerifiedByTooltip) {
+                    log("[PullLabBarcode] collectBarcodeIcons: icon " + String(ci) + " already verified, skipping");
+                    ci = ci + 1;
+                    continue;
+                }
+
+                var isRequired = BARCODE_REGEX.requiredPrefix.test(tooltip);
+                if (!isRequired) {
+                    log("[PullLabBarcode] collectBarcodeIcons: icon " + String(ci) + " tooltip does not start with 'Scan Required:', skipping");
+                    ci = ci + 1;
+                    continue;
+                }
+
+                var barcode = extractBarcodeValue(icon);
+                if (!barcode) {
+                    log("[PullLabBarcode] collectBarcodeIcons: icon " + String(ci) + " has no extractable barcode, skipping");
+                    ci = ci + 1;
+                    continue;
+                }
+
+                var parentRow = icon.closest(BARCODE_SELECTORS.itemRow);
+                if (parentRow) {
+                    var rowDisplay = parentRow.style.display;
+                    if (rowDisplay === "none") {
+                        log("[PullLabBarcode] collectBarcodeIcons: icon " + String(ci) + " parent row is hidden (display:none), skipping");
+                        ci = ci + 1;
+                        continue;
+                    }
+                }
+
+                var label = tooltip.replace(/^Scan Required:?\s*/i, "").trim();
+                if (!label || label.length === 0) {
+                    label = barcode;
+                }
+
+                var itemName = "";
+                if (parentRow) {
+                    var textCell = parentRow.querySelector(BARCODE_SELECTORS.itemTextCell);
+                    if (textCell) {
+                        var textCellClone = textCell.cloneNode(true);
+                        var helpTexts = textCellClone.querySelectorAll(BARCODE_SELECTORS.itemHelpText);
+                        var hi = 0;
+                        while (hi < helpTexts.length) {
+                            helpTexts[hi].remove();
+                            hi = hi + 1;
+                        }
+                        itemName = (textCellClone.textContent || "").trim();
+                    }
+                }
+                if (!itemName || itemName.length === 0) {
+                    itemName = label;
+                }
+
+                var statusKey = barcode + " (#" + String(result.length + 1) + ")";
+
+                result.push({
+                    el: icon,
+                    barcode: barcode,
+                    label: label,
+                    itemName: itemName,
+                    statusKey: statusKey
+                });
+
+                log("[PullLabBarcode] collectBarcodeIcons: added icon " + String(result.length) + " barcode='" + barcode + "' itemName='" + itemName + "'");
+
+                if (PULL_LAB_BARCODE_LEFT_LIST_EL) {
+                    var leftRow = document.createElement("div");
+                    leftRow.setAttribute("data-barcode-left-item", "");
+                    leftRow.style.padding = "6px 10px";
+                    leftRow.style.color = "#ddd";
+                    leftRow.style.borderBottom = "1px solid #2a2a2a";
+                    leftRow.style.overflow = "hidden";
+                    var indexSpan = document.createElement("span");
+                    indexSpan.style.color = "#666";
+                    indexSpan.style.marginRight = "8px";
+                    indexSpan.style.fontSize = "12px";
+                    indexSpan.textContent = String(result.length) + ".";
+                    var nameSpan = document.createElement("span");
+                    nameSpan.style.fontSize = "12px";
+                    nameSpan.style.fontWeight = "500";
+                    nameSpan.textContent = itemName;
+                    var barcodeDiv = document.createElement("div");
+                    barcodeDiv.style.fontSize = "10px";
+                    barcodeDiv.style.color = "#888";
+                    barcodeDiv.style.marginTop = "2px";
+                    barcodeDiv.style.marginLeft = "20px";
+                    barcodeDiv.style.overflow = "hidden";
+                    barcodeDiv.style.textOverflow = "ellipsis";
+                    barcodeDiv.style.whiteSpace = "nowrap";
+                    barcodeDiv.textContent = barcode;
+                    leftRow.appendChild(indexSpan);
+                    leftRow.appendChild(nameSpan);
+                    leftRow.appendChild(barcodeDiv);
+                    PULL_LAB_BARCODE_LEFT_LIST_EL.appendChild(leftRow);
+                }
+
+                ci = ci + 1;
+            }
+
+            if (result.length > 0) {
+                break;
+            }
+
+            attempts = attempts + 1;
+            if (attempts < maxAttempts) {
+                log("[PullLabBarcode] collectBarcodeIcons: 0 qualifying icons, retrying");
+                await sleep(BARCODE_TIMEOUTS.waitCollectIconsMs / maxAttempts);
+            }
+        }
+
+        log("[PullLabBarcode] collectBarcodeIcons: collected " + String(result.length) + " icons to process");
+        return result;
+    }
+
+    async function openBarcodeModalAndFill(iconObj) {
+        log("[PullLabBarcode] openBarcodeModalAndFill: starting for barcode='" + iconObj.barcode + "'");
+        var attempts = 0;
+        var maxAttempts = BARCODE_RETRY.fillConfirmRetries + 1;
+
+        while (attempts < maxAttempts) {
+            if (PULL_LAB_BARCODE_STOPPED) {
+                log("[PullLabBarcode] openBarcodeModalAndFill: stopped");
+                return false;
+            }
+
+            attempts = attempts + 1;
+            log("[PullLabBarcode] openBarcodeModalAndFill: attempt " + String(attempts) + "/" + String(maxAttempts));
+
+            var existingModal = document.querySelector(BARCODE_SELECTORS.bootboxVisibleModal);
+            if (existingModal) {
+                log("[PullLabBarcode] openBarcodeModalAndFill: existing modal detected, waiting for it to close");
+                await waitUntilHidden(BARCODE_SELECTORS.bootboxVisibleModal, BARCODE_TIMEOUTS.waitModalCloseMs);
+                await sleep(BARCODE_TIMEOUTS.waitSettleMs);
+            }
+
+            var currentIcon = iconObj.el;
+            if (!currentIcon || !document.body.contains(currentIcon)) {
+                log("[PullLabBarcode] openBarcodeModalAndFill: icon detached, re-querying by barcode");
+                var reQueryIcons = document.querySelectorAll(BARCODE_SELECTORS.barcodeIcon);
+                var reFound = false;
+                var qi = 0;
+                while (qi < reQueryIcons.length) {
+                    var qVal = extractBarcodeValue(reQueryIcons[qi]);
+                    if (qVal === iconObj.barcode) {
+                        iconObj.el = reQueryIcons[qi];
+                        currentIcon = reQueryIcons[qi];
+                        reFound = true;
+                        log("[PullLabBarcode] openBarcodeModalAndFill: re-found icon in DOM");
+                        break;
+                    }
+                    qi = qi + 1;
+                }
+                if (!reFound) {
+                    log("[PullLabBarcode] openBarcodeModalAndFill: icon not found in DOM after re-query");
+                    return false;
+                }
+            }
+
+            var preVerifiedClass = currentIcon.classList.contains(BARCODE_SELECTORS.verifiedClass);
+            var preTooltip = currentIcon.getAttribute(BARCODE_SELECTORS.tooltipAttr) || "";
+            if (preVerifiedClass || BARCODE_REGEX.verifiedPrefix.test(preTooltip)) {
+                log("[PullLabBarcode] openBarcodeModalAndFill: icon already verified before clicking");
+                return "already_verified";
+            }
+
+            log("[PullLabBarcode] openBarcodeModalAndFill: clicking icon");
+            try {
+                currentIcon.click();
+            } catch (clickErr) {
+                log("[PullLabBarcode] openBarcodeModalAndFill: click error " + String(clickErr));
+                if (attempts < maxAttempts) {
+                    await sleep(BARCODE_TIMEOUTS.waitSettleMs);
+                    continue;
+                }
+                return false;
+            }
+
+            log("[PullLabBarcode] openBarcodeModalAndFill: waiting for modal input");
+            var modalInput = await waitForSelector(BARCODE_SELECTORS.modalInput, BARCODE_TIMEOUTS.waitModalOpenMs);
+            if (!modalInput) {
+                log("[PullLabBarcode] openBarcodeModalAndFill: modal input not found after waiting");
+                if (attempts < maxAttempts) {
+                    await sleep(BARCODE_TIMEOUTS.waitSettleMs);
+                    continue;
+                }
+                return false;
+            }
+
+            var visibleModal = document.querySelector(BARCODE_SELECTORS.bootboxVisibleModal);
+            if (!visibleModal) {
+                log("[PullLabBarcode] openBarcodeModalAndFill: modal container not visible");
+                if (attempts < maxAttempts) {
+                    await sleep(BARCODE_TIMEOUTS.waitSettleMs);
+                    continue;
+                }
+                return false;
+            }
+
+            log("[PullLabBarcode] openBarcodeModalAndFill: filling input with '" + iconObj.barcode + "'");
+            try {
+                modalInput.focus();
+                modalInput.value = iconObj.barcode;
+                modalInput.dispatchEvent(new Event("input", { bubbles: true }));
+                modalInput.dispatchEvent(new Event("change", { bubbles: true }));
+            } catch (fillErr) {
+                log("[PullLabBarcode] openBarcodeModalAndFill: fill error " + String(fillErr));
+                if (attempts < maxAttempts) {
+                    await sleep(BARCODE_TIMEOUTS.waitSettleMs);
+                    continue;
+                }
+                return false;
+            }
+
+            await sleep(BARCODE_TIMEOUTS.waitSettleMs);
+
+            log("[PullLabBarcode] openBarcodeModalAndFill: looking for confirm button");
+            var confirmBtn = document.querySelector(BARCODE_SELECTORS.modalConfirmPrimary);
+            if (!confirmBtn) {
+                log("[PullLabBarcode] openBarcodeModalAndFill: primary confirm not found, trying fallback");
+                var allPrimaryBtns = document.querySelectorAll(BARCODE_SELECTORS.modalAnyPrimary);
+                var bi = 0;
+                while (bi < allPrimaryBtns.length) {
+                    var btnText = (allPrimaryBtns[bi].textContent || "").trim();
+                    if (BARCODE_REGEX.okText.test(btnText)) {
+                        confirmBtn = allPrimaryBtns[bi];
+                        log("[PullLabBarcode] openBarcodeModalAndFill: found fallback confirm with text '" + btnText + "'");
+                        break;
+                    }
+                    bi = bi + 1;
+                }
+            }
+
+            if (!confirmBtn) {
+                log("[PullLabBarcode] openBarcodeModalAndFill: no confirm button found");
+                if (attempts < maxAttempts) {
+                    await sleep(BARCODE_TIMEOUTS.waitSettleMs);
+                    continue;
+                }
+                return false;
+            }
+
+            log("[PullLabBarcode] openBarcodeModalAndFill: clicking confirm");
+            try {
+                confirmBtn.click();
+            } catch (confirmErr) {
+                log("[PullLabBarcode] openBarcodeModalAndFill: confirm click error " + String(confirmErr));
+                if (attempts < maxAttempts) {
+                    await sleep(BARCODE_TIMEOUTS.waitSettleMs);
+                    continue;
+                }
+                return false;
+            }
+
+            log("[PullLabBarcode] openBarcodeModalAndFill: waiting for modal to close");
+            var closed = await waitUntilHidden(BARCODE_SELECTORS.bootboxVisibleModal, BARCODE_TIMEOUTS.waitModalCloseMs);
+            if (!closed) {
+                log("[PullLabBarcode] openBarcodeModalAndFill: modal did not close in time");
+                if (attempts < maxAttempts) {
+                    continue;
+                }
+                return false;
+            }
+
+            log("[PullLabBarcode] openBarcodeModalAndFill: modal closed, checking for error modal");
+            var errorModal = await waitForSelector(BARCODE_SELECTORS.bootboxVisibleModal, 1500);
+            if (errorModal) {
+                var errorBody = errorModal.querySelector(BARCODE_SELECTORS.bootboxBody);
+                var errorText = errorBody ? (errorBody.textContent || "").trim() : "";
+                log("[PullLabBarcode] openBarcodeModalAndFill: post-confirm modal detected, text='" + errorText + "'");
+                if (errorText.toLowerCase().indexOf("invalid") !== -1) {
+                    log("[PullLabBarcode] openBarcodeModalAndFill: invalid barcode error detected");
+                    var okBtn = errorModal.querySelector(BARCODE_SELECTORS.bootboxOkBtn);
+                    if (!okBtn) {
+                        var fallbackBtns = errorModal.querySelectorAll(".modal-footer .btn.btn-primary");
+                        var fbi = 0;
+                        while (fbi < fallbackBtns.length) {
+                            var fbText = (fallbackBtns[fbi].textContent || "").trim();
+                            if (BARCODE_REGEX.okText.test(fbText)) {
+                                okBtn = fallbackBtns[fbi];
+                                break;
+                            }
+                            fbi = fbi + 1;
+                        }
+                    }
+                    if (okBtn) {
+                        log("[PullLabBarcode] openBarcodeModalAndFill: clicking OK to dismiss invalid barcode modal");
+                        try {
+                            okBtn.click();
+                        } catch (okErr) {
+                            log("[PullLabBarcode] openBarcodeModalAndFill: OK click error " + String(okErr));
+                        }
+                        await waitUntilHidden(BARCODE_SELECTORS.bootboxVisibleModal, BARCODE_TIMEOUTS.waitModalCloseMs);
+                        await sleep(BARCODE_TIMEOUTS.waitSettleMs);
+                    }
+                    return "invalid_barcode";
+                }
+            }
+
+            log("[PullLabBarcode] openBarcodeModalAndFill: modal closed successfully");
+            return true;
+        }
+
+        log("[PullLabBarcode] openBarcodeModalAndFill: all attempts exhausted");
+        return false;
+    }
+
+    async function verifyIconUpdated(iconObj) {
+        log("[PullLabBarcode] verifyIconUpdated: checking verification for barcode='" + iconObj.barcode + "'");
+        var attempts = 0;
+        var maxAttempts = BARCODE_RETRY.verifyRetries + 1;
+
+        while (attempts < maxAttempts) {
+            if (PULL_LAB_BARCODE_STOPPED) {
+                log("[PullLabBarcode] verifyIconUpdated: stopped");
+                return false;
+            }
+
+            attempts = attempts + 1;
+            await sleep(BARCODE_TIMEOUTS.waitVerifyIconMs);
+
+            var currentIcon = iconObj.el;
+            if (!currentIcon || !document.body.contains(currentIcon)) {
+                log("[PullLabBarcode] verifyIconUpdated: icon detached, re-querying");
+                var allIcons = document.querySelectorAll(BARCODE_SELECTORS.barcodeIcon);
+                var found = false;
+                var qi = 0;
+                while (qi < allIcons.length) {
+                    var qVal = extractBarcodeValue(allIcons[qi]);
+                    if (qVal === iconObj.barcode) {
+                        iconObj.el = allIcons[qi];
+                        currentIcon = allIcons[qi];
+                        found = true;
+                        break;
+                    }
+                    qi = qi + 1;
+                }
+                if (!found) {
+                    var broadIcons = document.querySelectorAll(BARCODE_SELECTORS.presenceCheckAnyIcon);
+                    var bqi = 0;
+                    while (bqi < broadIcons.length) {
+                        var broadVal = extractBarcodeValue(broadIcons[bqi]);
+                        if (broadVal === iconObj.barcode) {
+                            iconObj.el = broadIcons[bqi];
+                            currentIcon = broadIcons[bqi];
+                            found = true;
+                            break;
+                        }
+                        bqi = bqi + 1;
+                    }
+                }
+                if (!found) {
+                    log("[PullLabBarcode] verifyIconUpdated: icon not found in DOM");
+                    if (attempts < maxAttempts) {
+                        continue;
+                    }
+                    return false;
+                }
+            }
+
+            var hasClass = currentIcon.classList.contains(BARCODE_SELECTORS.verifiedClass);
+            var vTooltip = currentIcon.getAttribute(BARCODE_SELECTORS.tooltipAttr) || "";
+            var tooltipVerified = BARCODE_REGEX.verifiedPrefix.test(vTooltip);
+
+            if (hasClass || tooltipVerified) {
+                log("[PullLabBarcode] verifyIconUpdated: icon verified (class=" + String(hasClass) + ", tooltip=" + String(tooltipVerified) + ")");
+                return true;
+            }
+
+            log("[PullLabBarcode] verifyIconUpdated: not yet verified, attempt " + String(attempts) + "/" + String(maxAttempts));
+        }
+
+        log("[PullLabBarcode] verifyIconUpdated: verification failed after all retries");
+        return false;
+    }
+
+    async function processIconsSequentially(iconList) {
+        log("[PullLabBarcode] processIconsSequentially: starting with " + String(iconList.length) + " icons");
+
+        setAriaBusyOn();
+        announceBarcodeAriaLive("Starting barcode processing for " + String(iconList.length) + " items");
+
+        BARCODE_COUNTERS.total = iconList.length;
+        BARCODE_COUNTERS.processed = 0;
+        BARCODE_COUNTERS.verified = 0;
+        BARCODE_COUNTERS.skipped = 0;
+        BARCODE_COUNTERS.failures = 0;
+        BARCODE_COUNTERS.pending = iconList.length;
+        updateBarcodeRightPanelSummary(BARCODE_COUNTERS);
+
+        var startTime = Date.now();
+        var idx = 0;
+
+        while (idx < iconList.length) {
+            if (PULL_LAB_BARCODE_STOPPED) {
+                log("[PullLabBarcode] processIconsSequentially: stopped at index " + String(idx));
+                updateBarcodeRightPanelStatus(iconList[idx].statusKey, BARCODE_LABELS.statusStopped);
+                break;
+            }
+
+            if (Date.now() - startTime > BARCODE_TIMEOUTS.maxTotalDurationMs) {
+                log("[PullLabBarcode] processIconsSequentially: max duration exceeded");
+                updateBarcodeRightPanelStatus(iconList[idx].statusKey, BARCODE_LABELS.statusStopped, "timeout");
+                break;
+            }
+
+            var iconObj = iconList[idx];
+            log("[PullLabBarcode] processIconsSequentially: processing " + String(idx + 1) + "/" + String(iconList.length) + " barcode='" + iconObj.barcode + "'");
+
+            updateBarcodeRightPanelStatus(iconObj.statusKey, BARCODE_LABELS.statusProcessing);
+
+            var currentIcon = iconObj.el;
+            if (currentIcon && document.body.contains(currentIcon)) {
+                var alreadyVerifiedClass = currentIcon.classList.contains(BARCODE_SELECTORS.verifiedClass);
+                var alreadyTooltip = currentIcon.getAttribute(BARCODE_SELECTORS.tooltipAttr) || "";
+                var alreadyVerifiedTooltip = BARCODE_REGEX.verifiedPrefix.test(alreadyTooltip);
+                if (alreadyVerifiedClass || alreadyVerifiedTooltip) {
+                    log("[PullLabBarcode] processIconsSequentially: icon already verified, skipping");
+                    updateBarcodeRightPanelStatus(iconObj.statusKey, BARCODE_LABELS.statusSkippedVerified);
+                    BARCODE_COUNTERS.skipped = BARCODE_COUNTERS.skipped + 1;
+                    BARCODE_COUNTERS.pending = BARCODE_COUNTERS.pending - 1;
+                    updateBarcodeRightPanelSummary(BARCODE_COUNTERS);
+                    await barcodeYieldToUI();
+                    idx = idx + 1;
+                    continue;
+                }
+            } else {
+                log("[PullLabBarcode] processIconsSequentially: icon detached, re-querying");
+                var reIcons = document.querySelectorAll(BARCODE_SELECTORS.barcodeIcon);
+                var reFound = false;
+                var ri = 0;
+                while (ri < reIcons.length) {
+                    var rVal = extractBarcodeValue(reIcons[ri]);
+                    if (rVal === iconObj.barcode) {
+                        iconObj.el = reIcons[ri];
+                        reFound = true;
+                        log("[PullLabBarcode] processIconsSequentially: re-found icon");
+                        break;
+                    }
+                    ri = ri + 1;
+                }
+                if (!reFound) {
+                    log("[PullLabBarcode] processIconsSequentially: icon not found, marking failed");
+                    updateBarcodeRightPanelStatus(iconObj.statusKey, BARCODE_LABELS.statusFailed, "detached");
+                    BARCODE_COUNTERS.failures = BARCODE_COUNTERS.failures + 1;
+                    BARCODE_COUNTERS.pending = BARCODE_COUNTERS.pending - 1;
+                    updateBarcodeRightPanelSummary(BARCODE_COUNTERS);
+                    await barcodeYieldToUI();
+                    idx = idx + 1;
+                    continue;
+                }
+            }
+
+            try {
+                var fillResult = await openBarcodeModalAndFill(iconObj);
+
+                if (PULL_LAB_BARCODE_STOPPED) {
+                    updateBarcodeRightPanelStatus(iconObj.statusKey, BARCODE_LABELS.statusStopped);
+                    break;
+                }
+
+                if (fillResult === "already_verified") {
+                    log("[PullLabBarcode] processIconsSequentially: icon was already verified");
+                    updateBarcodeRightPanelStatus(iconObj.statusKey, BARCODE_LABELS.statusSkippedVerified);
+                    BARCODE_COUNTERS.skipped = BARCODE_COUNTERS.skipped + 1;
+                    BARCODE_COUNTERS.pending = BARCODE_COUNTERS.pending - 1;
+                    updateBarcodeRightPanelSummary(BARCODE_COUNTERS);
+                    await barcodeYieldToUI();
+                    idx = idx + 1;
+                    continue;
+                }
+
+                if (fillResult === "invalid_barcode") {
+                    log("[PullLabBarcode] processIconsSequentially: invalid barcode for '" + iconObj.barcode + "'");
+                    updateBarcodeRightPanelStatus(iconObj.statusKey, BARCODE_LABELS.statusInvalidBarcode);
+                    BARCODE_COUNTERS.failures = BARCODE_COUNTERS.failures + 1;
+                    BARCODE_COUNTERS.processed = BARCODE_COUNTERS.processed + 1;
+                    BARCODE_COUNTERS.pending = BARCODE_COUNTERS.pending - 1;
+                    updateBarcodeRightPanelSummary(BARCODE_COUNTERS);
+                    await barcodeYieldToUI();
+                    idx = idx + 1;
+                    continue;
+                }
+
+                if (!fillResult) {
+                    log("[PullLabBarcode] processIconsSequentially: fill/confirm failed for barcode='" + iconObj.barcode + "'");
+                    updateBarcodeRightPanelStatus(iconObj.statusKey, BARCODE_LABELS.statusFailed);
+                    BARCODE_COUNTERS.failures = BARCODE_COUNTERS.failures + 1;
+                    BARCODE_COUNTERS.processed = BARCODE_COUNTERS.processed + 1;
+                    BARCODE_COUNTERS.pending = BARCODE_COUNTERS.pending - 1;
+                    updateBarcodeRightPanelSummary(BARCODE_COUNTERS);
+                    await barcodeYieldToUI();
+                    idx = idx + 1;
+                    continue;
+                }
+
+                var verified = await verifyIconUpdated(iconObj);
+
+                if (PULL_LAB_BARCODE_STOPPED) {
+                    updateBarcodeRightPanelStatus(iconObj.statusKey, BARCODE_LABELS.statusStopped);
+                    break;
+                }
+
+                if (verified) {
+                    log("[PullLabBarcode] processIconsSequentially: verified barcode='" + iconObj.barcode + "'");
+                    updateBarcodeRightPanelStatus(iconObj.statusKey, BARCODE_LABELS.statusVerified);
+                    BARCODE_COUNTERS.verified = BARCODE_COUNTERS.verified + 1;
+                } else {
+                    log("[PullLabBarcode] processIconsSequentially: verification failed for barcode='" + iconObj.barcode + "'");
+                    updateBarcodeRightPanelStatus(iconObj.statusKey, BARCODE_LABELS.statusFailed, "verify failed");
+                    BARCODE_COUNTERS.failures = BARCODE_COUNTERS.failures + 1;
+                }
+
+                BARCODE_COUNTERS.processed = BARCODE_COUNTERS.processed + 1;
+                BARCODE_COUNTERS.pending = BARCODE_COUNTERS.pending - 1;
+                updateBarcodeRightPanelSummary(BARCODE_COUNTERS);
+            } catch (procErr) {
+                log("[PullLabBarcode] processIconsSequentially: error processing barcode='" + iconObj.barcode + "': " + String(procErr));
+                updateBarcodeRightPanelStatus(iconObj.statusKey, BARCODE_LABELS.statusFailed, String(procErr));
+                BARCODE_COUNTERS.failures = BARCODE_COUNTERS.failures + 1;
+                BARCODE_COUNTERS.processed = BARCODE_COUNTERS.processed + 1;
+                BARCODE_COUNTERS.pending = BARCODE_COUNTERS.pending - 1;
+                updateBarcodeRightPanelSummary(BARCODE_COUNTERS);
+            }
+
+            await barcodeYieldToUI();
+            idx = idx + 1;
+        }
+
+        setAriaBusyOff();
+        PULL_LAB_BARCODE_RUNNING = false;
+
+        var completionMsg = BARCODE_LABELS.done + ": " + String(BARCODE_COUNTERS.verified) + " verified, " + String(BARCODE_COUNTERS.skipped) + " skipped, " + String(BARCODE_COUNTERS.failures) + " failed out of " + String(BARCODE_COUNTERS.total);
+        log("[PullLabBarcode] processIconsSequentially: " + completionMsg);
+        announceBarcodeAriaLive(completionMsg);
+        updateBarcodeRightPanelSummary(BARCODE_COUNTERS);
+
+        if (PULL_LAB_BARCODE_BUTTON_REF) {
+            try {
+                PULL_LAB_BARCODE_BUTTON_REF.focus();
+            } catch (focusErr) {}
+        }
+    }
+
+    async function pullLabBarcodeInit() {
+        log("[PullLabBarcode] pullLabBarcodeInit: starting feature");
+
+        if (PULL_LAB_BARCODE_RUNNING) {
+            log("[PullLabBarcode] pullLabBarcodeInit: already running, ignoring");
+            return;
+        }
+
+        PULL_LAB_BARCODE_STOPPED = false;
+        PULL_LAB_BARCODE_RUNNING = true;
+        PULL_LAB_BARCODE_STATUS_MAP = {};
+
+        BARCODE_COUNTERS.total = 0;
+        BARCODE_COUNTERS.processed = 0;
+        BARCODE_COUNTERS.verified = 0;
+        BARCODE_COUNTERS.skipped = 0;
+        BARCODE_COUNTERS.failures = 0;
+        BARCODE_COUNTERS.pending = 0;
+
+        openBarcodeProgressPanel();
+
+        if (PULL_LAB_BARCODE_STOPPED) {
+            log("[PullLabBarcode] pullLabBarcodeInit: stopped before collection");
+            return;
+        }
+
+        announceBarcodeAriaLive(BARCODE_LABELS.scanning);
+
+        var iconList = await collectBarcodeIcons();
+
+        if (PULL_LAB_BARCODE_STOPPED) {
+            log("[PullLabBarcode] pullLabBarcodeInit: stopped after collection");
+            return;
+        }
+
+        if (iconList.length === 0) {
+            log("[PullLabBarcode] pullLabBarcodeInit: no icons found");
+            if (PULL_LAB_BARCODE_SUMMARY_EL) {
+                PULL_LAB_BARCODE_SUMMARY_EL.innerHTML = "";
+                var warningSpan = document.createElement("span");
+                warningSpan.style.color = "#f0ad4e";
+                warningSpan.style.fontWeight = "600";
+                warningSpan.textContent = "No barcode icons requiring input were found on this page.";
+                PULL_LAB_BARCODE_SUMMARY_EL.appendChild(warningSpan);
+            }
+            announceBarcodeAriaLive("No barcode icons found");
+            PULL_LAB_BARCODE_RUNNING = false;
+            setAriaBusyOff();
+            return;
+        }
+
+        var ri = 0;
+        while (ri < iconList.length) {
+            updateBarcodeRightPanelStatus(iconList[ri].statusKey, BARCODE_LABELS.statusPending);
+            ri = ri + 1;
+        }
+
+        await processIconsSequentially(iconList);
+
+        log("[PullLabBarcode] pullLabBarcodeInit: feature completed");
+    }
 
     //==========================
     // PARSE DEVIATION FEATURE
@@ -1319,7 +2518,8 @@
 
     function openSettingsPopup() {
         var buttonLabels = [
-            "Run Barcode",
+            "Pull Barcode",
+            "Pull Lab Barcode",
             "Scheduled Activities Builder",
             "Search Methods",
             "Parse Deviation",
@@ -9805,8 +11005,6 @@
         return true;
     }
 
-
-
     function importIERandomDelay() {
         var range = IMPORT_IE_SHORT_DELAY_MAX - IMPORT_IE_SHORT_DELAY_MIN;
         var val = IMPORT_IE_SHORT_DELAY_MIN + Math.floor(Math.random() * range);
@@ -14640,6 +15838,7 @@
         }
     }
 
+
     function createPopup(options) {
         options = options || {};
         var title = options.title || "Popup";
@@ -15262,6 +16461,30 @@
             APS_ParseDeviation();
         });
 
+        var pullLabBarcodeBtn = document.createElement("button");
+        pullLabBarcodeBtn.textContent = BARCODE_LABELS.featureButton;
+        pullLabBarcodeBtn.style.background = "#5b43c7";
+        pullLabBarcodeBtn.style.color = "#fff";
+        pullLabBarcodeBtn.style.border = "none";
+        pullLabBarcodeBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        pullLabBarcodeBtn.style.padding = scale(BUTTON_PADDING_PX);
+        pullLabBarcodeBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
+        pullLabBarcodeBtn.style.cursor = "pointer";
+        pullLabBarcodeBtn.style.fontWeight = "500";
+        pullLabBarcodeBtn.style.transition = "background 0.2s";
+        pullLabBarcodeBtn.setAttribute("aria-label", BARCODE_LABELS.featureButton);
+        pullLabBarcodeBtn.onmouseenter = function () {
+            this.style.background = "#4a37a0";
+        };
+        pullLabBarcodeBtn.onmouseleave = function () {
+            this.style.background = "#5b43c7";
+        };
+        pullLabBarcodeBtn.addEventListener("click", function () {
+            log("[PullLabBarcode] Button clicked");
+            pullLabBarcodeInit();
+        });
+        PULL_LAB_BARCODE_BUTTON_REF = pullLabBarcodeBtn;
+
         var clearLogsBtn = document.createElement("button");
         clearLogsBtn.textContent = "Clear Logs";
         clearLogsBtn.style.background = "#6c757d";
@@ -15278,6 +16501,7 @@
 
         var panelButtons = [
             { el: runBarcodeBtn, label: "Run Barcode" },
+            { el: pullLabBarcodeBtn, label: "Pull Lab Barcode" },
             { el: saBuilderBtn, label: "Scheduled Activities Builder" },
             { el: searchMethodsBtn, label: "Search Methods" },
             { el: parseDeviationBtn, label: "Parse Deviation" },

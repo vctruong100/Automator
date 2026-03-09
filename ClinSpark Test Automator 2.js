@@ -1,6 +1,6 @@
 
 // ==UserScript==
-// @name ClinSpark Test Automator
+// @name ClinSpark Test Automator 2
 // @namespace vinh.activity.plan.state
 // @version 3.3.3
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
@@ -127,7 +127,378 @@
     var GENDER_CONTROL_CLASS = "ieGenderControl";
     var CODE_VIEW_DUP_TOGGLE_BUTTON_ID = "ieCodeViewDupToggle";
 
-    // Run Find Study Event
+    var THEME_GRADIENT_START = "#667eea";
+    var THEME_GRADIENT_END = "#764ba2";
+    var THEME_GRADIENT_BG = "linear-gradient(135deg, #667eea 0%, #764ba2 100%)";
+    var THEME_SURFACE_BG = "rgba(15,10,40,0.55)";
+    var THEME_SURFACE_BG_HEAVY = "rgba(15,10,40,0.7)";
+    var THEME_SURFACE_BORDER = "rgba(255,255,255,0.25)";
+    var THEME_SURFACE_INNER_BORDER = "rgba(255,255,255,0.35)";
+    var THEME_BLUR_PX = 16;
+    var THEME_TEXT_PRIMARY = "#ffffff";
+    var THEME_TEXT_MUTED = "rgba(255,255,255,0.75)";
+    var THEME_TEXT_INVERSE = "#0f1020";
+    var THEME_ACCENT = "#a78bfa";
+    var THEME_ACCENT_HOVER = "#c4b5fd";
+    var THEME_DANGER = "#ef4444";
+    var THEME_DANGER_DARK = "#b91c1c";
+    var THEME_WARNING = "#f59e0b";
+    var THEME_WARNING_DARK = "#d97706";
+    var THEME_SUCCESS = "#10b981";
+    var THEME_SUCCESS_DARK = "#059669";
+    var THEME_DISABLED_OPACITY = 0.5;
+    var THEME_SELECT_OPTION_BG = "#2d1b69";
+    var THEME_SHADOW = "0 8px 30px rgba(0,0,0,0.3)";
+    var THEME_RADIUS = 14;
+    var THEME_OUTLINE_FOCUS = "0 0 0 3px rgba(199,210,254,0.6)";
+    var THEME_SCROLLBAR_TRACK = "rgba(255,255,255,0.12)";
+    var THEME_SCROLLBAR_THUMB = "rgba(255,255,255,0.35)";
+    var THEME_STYLE_TAG_ID = "ieThemeStyles";
+    var THEME_SCOPE_CLASS = "ie-theme-scope";
+    var THEME_Z_BASE = 10000;
+    var THEME_Z_OVERLAY = 11000;
+    var THEME_Z_TOAST = 12000;
+
+    function injectThemeStylesIfNeeded() {
+        log("injectThemeStylesIfNeeded: start");
+        var existing = document.getElementById(THEME_STYLE_TAG_ID);
+        if (existing) {
+            log("injectThemeStylesIfNeeded: already present, skipping");
+            return;
+        }
+        var style = document.createElement("style");
+        style.id = THEME_STYLE_TAG_ID;
+        style.textContent = [
+            "." + THEME_SCOPE_CLASS + " {",
+            "  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;",
+            "  color: " + THEME_TEXT_PRIMARY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-theme-backdrop {",
+            "  position: fixed; top:0; left:0; width:100%; height:100%;",
+            "  background: linear-gradient(135deg, " + THEME_GRADIENT_START + " 0%, " + THEME_GRADIENT_END + " 100%);",
+            "  z-index: " + (THEME_Z_BASE - 1) + ";",
+            "  pointer-events: none;",
+            "}",
+            "." + THEME_SCOPE_CLASS + ".ie-glass-panel,",
+            "." + THEME_SCOPE_CLASS + " .ie-glass-panel {",
+            "  background: " + THEME_GRADIENT_BG + ";",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  box-shadow: inset 0 0 0 1px " + THEME_SURFACE_INNER_BORDER + ", " + THEME_SHADOW + ";",
+            "  border-radius: " + THEME_RADIUS + "px;",
+            "  color: " + THEME_TEXT_PRIMARY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + ".ie-glass-panel-header,",
+            "." + THEME_SCOPE_CLASS + " .ie-glass-panel-header {",
+            "  background: linear-gradient(135deg, " + THEME_GRADIENT_START + " 0%, " + THEME_GRADIENT_END + " 100%);",
+            "  border-bottom: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  color: " + THEME_TEXT_PRIMARY + ";",
+            "  cursor: move; user-select: none;",
+            "}",
+            "." + THEME_SCOPE_CLASS + ".ie-glass-panel-header-danger,",
+            "." + THEME_SCOPE_CLASS + " .ie-glass-panel-header-danger {",
+            "  background: linear-gradient(135deg, " + THEME_DANGER + " 0%, " + THEME_DANGER_DARK + " 100%);",
+            "  border-bottom: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  color: " + THEME_TEXT_PRIMARY + ";",
+            "  cursor: move; user-select: none;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-primary {",
+            "  background: linear-gradient(135deg, " + THEME_GRADIENT_START + " 0%, " + THEME_GRADIENT_END + " 100%);",
+            "  color: " + THEME_TEXT_PRIMARY + "; border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 600;",
+            "  font-size: 14px; transition: opacity 0.2s, box-shadow 0.2s;",
+            "  box-shadow: " + THEME_SHADOW + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-primary:hover {",
+            "  opacity: 0.9; box-shadow: 0 0 0 2px " + THEME_ACCENT_HOVER + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-primary:focus-visible {",
+            "  box-shadow: " + THEME_OUTLINE_FOCUS + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-primary:disabled {",
+            "  opacity: " + THEME_DISABLED_OPACITY + "; cursor: default;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-secondary {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  color: " + THEME_TEXT_PRIMARY + "; border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 500;",
+            "  font-size: 13px; transition: background-color 0.2s, box-shadow 0.2s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-secondary:hover {",
+            "  background-color: " + THEME_SURFACE_BG_HEAVY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-secondary:disabled {",
+            "  opacity: " + THEME_DISABLED_OPACITY + "; cursor: default;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-secondary:focus-visible {",
+            "  box-shadow: " + THEME_OUTLINE_FOCUS + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-danger {",
+            "  background: linear-gradient(135deg, " + THEME_DANGER + " 0%, " + THEME_DANGER_DARK + " 100%);",
+            "  color: " + THEME_TEXT_PRIMARY + "; border: 1px solid rgba(239,68,68,0.4);",
+            "  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 600;",
+            "  font-size: 14px; transition: opacity 0.2s, box-shadow 0.2s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-danger:hover {",
+            "  opacity: 0.9;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-danger:focus-visible {",
+            "  box-shadow: " + THEME_OUTLINE_FOCUS + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-success {",
+            "  background: linear-gradient(135deg, " + THEME_SUCCESS + " 0%, " + THEME_SUCCESS_DARK + " 100%);",
+            "  color: " + THEME_TEXT_PRIMARY + "; border: 1px solid rgba(16,185,129,0.4);",
+            "  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 600;",
+            "  font-size: 14px; transition: opacity 0.2s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-success:hover { opacity: 0.9; }",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-success:disabled {",
+            "  opacity: " + THEME_DISABLED_OPACITY + "; cursor: default;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-warning {",
+            "  background: linear-gradient(135deg, " + THEME_WARNING + " 0%, " + THEME_WARNING_DARK + " 100%);",
+            "  color: " + THEME_TEXT_INVERSE + "; border: 1px solid rgba(245,158,11,0.4);",
+            "  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 600;",
+            "  font-size: 14px; transition: opacity 0.2s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-warning:hover { opacity: 0.9; }",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-warning:disabled {",
+            "  opacity: " + THEME_DISABLED_OPACITY + "; cursor: default;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-input {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; padding: 10px 12px; color: " + THEME_TEXT_PRIMARY + ";",
+            "  font-size: 14px; outline: none; transition: border-color 0.2s, box-shadow 0.2s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-input:focus {",
+            "  border-color: " + THEME_ACCENT + "; box-shadow: " + THEME_OUTLINE_FOCUS + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-input::placeholder { color: " + THEME_TEXT_MUTED + "; }",
+            "." + THEME_SCOPE_CLASS + " .ie-select {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; padding: 8px 12px; color: " + THEME_TEXT_PRIMARY + ";",
+            "  font-size: 14px; cursor: pointer; outline: none;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-select:focus {",
+            "  border-color: " + THEME_ACCENT + "; box-shadow: " + THEME_OUTLINE_FOCUS + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-select option {",
+            "  background: " + THEME_SELECT_OPTION_BG + "; color: " + THEME_TEXT_PRIMARY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-checkbox-row {",
+            "  display: flex; align-items: center; gap: 10px;",
+            "  padding: 8px 12px; background-color: " + THEME_SURFACE_BG + ";",
+            "  border-radius: 8px; cursor: pointer; transition: background-color 0.15s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-checkbox-row:hover {",
+            "  background-color: " + THEME_SURFACE_BG_HEAVY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " input[type='checkbox'] {",
+            "  accent-color: " + THEME_ACCENT + "; cursor: pointer;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " input[type='range'] {",
+            "  accent-color: " + THEME_ACCENT + "; cursor: pointer;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-pill-success {",
+            "  background: rgba(16,185,129,0.25); color: " + THEME_SUCCESS + ";",
+            "  padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-pill-danger {",
+            "  background: rgba(239,68,68,0.25); color: " + THEME_DANGER + ";",
+            "  padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-pill-warning {",
+            "  background: rgba(245,158,11,0.25); color: " + THEME_WARNING + ";",
+            "  padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-pill-muted {",
+            "  background: " + THEME_SURFACE_BG + "; color: " + THEME_TEXT_MUTED + ";",
+            "  padding: 2px 10px; border-radius: 10px; font-size: 11px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-pill-accent {",
+            "  background: rgba(167,139,250,0.25); color: " + THEME_ACCENT + ";",
+            "  padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-pill-info {",
+            "  background: rgba(102,126,234,0.25); color: " + THEME_GRADIENT_START + ";",
+            "  padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-progress-track {",
+            "  width: 100%; height: 8px; background: " + THEME_SURFACE_BG + ";",
+            "  border-radius: 4px; overflow: hidden;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-progress-fill {",
+            "  height: 100%; transition: width 0.3s;",
+            "  background: linear-gradient(135deg, " + THEME_GRADIENT_START + " 0%, " + THEME_GRADIENT_END + " 100%);",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-spinner {",
+            "  width: 40px; height: 40px;",
+            "  border: 4px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-top: 4px solid " + THEME_ACCENT + ";",
+            "  border-radius: 50%; margin: 0 auto 16px;",
+            "  animation: ieThemeSpin 1s linear infinite;",
+            "}",
+            "@keyframes ieThemeSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }",
+            "@media (prefers-reduced-motion: reduce) {",
+            "  ." + THEME_SCOPE_CLASS + " .ie-spinner { animation: none; }",
+            "  ." + THEME_SCOPE_CLASS + " * { transition-duration: 0s !important; animation-duration: 0s !important; }",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-list-item {",
+            "  display: flex; align-items: center; gap: 10px;",
+            "  padding: 10px; margin-bottom: 6px;",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; background-color: " + THEME_SURFACE_BG + ";",
+            "  cursor: pointer; transition: background-color 0.2s, border-color 0.2s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-list-item:hover {",
+            "  background-color: " + THEME_SURFACE_BG_HEAVY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-list-item.ie-selected {",
+            "  background-color: rgba(167,139,250,0.2); border-color: " + THEME_ACCENT + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-list-item.ie-selected-success {",
+            "  background-color: rgba(16,185,129,0.15); border-color: " + THEME_SUCCESS + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-list-item.ie-selected-danger {",
+            "  background-color: rgba(239,68,68,0.15); border-color: " + THEME_DANGER + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-section-header {",
+            "  font-weight: 600; font-size: 14px; color: " + THEME_ACCENT + ";",
+            "  padding: 8px; background-color: " + THEME_SURFACE_BG + ";",
+            "  border-radius: " + THEME_RADIUS + "px " + THEME_RADIUS + "px 0 0;",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + "; border-bottom: none;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-section-body {",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 0 0 " + THEME_RADIUS + "px " + THEME_RADIUS + "px;",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-count-badge {",
+            "  font-size: 11px; color: " + THEME_TEXT_MUTED + ";",
+            "  background: " + THEME_SURFACE_BG + "; padding: 2px 8px;",
+            "  border-radius: 10px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-radio-indicator {",
+            "  width: 18px; height: 18px; border: 2px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 50%; flex-shrink: 0; display: flex;",
+            "  align-items: center; justify-content: center;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-sub-surface {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-status-area {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; padding: 6px; font-size: 13px;",
+            "  white-space: pre-wrap; color: " + THEME_TEXT_PRIMARY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-log-box {",
+            "  background-color: rgba(0,0,0,0.25);",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; padding: 6px; font-size: 12px;",
+            "  color: " + THEME_TEXT_MUTED + "; white-space: pre-wrap;",
+            "  word-break: break-word; overflow-wrap: anywhere;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-resize-handle {",
+            "  position: absolute; width: 12px; height: 12px;",
+            "  right: 6px; bottom: 6px; cursor: se-resize;",
+            "  background: " + THEME_SURFACE_BORDER + "; border-radius: 2px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-error-text {",
+            "  color: " + THEME_DANGER + "; text-align: center; font-size: 14px; min-height: 20px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-muted-text {",
+            "  color: " + THEME_TEXT_MUTED + "; font-size: 13px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-selection-info {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  border-radius: 8px; padding: 10px; font-size: 13px;",
+            "  color: " + THEME_TEXT_MUTED + "; text-align: center;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-summary-box {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  border-radius: 8px; padding: 12px; text-align: center;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " ::-webkit-scrollbar { width: 8px; height: 8px; }",
+            "." + THEME_SCOPE_CLASS + " ::-webkit-scrollbar-track {",
+            "  background: " + THEME_SCROLLBAR_TRACK + "; border-radius: 4px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " ::-webkit-scrollbar-thumb {",
+            "  background: " + THEME_SCROLLBAR_THUMB + "; border-radius: 4px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " ::-webkit-scrollbar-thumb:hover {",
+            "  background: rgba(255,255,255,0.5);",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .select2-container .select2-choice,",
+            "." + THEME_SCOPE_CLASS + " .select2-container .select2-choices {",
+            "  background-color: " + THEME_SURFACE_BG + " !important;",
+            "  background-image: none !important;",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + " !important;",
+            "  color: " + THEME_TEXT_PRIMARY + " !important;",
+            "  border-radius: 8px !important;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .select2-container .select2-chosen {",
+            "  color: " + THEME_TEXT_PRIMARY + " !important;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .select2-container .select2-arrow {",
+            "  background: none !important; border-left: 1px solid " + THEME_SURFACE_BORDER + " !important;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .select2-container .select2-arrow b {",
+            "  background-position: 0 1px !important;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .select2-drop,",
+            ".select2-drop.select2-drop-active {",
+            "  background-color: rgba(45,27,105,0.97) !important;",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + " !important;",
+            "  z-index: " + THEME_Z_OVERLAY + " !important;",
+            "  color: " + THEME_TEXT_PRIMARY + " !important;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .select2-results .select2-result-label,",
+            ".select2-drop.select2-drop-active .select2-results .select2-result-label {",
+            "  color: " + THEME_TEXT_PRIMARY + " !important;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .select2-results .select2-highlighted,",
+            ".select2-drop.select2-drop-active .select2-results .select2-highlighted {",
+            "  background: " + THEME_ACCENT + " !important; color: " + THEME_TEXT_INVERSE + " !important;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .select2-results .select2-highlighted .select2-result-label,",
+            ".select2-drop.select2-drop-active .select2-results .select2-highlighted .select2-result-label {",
+            "  color: " + THEME_TEXT_INVERSE + " !important;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .select2-search input,",
+            ".select2-drop.select2-drop-active .select2-search input {",
+            "  background-color: " + THEME_SURFACE_BG + " !important;",
+            "  color: " + THEME_TEXT_PRIMARY + " !important;",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + " !important;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .select2-results .select2-no-results {",
+            "  background: " + THEME_SURFACE_BG_HEAVY + " !important; color: " + THEME_TEXT_MUTED + " !important;",
+            "}"
+        ].join("\n");
+        document.head.appendChild(style);
+        log("injectThemeStylesIfNeeded: completed, style tag created with id=" + THEME_STYLE_TAG_ID);
+    }
+
+    function applyThemeToUiRoots() {
+        log("applyThemeToUiRoots: start");
+        var panel = document.getElementById(PANEL_ID);
+        if (panel && !panel.classList.contains(THEME_SCOPE_CLASS)) {
+            panel.classList.add(THEME_SCOPE_CLASS);
+            log("applyThemeToUiRoots: added " + THEME_SCOPE_CLASS + " to main panel");
+        }
+        var popups = document.querySelectorAll("[id^='clinsparkPopup_']");
+        for (var i = 0; i < popups.length; i++) {
+            if (!popups[i].classList.contains(THEME_SCOPE_CLASS)) {
+                popups[i].classList.add(THEME_SCOPE_CLASS);
+                log("applyThemeToUiRoots: added " + THEME_SCOPE_CLASS + " to popup " + popups[i].id);
+            }
+        }
+        log("applyThemeToUiRoots: completed");
+    }
+
 
     var STORAGE_FIND_FORM_PENDING = "activityPlanState.findForm.pending";
     var STORAGE_FIND_FORM_KEYWORD = "activityPlanState.findForm.keyword";
@@ -215,1207 +586,6 @@
 
     var CLEAR_MAPPING_CANCELED = false;
     var CLEAR_MAPPING_PAUSE = false;
-
-    // Lab Barcode Feature
-
-    var BARCODE_SELECTORS = {
-        featureButtonTarget: '.main-gui-panel',
-        presenceCheckAnyIcon: 'i.fa-barcode, i.fa.fa-barcode',
-        barcodeIcon: 'i.fa-barcode[class*="itemDataBarcodeIcon_"], i.fa.fa-barcode[class*="itemDataBarcodeIcon_"]',
-        verifiedClass: 'barcodeVerifiedClass',
-        tooltipAttr: 'data-original-title',
-        modalInput: 'input.bootbox-input.bootbox-input-text.form-control',
-        modalConfirmPrimary: 'button[data-bb-handler="confirm"].btn.btn-primary',
-        modalAnyPrimary: 'div.bootbox.modal.in .modal-footer .btn.btn-primary, div.bootbox.modal.show .modal-footer .btn.btn-primary',
-        bootboxVisibleModal: 'div.bootbox.modal.in, div.bootbox.modal.show',
-        bootboxBody: '.bootbox-body',
-        bootboxOkBtn: 'button[data-bb-handler="ok"].btn.btn-primary',
-        itemRow: 'tr',
-        itemTextCell: 'td.itemText',
-        itemHelpText: '.itemHelpText',
-        ariaLiveRegion: '.aria-live-region'
-    };
-    var BARCODE_TIMEOUTS = {
-        waitProgressPanelMs: 10000,
-        waitCollectIconsMs: 8000,
-        waitModalOpenMs: 8000,
-        waitModalCloseMs: 6000,
-        waitSettleMs: 200,
-        waitVerifyIconMs: 1200,
-        idleBetweenItemsMs: 120,
-        maxTotalDurationMs: 300000
-    };
-    var BARCODE_RETRY = {
-        collectRetries: 2,
-        openModalRetries: 2,
-        fillConfirmRetries: 2,
-        verifyRetries: 2
-    };
-    var BARCODE_LABELS = {
-        featureButton: 'Pull Lab Barcode',
-        progressTitle: 'Pull Lab Barcode',
-        statusPending: 'Pending',
-        statusProcessing: 'Processing',
-        statusVerified: 'Verified',
-        statusSkippedVerified: 'Skipped (Already Verified)',
-        statusFailed: 'Failed',
-        statusInvalidBarcode: 'Failed (Invalid Barcode)',
-        statusStopped: 'Stopped',
-        scanning: 'Collecting barcode icons',
-        filling: 'Filling barcode',
-        confirming: 'Confirming',
-        verifying: 'Verifying',
-        done: 'Completed'
-    };
-    var BARCODE_COUNTERS = {
-        total: 0,
-        processed: 0,
-        verified: 0,
-        skipped: 0,
-        failures: 0,
-        pending: 0
-    };
-    var BARCODE_REGEX = {
-        barcodeClassToken: /\bitemDataBarcodeIcon_([A-Za-z0-9_-]+)\b/,
-        requiredPrefix: /^Scan Required:?/i,
-        verifiedPrefix: /^Verified:/i,
-        okText: /^(ok|confirm)$/i
-    };
-    var BARCODE_ATTRS = {
-        ariaBusyTarget: 'body',
-        ariaBusyAttr: 'aria-busy'
-    };
-    var PULL_LAB_BARCODE_STOPPED = false;
-    var PULL_LAB_BARCODE_RUNNING = false;
-    var PULL_LAB_BARCODE_POPUP_REF = null;
-    var PULL_LAB_BARCODE_TIMEOUTS_LIST = [];
-    var PULL_LAB_BARCODE_INTERVALS_LIST = [];
-    var PULL_LAB_BARCODE_OBSERVERS_LIST = [];
-    var PULL_LAB_BARCODE_RAF_IDS = [];
-    var PULL_LAB_BARCODE_IDLE_IDS = [];
-    var PULL_LAB_BARCODE_BUTTON_REF = null;
-    var PULL_LAB_BARCODE_ARIA_LIVE_EL = null;
-    var PULL_LAB_BARCODE_LEFT_LIST_EL = null;
-    var PULL_LAB_BARCODE_RIGHT_LIST_EL = null;
-    var PULL_LAB_BARCODE_SUMMARY_EL = null;
-    var PULL_LAB_BARCODE_STATUS_MAP = {};
-
-    //==========================
-    // PULL LAB BARCODE FEATURE
-    //==========================
-    // This feature pulls every lab barcode in the form
-    //==========================
-
-    function setAriaBusyOn() {
-        log("[PullLabBarcode] setAriaBusyOn: setting aria-busy on body");
-        try {
-            var target = document.querySelector(BARCODE_ATTRS.ariaBusyTarget);
-            if (target) {
-                target.setAttribute(BARCODE_ATTRS.ariaBusyAttr, "true");
-            }
-        } catch (e) {
-            log("[PullLabBarcode] setAriaBusyOn: error " + String(e));
-        }
-    }
-
-    function setAriaBusyOff() {
-        log("[PullLabBarcode] setAriaBusyOff: clearing aria-busy on body");
-        try {
-            var target = document.querySelector(BARCODE_ATTRS.ariaBusyTarget);
-            if (target) {
-                target.removeAttribute(BARCODE_ATTRS.ariaBusyAttr);
-            }
-        } catch (e) {
-            log("[PullLabBarcode] setAriaBusyOff: error " + String(e));
-        }
-    }
-
-    function stopPullLabBarcode() {
-        log("[PullLabBarcode] stopPullLabBarcode: initiating full teardown");
-        PULL_LAB_BARCODE_STOPPED = true;
-        PULL_LAB_BARCODE_RUNNING = false;
-        var i;
-        i = 0;
-        while (i < PULL_LAB_BARCODE_TIMEOUTS_LIST.length) {
-            try {
-                clearTimeout(PULL_LAB_BARCODE_TIMEOUTS_LIST[i]);
-            } catch (e) {}
-            i = i + 1;
-        }
-        PULL_LAB_BARCODE_TIMEOUTS_LIST = [];
-        i = 0;
-        while (i < PULL_LAB_BARCODE_INTERVALS_LIST.length) {
-            try {
-                clearInterval(PULL_LAB_BARCODE_INTERVALS_LIST[i]);
-            } catch (e) {}
-            i = i + 1;
-        }
-        PULL_LAB_BARCODE_INTERVALS_LIST = [];
-        i = 0;
-        while (i < PULL_LAB_BARCODE_OBSERVERS_LIST.length) {
-            try {
-                PULL_LAB_BARCODE_OBSERVERS_LIST[i].disconnect();
-            } catch (e) {}
-            i = i + 1;
-        }
-        PULL_LAB_BARCODE_OBSERVERS_LIST = [];
-        i = 0;
-        while (i < PULL_LAB_BARCODE_RAF_IDS.length) {
-            try {
-                cancelAnimationFrame(PULL_LAB_BARCODE_RAF_IDS[i]);
-            } catch (e) {}
-            i = i + 1;
-        }
-        PULL_LAB_BARCODE_RAF_IDS = [];
-        i = 0;
-        while (i < PULL_LAB_BARCODE_IDLE_IDS.length) {
-            try {
-                if (typeof cancelIdleCallback === "function") {
-                    cancelIdleCallback(PULL_LAB_BARCODE_IDLE_IDS[i]);
-                }
-            } catch (e) {}
-            i = i + 1;
-        }
-        PULL_LAB_BARCODE_IDLE_IDS = [];
-        try {
-            var openModal = document.querySelector(BARCODE_SELECTORS.bootboxVisibleModal);
-            if (openModal) {
-                var modalCloseBtn = openModal.querySelector(".bootbox-close-button, button[data-dismiss='modal']");
-                if (modalCloseBtn) {
-                    modalCloseBtn.click();
-                    log("[PullLabBarcode] stopPullLabBarcode: closed open bootbox modal");
-                }
-            }
-        } catch (e) {
-            log("[PullLabBarcode] stopPullLabBarcode: error closing bootbox modal " + String(e));
-        }
-        if (PULL_LAB_BARCODE_POPUP_REF) {
-            var popupToClose = PULL_LAB_BARCODE_POPUP_REF;
-            PULL_LAB_BARCODE_POPUP_REF = null;
-            try {
-                popupToClose.close();
-            } catch (e) {}
-        }
-        setAriaBusyOff();
-        PULL_LAB_BARCODE_STATUS_MAP = {};
-        PULL_LAB_BARCODE_LEFT_LIST_EL = null;
-        PULL_LAB_BARCODE_RIGHT_LIST_EL = null;
-        PULL_LAB_BARCODE_SUMMARY_EL = null;
-        PULL_LAB_BARCODE_ARIA_LIVE_EL = null;
-        BARCODE_COUNTERS.total = 0;
-        BARCODE_COUNTERS.processed = 0;
-        BARCODE_COUNTERS.verified = 0;
-        BARCODE_COUNTERS.skipped = 0;
-        BARCODE_COUNTERS.failures = 0;
-        BARCODE_COUNTERS.pending = 0;
-        if (PULL_LAB_BARCODE_BUTTON_REF) {
-            try {
-                PULL_LAB_BARCODE_BUTTON_REF.focus();
-                log("[PullLabBarcode] stopPullLabBarcode: focus restored to feature button");
-            } catch (e) {}
-        }
-        log("[PullLabBarcode] stopPullLabBarcode: teardown complete");
-    }
-
-    function extractBarcodeValue(iconEl) {
-        log("[PullLabBarcode] extractBarcodeValue: checking icon element");
-        if (!iconEl) {
-            log("[PullLabBarcode] extractBarcodeValue: icon element is null");
-            return null;
-        }
-        var className = iconEl.className || "";
-        var match = BARCODE_REGEX.barcodeClassToken.exec(className);
-        if (match && match[1]) {
-            var val = match[1].trim();
-            log("[PullLabBarcode] extractBarcodeValue: extracted '" + val + "' from class");
-            return val;
-        }
-        var tooltip = iconEl.getAttribute(BARCODE_SELECTORS.tooltipAttr) || "";
-        if (tooltip) {
-            var fallbackStr = tooltip.replace(/^(Scan Required:|Verified:)\s*/i, "").trim();
-            var tokens = fallbackStr.split(/\s+/);
-            if (tokens.length > 0 && tokens[0].length > 0) {
-                log("[PullLabBarcode] extractBarcodeValue: fallback extracted '" + tokens[0] + "' from tooltip");
-                return tokens[0];
-            }
-        }
-        log("[PullLabBarcode] extractBarcodeValue: no barcode found");
-        return null;
-    }
-
-    function announceBarcodeAriaLive(message) {
-        if (!PULL_LAB_BARCODE_ARIA_LIVE_EL) {
-            return;
-        }
-        try {
-            PULL_LAB_BARCODE_ARIA_LIVE_EL.textContent = message;
-        } catch (e) {}
-    }
-
-    function updateBarcodeRightPanelStatus(barcodeKey, newStatus, detailOptional) {
-        log("[PullLabBarcode] updateBarcodeRightPanelStatus: barcode='" + barcodeKey + "' status='" + newStatus + "'");
-        PULL_LAB_BARCODE_STATUS_MAP[barcodeKey] = newStatus;
-        if (!PULL_LAB_BARCODE_RIGHT_LIST_EL) {
-            return;
-        }
-        var statusColors = {};
-        statusColors[BARCODE_LABELS.statusPending] = "#888";
-        statusColors[BARCODE_LABELS.statusProcessing] = "#f0ad4e";
-        statusColors[BARCODE_LABELS.statusVerified] = "#5cb85c";
-        statusColors[BARCODE_LABELS.statusSkippedVerified] = "#5bc0de";
-        statusColors[BARCODE_LABELS.statusFailed] = "#d9534f";
-        statusColors[BARCODE_LABELS.statusStopped] = "#999";
-        var rafId = requestAnimationFrame(function () {
-            try {
-                var escapedKey = barcodeKey.replace(/['"\\]/g, "\\$&");
-                var existingRow = PULL_LAB_BARCODE_RIGHT_LIST_EL.querySelector("[data-barcode-key='" + escapedKey + "']");
-                if (existingRow) {
-                    var statusSpan = existingRow.querySelector("[data-barcode-status]");
-                    if (statusSpan) {
-                        statusSpan.textContent = newStatus;
-                        statusSpan.style.color = statusColors[newStatus] || "#fff";
-                    }
-                    if (detailOptional) {
-                        var detailSpan = existingRow.querySelector("[data-barcode-detail]");
-                        if (detailSpan) {
-                            detailSpan.textContent = detailOptional;
-                        } else {
-                            detailSpan = document.createElement("span");
-                            detailSpan.setAttribute("data-barcode-detail", "");
-                            detailSpan.style.fontSize = "11px";
-                            detailSpan.style.color = "#777";
-                            detailSpan.style.marginLeft = "6px";
-                            detailSpan.textContent = detailOptional;
-                            existingRow.appendChild(detailSpan);
-                        }
-                    }
-                } else {
-                    var row = document.createElement("div");
-                    row.setAttribute("data-barcode-right-item", "");
-                    row.setAttribute("data-barcode-key", barcodeKey);
-                    row.style.padding = "4px 10px";
-                    row.style.display = "flex";
-                    row.style.alignItems = "center";
-                    row.style.gap = "8px";
-                    row.style.fontSize = "12px";
-                    row.style.borderBottom = "1px solid #2a2a2a";
-                    var labelSpan = document.createElement("span");
-                    labelSpan.style.flex = "1";
-                    labelSpan.style.color = "#ddd";
-                    labelSpan.style.overflow = "hidden";
-                    labelSpan.style.textOverflow = "ellipsis";
-                    labelSpan.style.whiteSpace = "nowrap";
-                    labelSpan.textContent = barcodeKey;
-                    var newStatusSpan = document.createElement("span");
-                    newStatusSpan.setAttribute("data-barcode-status", "");
-                    newStatusSpan.style.fontWeight = "600";
-                    newStatusSpan.style.whiteSpace = "nowrap";
-                    newStatusSpan.textContent = newStatus;
-                    newStatusSpan.style.color = statusColors[newStatus] || "#fff";
-                    row.appendChild(labelSpan);
-                    row.appendChild(newStatusSpan);
-                    if (detailOptional) {
-                        var newDetailSpan = document.createElement("span");
-                        newDetailSpan.setAttribute("data-barcode-detail", "");
-                        newDetailSpan.style.fontSize = "11px";
-                        newDetailSpan.style.color = "#777";
-                        newDetailSpan.textContent = detailOptional;
-                        row.appendChild(newDetailSpan);
-                    }
-                    PULL_LAB_BARCODE_RIGHT_LIST_EL.appendChild(row);
-                }
-            } catch (e) {
-                log("[PullLabBarcode] updateBarcodeRightPanelStatus: error " + String(e));
-            }
-        });
-        PULL_LAB_BARCODE_RAF_IDS.push(rafId);
-        announceBarcodeAriaLive(barcodeKey + ": " + newStatus);
-    }
-
-    function updateBarcodeRightPanelSummary(counters) {
-        log("[PullLabBarcode] updateBarcodeRightPanelSummary: updating summary");
-        if (!PULL_LAB_BARCODE_SUMMARY_EL) {
-            return;
-        }
-        var pct = 0;
-        if (counters.total > 0) {
-            pct = Math.round(((counters.processed + counters.skipped) / counters.total) * 100);
-        }
-        var rafId = requestAnimationFrame(function () {
-            try {
-                PULL_LAB_BARCODE_SUMMARY_EL.innerHTML = "";
-                var items = [
-                    { label: "Total", value: counters.total, color: "#fff" },
-                    { label: "Processed", value: counters.processed, color: "#ccc" },
-                    { label: "Verified", value: counters.verified, color: "#5cb85c" },
-                    { label: "Skipped", value: counters.skipped, color: "#5bc0de" },
-                    { label: "Failed", value: counters.failures, color: "#d9534f" },
-                    { label: "Pending", value: counters.pending, color: "#888" }
-                ];
-                var si = 0;
-                while (si < items.length) {
-                    var span = document.createElement("span");
-                    span.style.color = items[si].color;
-                    span.textContent = items[si].label + ": " + items[si].value;
-                    PULL_LAB_BARCODE_SUMMARY_EL.appendChild(span);
-                    si = si + 1;
-                }
-                var pctSpan = document.createElement("span");
-                pctSpan.style.fontWeight = "600";
-                if (pct >= 100) {
-                    pctSpan.style.color = "#5cb85c";
-                } else {
-                    pctSpan.style.color = "#f0ad4e";
-                }
-                pctSpan.textContent = pct + "% complete";
-                PULL_LAB_BARCODE_SUMMARY_EL.appendChild(pctSpan);
-            } catch (e) {
-                log("[PullLabBarcode] updateBarcodeRightPanelSummary: error " + String(e));
-            }
-        });
-        PULL_LAB_BARCODE_RAF_IDS.push(rafId);
-    }
-
-    function barcodeYieldToUI() {
-        return new Promise(function (resolve) {
-            if (typeof requestIdleCallback === "function") {
-                var idleId = requestIdleCallback(function () {
-                    resolve();
-                });
-                PULL_LAB_BARCODE_IDLE_IDS.push(idleId);
-            } else {
-                var tid = setTimeout(function () {
-                    resolve();
-                }, BARCODE_TIMEOUTS.idleBetweenItemsMs);
-                PULL_LAB_BARCODE_TIMEOUTS_LIST.push(tid);
-            }
-        });
-    }
-
-    function openBarcodeProgressPanel() {
-        log("[PullLabBarcode] openBarcodeProgressPanel: building progress panel");
-        var container = document.createElement("div");
-        container.style.display = "flex";
-        container.style.flexDirection = "column";
-        container.style.gap = "12px";
-        container.style.height = "100%";
-        container.style.boxSizing = "border-box";
-
-        var ariaLive = document.createElement("div");
-        ariaLive.setAttribute("aria-live", "polite");
-        ariaLive.setAttribute("aria-atomic", "true");
-        ariaLive.setAttribute("role", "status");
-        ariaLive.style.position = "absolute";
-        ariaLive.style.width = "1px";
-        ariaLive.style.height = "1px";
-        ariaLive.style.overflow = "hidden";
-        ariaLive.style.clip = "rect(0,0,0,0)";
-        ariaLive.style.whiteSpace = "nowrap";
-        container.appendChild(ariaLive);
-        PULL_LAB_BARCODE_ARIA_LIVE_EL = ariaLive;
-
-        var splitContainer = document.createElement("div");
-        splitContainer.style.display = "flex";
-        splitContainer.style.gap = "12px";
-        splitContainer.style.flex = "1";
-        splitContainer.style.minHeight = "0";
-        splitContainer.style.overflow = "hidden";
-
-        var leftPanel = document.createElement("div");
-        leftPanel.style.flex = "1";
-        leftPanel.style.display = "flex";
-        leftPanel.style.flexDirection = "column";
-        leftPanel.style.border = "1px solid #333";
-        leftPanel.style.borderRadius = "6px";
-        leftPanel.style.background = "#1a1a1a";
-        leftPanel.style.overflow = "hidden";
-
-        var leftHeader = document.createElement("div");
-        leftHeader.textContent = "Discovered Icons";
-        leftHeader.style.padding = "8px 10px";
-        leftHeader.style.fontWeight = "600";
-        leftHeader.style.fontSize = "13px";
-        leftHeader.style.borderBottom = "1px solid #333";
-        leftHeader.style.color = "#ccc";
-        leftPanel.appendChild(leftHeader);
-
-        var leftSearch = document.createElement("input");
-        leftSearch.type = "text";
-        leftSearch.placeholder = "Search icons...";
-        leftSearch.setAttribute("aria-label", "Search discovered icons");
-        leftSearch.style.width = "100%";
-        leftSearch.style.padding = "6px 10px";
-        leftSearch.style.background = "#222";
-        leftSearch.style.color = "#fff";
-        leftSearch.style.border = "none";
-        leftSearch.style.borderBottom = "1px solid #333";
-        leftSearch.style.boxSizing = "border-box";
-        leftSearch.style.fontSize = "12px";
-        leftSearch.style.outline = "none";
-        leftPanel.appendChild(leftSearch);
-
-        var leftList = document.createElement("div");
-        leftList.style.flex = "1";
-        leftList.style.overflowY = "auto";
-        leftList.style.padding = "4px 0";
-        leftPanel.appendChild(leftList);
-        PULL_LAB_BARCODE_LEFT_LIST_EL = leftList;
-
-        leftSearch.addEventListener("input", function () {
-            var term = leftSearch.value.toLowerCase();
-            var items = leftList.querySelectorAll("[data-barcode-left-item]");
-            var si = 0;
-            while (si < items.length) {
-                var txt = (items[si].textContent || "").toLowerCase();
-                if (term === "" || txt.indexOf(term) !== -1) {
-                    items[si].style.display = "";
-                } else {
-                    items[si].style.display = "none";
-                }
-                si = si + 1;
-            }
-        });
-
-        var rightPanel = document.createElement("div");
-        rightPanel.style.flex = "1";
-        rightPanel.style.display = "flex";
-        rightPanel.style.flexDirection = "column";
-        rightPanel.style.border = "1px solid #333";
-        rightPanel.style.borderRadius = "6px";
-        rightPanel.style.background = "#1a1a1a";
-        rightPanel.style.overflow = "hidden";
-
-        var rightHeader = document.createElement("div");
-        rightHeader.textContent = "Status";
-        rightHeader.style.padding = "8px 10px";
-        rightHeader.style.fontWeight = "600";
-        rightHeader.style.fontSize = "13px";
-        rightHeader.style.borderBottom = "1px solid #333";
-        rightHeader.style.color = "#ccc";
-        rightPanel.appendChild(rightHeader);
-
-        var rightSearch = document.createElement("input");
-        rightSearch.type = "text";
-        rightSearch.placeholder = "Search status...";
-        rightSearch.setAttribute("aria-label", "Search item statuses");
-        rightSearch.style.width = "100%";
-        rightSearch.style.padding = "6px 10px";
-        rightSearch.style.background = "#222";
-        rightSearch.style.color = "#fff";
-        rightSearch.style.border = "none";
-        rightSearch.style.borderBottom = "1px solid #333";
-        rightSearch.style.boxSizing = "border-box";
-        rightSearch.style.fontSize = "12px";
-        rightSearch.style.outline = "none";
-        rightPanel.appendChild(rightSearch);
-
-        var rightList = document.createElement("div");
-        rightList.style.flex = "1";
-        rightList.style.overflowY = "auto";
-        rightList.style.padding = "4px 0";
-        rightPanel.appendChild(rightList);
-        PULL_LAB_BARCODE_RIGHT_LIST_EL = rightList;
-
-        rightSearch.addEventListener("input", function () {
-            var term = rightSearch.value.toLowerCase();
-            var items = rightList.querySelectorAll("[data-barcode-right-item]");
-            var si = 0;
-            while (si < items.length) {
-                var txt = (items[si].textContent || "").toLowerCase();
-                if (term === "" || txt.indexOf(term) !== -1) {
-                    items[si].style.display = "";
-                } else {
-                    items[si].style.display = "none";
-                }
-                si = si + 1;
-            }
-        });
-
-        splitContainer.appendChild(leftPanel);
-        splitContainer.appendChild(rightPanel);
-        container.appendChild(splitContainer);
-
-        var summaryFooter = document.createElement("div");
-        summaryFooter.style.padding = "8px 10px";
-        summaryFooter.style.background = "#1a1a1a";
-        summaryFooter.style.border = "1px solid #333";
-        summaryFooter.style.borderRadius = "6px";
-        summaryFooter.style.fontSize = "12px";
-        summaryFooter.style.color = "#ccc";
-        summaryFooter.style.display = "flex";
-        summaryFooter.style.flexWrap = "wrap";
-        summaryFooter.style.gap = "8px";
-        summaryFooter.style.justifyContent = "space-between";
-        summaryFooter.textContent = "Waiting to start...";
-        container.appendChild(summaryFooter);
-        PULL_LAB_BARCODE_SUMMARY_EL = summaryFooter;
-
-        var popup = createPopup({
-            title: BARCODE_LABELS.progressTitle,
-            content: container,
-            width: "700px",
-            height: "500px",
-            onClose: function () {
-                log("[PullLabBarcode] openBarcodeProgressPanel: popup close triggered");
-                stopPullLabBarcode();
-            }
-        });
-
-        PULL_LAB_BARCODE_POPUP_REF = popup;
-        try {
-            leftSearch.focus();
-        } catch (e) {}
-        log("[PullLabBarcode] openBarcodeProgressPanel: panel created");
-        return popup;
-    }
-
-    async function collectBarcodeIcons() {
-        log("[PullLabBarcode] collectBarcodeIcons: starting icon collection");
-        var attempts = 0;
-        var maxAttempts = BARCODE_RETRY.collectRetries;
-        var result = [];
-
-        while (attempts < maxAttempts) {
-            if (PULL_LAB_BARCODE_STOPPED) {
-                log("[PullLabBarcode] collectBarcodeIcons: stopped during collection");
-                return [];
-            }
-
-            var presenceCheck = document.querySelectorAll(BARCODE_SELECTORS.presenceCheckAnyIcon);
-            log("[PullLabBarcode] collectBarcodeIcons: attempt " + String(attempts + 1) + ", found " + String(presenceCheck.length) + " fa-barcode icons total");
-
-            if (presenceCheck.length === 0) {
-                attempts = attempts + 1;
-                if (attempts < maxAttempts) {
-                    log("[PullLabBarcode] collectBarcodeIcons: no icons found, retrying");
-                    await sleep(BARCODE_TIMEOUTS.waitCollectIconsMs / maxAttempts);
-                    continue;
-                }
-                log("[PullLabBarcode] collectBarcodeIcons: no barcode icons found after all retries");
-                return [];
-            }
-
-            var allIcons = document.querySelectorAll(BARCODE_SELECTORS.barcodeIcon);
-            log("[PullLabBarcode] collectBarcodeIcons: found " + String(allIcons.length) + " icons matching barcodeIcon selector");
-
-            result = [];
-
-            var ci = 0;
-            while (ci < allIcons.length) {
-                if (PULL_LAB_BARCODE_STOPPED) {
-                    log("[PullLabBarcode] collectBarcodeIcons: stopped during filtering");
-                    return [];
-                }
-
-                var icon = allIcons[ci];
-                var isVerifiedByClass = icon.classList.contains(BARCODE_SELECTORS.verifiedClass);
-                var tooltip = icon.getAttribute(BARCODE_SELECTORS.tooltipAttr) || "";
-                var isVerifiedByTooltip = BARCODE_REGEX.verifiedPrefix.test(tooltip);
-
-                if (isVerifiedByClass || isVerifiedByTooltip) {
-                    log("[PullLabBarcode] collectBarcodeIcons: icon " + String(ci) + " already verified, skipping");
-                    ci = ci + 1;
-                    continue;
-                }
-
-                var isRequired = BARCODE_REGEX.requiredPrefix.test(tooltip);
-                if (!isRequired) {
-                    log("[PullLabBarcode] collectBarcodeIcons: icon " + String(ci) + " tooltip does not start with 'Scan Required:', skipping");
-                    ci = ci + 1;
-                    continue;
-                }
-
-                var barcode = extractBarcodeValue(icon);
-                if (!barcode) {
-                    log("[PullLabBarcode] collectBarcodeIcons: icon " + String(ci) + " has no extractable barcode, skipping");
-                    ci = ci + 1;
-                    continue;
-                }
-
-                var parentRow = icon.closest(BARCODE_SELECTORS.itemRow);
-                if (parentRow) {
-                    var rowDisplay = parentRow.style.display;
-                    if (rowDisplay === "none") {
-                        log("[PullLabBarcode] collectBarcodeIcons: icon " + String(ci) + " parent row is hidden (display:none), skipping");
-                        ci = ci + 1;
-                        continue;
-                    }
-                }
-
-                var label = tooltip.replace(/^Scan Required:?\s*/i, "").trim();
-                if (!label || label.length === 0) {
-                    label = barcode;
-                }
-
-                var itemName = "";
-                if (parentRow) {
-                    var textCell = parentRow.querySelector(BARCODE_SELECTORS.itemTextCell);
-                    if (textCell) {
-                        var textCellClone = textCell.cloneNode(true);
-                        var helpTexts = textCellClone.querySelectorAll(BARCODE_SELECTORS.itemHelpText);
-                        var hi = 0;
-                        while (hi < helpTexts.length) {
-                            helpTexts[hi].remove();
-                            hi = hi + 1;
-                        }
-                        itemName = (textCellClone.textContent || "").trim();
-                    }
-                }
-                if (!itemName || itemName.length === 0) {
-                    itemName = label;
-                }
-
-                var statusKey = barcode + " (#" + String(result.length + 1) + ")";
-
-                result.push({
-                    el: icon,
-                    barcode: barcode,
-                    label: label,
-                    itemName: itemName,
-                    statusKey: statusKey
-                });
-
-                log("[PullLabBarcode] collectBarcodeIcons: added icon " + String(result.length) + " barcode='" + barcode + "' itemName='" + itemName + "'");
-
-                if (PULL_LAB_BARCODE_LEFT_LIST_EL) {
-                    var leftRow = document.createElement("div");
-                    leftRow.setAttribute("data-barcode-left-item", "");
-                    leftRow.style.padding = "6px 10px";
-                    leftRow.style.color = "#ddd";
-                    leftRow.style.borderBottom = "1px solid #2a2a2a";
-                    leftRow.style.overflow = "hidden";
-                    var indexSpan = document.createElement("span");
-                    indexSpan.style.color = "#666";
-                    indexSpan.style.marginRight = "8px";
-                    indexSpan.style.fontSize = "12px";
-                    indexSpan.textContent = String(result.length) + ".";
-                    var nameSpan = document.createElement("span");
-                    nameSpan.style.fontSize = "12px";
-                    nameSpan.style.fontWeight = "500";
-                    nameSpan.textContent = itemName;
-                    var barcodeDiv = document.createElement("div");
-                    barcodeDiv.style.fontSize = "10px";
-                    barcodeDiv.style.color = "#888";
-                    barcodeDiv.style.marginTop = "2px";
-                    barcodeDiv.style.marginLeft = "20px";
-                    barcodeDiv.style.overflow = "hidden";
-                    barcodeDiv.style.textOverflow = "ellipsis";
-                    barcodeDiv.style.whiteSpace = "nowrap";
-                    barcodeDiv.textContent = barcode;
-                    leftRow.appendChild(indexSpan);
-                    leftRow.appendChild(nameSpan);
-                    leftRow.appendChild(barcodeDiv);
-                    PULL_LAB_BARCODE_LEFT_LIST_EL.appendChild(leftRow);
-                }
-
-                ci = ci + 1;
-            }
-
-            if (result.length > 0) {
-                break;
-            }
-
-            attempts = attempts + 1;
-            if (attempts < maxAttempts) {
-                log("[PullLabBarcode] collectBarcodeIcons: 0 qualifying icons, retrying");
-                await sleep(BARCODE_TIMEOUTS.waitCollectIconsMs / maxAttempts);
-            }
-        }
-
-        log("[PullLabBarcode] collectBarcodeIcons: collected " + String(result.length) + " icons to process");
-        return result;
-    }
-
-    async function openBarcodeModalAndFill(iconObj) {
-        log("[PullLabBarcode] openBarcodeModalAndFill: starting for barcode='" + iconObj.barcode + "'");
-        var attempts = 0;
-        var maxAttempts = BARCODE_RETRY.fillConfirmRetries + 1;
-
-        while (attempts < maxAttempts) {
-            if (PULL_LAB_BARCODE_STOPPED) {
-                log("[PullLabBarcode] openBarcodeModalAndFill: stopped");
-                return false;
-            }
-
-            attempts = attempts + 1;
-            log("[PullLabBarcode] openBarcodeModalAndFill: attempt " + String(attempts) + "/" + String(maxAttempts));
-
-            var existingModal = document.querySelector(BARCODE_SELECTORS.bootboxVisibleModal);
-            if (existingModal) {
-                log("[PullLabBarcode] openBarcodeModalAndFill: existing modal detected, waiting for it to close");
-                await waitUntilHidden(BARCODE_SELECTORS.bootboxVisibleModal, BARCODE_TIMEOUTS.waitModalCloseMs);
-                await sleep(BARCODE_TIMEOUTS.waitSettleMs);
-            }
-
-            var currentIcon = iconObj.el;
-            if (!currentIcon || !document.body.contains(currentIcon)) {
-                log("[PullLabBarcode] openBarcodeModalAndFill: icon detached, re-querying by barcode");
-                var reQueryIcons = document.querySelectorAll(BARCODE_SELECTORS.barcodeIcon);
-                var reFound = false;
-                var qi = 0;
-                while (qi < reQueryIcons.length) {
-                    var qVal = extractBarcodeValue(reQueryIcons[qi]);
-                    if (qVal === iconObj.barcode) {
-                        iconObj.el = reQueryIcons[qi];
-                        currentIcon = reQueryIcons[qi];
-                        reFound = true;
-                        log("[PullLabBarcode] openBarcodeModalAndFill: re-found icon in DOM");
-                        break;
-                    }
-                    qi = qi + 1;
-                }
-                if (!reFound) {
-                    log("[PullLabBarcode] openBarcodeModalAndFill: icon not found in DOM after re-query");
-                    return false;
-                }
-            }
-
-            var preVerifiedClass = currentIcon.classList.contains(BARCODE_SELECTORS.verifiedClass);
-            var preTooltip = currentIcon.getAttribute(BARCODE_SELECTORS.tooltipAttr) || "";
-            if (preVerifiedClass || BARCODE_REGEX.verifiedPrefix.test(preTooltip)) {
-                log("[PullLabBarcode] openBarcodeModalAndFill: icon already verified before clicking");
-                return "already_verified";
-            }
-
-            log("[PullLabBarcode] openBarcodeModalAndFill: clicking icon");
-            try {
-                currentIcon.click();
-            } catch (clickErr) {
-                log("[PullLabBarcode] openBarcodeModalAndFill: click error " + String(clickErr));
-                if (attempts < maxAttempts) {
-                    await sleep(BARCODE_TIMEOUTS.waitSettleMs);
-                    continue;
-                }
-                return false;
-            }
-
-            log("[PullLabBarcode] openBarcodeModalAndFill: waiting for modal input");
-            var modalInput = await waitForSelector(BARCODE_SELECTORS.modalInput, BARCODE_TIMEOUTS.waitModalOpenMs);
-            if (!modalInput) {
-                log("[PullLabBarcode] openBarcodeModalAndFill: modal input not found after waiting");
-                if (attempts < maxAttempts) {
-                    await sleep(BARCODE_TIMEOUTS.waitSettleMs);
-                    continue;
-                }
-                return false;
-            }
-
-            var visibleModal = document.querySelector(BARCODE_SELECTORS.bootboxVisibleModal);
-            if (!visibleModal) {
-                log("[PullLabBarcode] openBarcodeModalAndFill: modal container not visible");
-                if (attempts < maxAttempts) {
-                    await sleep(BARCODE_TIMEOUTS.waitSettleMs);
-                    continue;
-                }
-                return false;
-            }
-
-            log("[PullLabBarcode] openBarcodeModalAndFill: filling input with '" + iconObj.barcode + "'");
-            try {
-                modalInput.focus();
-                modalInput.value = iconObj.barcode;
-                modalInput.dispatchEvent(new Event("input", { bubbles: true }));
-                modalInput.dispatchEvent(new Event("change", { bubbles: true }));
-            } catch (fillErr) {
-                log("[PullLabBarcode] openBarcodeModalAndFill: fill error " + String(fillErr));
-                if (attempts < maxAttempts) {
-                    await sleep(BARCODE_TIMEOUTS.waitSettleMs);
-                    continue;
-                }
-                return false;
-            }
-
-            await sleep(BARCODE_TIMEOUTS.waitSettleMs);
-
-            log("[PullLabBarcode] openBarcodeModalAndFill: looking for confirm button");
-            var confirmBtn = document.querySelector(BARCODE_SELECTORS.modalConfirmPrimary);
-            if (!confirmBtn) {
-                log("[PullLabBarcode] openBarcodeModalAndFill: primary confirm not found, trying fallback");
-                var allPrimaryBtns = document.querySelectorAll(BARCODE_SELECTORS.modalAnyPrimary);
-                var bi = 0;
-                while (bi < allPrimaryBtns.length) {
-                    var btnText = (allPrimaryBtns[bi].textContent || "").trim();
-                    if (BARCODE_REGEX.okText.test(btnText)) {
-                        confirmBtn = allPrimaryBtns[bi];
-                        log("[PullLabBarcode] openBarcodeModalAndFill: found fallback confirm with text '" + btnText + "'");
-                        break;
-                    }
-                    bi = bi + 1;
-                }
-            }
-
-            if (!confirmBtn) {
-                log("[PullLabBarcode] openBarcodeModalAndFill: no confirm button found");
-                if (attempts < maxAttempts) {
-                    await sleep(BARCODE_TIMEOUTS.waitSettleMs);
-                    continue;
-                }
-                return false;
-            }
-
-            log("[PullLabBarcode] openBarcodeModalAndFill: clicking confirm");
-            try {
-                confirmBtn.click();
-            } catch (confirmErr) {
-                log("[PullLabBarcode] openBarcodeModalAndFill: confirm click error " + String(confirmErr));
-                if (attempts < maxAttempts) {
-                    await sleep(BARCODE_TIMEOUTS.waitSettleMs);
-                    continue;
-                }
-                return false;
-            }
-
-            log("[PullLabBarcode] openBarcodeModalAndFill: waiting for modal to close");
-            var closed = await waitUntilHidden(BARCODE_SELECTORS.bootboxVisibleModal, BARCODE_TIMEOUTS.waitModalCloseMs);
-            if (!closed) {
-                log("[PullLabBarcode] openBarcodeModalAndFill: modal did not close in time");
-                if (attempts < maxAttempts) {
-                    continue;
-                }
-                return false;
-            }
-
-            log("[PullLabBarcode] openBarcodeModalAndFill: modal closed, checking for error modal");
-            var errorModal = await waitForSelector(BARCODE_SELECTORS.bootboxVisibleModal, 1500);
-            if (errorModal) {
-                var errorBody = errorModal.querySelector(BARCODE_SELECTORS.bootboxBody);
-                var errorText = errorBody ? (errorBody.textContent || "").trim() : "";
-                log("[PullLabBarcode] openBarcodeModalAndFill: post-confirm modal detected, text='" + errorText + "'");
-                if (errorText.toLowerCase().indexOf("invalid") !== -1) {
-                    log("[PullLabBarcode] openBarcodeModalAndFill: invalid barcode error detected");
-                    var okBtn = errorModal.querySelector(BARCODE_SELECTORS.bootboxOkBtn);
-                    if (!okBtn) {
-                        var fallbackBtns = errorModal.querySelectorAll(".modal-footer .btn.btn-primary");
-                        var fbi = 0;
-                        while (fbi < fallbackBtns.length) {
-                            var fbText = (fallbackBtns[fbi].textContent || "").trim();
-                            if (BARCODE_REGEX.okText.test(fbText)) {
-                                okBtn = fallbackBtns[fbi];
-                                break;
-                            }
-                            fbi = fbi + 1;
-                        }
-                    }
-                    if (okBtn) {
-                        log("[PullLabBarcode] openBarcodeModalAndFill: clicking OK to dismiss invalid barcode modal");
-                        try {
-                            okBtn.click();
-                        } catch (okErr) {
-                            log("[PullLabBarcode] openBarcodeModalAndFill: OK click error " + String(okErr));
-                        }
-                        await waitUntilHidden(BARCODE_SELECTORS.bootboxVisibleModal, BARCODE_TIMEOUTS.waitModalCloseMs);
-                        await sleep(BARCODE_TIMEOUTS.waitSettleMs);
-                    }
-                    return "invalid_barcode";
-                }
-            }
-
-            log("[PullLabBarcode] openBarcodeModalAndFill: modal closed successfully");
-            return true;
-        }
-
-        log("[PullLabBarcode] openBarcodeModalAndFill: all attempts exhausted");
-        return false;
-    }
-
-    async function verifyIconUpdated(iconObj) {
-        log("[PullLabBarcode] verifyIconUpdated: checking verification for barcode='" + iconObj.barcode + "'");
-        var attempts = 0;
-        var maxAttempts = BARCODE_RETRY.verifyRetries + 1;
-
-        while (attempts < maxAttempts) {
-            if (PULL_LAB_BARCODE_STOPPED) {
-                log("[PullLabBarcode] verifyIconUpdated: stopped");
-                return false;
-            }
-
-            attempts = attempts + 1;
-            await sleep(BARCODE_TIMEOUTS.waitVerifyIconMs);
-
-            var currentIcon = iconObj.el;
-            if (!currentIcon || !document.body.contains(currentIcon)) {
-                log("[PullLabBarcode] verifyIconUpdated: icon detached, re-querying");
-                var allIcons = document.querySelectorAll(BARCODE_SELECTORS.barcodeIcon);
-                var found = false;
-                var qi = 0;
-                while (qi < allIcons.length) {
-                    var qVal = extractBarcodeValue(allIcons[qi]);
-                    if (qVal === iconObj.barcode) {
-                        iconObj.el = allIcons[qi];
-                        currentIcon = allIcons[qi];
-                        found = true;
-                        break;
-                    }
-                    qi = qi + 1;
-                }
-                if (!found) {
-                    var broadIcons = document.querySelectorAll(BARCODE_SELECTORS.presenceCheckAnyIcon);
-                    var bqi = 0;
-                    while (bqi < broadIcons.length) {
-                        var broadVal = extractBarcodeValue(broadIcons[bqi]);
-                        if (broadVal === iconObj.barcode) {
-                            iconObj.el = broadIcons[bqi];
-                            currentIcon = broadIcons[bqi];
-                            found = true;
-                            break;
-                        }
-                        bqi = bqi + 1;
-                    }
-                }
-                if (!found) {
-                    log("[PullLabBarcode] verifyIconUpdated: icon not found in DOM");
-                    if (attempts < maxAttempts) {
-                        continue;
-                    }
-                    return false;
-                }
-            }
-
-            var hasClass = currentIcon.classList.contains(BARCODE_SELECTORS.verifiedClass);
-            var vTooltip = currentIcon.getAttribute(BARCODE_SELECTORS.tooltipAttr) || "";
-            var tooltipVerified = BARCODE_REGEX.verifiedPrefix.test(vTooltip);
-
-            if (hasClass || tooltipVerified) {
-                log("[PullLabBarcode] verifyIconUpdated: icon verified (class=" + String(hasClass) + ", tooltip=" + String(tooltipVerified) + ")");
-                return true;
-            }
-
-            log("[PullLabBarcode] verifyIconUpdated: not yet verified, attempt " + String(attempts) + "/" + String(maxAttempts));
-        }
-
-        log("[PullLabBarcode] verifyIconUpdated: verification failed after all retries");
-        return false;
-    }
-
-    async function processIconsSequentially(iconList) {
-        log("[PullLabBarcode] processIconsSequentially: starting with " + String(iconList.length) + " icons");
-
-        setAriaBusyOn();
-        announceBarcodeAriaLive("Starting barcode processing for " + String(iconList.length) + " items");
-
-        BARCODE_COUNTERS.total = iconList.length;
-        BARCODE_COUNTERS.processed = 0;
-        BARCODE_COUNTERS.verified = 0;
-        BARCODE_COUNTERS.skipped = 0;
-        BARCODE_COUNTERS.failures = 0;
-        BARCODE_COUNTERS.pending = iconList.length;
-        updateBarcodeRightPanelSummary(BARCODE_COUNTERS);
-
-        var startTime = Date.now();
-        var idx = 0;
-
-        while (idx < iconList.length) {
-            if (PULL_LAB_BARCODE_STOPPED) {
-                log("[PullLabBarcode] processIconsSequentially: stopped at index " + String(idx));
-                updateBarcodeRightPanelStatus(iconList[idx].statusKey, BARCODE_LABELS.statusStopped);
-                break;
-            }
-
-            if (Date.now() - startTime > BARCODE_TIMEOUTS.maxTotalDurationMs) {
-                log("[PullLabBarcode] processIconsSequentially: max duration exceeded");
-                updateBarcodeRightPanelStatus(iconList[idx].statusKey, BARCODE_LABELS.statusStopped, "timeout");
-                break;
-            }
-
-            var iconObj = iconList[idx];
-            log("[PullLabBarcode] processIconsSequentially: processing " + String(idx + 1) + "/" + String(iconList.length) + " barcode='" + iconObj.barcode + "'");
-
-            updateBarcodeRightPanelStatus(iconObj.statusKey, BARCODE_LABELS.statusProcessing);
-
-            var currentIcon = iconObj.el;
-            if (currentIcon && document.body.contains(currentIcon)) {
-                var alreadyVerifiedClass = currentIcon.classList.contains(BARCODE_SELECTORS.verifiedClass);
-                var alreadyTooltip = currentIcon.getAttribute(BARCODE_SELECTORS.tooltipAttr) || "";
-                var alreadyVerifiedTooltip = BARCODE_REGEX.verifiedPrefix.test(alreadyTooltip);
-                if (alreadyVerifiedClass || alreadyVerifiedTooltip) {
-                    log("[PullLabBarcode] processIconsSequentially: icon already verified, skipping");
-                    updateBarcodeRightPanelStatus(iconObj.statusKey, BARCODE_LABELS.statusSkippedVerified);
-                    BARCODE_COUNTERS.skipped = BARCODE_COUNTERS.skipped + 1;
-                    BARCODE_COUNTERS.pending = BARCODE_COUNTERS.pending - 1;
-                    updateBarcodeRightPanelSummary(BARCODE_COUNTERS);
-                    await barcodeYieldToUI();
-                    idx = idx + 1;
-                    continue;
-                }
-            } else {
-                log("[PullLabBarcode] processIconsSequentially: icon detached, re-querying");
-                var reIcons = document.querySelectorAll(BARCODE_SELECTORS.barcodeIcon);
-                var reFound = false;
-                var ri = 0;
-                while (ri < reIcons.length) {
-                    var rVal = extractBarcodeValue(reIcons[ri]);
-                    if (rVal === iconObj.barcode) {
-                        iconObj.el = reIcons[ri];
-                        reFound = true;
-                        log("[PullLabBarcode] processIconsSequentially: re-found icon");
-                        break;
-                    }
-                    ri = ri + 1;
-                }
-                if (!reFound) {
-                    log("[PullLabBarcode] processIconsSequentially: icon not found, marking failed");
-                    updateBarcodeRightPanelStatus(iconObj.statusKey, BARCODE_LABELS.statusFailed, "detached");
-                    BARCODE_COUNTERS.failures = BARCODE_COUNTERS.failures + 1;
-                    BARCODE_COUNTERS.pending = BARCODE_COUNTERS.pending - 1;
-                    updateBarcodeRightPanelSummary(BARCODE_COUNTERS);
-                    await barcodeYieldToUI();
-                    idx = idx + 1;
-                    continue;
-                }
-            }
-
-            try {
-                var fillResult = await openBarcodeModalAndFill(iconObj);
-
-                if (PULL_LAB_BARCODE_STOPPED) {
-                    updateBarcodeRightPanelStatus(iconObj.statusKey, BARCODE_LABELS.statusStopped);
-                    break;
-                }
-
-                if (fillResult === "already_verified") {
-                    log("[PullLabBarcode] processIconsSequentially: icon was already verified");
-                    updateBarcodeRightPanelStatus(iconObj.statusKey, BARCODE_LABELS.statusSkippedVerified);
-                    BARCODE_COUNTERS.skipped = BARCODE_COUNTERS.skipped + 1;
-                    BARCODE_COUNTERS.pending = BARCODE_COUNTERS.pending - 1;
-                    updateBarcodeRightPanelSummary(BARCODE_COUNTERS);
-                    await barcodeYieldToUI();
-                    idx = idx + 1;
-                    continue;
-                }
-
-                if (fillResult === "invalid_barcode") {
-                    log("[PullLabBarcode] processIconsSequentially: invalid barcode for '" + iconObj.barcode + "'");
-                    updateBarcodeRightPanelStatus(iconObj.statusKey, BARCODE_LABELS.statusInvalidBarcode);
-                    BARCODE_COUNTERS.failures = BARCODE_COUNTERS.failures + 1;
-                    BARCODE_COUNTERS.processed = BARCODE_COUNTERS.processed + 1;
-                    BARCODE_COUNTERS.pending = BARCODE_COUNTERS.pending - 1;
-                    updateBarcodeRightPanelSummary(BARCODE_COUNTERS);
-                    await barcodeYieldToUI();
-                    idx = idx + 1;
-                    continue;
-                }
-
-                if (!fillResult) {
-                    log("[PullLabBarcode] processIconsSequentially: fill/confirm failed for barcode='" + iconObj.barcode + "'");
-                    updateBarcodeRightPanelStatus(iconObj.statusKey, BARCODE_LABELS.statusFailed);
-                    BARCODE_COUNTERS.failures = BARCODE_COUNTERS.failures + 1;
-                    BARCODE_COUNTERS.processed = BARCODE_COUNTERS.processed + 1;
-                    BARCODE_COUNTERS.pending = BARCODE_COUNTERS.pending - 1;
-                    updateBarcodeRightPanelSummary(BARCODE_COUNTERS);
-                    await barcodeYieldToUI();
-                    idx = idx + 1;
-                    continue;
-                }
-
-                var verified = await verifyIconUpdated(iconObj);
-
-                if (PULL_LAB_BARCODE_STOPPED) {
-                    updateBarcodeRightPanelStatus(iconObj.statusKey, BARCODE_LABELS.statusStopped);
-                    break;
-                }
-
-                if (verified) {
-                    log("[PullLabBarcode] processIconsSequentially: verified barcode='" + iconObj.barcode + "'");
-                    updateBarcodeRightPanelStatus(iconObj.statusKey, BARCODE_LABELS.statusVerified);
-                    BARCODE_COUNTERS.verified = BARCODE_COUNTERS.verified + 1;
-                } else {
-                    log("[PullLabBarcode] processIconsSequentially: verification failed for barcode='" + iconObj.barcode + "'");
-                    updateBarcodeRightPanelStatus(iconObj.statusKey, BARCODE_LABELS.statusFailed, "verify failed");
-                    BARCODE_COUNTERS.failures = BARCODE_COUNTERS.failures + 1;
-                }
-
-                BARCODE_COUNTERS.processed = BARCODE_COUNTERS.processed + 1;
-                BARCODE_COUNTERS.pending = BARCODE_COUNTERS.pending - 1;
-                updateBarcodeRightPanelSummary(BARCODE_COUNTERS);
-            } catch (procErr) {
-                log("[PullLabBarcode] processIconsSequentially: error processing barcode='" + iconObj.barcode + "': " + String(procErr));
-                updateBarcodeRightPanelStatus(iconObj.statusKey, BARCODE_LABELS.statusFailed, String(procErr));
-                BARCODE_COUNTERS.failures = BARCODE_COUNTERS.failures + 1;
-                BARCODE_COUNTERS.processed = BARCODE_COUNTERS.processed + 1;
-                BARCODE_COUNTERS.pending = BARCODE_COUNTERS.pending - 1;
-                updateBarcodeRightPanelSummary(BARCODE_COUNTERS);
-            }
-
-            await barcodeYieldToUI();
-            idx = idx + 1;
-        }
-
-        setAriaBusyOff();
-        PULL_LAB_BARCODE_RUNNING = false;
-
-        var completionMsg = BARCODE_LABELS.done + ": " + String(BARCODE_COUNTERS.verified) + " verified, " + String(BARCODE_COUNTERS.skipped) + " skipped, " + String(BARCODE_COUNTERS.failures) + " failed out of " + String(BARCODE_COUNTERS.total);
-        log("[PullLabBarcode] processIconsSequentially: " + completionMsg);
-        announceBarcodeAriaLive(completionMsg);
-        updateBarcodeRightPanelSummary(BARCODE_COUNTERS);
-
-        if (PULL_LAB_BARCODE_BUTTON_REF) {
-            try {
-                PULL_LAB_BARCODE_BUTTON_REF.focus();
-            } catch (focusErr) {}
-        }
-    }
-
-    async function pullLabBarcodeInit() {
-        log("[PullLabBarcode] pullLabBarcodeInit: starting feature");
-
-        if (PULL_LAB_BARCODE_RUNNING) {
-            log("[PullLabBarcode] pullLabBarcodeInit: already running, ignoring");
-            return;
-        }
-
-        PULL_LAB_BARCODE_STOPPED = false;
-        PULL_LAB_BARCODE_RUNNING = true;
-        PULL_LAB_BARCODE_STATUS_MAP = {};
-
-        BARCODE_COUNTERS.total = 0;
-        BARCODE_COUNTERS.processed = 0;
-        BARCODE_COUNTERS.verified = 0;
-        BARCODE_COUNTERS.skipped = 0;
-        BARCODE_COUNTERS.failures = 0;
-        BARCODE_COUNTERS.pending = 0;
-
-        openBarcodeProgressPanel();
-
-        if (PULL_LAB_BARCODE_STOPPED) {
-            log("[PullLabBarcode] pullLabBarcodeInit: stopped before collection");
-            return;
-        }
-
-        announceBarcodeAriaLive(BARCODE_LABELS.scanning);
-
-        var iconList = await collectBarcodeIcons();
-
-        if (PULL_LAB_BARCODE_STOPPED) {
-            log("[PullLabBarcode] pullLabBarcodeInit: stopped after collection");
-            return;
-        }
-
-        if (iconList.length === 0) {
-            log("[PullLabBarcode] pullLabBarcodeInit: no icons found");
-            if (PULL_LAB_BARCODE_SUMMARY_EL) {
-                PULL_LAB_BARCODE_SUMMARY_EL.innerHTML = "";
-                var warningSpan = document.createElement("span");
-                warningSpan.style.color = "#f0ad4e";
-                warningSpan.style.fontWeight = "600";
-                warningSpan.textContent = "No barcode icons requiring input were found on this page.";
-                PULL_LAB_BARCODE_SUMMARY_EL.appendChild(warningSpan);
-            }
-            announceBarcodeAriaLive("No barcode icons found");
-            PULL_LAB_BARCODE_RUNNING = false;
-            setAriaBusyOff();
-            return;
-        }
-
-        var ri = 0;
-        while (ri < iconList.length) {
-            updateBarcodeRightPanelStatus(iconList[ri].statusKey, BARCODE_LABELS.statusPending);
-            ri = ri + 1;
-        }
-
-        await processIconsSequentially(iconList);
-
-        log("[PullLabBarcode] pullLabBarcodeInit: feature completed");
-    }
 
     //==========================
     // COPY FORMS TO STUDY EVENTS FEATURE
@@ -1518,11 +688,11 @@
         leftHeader.style.cssText = "display:flex;flex-direction:column;gap:8px;";
         var leftLabel = document.createElement("div");
         leftLabel.textContent = "Source Forms (select forms to copy)";
-        leftLabel.style.cssText = "font-weight:600;font-size:14px;color:#17a2b8;";
+        leftLabel.style.cssText = "font-weight:600;font-size:14px;color:" + THEME_ACCENT + ";";
         var leftSearch = document.createElement("input");
         leftSearch.type = "text";
         leftSearch.placeholder = "Search forms...";
-        leftSearch.style.cssText = "padding:10px;border-radius:6px;border:1px solid #444;background:#222;color:#fff;font-size:14px;";
+        leftSearch.style.cssText = "padding:10px;border-radius:6px;border:1px solid " + THEME_SURFACE_BORDER + ";background:" + THEME_SURFACE_BG + ";color:" + THEME_TEXT_PRIMARY + ";font-size:14px;";
         leftHeader.appendChild(leftLabel);
         leftHeader.appendChild(leftSearch);
 
@@ -1530,11 +700,11 @@
         rightHeader.style.cssText = "display:flex;flex-direction:column;gap:8px;";
         var rightLabel = document.createElement("div");
         rightLabel.textContent = "Target Study Events (select destinations)";
-        rightLabel.style.cssText = "font-weight:600;font-size:14px;color:#51cf66;";
+        rightLabel.style.cssText = "font-weight:600;font-size:14px;color:" + THEME_SUCCESS + ";";
         var rightSearch = document.createElement("input");
         rightSearch.type = "text";
         rightSearch.placeholder = "Search study events...";
-        rightSearch.style.cssText = "padding:10px;border-radius:6px;border:1px solid #444;background:#222;color:#fff;font-size:14px;";
+        rightSearch.style.cssText = "padding:10px;border-radius:6px;border:1px solid " + THEME_SURFACE_BORDER + ";background:" + THEME_SURFACE_BG + ";color:" + THEME_TEXT_PRIMARY + ";font-size:14px;";
         rightHeader.appendChild(rightLabel);
         rightHeader.appendChild(rightSearch);
 
@@ -1547,11 +717,11 @@
         panelsRow.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:16px;flex:1;overflow:hidden;";
 
         var leftPanel = document.createElement("div");
-        leftPanel.style.cssText = "border:2px solid #17a2b8;border-radius:8px;background:#1a1a1a;overflow-y:auto;padding:8px;";
+        leftPanel.style.cssText = "border:2px solid " + THEME_ACCENT + ";border-radius:8px;background:" + THEME_SURFACE_BG + ";overflow-y:auto;padding:8px;";
         leftPanel.id = "copyFormsLeftPanel";
 
         var rightPanel = document.createElement("div");
-        rightPanel.style.cssText = "border:2px solid #51cf66;border-radius:8px;background:#1a1a1a;overflow-y:auto;padding:8px;";
+        rightPanel.style.cssText = "border:2px solid " + THEME_SUCCESS + ";border-radius:8px;background:" + THEME_SURFACE_BG + ";overflow-y:auto;padding:8px;";
         rightPanel.id = "copyFormsRightPanel";
 
         panelsRow.appendChild(leftPanel);
@@ -1561,7 +731,7 @@
         // Selection info area
         var selectionInfo = document.createElement("div");
         selectionInfo.id = "copyFormsSelectionInfo";
-        selectionInfo.style.cssText = "background:#222;border-radius:6px;padding:10px;font-size:13px;color:#888;text-align:center;";
+        selectionInfo.style.cssText = "background:" + THEME_SURFACE_BG + ";border-radius:6px;padding:10px;font-size:13px;color:" + THEME_TEXT_MUTED + ";text-align:center;";
         selectionInfo.textContent = "Select forms on the left and study events on the right to continue";
         container.appendChild(selectionInfo);
 
@@ -1571,15 +741,15 @@
 
         var leftClearBtn = document.createElement("button");
         leftClearBtn.textContent = "Clear Left Selection";
-        leftClearBtn.style.cssText = "padding:8px 16px;border-radius:6px;border:none;background:#6c757d;color:#fff;font-size:13px;cursor:pointer;";
-        leftClearBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
-        leftClearBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
+        leftClearBtn.className = "ie-btn-secondary";
+        leftClearBtn.style.padding = "8px 16px";
+        leftClearBtn.style.fontSize = "13px";
 
         var rightClearBtn = document.createElement("button");
         rightClearBtn.textContent = "Clear Right Selection";
-        rightClearBtn.style.cssText = "padding:8px 16px;border-radius:6px;border:none;background:#6c757d;color:#fff;font-size:13px;cursor:pointer;";
-        rightClearBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
-        rightClearBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
+        rightClearBtn.className = "ie-btn-secondary";
+        rightClearBtn.style.padding = "8px 16px";
+        rightClearBtn.style.fontSize = "13px";
 
         clearRow.appendChild(leftClearBtn);
         clearRow.appendChild(rightClearBtn);
@@ -1587,7 +757,7 @@
 
         // Error message area
         var errorDiv = document.createElement("div");
-        errorDiv.style.cssText = "color:#ff6b6b;text-align:center;font-size:14px;min-height:20px;";
+        errorDiv.style.cssText = "color:" + THEME_DANGER + ";text-align:center;font-size:14px;min-height:20px;";
         errorDiv.id = "copyFormsError";
         container.appendChild(errorDiv);
 
@@ -1598,13 +768,18 @@
         var continueBtn = document.createElement("button");
         continueBtn.textContent = "Continue";
         continueBtn.disabled = true;
-        continueBtn.style.cssText = "padding:12px 32px;border-radius:6px;border:none;background:#28a745;color:#fff;font-size:14px;font-weight:600;cursor:pointer;opacity:0.5;";
+        continueBtn.className = "ie-btn-success";
+        continueBtn.style.padding = "12px 32px";
+        continueBtn.style.fontSize = "14px";
+        continueBtn.style.fontWeight = "600";
+        continueBtn.style.opacity = "0.5";
 
         var cancelBtn = document.createElement("button");
         cancelBtn.textContent = "Cancel";
-        cancelBtn.style.cssText = "padding:12px 32px;border-radius:6px;border:none;background:#dc3545;color:#fff;font-size:14px;font-weight:600;cursor:pointer;";
-        cancelBtn.onmouseenter = function() { this.style.background = "#c82333"; };
-        cancelBtn.onmouseleave = function() { this.style.background = "#dc3545"; };
+        cancelBtn.className = "ie-btn-danger";
+        cancelBtn.style.padding = "12px 32px";
+        cancelBtn.style.fontSize = "14px";
+        cancelBtn.style.fontWeight = "600";
 
         buttonRow.appendChild(continueBtn);
         buttonRow.appendChild(cancelBtn);
@@ -1623,12 +798,12 @@
                 segmentDiv.style.cssText = "margin-bottom:12px;";
 
                 var segmentHeader = document.createElement("div");
-                segmentHeader.style.cssText = "font-weight:600;font-size:14px;color:#ffc107;padding:8px;background:#2a2a2a;border-radius:6px 6px 0 0;border:1px solid #444;border-bottom:none;";
+                segmentHeader.style.cssText = "font-weight:600;font-size:14px;color:" + THEME_WARNING + ";padding:8px;background:" + THEME_SURFACE_BG_HEAVY + ";border-radius:6px 6px 0 0;border:1px solid " + THEME_SURFACE_BORDER + ";border-bottom:none;";
                 segmentHeader.textContent = "📁 " + segment.segmentText;
                 segmentDiv.appendChild(segmentHeader);
 
                 var eventsContainer = document.createElement("div");
-                eventsContainer.style.cssText = "border:1px solid #444;border-radius:0 0 6px 6px;background:#1e1e1e;";
+                eventsContainer.style.cssText = "border:1px solid " + THEME_SURFACE_BORDER + ";border-radius:0 0 6px 6px;background:" + THEME_SURFACE_BG + ";";
 
                 var hasVisibleContent = false;
 
@@ -1637,23 +812,23 @@
                     var studyEvent = segment.studyEvents[evKey];
 
                     var eventDiv = document.createElement("div");
-                    eventDiv.style.cssText = "padding:8px;border-bottom:1px solid #333;";
+                    eventDiv.style.cssText = "padding:8px;border-bottom:1px solid " + THEME_SURFACE_INNER_BORDER + ";";
 
                     var eventHeader = document.createElement("div");
-                    eventHeader.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px;background:#252525;border-radius:4px;margin-bottom:6px;";
+                    eventHeader.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px;background:" + THEME_SURFACE_BG_HEAVY + ";border-radius:4px;margin-bottom:6px;";
 
                     var eventCheckbox = document.createElement("input");
                     eventCheckbox.type = "checkbox";
-                    eventCheckbox.style.cssText = "width:16px;height:16px;cursor:pointer;accent-color:#17a2b8;";
+                    eventCheckbox.style.cssText = "width:16px;height:16px;cursor:pointer;accent-color:" + THEME_ACCENT + ";";
                     eventCheckbox.dataset.segment = segment.segmentText;
                     eventCheckbox.dataset.event = studyEvent.eventText;
 
                     var eventLabel = document.createElement("span");
-                    eventLabel.style.cssText = "font-weight:500;color:#17a2b8;font-size:13px;flex:1;";
+                    eventLabel.style.cssText = "font-weight:500;color:" + THEME_ACCENT + ";font-size:13px;flex:1;";
                     eventLabel.textContent = "📅 " + studyEvent.eventText;
 
                     var eventCount = document.createElement("span");
-                    eventCount.style.cssText = "font-size:11px;color:#888;background:#333;padding:2px 6px;border-radius:10px;";
+                    eventCount.style.cssText = "font-size:11px;color:" + THEME_TEXT_MUTED + ";background:" + THEME_SURFACE_BG_HEAVY + ";padding:2px 6px;border-radius:10px;";
                     eventCount.textContent = studyEvent.forms.length + " forms";
 
                     eventHeader.appendChild(eventCheckbox);
@@ -1671,7 +846,7 @@
                         visibleForms++;
 
                         var formItem = document.createElement("div");
-                        formItem.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 8px;margin:4px 0;border:1px solid #333;border-radius:4px;background:#252525;cursor:pointer;transition:all 0.2s;";
+                        formItem.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 8px;margin:4px 0;border:1px solid " + THEME_SURFACE_INNER_BORDER + ";border-radius:4px;background:" + THEME_SURFACE_BG_HEAVY + ";cursor:pointer;transition:all 0.2s;";
                         formItem.dataset.formKey = form.rowKey;
                         formItem.dataset.segment = form.segmentText;
                         formItem.dataset.event = form.eventText;
@@ -1679,18 +854,18 @@
 
                         var formCheckbox = document.createElement("input");
                         formCheckbox.type = "checkbox";
-                        formCheckbox.style.cssText = "width:14px;height:14px;cursor:pointer;accent-color:#17a2b8;";
+                        formCheckbox.style.cssText = "width:14px;height:14px;cursor:pointer;accent-color:" + THEME_ACCENT + ";";
                         formCheckbox.checked = !!selectedForms[form.rowKey];
 
                         var formLabel = document.createElement("div");
                         formLabel.style.cssText = "flex:1;";
 
                         var formName = document.createElement("div");
-                        formName.style.cssText = "font-size:13px;color:#fff;";
+                        formName.style.cssText = "font-size:13px;color:" + THEME_TEXT_PRIMARY + ";";
                         formName.textContent = "📄 " + form.formText;
 
                         var formPath = document.createElement("div");
-                        formPath.style.cssText = "font-size:10px;color:#666;margin-top:2px;";
+                        formPath.style.cssText = "font-size:10px;color:" + THEME_TEXT_MUTED + ";margin-top:2px;";
                         formPath.textContent = form.segmentText + " → " + form.eventText + " → " + form.formText;
 
                         formLabel.appendChild(formName);
@@ -1699,8 +874,8 @@
                         formItem.appendChild(formLabel);
 
                         if (selectedForms[form.rowKey]) {
-                            formItem.style.background = "#1a3d3d";
-                            formItem.style.border = "1px solid #17a2b8";
+                            formItem.style.background = THEME_SURFACE_BG;
+                            formItem.style.border = "1px solid " + THEME_ACCENT;
                         }
 
                         (function(formData, checkbox, item) {
@@ -1708,8 +883,8 @@
                                 if (selectedForms[formData.rowKey]) {
                                     delete selectedForms[formData.rowKey];
                                     checkbox.checked = false;
-                                    item.style.background = "#252525";
-                                    item.style.border = "1px solid #333";
+                                    item.style.background = THEME_SURFACE_BG_HEAVY;
+                                    item.style.border = "1px solid " + THEME_SURFACE_INNER_BORDER;
                                 } else {
                                     // Check if selecting from a different study event
                                     if (currentSelectedStudyEvent && currentSelectedStudyEvent !== formData.eventText) {
@@ -1719,8 +894,8 @@
                                     currentSelectedStudyEvent = formData.eventText;
                                     selectedForms[formData.rowKey] = formData;
                                     checkbox.checked = true;
-                                    item.style.background = "#1a3d3d";
-                                    item.style.border = "1px solid #17a2b8";
+                                    item.style.background = THEME_SURFACE_BG;
+                                    item.style.border = "1px solid " + THEME_ACCENT;
                                     errorDiv.textContent = "";
                                 }
                                 updateSelectionInfo();
@@ -1794,13 +969,13 @@
                 if (filter && ev.text.toLowerCase().indexOf(filter) === -1) continue;
 
                 var item = document.createElement("div");
-                item.style.cssText = "display:flex;align-items:center;gap:10px;padding:10px;margin-bottom:6px;border:1px solid #333;border-radius:6px;background:#252525;cursor:pointer;transition:all 0.2s;";
+                item.style.cssText = "display:flex;align-items:center;gap:10px;padding:10px;margin-bottom:6px;border:1px solid " + THEME_SURFACE_INNER_BORDER + ";border-radius:6px;background:" + THEME_SURFACE_BG_HEAVY + ";cursor:pointer;transition:all 0.2s;";
                 item.dataset.eventValue = ev.value;
                 item.dataset.eventText = ev.text;
 
                 var checkbox = document.createElement("input");
                 checkbox.type = "checkbox";
-                checkbox.style.cssText = "width:16px;height:16px;cursor:pointer;accent-color:#51cf66;";
+                checkbox.style.cssText = "width:16px;height:16px;cursor:pointer;accent-color:" + THEME_SUCCESS + ";";
                 checkbox.checked = !!selectedStudyEvents[ev.value];
 
                 var label = document.createElement("div");
@@ -1811,8 +986,8 @@
                 item.appendChild(label);
 
                 if (selectedStudyEvents[ev.value]) {
-                    item.style.background = "#1a3d1a";
-                    item.style.border = "1px solid #51cf66";
+                    item.style.background = THEME_SURFACE_BG;
+                    item.style.border = "1px solid " + THEME_SUCCESS;
                 }
 
                 (function(evData, cb, itemEl) {
@@ -1820,13 +995,13 @@
                         if (selectedStudyEvents[evData.value]) {
                             delete selectedStudyEvents[evData.value];
                             cb.checked = false;
-                            itemEl.style.background = "#252525";
-                            itemEl.style.border = "1px solid #333";
+                            itemEl.style.background = THEME_SURFACE_BG_HEAVY;
+                            itemEl.style.border = "1px solid " + THEME_SURFACE_INNER_BORDER;
                         } else {
                             selectedStudyEvents[evData.value] = evData;
                             cb.checked = true;
-                            itemEl.style.background = "#1a3d1a";
-                            itemEl.style.border = "1px solid #51cf66";
+                            itemEl.style.background = THEME_SURFACE_BG;
+                            itemEl.style.border = "1px solid " + THEME_SUCCESS;
                         }
                         updateSelectionInfo();
                         validateSelection();
@@ -1851,15 +1026,15 @@
 
             if (formCount === 0 && eventCount === 0) {
                 selectionInfo.textContent = "Select forms on the left and study events on the right to continue";
-                selectionInfo.style.color = "#888";
+                selectionInfo.style.color = THEME_TEXT_MUTED;
             } else if (formCount === 0) {
                 selectionInfo.textContent = eventCount + " study event(s) selected. Now select forms to copy.";
-                selectionInfo.style.color = "#ffc107";
+                selectionInfo.style.color = THEME_WARNING;
             } else if (eventCount === 0) {
                 selectionInfo.textContent = formCount + " form(s) selected from " + (currentSelectedStudyEvent || "?") + ". Now select target study events.";
-                selectionInfo.style.color = "#ffc107";
+                selectionInfo.style.color = THEME_WARNING;
             } else {
-                selectionInfo.innerHTML = "<span style='color:#51cf66;font-weight:600;'>" + formCount + " form(s)</span> will be copied to <span style='color:#17a2b8;font-weight:600;'>" + eventCount + " study event(s)</span> = <span style='color:#ffc107;font-weight:600;'>" + totalItems + " new item(s)</span>";
+                selectionInfo.innerHTML = "<span style='color:" + THEME_SUCCESS + ";font-weight:600;'>" + formCount + " form(s)</span> will be copied to <span style='color:" + THEME_ACCENT + ";font-weight:600;'>" + eventCount + " study event(s)</span> = <span style='color:" + THEME_WARNING + ";font-weight:600;'>" + totalItems + " new item(s)</span>";
             }
         }
 
@@ -1871,8 +1046,8 @@
             continueBtn.disabled = !valid;
             continueBtn.style.opacity = valid ? "1" : "0.5";
             if (valid) {
-                continueBtn.onmouseenter = function() { this.style.background = "#218838"; };
-                continueBtn.onmouseleave = function() { this.style.background = "#28a745"; };
+                continueBtn.onmouseenter = null;
+                continueBtn.onmouseleave = null;
             } else {
                 continueBtn.onmouseenter = null;
                 continueBtn.onmouseleave = null;
@@ -1942,28 +1117,28 @@
         // Status header
         var statusDiv = document.createElement("div");
         statusDiv.id = "copyFormsStatus";
-        statusDiv.style.cssText = "text-align:center;font-size:16px;font-weight:600;padding:12px;background:#222;border-radius:6px;margin-bottom:12px;";
+        statusDiv.style.cssText = "text-align:center;font-size:16px;font-weight:600;padding:12px;background:" + THEME_SURFACE_BG + ";border-radius:6px;margin-bottom:12px;color:" + THEME_TEXT_PRIMARY + ";";
         statusDiv.textContent = "Preparing... 0 of " + items.length;
         container.appendChild(statusDiv);
 
         // Progress bar
         var progressBarOuter = document.createElement("div");
-        progressBarOuter.style.cssText = "width:100%;height:8px;background:#333;border-radius:4px;margin-bottom:16px;overflow:hidden;";
+        progressBarOuter.style.cssText = "width:100%;height:8px;background:" + THEME_SURFACE_BG_HEAVY + ";border-radius:4px;margin-bottom:16px;overflow:hidden;";
         var progressBarInner = document.createElement("div");
         progressBarInner.id = "copyFormsProgressBar";
-        progressBarInner.style.cssText = "width:0%;height:100%;background:#28a745;transition:width 0.3s;";
+        progressBarInner.style.cssText = "width:0%;height:100%;background:" + THEME_SUCCESS + ";transition:width 0.3s;";
         progressBarOuter.appendChild(progressBarInner);
         container.appendChild(progressBarOuter);
 
         // Items list
         var listContainer = document.createElement("div");
-        listContainer.style.cssText = "flex:1;overflow-y:auto;border:1px solid #333;border-radius:6px;background:#1a1a1a;padding:8px;";
+        listContainer.style.cssText = "flex:1;overflow-y:auto;border:1px solid " + THEME_SURFACE_BORDER + ";border-radius:6px;background:" + THEME_SURFACE_BG + ";padding:8px;";
         listContainer.id = "copyFormsItemsList";
 
         for (var i = 0; i < items.length; i++) {
             var item = items[i];
             var itemDiv = document.createElement("div");
-            itemDiv.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin-bottom:4px;border:1px solid #333;border-radius:4px;background:#252525;font-size:12px;";
+            itemDiv.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin-bottom:4px;border:1px solid " + THEME_SURFACE_INNER_BORDER + ";border-radius:4px;background:" + THEME_SURFACE_BG_HEAVY + ";font-size:12px;color:" + THEME_TEXT_PRIMARY + ";";
             itemDiv.id = "copyFormsItem_" + i;
 
             var itemLabel = document.createElement("div");
@@ -1971,7 +1146,7 @@
             itemLabel.textContent = item.segmentText + " → " + item.targetEventText + " → " + item.formText;
 
             var itemStatus = document.createElement("div");
-            itemStatus.style.cssText = "padding:2px 8px;border-radius:10px;font-size:11px;background:#444;color:#888;margin-left:8px;flex-shrink:0;";
+            itemStatus.style.cssText = "padding:2px 8px;border-radius:10px;font-size:11px;background:" + THEME_SURFACE_BG_HEAVY + ";color:" + THEME_TEXT_MUTED + ";margin-left:8px;flex-shrink:0;";
             itemStatus.textContent = "Incomplete";
             itemStatus.className = "item-status";
 
@@ -1984,7 +1159,7 @@
         // Summary area
         var summaryDiv = document.createElement("div");
         summaryDiv.id = "copyFormsSummary";
-        summaryDiv.style.cssText = "display:none;margin-top:12px;padding:12px;background:#222;border-radius:6px;text-align:center;";
+        summaryDiv.style.cssText = "display:none;margin-top:12px;padding:12px;background:" + THEME_SURFACE_BG + ";border-radius:6px;text-align:center;color:" + THEME_TEXT_PRIMARY + ";";
         container.appendChild(summaryDiv);
 
         // Stop button
@@ -1993,9 +1168,7 @@
         var stopBtn = document.createElement("button");
         stopBtn.textContent = "Stop and Close";
         stopBtn.id = "copyFormsStopBtn";
-        stopBtn.style.cssText = "padding:10px 24px;border-radius:6px;border:none;background:#dc3545;color:#fff;font-size:14px;font-weight:500;cursor:pointer;";
-        stopBtn.onmouseenter = function() { this.style.background = "#c82333"; };
-        stopBtn.onmouseleave = function() { this.style.background = "#dc3545"; };
+        stopBtn.className = "ie-btn-danger";
         stopBtn.addEventListener("click", function() {
             COPY_FORMS_CANCELLED = true;
             stopBtn.disabled = true;
@@ -2025,8 +1198,8 @@
                 var statusEl = item.querySelector(".item-status");
                 if (statusEl) {
                     statusEl.textContent = status;
-                    statusEl.style.background = color || "#444";
-                    statusEl.style.color = "#fff";
+                    statusEl.style.background = color || THEME_SURFACE_BG_HEAVY;
+                    statusEl.style.color = THEME_TEXT_PRIMARY;
                 }
             }
         };
@@ -2035,13 +1208,13 @@
             var summaryEl = document.getElementById("copyFormsSummary");
             if (summaryEl) {
                 summaryEl.style.display = "block";
-                summaryEl.innerHTML = '<div style="font-size:16px;font-weight:600;margin-bottom:8px;color:#51cf66;">✓ Completed</div>' +
-                    '<div>Total: ' + total + ' | Success: <span style="color:#51cf66;">' + success + '</span> | Duplicates: <span style="color:#ffc107;">' + duplicates + '</span> | Errors: <span style="color:#ff6b6b;">' + errors + '</span></div>';
+                summaryEl.innerHTML = '<div style="font-size:16px;font-weight:600;margin-bottom:8px;color:' + THEME_SUCCESS + ';">✓ Completed</div>' +
+                    '<div>Total: ' + total + ' | Success: <span style="color:' + THEME_SUCCESS + ';">' + success + '</span> | Duplicates: <span style="color:' + THEME_WARNING + ';">' + duplicates + '</span> | Errors: <span style="color:' + THEME_DANGER + ';">' + errors + '</span></div>';
             }
             var stopBtn = document.getElementById("copyFormsStopBtn");
             if (stopBtn) {
                 stopBtn.textContent = "Close";
-                stopBtn.style.background = "#6c757d";
+                stopBtn.className = "ie-btn-secondary";
                 stopBtn.disabled = false;
                 stopBtn.style.opacity = "1";
                 stopBtn.onclick = function() {
@@ -2062,7 +1235,7 @@
         if (!isOnCopyFormsPage()) {
             createPopup({
                 title: "Copy Forms - Error",
-                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">⚠️ Wrong Page</p><p>Navigate to the Activity Plans Show page first.</p><p style="margin-top:12px;font-size:12px;color:#888;">Required URL: https://cenexeltest.clinspark.com/secure/crfdesign/activityplans/show/{id}</p></div>',
+                content: '<div style="text-align:center;padding:20px;"><p style="color:' + THEME_DANGER + ';font-size:16px;margin-bottom:12px;">⚠️ Wrong Page</p><p>Navigate to the Activity Plans Show page first.</p><p style="margin-top:12px;font-size:12px;color:' + THEME_TEXT_MUTED + ';">Required URL: https://cenexeltest.clinspark.com/secure/crfdesign/activityplans/show/{id}</p></div>',
                 width: "450px",
                 height: "auto"
             });
@@ -2073,7 +1246,7 @@
         // Show loading popup
         var loadingPopup = createPopup({
             title: "Copy Forms to Study Events",
-            content: '<div style="text-align:center;padding:30px;"><div class="copy-forms-spinner" style="width:40px;height:40px;border:4px solid #333;border-top:4px solid #17a2b8;border-radius:50%;margin:0 auto 16px;animation:copyFormsSpin 1s linear infinite;"></div><div style="font-size:16px;margin-bottom:8px;">Collecting data...</div><div id="copyFormsLoadingMsg" style="font-size:13px;color:#888;">Scanning table...</div></div><style>@keyframes copyFormsSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>',
+            content: '<div style="text-align:center;padding:30px;"><div class="copy-forms-spinner" style="width:40px;height:40px;border:4px solid ' + THEME_SURFACE_BG_HEAVY + ';border-top:4px solid ' + THEME_ACCENT + ';border-radius:50%;margin:0 auto 16px;animation:copyFormsSpin 1s linear infinite;"></div><div style="font-size:16px;margin-bottom:8px;">Collecting data...</div><div id="copyFormsLoadingMsg" style="font-size:13px;color:' + THEME_TEXT_MUTED + ';">Scanning table...</div></div><style>@keyframes copyFormsSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>',
             width: "350px",
             height: "auto"
         });
@@ -2093,7 +1266,7 @@
             loadingPopup.close();
             createPopup({
                 title: "Copy Forms - Error",
-                content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">No rows found in the Scheduled Activities table.</div>',
+                content: '<div style="text-align:center;padding:20px;color:' + THEME_DANGER + ';">No rows found in the Scheduled Activities table.</div>',
                 width: "400px",
                 height: "auto"
             });
@@ -2128,7 +1301,7 @@
             loadingPopup.close();
             createPopup({
                 title: "Copy Forms - Error",
-                content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">Modal did not appear within timeout.</div>',
+                content: '<div style="text-align:center;padding:20px;color:' + THEME_DANGER + ';">Modal did not appear within timeout.</div>',
                 width: "400px",
                 height: "auto"
             });
@@ -2157,7 +1330,7 @@
         if (studyEvents.length === 0) {
             createPopup({
                 title: "Copy Forms - Error",
-                content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">No study events found in the modal dropdown.</div>',
+                content: '<div style="text-align:center;padding:20px;color:' + THEME_DANGER + ';">No study events found in the modal dropdown.</div>',
                 width: "400px",
                 height: "auto"
             });
@@ -2263,14 +1436,14 @@
 
             var item = items[i];
             progressContent.updateProgress(i + 1, items.length);
-            progressContent.setItemStatus(i, "Processing...", "#17a2b8");
+            progressContent.setItemStatus(i, "Processing...", THEME_ACCENT);
 
             log("Copy Forms: processing item " + (i + 1) + "/" + items.length + ": " + item.segmentText + " -> " + item.targetEventText + " -> " + item.formText);
 
             // Check for duplicates
             if (formExistsInMap(item.segmentText, item.targetEventText, item.formText, COPY_FORMS_EXISTING_MAP)) {
                 log("Copy Forms: duplicate detected - " + item.segmentText + " -> " + item.targetEventText + " -> " + item.formText);
-                progressContent.setItemStatus(i, "Duplicate (Skipped)", "#ffc107");
+                progressContent.setItemStatus(i, "Duplicate (Skipped)", THEME_WARNING);
                 duplicateCount++;
                 continue;
             }
@@ -2339,7 +1512,7 @@
                 log("Copy Forms: clicking Add button...");
                 if (!clickAddSaButton()) {
                     log("Copy Forms: could not click Add button");
-                    progressContent.setItemStatus(i, "Error (add)", "#dc3545");
+                    progressContent.setItemStatus(i, "Error (add)", THEME_DANGER);
                     errorCount++;
                     continue;
                 }
@@ -2347,7 +1520,7 @@
                 var addModal = await waitForSAModal(10000);
                 if (!addModal) {
                     log("Copy Forms: add modal did not open");
-                    progressContent.setItemStatus(i, "Error (modal)", "#dc3545");
+                    progressContent.setItemStatus(i, "Error (modal)", THEME_DANGER);
                     errorCount++;
                     continue;
                 }
@@ -2381,7 +1554,7 @@
                     var closed = await waitForSAModalClose(10000);
                     if (!closed) {
                         log("Copy Forms: modal did not close after save");
-                        progressContent.setItemStatus(i, "Error (save)", "#dc3545");
+                        progressContent.setItemStatus(i, "Error (save)", THEME_DANGER);
                         errorCount++;
                         continue;
                     }
@@ -2461,13 +1634,13 @@
                 var newKey = normalizeSAText(item.segmentText) + "|" + normalizeSAText(item.targetEventText) + "|" + normalizeSAText(item.formText);
                 COPY_FORMS_EXISTING_MAP[newKey] = true;
 
-                progressContent.setItemStatus(i, "Complete", "#28a745");
+                progressContent.setItemStatus(i, "Complete", THEME_SUCCESS);
                 successCount++;
                 log("Copy Forms: item " + (i + 1) + " completed successfully");
 
             } catch (err) {
                 log("Copy Forms: error processing item " + i + " - " + String(err));
-                progressContent.setItemStatus(i, "Error", "#dc3545");
+                progressContent.setItemStatus(i, "Error", THEME_DANGER);
                 errorCount++;
             }
 
@@ -2690,11 +1863,11 @@
         sourceSearchContainer.style.cssText = "display:flex;flex-direction:column;gap:8px;";
         var sourceLabel = document.createElement("div");
         sourceLabel.textContent = "Source Forms (to be replaced)";
-        sourceLabel.style.cssText = "font-weight:600;font-size:14px;color:#ff6b6b;";
+        sourceLabel.style.cssText = "font-weight:600;font-size:14px;color:" + THEME_DANGER + ";";
         var sourceSearch = document.createElement("input");
         sourceSearch.type = "text";
         sourceSearch.placeholder = "Search source forms...";
-        sourceSearch.style.cssText = "padding:10px;border-radius:6px;border:1px solid #444;background:#222;color:#fff;font-size:14px;";
+        sourceSearch.style.cssText = "padding:10px;border-radius:6px;border:1px solid " + THEME_SURFACE_BORDER + ";background:" + THEME_SURFACE_BG + ";color:" + THEME_TEXT_PRIMARY + ";font-size:14px;";
         sourceSearchContainer.appendChild(sourceLabel);
         sourceSearchContainer.appendChild(sourceSearch);
 
@@ -2702,11 +1875,11 @@
         targetSearchContainer.style.cssText = "display:flex;flex-direction:column;gap:8px;";
         var targetLabel = document.createElement("div");
         targetLabel.textContent = "Target Forms (replacements)";
-        targetLabel.style.cssText = "font-weight:600;font-size:14px;color:#51cf66;";
+        targetLabel.style.cssText = "font-weight:600;font-size:14px;color:" + THEME_SUCCESS + ";";
         var targetSearch = document.createElement("input");
         targetSearch.type = "text";
         targetSearch.placeholder = "Search target forms...";
-        targetSearch.style.cssText = "padding:10px;border-radius:6px;border:1px solid #444;background:#222;color:#fff;font-size:14px;";
+        targetSearch.style.cssText = "padding:10px;border-radius:6px;border:1px solid " + THEME_SURFACE_BORDER + ";background:" + THEME_SURFACE_BG + ";color:" + THEME_TEXT_PRIMARY + ";font-size:14px;";
         targetSearchContainer.appendChild(targetLabel);
         targetSearchContainer.appendChild(targetSearch);
 
@@ -2719,11 +1892,11 @@
         panelsRow.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:16px;flex:1;overflow:hidden;";
 
         var sourcePanel = document.createElement("div");
-        sourcePanel.style.cssText = "border:2px solid #ff6b6b;border-radius:8px;background:#1a1a1a;overflow-y:auto;padding:8px;";
+        sourcePanel.style.cssText = "border:2px solid " + THEME_DANGER + ";border-radius:8px;background:" + THEME_SURFACE_BG + ";overflow-y:auto;padding:8px;";
         sourcePanel.id = "archiveUpdateSourcePanel";
 
         var targetPanel = document.createElement("div");
-        targetPanel.style.cssText = "border:2px solid #51cf66;border-radius:8px;background:#1a1a1a;overflow-y:auto;padding:8px;";
+        targetPanel.style.cssText = "border:2px solid " + THEME_SUCCESS + ";border-radius:8px;background:" + THEME_SURFACE_BG + ";overflow-y:auto;padding:8px;";
         targetPanel.id = "archiveUpdateTargetPanel";
 
         panelsRow.appendChild(sourcePanel);
@@ -2732,7 +1905,7 @@
 
         // Error message area
         var errorDiv = document.createElement("div");
-        errorDiv.style.cssText = "color:#ff6b6b;text-align:center;font-size:14px;min-height:20px;";
+        errorDiv.style.cssText = "color:" + THEME_DANGER + ";text-align:center;font-size:14px;min-height:20px;";
         errorDiv.id = "archiveUpdateError";
         container.appendChild(errorDiv);
 
@@ -2745,12 +1918,12 @@
         archiveReasonContainer.style.cssText = "display:flex;flex-direction:column;gap:6px;";
         var archiveReasonLabel = document.createElement("label");
         archiveReasonLabel.textContent = "Archive Reason";
-        archiveReasonLabel.style.cssText = "font-size:13px;font-weight:600;color:#ccc;";
+        archiveReasonLabel.style.cssText = "font-size:13px;font-weight:600;color:" + THEME_TEXT_PRIMARY + ";";
         var archiveReasonInput = document.createElement("input");
         archiveReasonInput.type = "text";
         archiveReasonInput.value = "Old version";
         archiveReasonInput.id = "archiveUpdateArchiveReason";
-        archiveReasonInput.style.cssText = "padding:10px;border-radius:6px;border:1px solid #444;background:#222;color:#fff;font-size:13px;";
+        archiveReasonInput.style.cssText = "padding:10px;border-radius:6px;border:1px solid " + THEME_SURFACE_BORDER + ";background:" + THEME_SURFACE_BG + ";color:" + THEME_TEXT_PRIMARY + ";font-size:13px;";
         archiveReasonContainer.appendChild(archiveReasonLabel);
         archiveReasonContainer.appendChild(archiveReasonInput);
 
@@ -2759,12 +1932,12 @@
         visibilityReasonContainer.style.cssText = "display:flex;flex-direction:column;gap:6px;";
         var visibilityReasonLabel = document.createElement("label");
         visibilityReasonLabel.textContent = "Visibility Reason";
-        visibilityReasonLabel.style.cssText = "font-size:13px;font-weight:600;color:#ccc;";
+        visibilityReasonLabel.style.cssText = "font-size:13px;font-weight:600;color:" + THEME_TEXT_PRIMARY + ";";
         var visibilityReasonInput = document.createElement("input");
         visibilityReasonInput.type = "text";
         visibilityReasonInput.value = "Add visibility condition";
         visibilityReasonInput.id = "archiveUpdateVisibilityReason";
-        visibilityReasonInput.style.cssText = "padding:10px;border-radius:6px;border:1px solid #444;background:#222;color:#fff;font-size:13px;";
+        visibilityReasonInput.style.cssText = "padding:10px;border-radius:6px;border:1px solid " + THEME_SURFACE_BORDER + ";background:" + THEME_SURFACE_BG + ";color:" + THEME_TEXT_PRIMARY + ";font-size:13px;";
         visibilityReasonContainer.appendChild(visibilityReasonLabel);
         visibilityReasonContainer.appendChild(visibilityReasonInput);
 
@@ -2778,20 +1951,26 @@
 
         var clearAllBtn = document.createElement("button");
         clearAllBtn.textContent = "Clear All";
-        clearAllBtn.style.cssText = "padding:12px 24px;border-radius:6px;border:none;background:#6c757d;color:#fff;font-size:14px;font-weight:500;cursor:pointer;transition:background 0.2s;";
-        clearAllBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
-        clearAllBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
+        clearAllBtn.className = "ie-btn-secondary";
+        clearAllBtn.style.padding = "12px 24px";
+        clearAllBtn.style.fontSize = "14px";
+        clearAllBtn.style.fontWeight = "500";
 
         var confirmBtn = document.createElement("button");
         confirmBtn.textContent = "Confirm";
         confirmBtn.disabled = true;
-        confirmBtn.style.cssText = "padding:12px 24px;border-radius:6px;border:none;background:#28a745;color:#fff;font-size:14px;font-weight:500;cursor:pointer;transition:background 0.2s;opacity:0.5;";
+        confirmBtn.className = "ie-btn-success";
+        confirmBtn.style.padding = "12px 24px";
+        confirmBtn.style.fontSize = "14px";
+        confirmBtn.style.fontWeight = "500";
+        confirmBtn.style.opacity = "0.5";
 
         var cancelBtn = document.createElement("button");
         cancelBtn.textContent = "Cancel";
-        cancelBtn.style.cssText = "padding:12px 24px;border-radius:6px;border:none;background:#dc3545;color:#fff;font-size:14px;font-weight:500;cursor:pointer;transition:background 0.2s;";
-        cancelBtn.onmouseenter = function() { this.style.background = "#c82333"; };
-        cancelBtn.onmouseleave = function() { this.style.background = "#dc3545"; };
+        cancelBtn.className = "ie-btn-danger";
+        cancelBtn.style.padding = "12px 24px";
+        cancelBtn.style.fontSize = "14px";
+        cancelBtn.style.fontWeight = "500";
 
         buttonRow.appendChild(clearAllBtn);
         buttonRow.appendChild(confirmBtn);
@@ -2807,11 +1986,11 @@
                 if (filter && form.formText.toLowerCase().indexOf(filter) === -1) continue;
 
                 var item = document.createElement("div");
-                item.style.cssText = "display:flex;align-items:center;gap:10px;padding:10px;margin-bottom:6px;border:1px solid #333;border-radius:6px;background:#252525;cursor:pointer;transition:all 0.2s;";
+                item.style.cssText = "display:flex;align-items:center;gap:10px;padding:10px;margin-bottom:6px;border:1px solid " + THEME_SURFACE_INNER_BORDER + ";border-radius:6px;background:" + THEME_SURFACE_BG_HEAVY + ";cursor:pointer;transition:all 0.2s;color:" + THEME_TEXT_PRIMARY + ";";
                 item.dataset.formKey = form.formKey;
 
                 var radio = document.createElement("div");
-                radio.style.cssText = "width:18px;height:18px;border:2px solid #666;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;";
+                radio.style.cssText = "width:18px;height:18px;border:2px solid " + THEME_SURFACE_BORDER + ";border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;";
                 radio.className = "radio-indicator";
 
                 var label = document.createElement("div");
@@ -2819,7 +1998,7 @@
                 label.textContent = form.formText;
 
                 var count = document.createElement("div");
-                count.style.cssText = "font-size:11px;color:#888;background:#333;padding:2px 8px;border-radius:10px;";
+                count.style.cssText = "font-size:11px;color:" + THEME_TEXT_MUTED + ";background:" + THEME_SURFACE_BG_HEAVY + ";padding:2px 8px;border-radius:10px;";
                 count.textContent = form.occurrences.length + " occurrence" + (form.occurrences.length !== 1 ? "s" : "");
 
                 item.appendChild(radio);
@@ -2827,20 +2006,20 @@
                 item.appendChild(count);
 
                 if (selectedSource === form.formKey) {
-                    item.style.background = "#3d2020";
-                    item.style.border = "1px solid #ff6b6b";
-                    radio.innerHTML = '<div style="width:10px;height:10px;background:#ff6b6b;border-radius:50%;"></div>';
+                    item.style.background = THEME_SURFACE_BG_HEAVY;
+                    item.style.border = "1px solid " + THEME_DANGER;
+                    radio.innerHTML = '<div style="width:10px;height:10px;background:' + THEME_DANGER + ';border-radius:50%;"></div>';
                 }
 
                 item.addEventListener("mouseenter", function() {
                     if (this.dataset.formKey !== selectedSource) {
-                        this.style.background = "#333";
+                        this.style.background = THEME_SURFACE_BG_HEAVY;
                     }
                 });
                 item.addEventListener("mouseleave", function() {
                     if (this.dataset.formKey !== selectedSource) {
-                        this.style.background = "#252525";
-                        this.style.border = "1px solid #333";
+                        this.style.background = THEME_SURFACE_BG_HEAVY;
+                        this.style.border = "1px solid " + THEME_SURFACE_INNER_BORDER;
                     }
                 });
 
@@ -2866,11 +2045,11 @@
                 if (filter && form.text.toLowerCase().indexOf(filter) === -1) continue;
 
                 var item = document.createElement("div");
-                item.style.cssText = "display:flex;align-items:center;gap:10px;padding:10px;margin-bottom:6px;border:1px solid #333;border-radius:6px;background:#252525;cursor:pointer;transition:all 0.2s;";
+                item.style.cssText = "display:flex;align-items:center;gap:10px;padding:10px;margin-bottom:6px;border:1px solid " + THEME_SURFACE_INNER_BORDER + ";border-radius:6px;background:" + THEME_SURFACE_BG_HEAVY + ";cursor:pointer;transition:all 0.2s;color:" + THEME_TEXT_PRIMARY + ";";
                 item.dataset.formKey = form.value;
 
                 var radio = document.createElement("div");
-                radio.style.cssText = "width:18px;height:18px;border:2px solid #666;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;";
+                radio.style.cssText = "width:18px;height:18px;border:2px solid " + THEME_SURFACE_BORDER + ";border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;";
                 radio.className = "radio-indicator";
 
                 var label = document.createElement("div");
@@ -2881,20 +2060,20 @@
                 item.appendChild(label);
 
                 if (selectedTarget === form.value) {
-                    item.style.background = "#1a3d1a";
-                    item.style.border = "1px solid #51cf66";
-                    radio.innerHTML = '<div style="width:10px;height:10px;background:#51cf66;border-radius:50%;"></div>';
+                    item.style.background = THEME_SURFACE_BG_HEAVY;
+                    item.style.border = "1px solid " + THEME_SUCCESS;
+                    radio.innerHTML = '<div style="width:10px;height:10px;background:' + THEME_SUCCESS + ';border-radius:50%;"></div>';
                 }
 
                 item.addEventListener("mouseenter", function() {
                     if (this.dataset.formKey !== selectedTarget) {
-                        this.style.background = "#333";
+                        this.style.background = THEME_SURFACE_BG_HEAVY;
                     }
                 });
                 item.addEventListener("mouseleave", function() {
                     if (this.dataset.formKey !== selectedTarget) {
-                        this.style.background = "#252525";
-                        this.style.border = "1px solid #333";
+                        this.style.background = THEME_SURFACE_BG_HEAVY;
+                        this.style.border = "1px solid " + THEME_SURFACE_INNER_BORDER;
                     }
                 });
 
@@ -2924,8 +2103,8 @@
             confirmBtn.disabled = !valid;
             confirmBtn.style.opacity = valid ? "1" : "0.5";
             if (valid) {
-                confirmBtn.onmouseenter = function() { this.style.background = "#218838"; };
-                confirmBtn.onmouseleave = function() { this.style.background = "#28a745"; };
+                confirmBtn.onmouseenter = null;
+                confirmBtn.onmouseleave = null;
             } else {
                 confirmBtn.onmouseenter = null;
                 confirmBtn.onmouseleave = null;
@@ -2994,28 +2173,28 @@
         // Status header
         var statusDiv = document.createElement("div");
         statusDiv.id = "archiveUpdateStatus";
-        statusDiv.style.cssText = "text-align:center;font-size:16px;font-weight:600;padding:12px;background:#222;border-radius:6px;margin-bottom:12px;";
+        statusDiv.style.cssText = "text-align:center;font-size:16px;font-weight:600;padding:12px;background:" + THEME_SURFACE_BG + ";border-radius:6px;margin-bottom:12px;color:" + THEME_TEXT_PRIMARY + ";";
         statusDiv.textContent = "Preparing... 0 of " + occurrences.length;
         container.appendChild(statusDiv);
 
         // Progress bar
         var progressBarOuter = document.createElement("div");
-        progressBarOuter.style.cssText = "width:100%;height:8px;background:#333;border-radius:4px;margin-bottom:16px;overflow:hidden;";
+        progressBarOuter.style.cssText = "width:100%;height:8px;background:" + THEME_SURFACE_BG_HEAVY + ";border-radius:4px;margin-bottom:16px;overflow:hidden;";
         var progressBarInner = document.createElement("div");
         progressBarInner.id = "archiveUpdateProgressBar";
-        progressBarInner.style.cssText = "width:0%;height:100%;background:#28a745;transition:width 0.3s;";
+        progressBarInner.style.cssText = "width:0%;height:100%;background:" + THEME_SUCCESS + ";transition:width 0.3s;";
         progressBarOuter.appendChild(progressBarInner);
         container.appendChild(progressBarOuter);
 
         // Items list
         var listContainer = document.createElement("div");
-        listContainer.style.cssText = "flex:1;overflow-y:auto;border:1px solid #333;border-radius:6px;background:#1a1a1a;padding:8px;";
+        listContainer.style.cssText = "flex:1;overflow-y:auto;border:1px solid " + THEME_SURFACE_BORDER + ";border-radius:6px;background:" + THEME_SURFACE_BG + ";padding:8px;";
         listContainer.id = "archiveUpdateItemsList";
 
         for (var i = 0; i < occurrences.length; i++) {
             var occ = occurrences[i];
             var item = document.createElement("div");
-            item.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin-bottom:4px;border:1px solid #333;border-radius:4px;background:#252525;font-size:12px;";
+            item.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin-bottom:4px;border:1px solid " + THEME_SURFACE_INNER_BORDER + ";border-radius:4px;background:" + THEME_SURFACE_BG_HEAVY + ";font-size:12px;color:" + THEME_TEXT_PRIMARY + ";";
             item.id = "archiveUpdateItem_" + i;
 
             var itemLabel = document.createElement("div");
@@ -3023,7 +2202,7 @@
             itemLabel.textContent = occ.segmentText + " → " + occ.eventText + " → " + occ.formText;
 
             var itemStatus = document.createElement("div");
-            itemStatus.style.cssText = "padding:2px 8px;border-radius:10px;font-size:11px;background:#444;color:#888;margin-left:8px;flex-shrink:0;";
+            itemStatus.style.cssText = "padding:2px 8px;border-radius:10px;font-size:11px;background:" + THEME_SURFACE_BG_HEAVY + ";color:" + THEME_TEXT_MUTED + ";margin-left:8px;flex-shrink:0;";
             itemStatus.textContent = "Pending";
             itemStatus.className = "item-status";
 
@@ -3036,7 +2215,7 @@
         // Summary area
         var summaryDiv = document.createElement("div");
         summaryDiv.id = "archiveUpdateSummary";
-        summaryDiv.style.cssText = "display:none;margin-top:12px;padding:12px;background:#222;border-radius:6px;text-align:center;";
+        summaryDiv.style.cssText = "display:none;margin-top:12px;padding:12px;background:" + THEME_SURFACE_BG + ";border-radius:6px;text-align:center;color:" + THEME_TEXT_PRIMARY + ";";
         container.appendChild(summaryDiv);
 
         // Cancel button
@@ -3045,9 +2224,7 @@
         var cancelBtn = document.createElement("button");
         cancelBtn.textContent = "Cancel";
         cancelBtn.id = "archiveUpdateCancelBtn";
-        cancelBtn.style.cssText = "padding:10px 24px;border-radius:6px;border:none;background:#dc3545;color:#fff;font-size:14px;font-weight:500;cursor:pointer;";
-        cancelBtn.onmouseenter = function() { this.style.background = "#c82333"; };
-        cancelBtn.onmouseleave = function() { this.style.background = "#dc3545"; };
+        cancelBtn.className = "ie-btn-danger";
         cancelBtn.addEventListener("click", function() {
             ARCHIVE_UPDATE_FORMS_CANCELLED = true;
             cancelBtn.disabled = true;
@@ -3077,8 +2254,8 @@
                 var statusEl = item.querySelector(".item-status");
                 if (statusEl) {
                     statusEl.textContent = status;
-                    statusEl.style.background = color || "#444";
-                    statusEl.style.color = "#fff";
+                    statusEl.style.background = color || THEME_SURFACE_BG_HEAVY;
+                    statusEl.style.color = THEME_TEXT_PRIMARY;
                 }
             }
         };
@@ -3087,13 +2264,13 @@
             var summaryEl = document.getElementById("archiveUpdateSummary");
             if (summaryEl) {
                 summaryEl.style.display = "block";
-                summaryEl.innerHTML = '<div style="font-size:16px;font-weight:600;margin-bottom:8px;">Complete</div>' +
-                    '<div>Total: ' + total + ' | Success: <span style="color:#51cf66;">' + success + '</span> | Skipped: <span style="color:#ffc107;">' + skipped + '</span> | Errors: <span style="color:#ff6b6b;">' + errors + '</span></div>';
+                summaryEl.innerHTML = '<div style="font-size:16px;font-weight:600;margin-bottom:8px;color:' + THEME_SUCCESS + ';">Complete</div>' +
+                    '<div>Total: ' + total + ' | Success: <span style="color:' + THEME_SUCCESS + ';">' + success + '</span> | Skipped: <span style="color:' + THEME_WARNING + ';">' + skipped + '</span> | Errors: <span style="color:' + THEME_DANGER + ';">' + errors + '</span></div>';
             }
             var cancelBtn = document.getElementById("archiveUpdateCancelBtn");
             if (cancelBtn) {
                 cancelBtn.textContent = "Close";
-                cancelBtn.style.background = "#6c757d";
+                cancelBtn.className = "ie-btn-secondary";
                 cancelBtn.onclick = function() {
                     if (ARCHIVE_UPDATE_FORMS_PROGRESS_REF) {
                         ARCHIVE_UPDATE_FORMS_PROGRESS_REF.close();
@@ -3608,7 +2785,7 @@
         if (total === 0) {
             createPopup({
                 title: "Archive/Update Forms - Error",
-                content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">No occurrences found for selected Source form.</div>',
+                content: '<div style="text-align:center;padding:20px;color:' + THEME_DANGER + ';">No occurrences found for selected Source form.</div>',
                 width: "400px",
                 height: "auto"
             });
@@ -3643,7 +2820,7 @@
 
             var occ = occurrences[i];
             progressContent.updateProgress(i + 1, total);
-            progressContent.setItemStatus(i, "Processing...", "#17a2b8");
+            progressContent.setItemStatus(i, "Processing...", THEME_ACCENT);
 
             try {
                 // Re-scan to get fresh row reference
@@ -3654,7 +2831,7 @@
                 // Check if target already exists for this segment/event
                 if (checkTargetFormExists(freshRows, segKey, evKey, targetFormValue)) {
                     log("Archive/Update Forms: target form already exists for " + occ.segmentText + " → " + occ.eventText + "; skipping");
-                    progressContent.setItemStatus(i, "Skipped (exists)", "#ffc107");
+                    progressContent.setItemStatus(i, "Skipped (exists)", THEME_WARNING);
                     skipCount++;
                     continue;
                 }
@@ -3663,7 +2840,7 @@
                 var row = findRowInDOM(occ.segmentText, occ.eventText, occ.formText);
                 if (!row) {
                     log("Archive/Update Forms: could not find row for " + occ.rowKey);
-                    progressContent.setItemStatus(i, "Error (not found)", "#dc3545");
+                    progressContent.setItemStatus(i, "Error (not found)", THEME_DANGER);
                     errorCount++;
                     continue;
                 }
@@ -3778,7 +2955,7 @@
                                     var closed = await waitForSAModalClose(10000);
                                     if (!closed) {
                                         log("Archive/Update Forms: archive modal did not close for " + occ.rowKey);
-                                        progressContent.setItemStatus(i, "Error (archive)", "#dc3545");
+                                        progressContent.setItemStatus(i, "Error (archive)", THEME_DANGER);
                                         errorCount++;
                                         continue;
                                     }
@@ -3797,7 +2974,7 @@
                 await sleep(500);
                 if (!clickAddSaButton()) {
                     log("Archive/Update Forms: could not click Add button");
-                    progressContent.setItemStatus(i, "Error (add)", "#dc3545");
+                    progressContent.setItemStatus(i, "Error (add)", THEME_DANGER);
                     errorCount++;
                     continue;
                 }
@@ -3805,7 +2982,7 @@
                 var addModal = await waitForSAModal(10000);
                 if (!addModal) {
                     log("Archive/Update Forms: add modal did not open");
-                    progressContent.setItemStatus(i, "Error (add modal)", "#dc3545");
+                    progressContent.setItemStatus(i, "Error (add modal)", THEME_DANGER);
                     errorCount++;
                     continue;
                 }
@@ -3834,7 +3011,7 @@
                     var addClosed = await waitForSAModalClose(10000);
                     if (!addClosed) {
                         log("Archive/Update Forms: add modal did not close");
-                        progressContent.setItemStatus(i, "Error (save)", "#dc3545");
+                        progressContent.setItemStatus(i, "Error (save)", THEME_DANGER);
                         errorCount++;
                         continue;
                     }
@@ -3968,13 +3145,13 @@
                     }
                 }
 
-                progressContent.setItemStatus(i, "Success", "#28a745");
+                progressContent.setItemStatus(i, "Success", THEME_SUCCESS);
                 successCount++;
                 log("Archive/Update Forms: processed " + occ.rowKey + " successfully");
 
             } catch (err) {
                 log("Archive/Update Forms: error processing " + occ.rowKey + " - " + String(err));
-                progressContent.setItemStatus(i, "Error", "#dc3545");
+                progressContent.setItemStatus(i, "Error", THEME_DANGER);
                 errorCount++;
             }
 
@@ -3993,7 +3170,7 @@
         if (!isOnArchiveUpdateFormsPage()) {
             createPopup({
                 title: "Archive/Update Forms - Error",
-                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">⚠️ Wrong Page</p><p>Navigate to the Activity Plans Show page first.</p><p style="margin-top:12px;font-size:12px;color:#888;">Required URL: https://cenexeltest.clinspark.com/secure/crfdesign/activityplans/show/{id}</p></div>',
+                content: '<div style="text-align:center;padding:20px;"><p style="color:' + THEME_DANGER + ';font-size:16px;margin-bottom:12px;">⚠️ Wrong Page</p><p>Navigate to the Activity Plans Show page first.</p><p style="margin-top:12px;font-size:12px;color:' + THEME_TEXT_MUTED + ';">Required URL: https://cenexeltest.clinspark.com/secure/crfdesign/activityplans/show/{id}</p></div>',
                 width: "450px",
                 height: "auto"
             });
@@ -4005,7 +3182,7 @@
         if (isAddSaButtonDisabled()) {
             createPopup({
                 title: "Archive/Update Forms - Error",
-                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">⚠️ Add Button Disabled</p><p>The Add button is currently disabled. This activity plan may no longer be in design mode.</p></div>',
+                content: '<div style="text-align:center;padding:20px;"><p style="color:' + THEME_DANGER + ';font-size:16px;margin-bottom:12px;">⚠️ Add Button Disabled</p><p>The Add button is currently disabled. This activity plan may no longer be in design mode.</p></div>',
                 width: "400px",
                 height: "auto"
             });
@@ -4019,7 +3196,7 @@
         if (rows.length === 0) {
             createPopup({
                 title: "Archive/Update Forms - Error",
-                content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">No rows found in the Scheduled Activities table.</div>',
+                content: '<div style="text-align:center;padding:20px;color:' + THEME_DANGER + ';">No rows found in the Scheduled Activities table.</div>',
                 width: "400px",
                 height: "auto"
             });
@@ -4033,7 +3210,7 @@
         if (sourceFormCount === 0) {
             createPopup({
                 title: "Archive/Update Forms - Error",
-                content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">No forms found in the Scheduled Activities table.</div>',
+                content: '<div style="text-align:center;padding:20px;color:' + THEME_DANGER + ';">No forms found in the Scheduled Activities table.</div>',
                 width: "400px",
                 height: "auto"
             });
@@ -4062,7 +3239,7 @@
             loadingPopup.close();
             createPopup({
                 title: "Archive/Update Forms - Error",
-                content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">Could not click the Add button.</div>',
+                content: '<div style="text-align:center;padding:20px;color:' + THEME_DANGER + ';">Could not click the Add button.</div>',
                 width: "400px",
                 height: "auto"
             });
@@ -4076,7 +3253,7 @@
             loadingPopup.close();
             createPopup({
                 title: "Archive/Update Forms - Error",
-                content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">Modal did not appear within timeout.</div>',
+                content: '<div style="text-align:center;padding:20px;color:' + THEME_DANGER + ';">Modal did not appear within timeout.</div>',
                 width: "400px",
                 height: "auto"
             });
@@ -4106,7 +3283,7 @@
         if (targetFormsArray.length === 0) {
             createPopup({
                 title: "Archive/Update Forms - Error",
-                content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">No forms found in the Add modal dropdown.</div>',
+                content: '<div style="text-align:center;padding:20px;color:' + THEME_DANGER + ';">No forms found in the Add modal dropdown.</div>',
                 width: "400px",
                 height: "auto"
             });
@@ -4352,8 +3529,92 @@
         return results.map(function(r) { return r.method; });
     }
 
+    function disableBootstrapModalFocusTrap() {
+        try {
+            if (window.jQuery && window.jQuery(document)) {
+                log("Methods Library: disabling Bootstrap focus trap");
+                window.jQuery(document).off("focusin.bs.modal");
+            }
+        } catch (e) {
+            log("Methods Library: error disabling focus trap - " + String(e));
+        }
+    }
+
+    function enableBootstrapModalFocusTrap() {
+        try {
+            log("Methods Library: focus trap will be restored by Bootstrap on next modal show");
+        } catch (e) {
+            log("Methods Library: error enabling focus trap - " + String(e));
+        }
+    }
+
+    function neutralizeAjaxModal() {
+        try {
+            var ajaxModal = document.getElementById("ajaxModal");
+            if (!ajaxModal) {
+                log("Methods Library: #ajaxModal not found to neutralize");
+                return;
+            }
+            ajaxModal.setAttribute("data-aps-neutralized", "1");
+            ajaxModal.style.pointerEvents = "none";
+            ajaxModal.style.visibility = "hidden";
+            ajaxModal.style.opacity = "0";
+            ajaxModal.setAttribute("aria-hidden", "true");
+            var modalOpenOnBody = document.body.classList.contains("modal-open");
+            if (modalOpenOnBody) {
+                document.body.classList.remove("modal-open");
+                log("Methods Library: removed modal-open from body");
+            }
+            log("Methods Library: #ajaxModal neutralized");
+        } catch (e) {
+            log("Methods Library: error neutralizing #ajaxModal - " + String(e));
+        }
+    }
+
+    function restoreAjaxModal() {
+        try {
+            var ajaxModal = document.getElementById("ajaxModal");
+            if (!ajaxModal) {
+                log("Methods Library: #ajaxModal not found to restore");
+                return;
+            }
+            var wasNeutralized = ajaxModal.getAttribute("data-aps-neutralized") === "1";
+            if (!wasNeutralized) {
+                log("Methods Library: #ajaxModal not previously neutralized; nothing to restore");
+                return;
+            }
+            ajaxModal.removeAttribute("data-aps-neutralized");
+            ajaxModal.style.pointerEvents = "";
+            ajaxModal.style.visibility = "";
+            ajaxModal.style.opacity = "";
+            ajaxModal.removeAttribute("aria-hidden");
+            var stillShown = ajaxModal.classList.contains("in") || ajaxModal.classList.contains("show");
+            if (stillShown && !document.body.classList.contains("modal-open")) {
+                document.body.classList.add("modal-open");
+                log("Methods Library: restored modal-open on body");
+            }
+            log("Methods Library: #ajaxModal restored");
+        } catch (e) {
+            log("Methods Library: error restoring #ajaxModal - " + String(e));
+        }
+    }
+
     function openMethodsLibraryModal() {
+        var bootstrapBackdrops = document.querySelectorAll('.modal-backdrop');
+        for (var i = 0; i < bootstrapBackdrops.length; i++) {
+            bootstrapBackdrops[i].style.display = 'none';
+        }
+
+        disableBootstrapModalFocusTrap();
+        neutralizeAjaxModal();
+
         if (METHODS_LIBRARY_MODAL_REF && document.body.contains(METHODS_LIBRARY_MODAL_REF)) {
+            var existingSearchInput = METHODS_LIBRARY_MODAL_REF.querySelector('input[type="text"]');
+            if (existingSearchInput) {
+                existingSearchInput.disabled = false;
+                existingSearchInput.readOnly = false;
+                existingSearchInput.focus();
+            }
             METHODS_LIBRARY_MODAL_REF.focus();
             return;
         }
@@ -4370,7 +3631,7 @@
         overlay.style.width = "100%";
         overlay.style.height = "100%";
         overlay.style.background = "rgba(0,0,0,0.6)";
-        overlay.style.zIndex = "999997";
+        overlay.style.zIndex = String(THEME_Z_OVERLAY - 1);
 
         var modal = document.createElement("div");
         modal.setAttribute("role", "dialog");
@@ -4385,16 +3646,16 @@
         modal.style.maxWidth = "95vw";
         modal.style.height = "600px";
         modal.style.maxHeight = "90vh";
-        modal.style.background = "#1a1a1a";
-        modal.style.color = "#fff";
-        modal.style.border = "1px solid #444";
-        modal.style.borderRadius = "10px";
-        modal.style.boxShadow = "0 8px 32px rgba(0,0,0,0.5)";
+        modal.style.background = THEME_GRADIENT_BG;
+        modal.style.color = THEME_TEXT_PRIMARY;
+        modal.style.border = "1px solid " + THEME_SURFACE_BORDER;
+        modal.style.borderRadius = THEME_RADIUS + "px";
+        modal.style.boxShadow = THEME_SHADOW;
         modal.style.display = "flex";
         modal.style.flexDirection = "column";
         modal.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
         modal.style.fontSize = "14px";
-        modal.style.zIndex = "999998";
+        modal.style.zIndex = String(THEME_Z_OVERLAY + 1);
         modal.style.outline = "none";
 
         METHODS_LIBRARY_MODAL_REF = modal;
@@ -4404,7 +3665,7 @@
         header.style.alignItems = "center";
         header.style.justifyContent = "space-between";
         header.style.padding = "12px 16px";
-        header.style.borderBottom = "1px solid #333";
+        header.style.borderBottom = "1px solid " + THEME_SURFACE_INNER_BORDER;
         header.style.cursor = "move";
         header.style.userSelect = "none";
 
@@ -4418,13 +3679,13 @@
         closeBtn.textContent = "✕";
         closeBtn.setAttribute("aria-label", "Close");
         closeBtn.style.background = "transparent";
-        closeBtn.style.color = "#fff";
+        closeBtn.style.color = THEME_TEXT_PRIMARY;
         closeBtn.style.border = "none";
         closeBtn.style.fontSize = "18px";
         closeBtn.style.cursor = "pointer";
         closeBtn.style.padding = "4px 8px";
         closeBtn.style.borderRadius = "4px";
-        closeBtn.onmouseenter = function() { closeBtn.style.background = "#333"; };
+        closeBtn.onmouseenter = function() { closeBtn.style.background = THEME_SURFACE_BG_HEAVY; };
         closeBtn.onmouseleave = function() { closeBtn.style.background = "transparent"; };
         header.appendChild(closeBtn);
         modal.appendChild(header);
@@ -4434,7 +3695,7 @@
         toolbar.style.alignItems = "center";
         toolbar.style.gap = "10px";
         toolbar.style.padding = "10px 16px";
-        toolbar.style.borderBottom = "1px solid #333";
+        toolbar.style.borderBottom = "1px solid " + THEME_SURFACE_INNER_BORDER;
         toolbar.style.flexWrap = "wrap";
 
         var searchInput = document.createElement("input");
@@ -4444,23 +3705,23 @@
         searchInput.style.flex = "1";
         searchInput.style.minWidth = "150px";
         searchInput.style.padding = "8px 12px";
-        searchInput.style.background = "#2a2a2a";
-        searchInput.style.border = "1px solid #444";
+        searchInput.style.background = THEME_SURFACE_BG;
+        searchInput.style.border = "1px solid " + THEME_SURFACE_BORDER;
         searchInput.style.borderRadius = "6px";
-        searchInput.style.color = "#fff";
+        searchInput.style.color = THEME_TEXT_PRIMARY;
         searchInput.style.fontSize = "14px";
         searchInput.style.outline = "none";
-        searchInput.onfocus = function() { searchInput.style.borderColor = "#5b43c7"; };
-        searchInput.onblur = function() { searchInput.style.borderColor = "#444"; };
+        searchInput.onfocus = function() { searchInput.style.borderColor = THEME_ACCENT; };
+        searchInput.onblur = function() { searchInput.style.borderColor = THEME_SURFACE_BORDER; };
         toolbar.appendChild(searchInput);
 
         var tagSelect = document.createElement("select");
         tagSelect.setAttribute("aria-label", "Filter by tag");
         tagSelect.style.padding = "8px 12px";
-        tagSelect.style.background = "#2a2a2a";
-        tagSelect.style.border = "1px solid #444";
+        tagSelect.style.background = THEME_SURFACE_BG;
+        tagSelect.style.border = "1px solid " + THEME_SURFACE_BORDER;
         tagSelect.style.borderRadius = "6px";
-        tagSelect.style.color = "#fff";
+        tagSelect.style.color = THEME_TEXT_PRIMARY;
         tagSelect.style.fontSize = "14px";
         tagSelect.style.cursor = "pointer";
         toolbar.appendChild(tagSelect);
@@ -4468,10 +3729,10 @@
         var sortSelect = document.createElement("select");
         sortSelect.setAttribute("aria-label", "Sort order");
         sortSelect.style.padding = "8px 12px";
-        sortSelect.style.background = "#2a2a2a";
-        sortSelect.style.border = "1px solid #444";
+        sortSelect.style.background = THEME_SURFACE_BG;
+        sortSelect.style.border = "1px solid " + THEME_SURFACE_BORDER;
         sortSelect.style.borderRadius = "6px";
-        sortSelect.style.color = "#fff";
+        sortSelect.style.color = THEME_TEXT_PRIMARY;
         sortSelect.style.fontSize = "14px";
         sortSelect.style.cursor = "pointer";
         var sortOpts = [
@@ -4493,7 +3754,7 @@
         searchBodyLabel.style.gap = "6px";
         searchBodyLabel.style.cursor = "pointer";
         searchBodyLabel.style.fontSize = "13px";
-        searchBodyLabel.style.color = "#aaa";
+        searchBodyLabel.style.color = THEME_TEXT_MUTED;
         var searchBodyCheckbox = document.createElement("input");
         searchBodyCheckbox.type = "checkbox";
         searchBodyCheckbox.setAttribute("aria-label", "Search in body content");
@@ -4507,7 +3768,7 @@
         favoritesLabel.style.gap = "6px";
         favoritesLabel.style.cursor = "pointer";
         favoritesLabel.style.fontSize = "13px";
-        favoritesLabel.style.color = "#aaa";
+        favoritesLabel.style.color = THEME_TEXT_MUTED;
         var favoritesCheckbox = document.createElement("input");
         favoritesCheckbox.type = "checkbox";
         favoritesCheckbox.setAttribute("aria-label", "Show only favorites");
@@ -4524,16 +3785,16 @@
             btn.textContent = text;
             btn.setAttribute("aria-label", ariaLabel);
             btn.style.padding = "8px 14px";
-            btn.style.background = "#333";
-            btn.style.color = "#fff";
-            btn.style.border = "1px solid #444";
+            btn.style.background = THEME_SURFACE_BG;
+            btn.style.color = THEME_TEXT_PRIMARY;
+            btn.style.border = "1px solid " + THEME_SURFACE_BORDER;
             btn.style.borderRadius = "6px";
             btn.style.cursor = "pointer";
             btn.style.fontSize = "13px";
             btn.style.fontWeight = "500";
             btn.style.transition = "background 0.15s";
-            btn.onmouseenter = function() { btn.style.background = "#444"; };
-            btn.onmouseleave = function() { btn.style.background = "#333"; };
+            btn.onmouseenter = function() { btn.style.background = THEME_SURFACE_BG_HEAVY; };
+            btn.onmouseleave = function() { btn.style.background = THEME_SURFACE_BG; };
             return btn;
         }
 
@@ -4552,9 +3813,9 @@
         var listPane = document.createElement("div");
         listPane.style.width = "280px";
         listPane.style.minWidth = "200px";
-        listPane.style.borderRight = "1px solid #333";
+        listPane.style.borderRight = "1px solid " + THEME_SURFACE_INNER_BORDER;
         listPane.style.overflowY = "auto";
-        listPane.style.background = "#1a1a1a";
+        listPane.style.background = THEME_SURFACE_BG;
         listPane.setAttribute("role", "listbox");
         listPane.setAttribute("aria-label", "Methods list");
 
@@ -4563,12 +3824,12 @@
         previewPane.style.display = "flex";
         previewPane.style.flexDirection = "column";
         previewPane.style.overflow = "hidden";
-        previewPane.style.background = "#111";
+        previewPane.style.background = THEME_SURFACE_BG;
 
         var previewHeader = document.createElement("div");
         previewHeader.style.padding = "12px 16px";
-        previewHeader.style.borderBottom = "1px solid #333";
-        previewHeader.style.background = "#1a1a1a";
+        previewHeader.style.borderBottom = "1px solid " + THEME_SURFACE_INNER_BORDER;
+        previewHeader.style.background = THEME_SURFACE_BG;
 
         var previewTitle = document.createElement("div");
         previewTitle.style.fontWeight = "600";
@@ -4579,7 +3840,7 @@
 
         var previewMeta = document.createElement("div");
         previewMeta.style.fontSize = "12px";
-        previewMeta.style.color = "#888";
+        previewMeta.style.color = THEME_TEXT_MUTED;
         previewHeader.appendChild(previewMeta);
 
         var previewBody = document.createElement("pre");
@@ -4587,12 +3848,12 @@
         previewBody.style.margin = "0";
         previewBody.style.padding = "16px";
         previewBody.style.overflowY = "auto";
-        previewBody.style.background = "#0d0d0d";
+        previewBody.style.background = THEME_SURFACE_BG;
         previewBody.style.fontSize = "13px";
         previewBody.style.fontFamily = "Consolas, Monaco, 'Courier New', monospace";
         previewBody.style.whiteSpace = "pre-wrap";
         previewBody.style.wordBreak = "break-word";
-        previewBody.style.color = "#e0e0e0";
+        previewBody.style.color = THEME_TEXT_PRIMARY;
         previewBody.style.lineHeight = "1.5";
 
         previewPane.appendChild(previewHeader);
@@ -4603,16 +3864,16 @@
 
         var statusBar = document.createElement("div");
         statusBar.style.padding = "8px 16px";
-        statusBar.style.borderTop = "1px solid #333";
+        statusBar.style.borderTop = "1px solid " + THEME_SURFACE_INNER_BORDER;
         statusBar.style.fontSize = "12px";
-        statusBar.style.color = "#888";
-        statusBar.style.background = "#1a1a1a";
+        statusBar.style.color = THEME_TEXT_MUTED;
+        statusBar.style.background = THEME_SURFACE_BG;
         statusBar.textContent = "Loading...";
         modal.appendChild(statusBar);
 
         function updateStatus(msg, isError) {
             statusBar.textContent = msg;
-            statusBar.style.color = isError ? "#e74c3c" : "#888";
+            statusBar.style.color = isError ? THEME_DANGER : THEME_TEXT_MUTED;
         }
 
         function populateTagSelect() {
@@ -4634,7 +3895,7 @@
             if (methods.length === 0) {
                 var empty = document.createElement("div");
                 empty.style.padding = "20px";
-                empty.style.color = "#666";
+                empty.style.color = THEME_TEXT_MUTED;
                 empty.style.textAlign = "center";
                 empty.textContent = "No methods found";
                 listPane.appendChild(empty);
@@ -4653,14 +3914,14 @@
                     item.setAttribute("data-method-id", m.id);
                     item.tabIndex = 0;
                     item.style.padding = "10px 14px";
-                    item.style.borderBottom = "1px solid #2a2a2a";
+                    item.style.borderBottom = "1px solid " + THEME_SURFACE_INNER_BORDER;
                     item.style.cursor = "pointer";
                     item.style.transition = "background 0.1s";
                     item.style.position = "relative";
 
                     var itemId = document.createElement("div");
                     itemId.style.fontSize = "11px";
-                    itemId.style.color = "#5b43c7";
+                    itemId.style.color = THEME_ACCENT;
                     itemId.style.marginBottom = "2px";
                     itemId.textContent = m.id || "";
                     item.appendChild(itemId);
@@ -4674,7 +3935,7 @@
                     if (m.tags && m.tags.length > 0) {
                         var itemTags = document.createElement("div");
                         itemTags.style.fontSize = "11px";
-                        itemTags.style.color = "#666";
+                        itemTags.style.color = THEME_TEXT_MUTED;
                         itemTags.style.marginTop = "4px";
                         itemTags.textContent = m.tags.join(", ");
                         item.appendChild(itemTags);
@@ -4694,19 +3955,19 @@
                     if (isPinned) {
                         var pinBadge = document.createElement("span");
                         pinBadge.textContent = "📌 Pinned";
-                        pinBadge.style.color = "#f39c12";
+                        pinBadge.style.color = THEME_WARNING;
                         badges.appendChild(pinBadge);
                     }
                     if (isFav) {
                         var favBadge = document.createElement("span");
                         favBadge.textContent = "★ Favorite";
-                        favBadge.style.color = "#ffd700";
+                        favBadge.style.color = THEME_WARNING;
                         badges.appendChild(favBadge);
                     }
                     if (isRecent && !isPinned) {
                         var recentBadge = document.createElement("span");
                         recentBadge.textContent = "🕒 Recent";
-                        recentBadge.style.color = "#888";
+                        recentBadge.style.color = THEME_TEXT_MUTED;
                         badges.appendChild(recentBadge);
                     }
 
@@ -4727,7 +3988,7 @@
                     favBtn.title = isFav ? "Remove from favorites" : "Add to favorites";
                     favBtn.style.background = "transparent";
                     favBtn.style.border = "none";
-                    favBtn.style.color = isFav ? "#ffd700" : "#888";
+                    favBtn.style.color = isFav ? THEME_WARNING : THEME_TEXT_MUTED;
                     favBtn.style.fontSize = "16px";
                     favBtn.style.cursor = "pointer";
                     favBtn.style.padding = "2px 6px";
@@ -4743,7 +4004,7 @@
                     pinBtn.title = isPinned ? "Unpin" : "Pin to top";
                     pinBtn.style.background = "transparent";
                     pinBtn.style.border = "none";
-                    pinBtn.style.color = isPinned ? "#f39c12" : "#888";
+                    pinBtn.style.color = isPinned ? THEME_WARNING : THEME_TEXT_MUTED;
                     pinBtn.style.fontSize = "14px";
                     pinBtn.style.cursor = "pointer";
                     pinBtn.style.padding = "2px 6px";
@@ -4762,7 +4023,7 @@
                     item.appendChild(actions);
 
                     item.onmouseenter = function() {
-                        if (selectedMethod !== m) item.style.background = "#252525";
+                        if (selectedMethod !== m) item.style.background = THEME_SURFACE_BG_HEAVY;
                         actions.style.display = "flex";
                     };
                     item.onmouseleave = function() {
@@ -4797,7 +4058,7 @@
             }
             if (itemEl) {
                 itemEl.setAttribute("aria-selected", "true");
-                itemEl.style.background = "#2a2a2a";
+                itemEl.style.background = THEME_SURFACE_BG_HEAVY;
                 itemEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
             }
 
@@ -4874,6 +4135,21 @@
             tagSelect.value = getLastTag();
             sortSelect.value = getSortOrder();
 
+            searchInput.disabled = false;
+            searchInput.readOnly = false;
+            searchInput.style.pointerEvents = 'auto';
+            searchInput.tabIndex = 0;
+
+            setTimeout(function() {
+                var bootstrapBackdrops = document.querySelectorAll('.modal-backdrop');
+                for (var i = 0; i < bootstrapBackdrops.length; i++) {
+                    bootstrapBackdrops[i].style.display = 'none';
+                }
+                searchInput.focus();
+                searchInput.select();
+                searchInput.click();
+            }, 150);
+
             doSearch();
         }
 
@@ -4909,6 +4185,14 @@
             modal.remove();
             METHODS_LIBRARY_MODAL_REF = null;
             document.removeEventListener("keydown", keyHandler);
+
+            restoreAjaxModal();
+            enableBootstrapModalFocusTrap();
+
+            var bootstrapBackdrops = document.querySelectorAll('.modal-backdrop');
+            for (var i = 0; i < bootstrapBackdrops.length; i++) {
+                bootstrapBackdrops[i].style.display = 'block';
+            }
         }
 
         closeBtn.onclick = closeModal;
@@ -5223,8 +4507,7 @@
             "Run ICF Consent",
             "Run Button (1-5)",
             "Import Cohort Subjects",
-            "Pull Barcode",
-            "Pull Lab Barcode",
+            "Run Barcode",
             "Add Existing Subject",
             "Search Methods",
             "Scheduled Activities Builder",
@@ -5255,7 +4538,7 @@
         var description = document.createElement("div");
         description.textContent = "Select which buttons to display in the panel:";
         description.style.fontSize = "13px";
-        description.style.color = "#aaa";
+        description.style.color = THEME_TEXT_MUTED;
         description.style.marginBottom = "12px";
         container.appendChild(description);
 
@@ -5278,12 +4561,12 @@
             row.style.alignItems = "center";
             row.style.gap = "10px";
             row.style.padding = "8px 12px";
-            row.style.background = "#1a1a1a";
+            row.style.background = THEME_SURFACE_BG;
             row.style.borderRadius = "6px";
             row.style.cursor = "pointer";
             row.style.transition = "background 0.15s";
-            row.onmouseenter = function() { this.style.background = "#252525"; };
-            row.onmouseleave = function() { this.style.background = "#1a1a1a"; };
+            row.onmouseenter = function() { this.style.background = THEME_SURFACE_BG_HEAVY; };
+            row.onmouseleave = function() { this.style.background = THEME_SURFACE_BG; };
 
             var checkbox = document.createElement("input");
             checkbox.type = "checkbox";
@@ -5291,13 +4574,13 @@
             checkbox.style.width = "18px";
             checkbox.style.height = "18px";
             checkbox.style.cursor = "pointer";
-            checkbox.style.accentColor = "#5b43c7";
+            checkbox.style.accentColor = THEME_ACCENT;
             checkbox.dataset.label = label;
 
             var labelText = document.createElement("span");
             labelText.textContent = label;
             labelText.style.fontSize = "14px";
-            labelText.style.color = "#fff";
+            labelText.style.color = THEME_TEXT_PRIMARY;
 
             row.appendChild(checkbox);
             row.appendChild(labelText);
@@ -5311,12 +4594,12 @@
         var hotkeySection = document.createElement("div");
         hotkeySection.style.marginTop = "20px";
         hotkeySection.style.paddingTop = "20px";
-        hotkeySection.style.borderTop = "1px solid #333";
+        hotkeySection.style.borderTop = "1px solid " + THEME_SURFACE_INNER_BORDER;
 
         var hotkeyLabel = document.createElement("div");
         hotkeyLabel.textContent = "Panel Toggle Hotkey:";
         hotkeyLabel.style.fontSize = "13px";
-        hotkeyLabel.style.color = "#aaa";
+        hotkeyLabel.style.color = THEME_TEXT_MUTED;
         hotkeyLabel.style.marginBottom = "8px";
         hotkeySection.appendChild(hotkeyLabel);
 
@@ -5331,21 +4614,21 @@
         hotkeyInput.placeholder = "Press a key...";
         hotkeyInput.style.flex = "1";
         hotkeyInput.style.padding = "10px 12px";
-        hotkeyInput.style.background = "#2a2a2a";
-        hotkeyInput.style.border = "1px solid #444";
+        hotkeyInput.style.background = THEME_SURFACE_BG;
+        hotkeyInput.style.border = "1px solid " + THEME_SURFACE_BORDER;
         hotkeyInput.style.borderRadius = "6px";
-        hotkeyInput.style.color = "#fff";
+        hotkeyInput.style.color = THEME_TEXT_PRIMARY;
         hotkeyInput.style.fontSize = "14px";
         hotkeyInput.style.outline = "none";
         hotkeyInput.style.fontFamily = "monospace";
         hotkeyInput.style.cursor = "pointer";
 
         hotkeyInput.addEventListener("focus", function() {
-            this.style.borderColor = "#5b43c7";
+            this.style.borderColor = THEME_ACCENT;
         });
 
         hotkeyInput.addEventListener("blur", function() {
-            this.style.borderColor = "#333";
+            this.style.borderColor = THEME_SURFACE_INNER_BORDER;
         });
 
         hotkeyInput.addEventListener("keydown", function(e) {
@@ -5384,15 +4667,9 @@
 
         var hotkeyResetBtn = document.createElement("button");
         hotkeyResetBtn.textContent = "Reset";
-        hotkeyResetBtn.style.background = "#333";
-        hotkeyResetBtn.style.color = "#fff";
-        hotkeyResetBtn.style.border = "none";
-        hotkeyResetBtn.style.borderRadius = "6px";
+        hotkeyResetBtn.className = "ie-btn-secondary";
         hotkeyResetBtn.style.padding = "10px 16px";
-        hotkeyResetBtn.style.cursor = "pointer";
         hotkeyResetBtn.style.fontSize = "13px";
-        hotkeyResetBtn.onmouseenter = function() { this.style.background = "#444"; };
-        hotkeyResetBtn.onmouseleave = function() { this.style.background = "#333"; };
         hotkeyResetBtn.addEventListener("click", function() {
             hotkeyInput.value = "F2";
         });
@@ -5404,7 +4681,7 @@
         var hotkeyHint = document.createElement("div");
         hotkeyHint.textContent = "Click the input field and press any key to set a new hotkey";
         hotkeyHint.style.fontSize = "11px";
-        hotkeyHint.style.color = "#666";
+        hotkeyHint.style.color = THEME_TEXT_MUTED;
         hotkeyHint.style.marginTop = "6px";
         hotkeyHint.style.fontStyle = "italic";
         hotkeySection.appendChild(hotkeyHint);
@@ -5420,15 +4697,9 @@
 
         var selectAllBtn = document.createElement("button");
         selectAllBtn.textContent = "Select All";
-        selectAllBtn.style.background = "#333";
-        selectAllBtn.style.color = "#fff";
-        selectAllBtn.style.border = "none";
-        selectAllBtn.style.borderRadius = "6px";
+        selectAllBtn.className = "ie-btn-secondary";
         selectAllBtn.style.padding = "8px 16px";
-        selectAllBtn.style.cursor = "pointer";
         selectAllBtn.style.fontSize = "13px";
-        selectAllBtn.onmouseenter = function() { this.style.background = "#444"; };
-        selectAllBtn.onmouseleave = function() { this.style.background = "#333"; };
         selectAllBtn.addEventListener("click", function() {
             for (var j = 0; j < checkboxes.length; j++) {
                 checkboxes[j].checked = true;
@@ -5437,15 +4708,9 @@
 
         var deselectAllBtn = document.createElement("button");
         deselectAllBtn.textContent = "Deselect All";
-        deselectAllBtn.style.background = "#333";
-        deselectAllBtn.style.color = "#fff";
-        deselectAllBtn.style.border = "none";
-        deselectAllBtn.style.borderRadius = "6px";
+        deselectAllBtn.className = "ie-btn-secondary";
         deselectAllBtn.style.padding = "8px 16px";
-        deselectAllBtn.style.cursor = "pointer";
         deselectAllBtn.style.fontSize = "13px";
-        deselectAllBtn.onmouseenter = function() { this.style.background = "#444"; };
-        deselectAllBtn.onmouseleave = function() { this.style.background = "#333"; };
         deselectAllBtn.addEventListener("click", function() {
             for (var j = 0; j < checkboxes.length; j++) {
                 checkboxes[j].checked = false;
@@ -5454,16 +4719,10 @@
 
         var saveBtn = document.createElement("button");
         saveBtn.textContent = "Save & Refresh";
-        saveBtn.style.background = "#5b43c7";
-        saveBtn.style.color = "#fff";
-        saveBtn.style.border = "none";
-        saveBtn.style.borderRadius = "6px";
+        saveBtn.className = "ie-btn-primary";
         saveBtn.style.padding = "10px 20px";
-        saveBtn.style.cursor = "pointer";
         saveBtn.style.fontSize = "14px";
         saveBtn.style.fontWeight = "600";
-        saveBtn.onmouseenter = function() { this.style.background = "#4a35a6"; };
-        saveBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
 
         buttonRow.appendChild(selectAllBtn);
         buttonRow.appendChild(deselectAllBtn);
@@ -5748,7 +5007,7 @@
 
         var descDiv = document.createElement("div");
         descDiv.style.fontSize = "13px";
-        descDiv.style.color = "#aaa";
+        descDiv.style.color = THEME_TEXT_MUTED;
         descDiv.style.marginBottom = "12px";
         descDiv.textContent = "Choose the epoch where you want to add the existing subject. Screening epochs are excluded.";
         popupContent.appendChild(descDiv);
@@ -5760,9 +5019,9 @@
                 itemDiv.style.justifyContent = "space-between";
                 itemDiv.style.alignItems = "center";
                 itemDiv.style.padding = "10px 12px";
-                itemDiv.style.background = "#1a1a1a";
+                itemDiv.style.background = THEME_SURFACE_BG_HEAVY;
                 itemDiv.style.borderRadius = "6px";
-                itemDiv.style.border = "1px solid #333";
+                itemDiv.style.border = "1px solid " + THEME_SURFACE_INNER_BORDER;
 
                 var nameSpan = document.createElement("span");
                 nameSpan.textContent = epoch.name;
@@ -5770,12 +5029,8 @@
 
                 var confirmBtn = document.createElement("button");
                 confirmBtn.textContent = "Confirm";
-                confirmBtn.style.background = "#2e7d32";
-                confirmBtn.style.color = "#fff";
-                confirmBtn.style.border = "none";
-                confirmBtn.style.borderRadius = "4px";
+                confirmBtn.className = "ie-btn-success";
                 confirmBtn.style.padding = "6px 12px";
-                confirmBtn.style.cursor = "pointer";
                 confirmBtn.style.fontWeight = "500";
                 confirmBtn.addEventListener("click", async function() {
                     log("AES: epoch selected - " + epoch.name + " (id=" + epoch.id + ")");
@@ -5829,14 +5084,14 @@
         var progressDiv = document.createElement("div");
         progressDiv.id = "aesCollectProgress";
         progressDiv.style.fontSize = "14px";
-        progressDiv.style.color = "#9df";
+        progressDiv.style.color = THEME_ACCENT;
         progressDiv.textContent = "Initializing...";
         popupContent.appendChild(progressDiv);
 
         var loadingDiv = document.createElement("div");
         loadingDiv.id = "aesLoading";
         loadingDiv.style.fontSize = "14px";
-        loadingDiv.style.color = "#9df";
+        loadingDiv.style.color = THEME_ACCENT;
         loadingDiv.textContent = "Running.";
         popupContent.appendChild(loadingDiv);
 
@@ -6126,7 +5381,7 @@
 
         var descDiv = document.createElement("div");
         descDiv.style.fontSize = "13px";
-        descDiv.style.color = "#aaa";
+        descDiv.style.color = THEME_TEXT_MUTED;
         descDiv.style.marginBottom = "12px";
         descDiv.innerHTML = "Adding to epoch: <strong>" + selectedEpochName + "</strong><br>Found " + subjectList.length + " eligible subjects.";
         popupContent.appendChild(descDiv);
@@ -6137,9 +5392,9 @@
                 itemDiv.style.display = "flex";
                 itemDiv.style.flexDirection = "column";
                 itemDiv.style.padding = "10px 12px";
-                itemDiv.style.background = "#1a1a1a";
+                itemDiv.style.background = THEME_SURFACE_BG_HEAVY;
                 itemDiv.style.borderRadius = "6px";
-                itemDiv.style.border = "1px solid #333";
+                itemDiv.style.border = "1px solid " + THEME_SURFACE_INNER_BORDER;
                 itemDiv.style.gap = "6px";
 
                 var topRow = document.createElement("div");
@@ -6154,12 +5409,8 @@
 
                 var selectBtn = document.createElement("button");
                 selectBtn.textContent = "Select";
-                selectBtn.style.background = "#1976d2";
-                selectBtn.style.color = "#fff";
-                selectBtn.style.border = "none";
-                selectBtn.style.borderRadius = "4px";
+                selectBtn.className = "ie-btn-primary";
                 selectBtn.style.padding = "6px 12px";
-                selectBtn.style.cursor = "pointer";
                 selectBtn.style.fontWeight = "500";
                 selectBtn.addEventListener("click", async function() {
                     log("AES: subject selected - " + subject.subjectNumber + " (volunteerId=" + subject.volunteerId + ")");
@@ -6179,12 +5430,12 @@
                 var locationSpan = document.createElement("span");
                 locationSpan.textContent = subject.epochName + " → " + subject.cohortName;
                 locationSpan.style.fontSize = "12px";
-                locationSpan.style.color = "#888";
+                locationSpan.style.color = THEME_TEXT_MUTED;
 
                 var volunteerSpan = document.createElement("span");
                 volunteerSpan.textContent = subject.volunteerDisplay;
                 volunteerSpan.style.fontSize = "11px";
-                volunteerSpan.style.color = "#666";
+                volunteerSpan.style.color = THEME_TEXT_MUTED;
 
                 itemDiv.appendChild(topRow);
                 itemDiv.appendChild(locationSpan);
@@ -6236,7 +5487,7 @@
         var loadingDiv = document.createElement("div");
         loadingDiv.id = "aesProgressLoading";
         loadingDiv.style.fontSize = "14px";
-        loadingDiv.style.color = "#9df";
+        loadingDiv.style.color = THEME_ACCENT;
         loadingDiv.textContent = "Running.";
         popupContent.appendChild(loadingDiv);
 
@@ -6279,7 +5530,7 @@
 
         var errorDiv = document.createElement("div");
         errorDiv.style.fontSize = "16px";
-        errorDiv.style.color = "#f44336";
+        errorDiv.style.color = THEME_DANGER;
         errorDiv.style.fontWeight = "500";
         errorDiv.textContent = message;
         popupContent.appendChild(errorDiv);
@@ -6307,7 +5558,7 @@
 
         var successDiv = document.createElement("div");
         successDiv.style.fontSize = "18px";
-        successDiv.style.color = "#4caf50";
+        successDiv.style.color = THEME_SUCCESS;
         successDiv.style.fontWeight = "600";
         successDiv.textContent = "✓ Subject Added Successfully!";
         popupContent.appendChild(successDiv);
@@ -6317,7 +5568,7 @@
 
         var detailsDiv = document.createElement("div");
         detailsDiv.style.fontSize = "14px";
-        detailsDiv.style.color = "#aaa";
+        detailsDiv.style.color = THEME_TEXT_MUTED;
         detailsDiv.innerHTML = "Subject <strong>" + subjectNumber + "</strong> has been added to epoch <strong>" + epochName + "</strong> and activated.";
         popupContent.appendChild(detailsDiv);
 
@@ -7149,17 +6400,17 @@
         var segmentSearch = document.createElement("input");
         segmentSearch.type = "text";
         segmentSearch.placeholder = "Search Segments...";
-        segmentSearch.style.cssText = "padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;";
+        segmentSearch.style.cssText = "padding:8px;border-radius:4px;border:1px solid " + THEME_SURFACE_BORDER + ";background:" + THEME_SURFACE_BG_HEAVY + ";color:" + THEME_TEXT_PRIMARY + ";";
 
         var eventSearch = document.createElement("input");
         eventSearch.type = "text";
         eventSearch.placeholder = "Search Study Events...";
-        eventSearch.style.cssText = "padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;";
+        eventSearch.style.cssText = "padding:8px;border-radius:4px;border:1px solid " + THEME_SURFACE_BORDER + ";background:" + THEME_SURFACE_BG_HEAVY + ";color:" + THEME_TEXT_PRIMARY + ";";
 
         var formSearch = document.createElement("input");
         formSearch.type = "text";
         formSearch.placeholder = "Search Forms...";
-        formSearch.style.cssText = "padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;";
+        formSearch.style.cssText = "padding:8px;border-radius:4px;border:1px solid " + THEME_SURFACE_BORDER + ";background:" + THEME_SURFACE_BG_HEAVY + ";color:" + THEME_TEXT_PRIMARY + ";";
 
         var timeLabel = document.createElement("div");
         timeLabel.textContent = "Time Relative to Segment";
@@ -7181,11 +6432,11 @@
 
         // Segments column (with checkboxes and dropzones)
         var segmentColumnWrapper = document.createElement("div");
-        segmentColumnWrapper.style.cssText = "display:flex;flex-direction:column;border:1px solid #333;border-radius:4px;background:#1a1a1a;height:100%;overflow:hidden;";
+        segmentColumnWrapper.style.cssText = "display:flex;flex-direction:column;border:1px solid " + THEME_SURFACE_INNER_BORDER + ";border-radius:4px;background:" + THEME_SURFACE_BG_HEAVY + ";height:100%;overflow:hidden;";
 
         // Select All header for segments
         var segmentHeader = document.createElement("div");
-        segmentHeader.style.cssText = "display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid #333;background:#222;";
+        segmentHeader.style.cssText = "display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid " + THEME_SURFACE_INNER_BORDER + ";background:" + THEME_SURFACE_BG_HEAVY + ";";
 
         var selectAllCheckbox = document.createElement("input");
         selectAllCheckbox.type = "checkbox";
@@ -7208,29 +6459,29 @@
 
         // Study Events column (draggable items)
         var eventColumn = document.createElement("div");
-        eventColumn.style.cssText = "overflow-y:auto;border:1px solid #444;border-radius:6px;padding:10px;background:#1e1e1e;box-shadow:inset 0 1px 3px rgba(0,0,0,0.3);";
+        eventColumn.style.cssText = "overflow-y:auto;border:1px solid " + THEME_SURFACE_BORDER + ";border-radius:6px;padding:10px;background:" + THEME_SURFACE_BG_HEAVY + ";box-shadow:inset 0 1px 3px rgba(0,0,0,0.3);";
         eventColumn.id = "saBuilderEvents";
 
         // Make Study Events column a drop zone for restoring events
         eventColumn.addEventListener("dragover", function(e) {
             e.preventDefault();
-            this.style.background = "#252525";
-            this.style.border = "2px dashed #007bff";
+            this.style.background = THEME_SURFACE_BG;
+            this.style.border = "2px dashed " + THEME_ACCENT;
             this.style.transition = "all 0.2s ease";
         });
 
         eventColumn.addEventListener("dragleave", function(e) {
             e.preventDefault();
-            this.style.background = "#1e1e1e";
-            this.style.border = "1px solid #444";
+            this.style.background = THEME_SURFACE_BG_HEAVY;
+            this.style.border = "1px solid " + THEME_SURFACE_BORDER;
             this.style.transition = "all 0.2s ease";
         });
 
         eventColumn.addEventListener("drop", function(e) {
             e.preventDefault();
             e.stopPropagation();
-            this.style.background = "#1e1e1e";
-            this.style.border = "1px solid #444";
+            this.style.background = THEME_SURFACE_BG_HEAVY;
+            this.style.border = "1px solid " + THEME_SURFACE_BORDER;
             this.style.transition = "all 0.2s ease";
 
             var eventData = e.dataTransfer.getData("text/plain");
@@ -7259,12 +6510,12 @@
 
         // Forms column (checkboxes)
         var formColumn = document.createElement("div");
-        formColumn.style.cssText = "overflow-y:auto;border:1px solid #333;border-radius:4px;padding:8px;background:#1a1a1a;";
+        formColumn.style.cssText = "overflow-y:auto;border:1px solid " + THEME_SURFACE_INNER_BORDER + ";border-radius:4px;padding:8px;background:" + THEME_SURFACE_BG_HEAVY + ";";
         formColumn.id = "saBuilderForms";
 
         // Time inputs column
         var timeColumn = document.createElement("div");
-        timeColumn.style.cssText = "display:flex;flex-direction:column;gap:12px;padding:8px;border:1px solid #333;border-radius:4px;background:#1a1a1a;height:100%;overflow-y:auto;overflow-x:hidden;";
+        timeColumn.style.cssText = "display:flex;flex-direction:column;gap:12px;padding:8px;border:1px solid " + THEME_SURFACE_INNER_BORDER + ";border-radius:4px;background:" + THEME_SURFACE_BG_HEAVY + ";height:100%;overflow-y:auto;overflow-x:hidden;";
         timeColumn.id = "saBuilderTime";
 
         // Track segment-event assignments
@@ -7290,7 +6541,7 @@
                 if (filterLower && seg.text.toLowerCase().indexOf(filterLower) === -1) continue;
 
                 var segItem = document.createElement("div");
-                segItem.style.cssText = "margin-bottom:8px;padding:8px;border:1px solid #444;border-radius:4px;background:#222;";
+                segItem.style.cssText = "margin-bottom:8px;padding:8px;border:1px solid " + THEME_SURFACE_BORDER + ";border-radius:4px;background:" + THEME_SURFACE_BG_HEAVY + ";";
                 segItem.dataset.segmentValue = seg.value;
                 segItem.dataset.segmentText = seg.text;
 
@@ -7326,7 +6577,7 @@
 
                 // Dropzone for study events
                 var dropzone = document.createElement("div");
-                dropzone.style.cssText = "min-height:30px;margin-top:8px;padding:4px;border:1px dashed #555;border-radius:4px;background:#1a1a1a;";
+                dropzone.style.cssText = "min-height:30px;margin-top:8px;padding:4px;border:1px dashed " + THEME_SURFACE_BORDER + ";border-radius:4px;background:" + THEME_SURFACE_BG_HEAVY + ";";
                 dropzone.dataset.segmentValue = seg.value;
                 dropzone.className = "sa-segment-dropzone";
 
@@ -7342,19 +6593,19 @@
                     if (events.length === 0) {
                         var placeholder = document.createElement("div");
                         placeholder.textContent = "Drop study events here";
-                        placeholder.style.cssText = "color:#666;font-size:12px;text-align:center;padding:8px;";
+                        placeholder.style.cssText = "color:" + THEME_TEXT_MUTED + ";font-size:12px;text-align:center;padding:8px;";
                         dz.appendChild(placeholder);
                     } else {
                         for (var j = 0; j < events.length; j++) {
                             var ev = events[j];
                             var evItem = document.createElement("div");
-                            evItem.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:4px 8px;margin:2px 0;background:#333;border-radius:3px;font-size:12px;";
+                            evItem.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:4px 8px;margin:2px 0;background:" + THEME_SURFACE_BG + ";border-radius:3px;font-size:12px;";
                             evItem.dataset.eventValue = ev.value;
                             evItem.dataset.eventText = ev.text;
                             evItem.draggable = true;
 
                             var attachedItem = document.createElement("div");
-                            attachedItem.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:8px 10px;margin-bottom:4px;border:1px solid #666;border-radius:5px;background:#3a3a3a;color:#fff;font-size:13px;font-weight:500;cursor:move;transition:all 0.2s ease;box-shadow:0 1px 3px rgba(0,0,0,0.2);";
+                            attachedItem.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:8px 10px;margin-bottom:4px;border:1px solid " + THEME_SURFACE_BORDER + ";border-radius:5px;background:" + THEME_SURFACE_BG + ";color:" + THEME_TEXT_PRIMARY + ";font-size:13px;font-weight:500;cursor:move;transition:all 0.2s ease;box-shadow:0 1px 3px rgba(0,0,0,0.2);";
                             attachedItem.draggable = true;
                             attachedItem.dataset.eventValue = ev.value;
                             attachedItem.dataset.eventText = ev.text;
@@ -7384,32 +6635,32 @@
                             });
 
                             attachedItem.addEventListener("mouseenter", function() {
-                                this.style.background = "#4a4a4a";
-                                this.style.border = "1px solid #777";
+                                this.style.background = THEME_SURFACE_BG_HEAVY;
+                                this.style.border = "1px solid " + THEME_SURFACE_INNER_BORDER;
                                 this.style.transform = "translateY(-1px)";
                                 this.style.boxShadow = "0 2px 5px rgba(0,0,0,0.3)";
                             });
 
                             attachedItem.addEventListener("mouseleave", function() {
-                                this.style.background = "#3a3a3a";
-                                this.style.border = "1px solid #666";
+                                this.style.background = THEME_SURFACE_BG;
+                                this.style.border = "1px solid " + THEME_SURFACE_BORDER;
                                 this.style.transform = "translateY(0)";
                                 this.style.boxShadow = "0 1px 3px rgba(0,0,0,0.2)";
                             });
 
                             var removeBtn = document.createElement("button");
                             removeBtn.textContent = "×";
-                            removeBtn.style.cssText = "background:transparent;border:none;color:#ff6b6b;cursor:pointer;font-size:18px;font-weight:bold;padding:0;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:all 0.2s ease;flex-shrink:0;margin-left:8px;";
+                            removeBtn.style.cssText = "background:transparent;border:none;color:" + THEME_DANGER + ";cursor:pointer;font-size:18px;font-weight:bold;padding:0;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:all 0.2s ease;flex-shrink:0;margin-left:8px;";
 
                             removeBtn.addEventListener("mouseenter", function() {
                                 this.style.background = "rgba(255,107,107,0.2)";
-                                this.style.color = "#ff5252";
+                                this.style.color = THEME_DANGER;
                                 this.style.transform = "scale(1.1)";
                             });
 
                             removeBtn.addEventListener("mouseleave", function() {
                                 this.style.background = "transparent";
-                                this.style.color = "#ff6b6b";
+                                this.style.color = THEME_DANGER;
                                 this.style.transform = "scale(1)";
                             });
 
@@ -7450,18 +6701,18 @@
                 dropzone.addEventListener("dragover", function(e) {
                     e.preventDefault();
                     e.dataTransfer.dropEffect = "copy";
-                    this.style.background = "#2a2a4a";
+                    this.style.background = THEME_SURFACE_BG;
                 });
 
                 dropzone.addEventListener("dragleave", function(e) {
-                    this.style.background = "#1a1a1a";
+                    this.style.background = THEME_SURFACE_BG_HEAVY;
                 });
 
                 // Handle drop
                 dropzone.addEventListener("drop", (function(segVal) {
                     return function(e) {
                         e.preventDefault();
-                        this.style.background = "#1a1a1a";
+                        this.style.background = THEME_SURFACE_BG_HEAVY;
                         try {
                             var data = JSON.parse(e.dataTransfer.getData("text/plain"));
                             if (data && data.value && data.text) {
@@ -7501,22 +6752,22 @@
                 if (filterLower && ev.text.toLowerCase().indexOf(filterLower) === -1) continue;
 
                 var evItem = document.createElement("div");
-                evItem.style.cssText = "padding:10px 12px;margin-bottom:6px;border:1px solid #555;border-radius:6px;background:#2a2a2a;cursor:grab;color:#fff;font-size:14px;font-weight:500;transition:all 0.2s ease;box-shadow:0 2px 4px rgba(0,0,0,0.2);";
+                evItem.style.cssText = "padding:10px 12px;margin-bottom:6px;border:1px solid " + THEME_SURFACE_BORDER + ";border-radius:6px;background:" + THEME_SURFACE_BG + ";cursor:grab;color:" + THEME_TEXT_PRIMARY + ";font-size:14px;font-weight:500;transition:all 0.2s ease;box-shadow:0 2px 4px rgba(0,0,0,0.2);";
                 evItem.textContent = ev.text;
                 evItem.draggable = true;
                 evItem.dataset.eventValue = ev.value;
                 evItem.dataset.eventText = ev.text;
 
                 evItem.addEventListener("mouseenter", function() {
-                    this.style.background = "#333";
-                    this.style.border = "1px solid #666";
+                    this.style.background = THEME_SURFACE_BG_HEAVY;
+                    this.style.border = "1px solid " + THEME_SURFACE_INNER_BORDER;
                     this.style.transform = "translateY(-1px)";
                     this.style.boxShadow = "0 4px 8px rgba(0,0,0,0.3)";
                 });
 
                 evItem.addEventListener("mouseleave", function() {
-                    this.style.background = "#2a2a2a";
-                    this.style.border = "1px solid #555";
+                    this.style.background = THEME_SURFACE_BG;
+                    this.style.border = "1px solid " + THEME_SURFACE_BORDER;
                     this.style.transform = "translateY(0)";
                     this.style.boxShadow = "0 2px 4px rgba(0,0,0,0.2)";
                 });
@@ -7569,21 +6820,21 @@
             // Create the event item
             var evItem = document.createElement("div");
             evItem.textContent = eventData.text;
-            evItem.style.cssText = "padding:10px 12px;margin-bottom:6px;border:1px solid #555;border-radius:6px;background:#2a2a2a;cursor:grab;color:#fff;font-size:14px;font-weight:500;transition:all 0.2s ease;box-shadow:0 2px 4px rgba(0,0,0,0.2);animation:slideIn 0.3s ease;";
+            evItem.style.cssText = "padding:10px 12px;margin-bottom:6px;border:1px solid " + THEME_SURFACE_BORDER + ";border-radius:6px;background:" + THEME_SURFACE_BG + ";cursor:grab;color:" + THEME_TEXT_PRIMARY + ";font-size:14px;font-weight:500;transition:all 0.2s ease;box-shadow:0 2px 4px rgba(0,0,0,0.2);animation:slideIn 0.3s ease;";
             evItem.draggable = true;
             evItem.dataset.eventValue = eventData.value;
             evItem.dataset.eventText = eventData.text;
 
             evItem.addEventListener("mouseenter", function() {
-                this.style.background = "#333";
-                this.style.border = "1px solid #666";
+                this.style.background = THEME_SURFACE_BG_HEAVY;
+                this.style.border = "1px solid " + THEME_SURFACE_INNER_BORDER;
                 this.style.transform = "translateY(-1px)";
                 this.style.boxShadow = "0 4px 8px rgba(0,0,0,0.3)";
             });
 
             evItem.addEventListener("mouseleave", function() {
-                this.style.background = "#2a2a2a";
-                this.style.border = "1px solid #555";
+                this.style.background = THEME_SURFACE_BG;
+                this.style.border = "1px solid " + THEME_SURFACE_BORDER;
                 this.style.transform = "translateY(0)";
                 this.style.boxShadow = "0 2px 4px rgba(0,0,0,0.2)";
             });
@@ -7641,13 +6892,13 @@
                 if (filterLower && frm.text.toLowerCase().indexOf(filterLower) === -1) continue;
 
                 var frmItem = document.createElement("div");
-                frmItem.style.cssText = "display:flex;align-items:flex-start;gap:8px;padding:6px;margin-bottom:4px;border:1px solid #444;border-radius:4px;background:#222;";
+                frmItem.style.cssText = "display:flex;align-items:flex-start;gap:8px;padding:6px;margin-bottom:4px;border:1px solid " + THEME_SURFACE_BORDER + ";border-radius:4px;background:" + THEME_SURFACE_BG_HEAVY + ";";
 
                 var checkbox = document.createElement("input");
                 checkbox.type = "checkbox";
                 checkbox.dataset.formValue = frm.value;
                 checkbox.dataset.formText = frm.text;
-                checkbox.style.cssText = "width:18px;height:18px;cursor:pointer;flex-shrink:0;margin-top:2px;accent-color:#007bff;";
+                checkbox.style.cssText = "width:18px;height:18px;cursor:pointer;flex-shrink:0;margin-top:2px;accent-color:" + THEME_ACCENT + ";";
 
                 var label = document.createElement("span");
                 label.textContent = frm.text;
@@ -7666,7 +6917,7 @@
 
             var lbl = document.createElement("label");
             lbl.textContent = labelText;
-            lbl.style.cssText = "font-size:12px;color:#aaa;";
+            lbl.style.cssText = "font-size:12px;color:" + THEME_TEXT_MUTED + ";";
 
             var input = document.createElement("input");
             input.type = "number";
@@ -7674,7 +6925,7 @@
             input.min = "0";
             input.max = String(max);
             input.value = "0";
-            input.style.cssText = "padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;width:100%;";
+            input.style.cssText = "padding:8px;border-radius:4px;border:1px solid " + THEME_SURFACE_BORDER + ";background:" + THEME_SURFACE_BG_HEAVY + ";color:" + THEME_TEXT_PRIMARY + ";width:100%;";
 
             row.appendChild(lbl);
             row.appendChild(input);
@@ -7683,12 +6934,12 @@
 
         // Hidden checkbox row
         var hiddenRow = document.createElement("div");
-        hiddenRow.style.cssText = "display:flex;align-items:center;gap:8px;padding-top:12px;margin-top:12px;border-top:1px solid #444;";
+        hiddenRow.style.cssText = "display:flex;align-items:center;gap:8px;padding-top:12px;margin-top:12px;border-top:1px solid " + THEME_SURFACE_BORDER + ";";
 
         var hiddenCheckbox = document.createElement("input");
         hiddenCheckbox.type = "checkbox";
         hiddenCheckbox.id = "saBuilderHidden";
-        hiddenCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;accent-color:#007bff;";
+        hiddenCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;accent-color:" + THEME_ACCENT + ";";
 
         var hiddenLabel = document.createElement("label");
         hiddenLabel.textContent = "Hidden?";
@@ -7707,7 +6958,7 @@
         mandatoryCheckbox.type = "checkbox";
         mandatoryCheckbox.id = "saBuilderMandatory";
         mandatoryCheckbox.checked = true;
-        mandatoryCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;accent-color:#007bff;";
+        mandatoryCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;accent-color:" + THEME_ACCENT + ";";
 
         var mandatoryLabel = document.createElement("label");
         mandatoryLabel.textContent = "Mandatory";
@@ -7725,7 +6976,7 @@
         var enforceCheckbox = document.createElement("input");
         enforceCheckbox.type = "checkbox";
         enforceCheckbox.id = "saBuilderEnforce";
-        enforceCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;accent-color:#007bff;";
+        enforceCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;accent-color:" + THEME_ACCENT + ";";
 
         var enforceLabel = document.createElement("label");
         enforceLabel.textContent = "Enforce Data Collection Order";
@@ -7742,13 +6993,13 @@
 
         var preWindowLabel = document.createElement("label");
         preWindowLabel.textContent = "Pre-Window";
-        preWindowLabel.style.cssText = "font-size:12px;color:#aaa;";
+        preWindowLabel.style.cssText = "font-size:12px;color:" + THEME_TEXT_MUTED + ";";
 
         var preWindowInput = document.createElement("input");
         preWindowInput.type = "text";
         preWindowInput.id = "saBuilderPreWindow";
         preWindowInput.placeholder = "";
-        preWindowInput.style.cssText = "padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;width:100%;";
+        preWindowInput.style.cssText = "padding:8px;border-radius:4px;border:1px solid " + THEME_SURFACE_BORDER + ";background:" + THEME_SURFACE_BG_HEAVY + ";color:" + THEME_TEXT_PRIMARY + ";width:100%;";
 
         preWindowRow.appendChild(preWindowLabel);
         preWindowRow.appendChild(preWindowInput);
@@ -7760,13 +7011,13 @@
 
         var postWindowLabel = document.createElement("label");
         postWindowLabel.textContent = "Post-Window";
-        postWindowLabel.style.cssText = "font-size:12px;color:#aaa;";
+        postWindowLabel.style.cssText = "font-size:12px;color:" + THEME_TEXT_MUTED + ";";
 
         var postWindowInput = document.createElement("input");
         postWindowInput.type = "text";
         postWindowInput.id = "saBuilderPostWindow";
         postWindowInput.placeholder = "";
-        postWindowInput.style.cssText = "padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;width:100%;";
+        postWindowInput.style.cssText = "padding:8px;border-radius:4px;border:1px solid " + THEME_SURFACE_BORDER + ";background:" + THEME_SURFACE_BG_HEAVY + ";color:" + THEME_TEXT_PRIMARY + ";width:100%;";
 
         postWindowRow.appendChild(postWindowLabel);
         postWindowRow.appendChild(postWindowInput);
@@ -7774,12 +7025,12 @@
 
         // Reference Activity checkbox row
         var refActivityRow = document.createElement("div");
-        refActivityRow.style.cssText = "display:flex;align-items:center;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid #444;";
+        refActivityRow.style.cssText = "display:flex;align-items:center;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid " + THEME_SURFACE_BORDER + ";";
 
         var refActivityCheckbox = document.createElement("input");
         refActivityCheckbox.type = "checkbox";
         refActivityCheckbox.id = "saBuilderRefActivity";
-        refActivityCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;accent-color:#007bff;";
+        refActivityCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;accent-color:" + THEME_ACCENT + ";";
 
         var refActivityLabel = document.createElement("label");
         refActivityLabel.textContent = "Reference Activity";
@@ -7826,7 +7077,7 @@
 
         // Time inputs section (moved below other inputs)
         var timeInputsSection = document.createElement("div");
-        timeInputsSection.style.cssText = "padding-top:12px;margin-top:12px;border-top:1px solid #444;";
+        timeInputsSection.style.cssText = "padding-top:12px;margin-top:12px;border-top:1px solid " + THEME_SURFACE_BORDER + ";";
 
         // Pre-Reference checkbox row (positioned right above time inputs)
         var preRefRow = document.createElement("div");
@@ -7835,7 +7086,7 @@
         var preRefCheckbox = document.createElement("input");
         preRefCheckbox.type = "checkbox";
         preRefCheckbox.id = "saBuilderPreReference";
-        preRefCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;accent-color:#007bff;";
+        preRefCheckbox.style.cssText = "width:18px;height:18px;cursor:pointer;accent-color:" + THEME_ACCENT + ";";
 
         var preRefLabel = document.createElement("label");
         preRefLabel.textContent = "Pre-Reference?";
@@ -7909,13 +7160,12 @@
 
         // Confirm button row
         var buttonRow = document.createElement("div");
-        buttonRow.style.cssText = "display:flex;justify-content:flex-end;gap:12px;padding-top:12px;border-top:1px solid #333;";
+        buttonRow.style.cssText = "display:flex;justify-content:flex-end;gap:12px;padding-top:12px;border-top:1px solid " + THEME_SURFACE_BORDER + ";";
 
         var confirmBtn = document.createElement("button");
         confirmBtn.textContent = "Confirm";
-        confirmBtn.style.cssText = "padding:10px 24px;border-radius:6px;border:none;background:#28a745;color:#fff;font-weight:600;cursor:pointer;";
-        confirmBtn.addEventListener("mouseenter", function() { this.style.background = "#218838"; });
-        confirmBtn.addEventListener("mouseleave", function() { this.style.background = "#28a745"; });
+        confirmBtn.className = "ie-btn-success";
+        confirmBtn.style.cssText = "padding:10px 24px;font-weight:600;";
 
         confirmBtn.addEventListener("click", function() {
             // Collect selected segments and their events
@@ -8061,12 +7311,12 @@
 
         var loadingDiv = document.createElement("div");
         loadingDiv.id = "saBuilderProgressLoading";
-        loadingDiv.style.cssText = "text-align:center;font-size:14px;color:#9df;";
+        loadingDiv.style.cssText = "text-align:center;font-size:14px;color:" + THEME_ACCENT + ";";
         loadingDiv.textContent = "Running.";
 
         var listContainer = document.createElement("div");
         listContainer.id = "saBuilderProgressList";
-        listContainer.style.cssText = "flex:1;overflow-y:auto;border:1px solid #333;border-radius:4px;padding:8px;background:#1a1a1a;max-height:350px;";
+        listContainer.style.cssText = "flex:1;overflow-y:auto;border:1px solid " + THEME_SURFACE_BORDER + ";border-radius:4px;padding:8px;background:" + THEME_SURFACE_BG_HEAVY + ";max-height:350px;";
 
         // Render items
         function renderItems() {
@@ -8077,11 +7327,11 @@
                 row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:6px 8px;margin-bottom:4px;border-radius:4px;font-size:12px;";
 
                 if (item.status === "Complete") {
-                    row.style.background = "#1a3a1a";
+                    row.style.background = "rgba(16,185,129,0.15)";
                 } else if (item.status === "Duplicate (Removed)") {
-                    row.style.background = "#3a3a1a";
+                    row.style.background = "rgba(245,158,11,0.15)";
                 } else {
-                    row.style.background = "#222";
+                    row.style.background = THEME_SURFACE_BG_HEAVY;
                 }
 
                 var keySpan = document.createElement("span");
@@ -8092,11 +7342,11 @@
                 statusSpan.textContent = item.status;
                 statusSpan.style.cssText = "font-weight:500;flex-shrink:0;";
                 if (item.status === "Complete") {
-                    statusSpan.style.color = "#4f4";
+                    statusSpan.style.color = THEME_SUCCESS;
                 } else if (item.status === "Duplicate (Removed)") {
-                    statusSpan.style.color = "#ff4";
+                    statusSpan.style.color = THEME_WARNING;
                 } else {
-                    statusSpan.style.color = "#aaa";
+                    statusSpan.style.color = THEME_TEXT_MUTED;
                 }
 
                 row.appendChild(keySpan);
@@ -8112,7 +7362,8 @@
 
         var stopBtn = document.createElement("button");
         stopBtn.textContent = "Close";
-        stopBtn.style.cssText = "padding:10px 24px;border-radius:6px;border:none;background:#dc3545;color:#fff;font-weight:600;cursor:pointer;";
+        stopBtn.className = "ie-btn-danger";
+        stopBtn.style.cssText = "padding:10px 24px;font-weight:600;";
         stopBtn.addEventListener("click", function() {
             SA_BUILDER_CANCELLED = true;
             log("SA Builder: stopped by user");
@@ -8165,9 +7416,10 @@
             setComplete: function() {
                 clearInterval(loadingInterval);
                 loadingDiv.textContent = "Done!";
-                loadingDiv.style.color = "#4f4";
+                loadingDiv.style.color = THEME_SUCCESS;
                 stopBtn.textContent = "Close";
-                stopBtn.style.background = "#28a745";
+                stopBtn.className = "ie-btn-success";
+                stopBtn.style.cssText = "padding:10px 24px;font-weight:600;";
             }
         };
     }
@@ -8482,7 +7734,7 @@
         if (!isOnSABuilderPage()) {
             var errorPopup = createPopup({
                 title: "Scheduled Activities Builder",
-                content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;font-size:16px;margin-bottom:16px;">⚠️ Wrong Page</p><p>You must be on the Activity Plans Show page to use this feature.</p><p style="margin-top:12px;font-size:12px;color:#888;">Required URL: ' + SA_BUILDER_TARGET_URL + '</p></div>',
+                content: '<div style="text-align:center;padding:20px;"><p style="color:' + THEME_DANGER + ';font-size:16px;margin-bottom:16px;">⚠️ Wrong Page</p><p>You must be on the Activity Plans Show page to use this feature.</p><p style="margin-top:12px;font-size:12px;color:' + THEME_TEXT_MUTED + ';">Required URL: ' + SA_BUILDER_TARGET_URL + '</p></div>',
                 width: "450px",
                 height: "auto"
             });
@@ -8493,7 +7745,7 @@
         // Show loading popup
         var loadingContent = document.createElement("div");
         loadingContent.style.cssText = "text-align:center;padding:30px;";
-        loadingContent.innerHTML = '<div style="font-size:16px;margin-bottom:16px;">Collecting data...</div><div id="saBuilderLoadingDots" style="color:#9df;">Loading.</div>';
+        loadingContent.innerHTML = '<div style="font-size:16px;margin-bottom:16px;">Collecting data...</div><div id="saBuilderLoadingDots" style="color:' + THEME_ACCENT + ';">Loading.</div>';
 
         var loadingPopup = createPopup({
             title: "Scheduled Activities Builder",
@@ -8528,7 +7780,7 @@
             loadingPopup.close();
             createPopup({
                 title: "Scheduled Activities Builder",
-                content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;font-size:16px;margin-bottom:16px;">⚠️ Add Button Disabled</p><p>The Add button is currently disabled. This activity plan may no longer be in design mode.</p></div>',
+                content: '<div style="text-align:center;padding:20px;"><p style="color:' + THEME_DANGER + ';font-size:16px;margin-bottom:16px;">⚠️ Add Button Disabled</p><p>The Add button is currently disabled. This activity plan may no longer be in design mode.</p></div>',
                 width: "400px",
                 height: "auto"
             });
@@ -8542,7 +7794,7 @@
             loadingPopup.close();
             createPopup({
                 title: "Scheduled Activities Builder",
-                content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;">Failed to find or click the Add button.</p></div>',
+                content: '<div style="text-align:center;padding:20px;"><p style="color:' + THEME_DANGER + ';">Failed to find or click the Add button.</p></div>',
                 width: "350px",
                 height: "auto"
             });
@@ -8556,7 +7808,7 @@
             loadingPopup.close();
             createPopup({
                 title: "Scheduled Activities Builder",
-                content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;">Modal did not appear within timeout.</p></div>',
+                content: '<div style="text-align:center;padding:20px;"><p style="color:' + THEME_DANGER + ';">Modal did not appear within timeout.</p></div>',
                 width: "350px",
                 height: "auto"
             });
@@ -8629,7 +7881,7 @@
         var box = document.createElement("div");
         box.style.textAlign = "center";
         box.style.fontSize = "16px";
-        box.style.color = "#fff";
+        box.style.color = THEME_TEXT_PRIMARY;
         box.style.padding = "20px";
         box.textContent = STUDY_EVENT_NO_MATCH_MESSAGE;
         createPopup({ title: STUDY_EVENT_NO_MATCH_TITLE, content: box, width: "320px", height: "auto" });
@@ -8730,9 +7982,9 @@
         inputKeyword.style.boxSizing = "border-box";
         inputKeyword.style.padding = "8px";
         inputKeyword.style.borderRadius = "6px";
-        inputKeyword.style.border = "1px solid #444";
-        inputKeyword.style.background = "#1a1a1a";
-        inputKeyword.style.color = "#fff";
+        inputKeyword.style.border = "1px solid " + THEME_SURFACE_BORDER;
+        inputKeyword.style.background = THEME_SURFACE_BG_HEAVY;
+        inputKeyword.style.color = THEME_TEXT_PRIMARY;
         row1.appendChild(label1);
         row1.appendChild(inputKeyword);
         container.appendChild(row1);
@@ -8752,9 +8004,9 @@
         inputSubject.style.boxSizing = "border-box";
         inputSubject.style.padding = "8px";
         inputSubject.style.borderRadius = "6px";
-        inputSubject.style.border = "1px solid #444";
-        inputSubject.style.background = "#1a1a1a";
-        inputSubject.style.color = "#fff";
+        inputSubject.style.border = "1px solid " + THEME_SURFACE_BORDER;
+        inputSubject.style.background = THEME_SURFACE_BG_HEAVY;
+        inputSubject.style.color = THEME_TEXT_PRIMARY;
         row2.appendChild(label2);
         row2.appendChild(inputSubject);
         container.appendChild(row2);
@@ -8863,28 +8115,16 @@
         btnRow.style.gap = scale(BUTTON_GAP_PX);
         var clearIdBtn = document.createElement("button");
         clearIdBtn.textContent = "Clear ID";
-        clearIdBtn.style.background = "#777";
-        clearIdBtn.style.color = "#fff";
-        clearIdBtn.style.border = "none";
-        clearIdBtn.style.borderRadius = "6px";
+        clearIdBtn.className = "ie-btn-secondary";
         clearIdBtn.style.padding = "8px 12px";
-        clearIdBtn.style.cursor = "pointer";
         var cancelBtn = document.createElement("button");
         cancelBtn.textContent = STUDY_EVENT_POPUP_CANCEL_TEXT;
-        cancelBtn.style.background = "#333";
-        cancelBtn.style.color = "#fff";
-        cancelBtn.style.border = "none";
-        cancelBtn.style.borderRadius = "6px";
+        cancelBtn.className = "ie-btn-secondary";
         cancelBtn.style.padding = "8px 12px";
-        cancelBtn.style.cursor = "pointer";
         var okBtn = document.createElement("button");
         okBtn.textContent = STUDY_EVENT_POPUP_OK_TEXT;
-        okBtn.style.background = "#0b82ff";
-        okBtn.style.color = "#fff";
-        okBtn.style.border = "none";
-        okBtn.style.borderRadius = "6px";
+        okBtn.className = "ie-btn-primary";
         okBtn.style.padding = "8px 12px";
-        okBtn.style.cursor = "pointer";
         btnRow.appendChild(clearIdBtn);
         btnRow.appendChild(cancelBtn);
         btnRow.appendChild(okBtn);
@@ -9390,7 +8630,7 @@
         var box = document.createElement("div");
         box.style.textAlign = "center";
         box.style.fontSize = "16px";
-        box.style.color = "#fff";
+        box.style.color = THEME_TEXT_PRIMARY;
         box.style.padding = "20px";
         box.textContent = FORM_NO_MATCH_MESSAGE;
         createPopup({ title: FORM_NO_MATCH_TITLE, content: box, width: "320px", height: "auto" });
@@ -9623,9 +8863,9 @@
         inputKeyword.style.boxSizing = "border-box";
         inputKeyword.style.padding = "8px";
         inputKeyword.style.borderRadius = "6px";
-        inputKeyword.style.border = "1px solid #444";
-        inputKeyword.style.background = "#1a1a1a";
-        inputKeyword.style.color = "#fff";
+        inputKeyword.style.border = "1px solid " + THEME_SURFACE_BORDER;
+        inputKeyword.style.background = THEME_SURFACE_BG_HEAVY;
+        inputKeyword.style.color = THEME_TEXT_PRIMARY;
         row1.appendChild(label1);
         row1.appendChild(inputKeyword);
         container.appendChild(row1);
@@ -9645,9 +8885,9 @@
         inputSubject.style.boxSizing = "border-box";
         inputSubject.style.padding = "8px";
         inputSubject.style.borderRadius = "6px";
-        inputSubject.style.border = "1px solid #444";
-        inputSubject.style.background = "#1a1a1a";
-        inputSubject.style.color = "#fff";
+        inputSubject.style.border = "1px solid " + THEME_SURFACE_BORDER;
+        inputSubject.style.background = THEME_SURFACE_BG_HEAVY;
+        inputSubject.style.color = THEME_TEXT_PRIMARY;
         row2.appendChild(label2);
         row2.appendChild(inputSubject);
         container.appendChild(row2);
@@ -9756,28 +8996,16 @@
         btnRow.style.gap = "8px";
         var clearIdBtn = document.createElement("button");
         clearIdBtn.textContent = "Clear ID";
-        clearIdBtn.style.background = "#777";
-        clearIdBtn.style.color = "#fff";
-        clearIdBtn.style.border = "none";
-        clearIdBtn.style.borderRadius = "6px";
+        clearIdBtn.className = "ie-btn-secondary";
         clearIdBtn.style.padding = "8px 12px";
-        clearIdBtn.style.cursor = "pointer";
         var cancelBtn = document.createElement("button");
         cancelBtn.textContent = FORM_POPUP_CANCEL_TEXT;
-        cancelBtn.style.background = "#333";
-        cancelBtn.style.color = "#fff";
-        cancelBtn.style.border = "none";
-        cancelBtn.style.borderRadius = "6px";
+        cancelBtn.className = "ie-btn-secondary";
         cancelBtn.style.padding = "8px 12px";
-        cancelBtn.style.cursor = "pointer";
         var okBtn = document.createElement("button");
         okBtn.textContent = FORM_POPUP_OK_TEXT;
-        okBtn.style.background = "#0b82ff";
-        okBtn.style.color = "#fff";
-        okBtn.style.border = "none";
-        okBtn.style.borderRadius = "6px";
+        okBtn.className = "ie-btn-primary";
         okBtn.style.padding = "8px 12px";
-        okBtn.style.cursor = "pointer";
         btnRow.appendChild(clearIdBtn);
         btnRow.appendChild(cancelBtn);
         btnRow.appendChild(okBtn);
@@ -10121,7 +9349,7 @@
         var inputEl = document.createElement("input");
         inputEl.type = "text";
         inputEl.placeholder = "Required (case sensitive)";
-        inputEl.style.cssText = "width:100%;box-sizing:border-box;padding:10px;border-radius:6px;border:1px solid #444;background:#1a1a1a;color:#fff";
+        inputEl.style.cssText = "width:100%;box-sizing:border-box;padding:10px;border-radius:6px;border:1px solid " + THEME_SURFACE_BORDER + ";background:" + THEME_SURFACE_BG_HEAVY + ";color:" + THEME_TEXT_PRIMARY + "";
         inputRow.appendChild(label);
         inputRow.appendChild(inputEl);
         container.appendChild(inputRow);
@@ -10129,21 +9357,23 @@
         btnRow.style.cssText = "display:flex;justify-content:flex-end";
         var confirmBtn = document.createElement("button");
         confirmBtn.textContent = "Confirmed";
-        confirmBtn.style.cssText = "background:#28a745;color:#fff;border:none;border-radius:6px;padding:10px 20px;cursor:pointer;font-weight:600";
+        confirmBtn.className = "ie-btn-success";
+        confirmBtn.style.cssText = "padding:10px 20px;font-weight:600";
         btnRow.appendChild(confirmBtn);
         container.appendChild(btnRow);
         var statusBox = document.createElement("div");
-        statusBox.style.cssText = "display:none;margin-top:8px;padding:12px;background:#1a1a1a;border-radius:6px;border:1px solid #333;text-align:center";
+        statusBox.style.cssText = "display:none;margin-top:8px;padding:12px;background:" + THEME_SURFACE_BG_HEAVY + ";border-radius:6px;border:1px solid " + THEME_SURFACE_BORDER + ";text-align:center";
         statusBox.textContent = "Running.";
         container.appendChild(statusBox);
         var resultsBox = document.createElement("div");
-        resultsBox.style.cssText = "display:none;margin-top:8px;max-height:300px;overflow-y:auto;background:#1a1a1a;border-radius:6px;border:1px solid #333;padding:12px";
+        resultsBox.style.cssText = "display:none;margin-top:8px;max-height:300px;overflow-y:auto;background:" + THEME_SURFACE_BG_HEAVY + ";border-radius:6px;border:1px solid " + THEME_SURFACE_BORDER + ";padding:12px";
         container.appendChild(resultsBox);
         var okRow = document.createElement("div");
         okRow.style.cssText = "display:none;justify-content:center;margin-top:8px";
         var okBtn = document.createElement("button");
         okBtn.textContent = "Ok";
-        okBtn.style.cssText = "background:#0b82ff;color:#fff;border:none;border-radius:6px;padding:10px 30px;cursor:pointer;font-weight:600";
+        okBtn.className = "ie-btn-primary";
+        okBtn.style.cssText = "padding:10px 30px;font-weight:600";
         okRow.appendChild(okBtn);
         container.appendChild(okRow);
         var popup = createPopup({ title: PARSE_METHOD_POPUP_TITLE, content: container, width: "480px", height: "auto", onClose: function() { stopParseMethodAutomation(); } });
@@ -10151,8 +9381,8 @@
 
         function doConfirm() {
             var itemName = (inputEl.value + "").trim();
-            if (!itemName) { inputEl.style.border = "2px solid #dc3545"; return; }
-            inputEl.style.border = "1px solid #444";
+            if (!itemName) { inputEl.style.border = "2px solid " + THEME_DANGER; return; }
+            inputEl.style.border = "1px solid " + THEME_SURFACE_BORDER;
             log("ParseMethod: Confirmed itemName=" + itemName);
             try { localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_PARSE_METHOD); localStorage.setItem(STORAGE_PARSE_METHOD_RUNNING, "1"); localStorage.setItem(STORAGE_PARSE_METHOD_ITEM_NAME, itemName); } catch (e) {}
             inputRow.style.display = "none";
@@ -10191,19 +9421,19 @@
 
     function showParseMethodResults(box, methods) {
         box.innerHTML = "";
-        if (!methods || methods.length === 0) { box.innerHTML = "<div style='color:#999;text-align:center;padding:20px'>No methods found.</div>"; return; }
+        if (!methods || methods.length === 0) { box.innerHTML = "<div style='color:" + THEME_TEXT_MUTED + ";text-align:center;padding:20px'>No methods found.</div>"; return; }
         for (var i = 0; i < methods.length; i++) {
             var m = methods[i];
             var block = document.createElement("div");
-            block.style.cssText = "margin-bottom:12px;padding:10px;background:#222;border-radius:6px;border:1px solid #444";
+            block.style.cssText = "margin-bottom:12px;padding:10px;background:" + THEME_SURFACE_BG_HEAVY + ";border-radius:6px;border:1px solid " + THEME_SURFACE_BORDER;
             var title = document.createElement("div");
-            title.style.cssText = "font-weight:600;color:#4a90e2;margin-bottom:6px";
+            title.style.cssText = "font-weight:600;color:" + THEME_ACCENT + ";margin-bottom:6px";
             title.textContent = m.name;
             block.appendChild(title);
             if (m.forms && m.forms.length > 0) {
                 var list = document.createElement("div");
                 list.style.paddingLeft = "16px";
-                for (var j = 0; j < m.forms.length; j++) { var it = document.createElement("div"); it.style.cssText = "color:#ccc;font-size:12px"; it.textContent = "- " + m.forms[j]; list.appendChild(it); }
+                for (var j = 0; j < m.forms.length; j++) { var it = document.createElement("div"); it.style.cssText = "color:" + THEME_TEXT_MUTED + ";font-size:12px"; it.textContent = "- " + m.forms[j]; list.appendChild(it); }
                 block.appendChild(list);
             }
             box.appendChild(block);
@@ -10212,15 +9442,15 @@
 
     function addParseMethodResult(box, name, forms) {
         var block = document.createElement("div");
-        block.style.cssText = "margin-bottom:12px;padding:10px;background:#222;border-radius:6px;border:1px solid #444";
+        block.style.cssText = "margin-bottom:12px;padding:10px;background:" + THEME_SURFACE_BG_HEAVY + ";border-radius:6px;border:1px solid " + THEME_SURFACE_BORDER;
         var title = document.createElement("div");
-        title.style.cssText = "font-weight:600;color:#4a90e2;margin-bottom:6px";
+        title.style.cssText = "font-weight:600;color:" + THEME_ACCENT + ";margin-bottom:6px";
         title.textContent = name;
         block.appendChild(title);
         if (forms && forms.length > 0) {
             var list = document.createElement("div");
             list.style.paddingLeft = "16px";
-            for (var j = 0; j < forms.length; j++) { var it = document.createElement("div"); it.style.cssText = "color:#ccc;font-size:12px"; it.textContent = "- " + forms[j]; list.appendChild(it); }
+            for (var j = 0; j < forms.length; j++) { var it = document.createElement("div"); it.style.cssText = "color:" + THEME_TEXT_MUTED + ";font-size:12px"; it.textContent = "- " + forms[j]; list.appendChild(it); }
             block.appendChild(list);
         }
         box.appendChild(block);
@@ -10325,11 +9555,11 @@
         var container = document.createElement("div");
         container.style.cssText = "display:flex;flex-direction:column;gap:16px";
         var statusBox = document.createElement("div");
-        statusBox.style.cssText = "padding:12px;background:#1a1a1a;border-radius:6px;border:1px solid #333;text-align:center";
+        statusBox.style.cssText = "padding:12px;background:" + THEME_SURFACE_BG_HEAVY + ";border-radius:6px;border:1px solid " + THEME_SURFACE_BORDER + ";text-align:center";
         statusBox.textContent = "Find Form completed.";
         container.appendChild(statusBox);
         var resultsBox = document.createElement("div");
-        resultsBox.style.cssText = "max-height:300px;overflow-y:auto;background:#1a1a1a;border-radius:6px;border:1px solid #333;padding:12px";
+        resultsBox.style.cssText = "max-height:300px;overflow-y:auto;background:" + THEME_SURFACE_BG_HEAVY + ";border-radius:6px;border:1px solid " + THEME_SURFACE_BORDER + ";padding:12px";
         showParseMethodResults(resultsBox, methods);
         container.appendChild(resultsBox);
         createPopup({ title: "Parse Method", content: container, width: "480px", height: "auto", onClose: function() { clearParseMethodStoredResults(); } });
@@ -10808,7 +10038,7 @@
         var loadingText = document.createElement("div");
         loadingText.style.textAlign = "center";
         loadingText.style.fontSize = "16px";
-        loadingText.style.color = "#fff";
+        loadingText.style.color = THEME_TEXT_PRIMARY;
         loadingText.style.padding = "20px";
         loadingText.textContent = "Locating barcode.";
 
@@ -10910,24 +10140,24 @@
         var statusDiv = document.createElement("div");
         statusDiv.style.textAlign = "center";
         statusDiv.style.fontSize = "16px";
-        statusDiv.style.color = "#fff";
+        statusDiv.style.color = THEME_TEXT_PRIMARY;
         statusDiv.style.padding = "8px";
         statusDiv.textContent = "Running.";
 
         var listContainer = document.createElement("div");
         listContainer.style.maxHeight = "400px";
         listContainer.style.overflowY = "auto";
-        listContainer.style.border = "1px solid #444";
+        listContainer.style.border = "1px solid " + THEME_SURFACE_BORDER;
         listContainer.style.borderRadius = "4px";
         listContainer.style.padding = "8px";
-        listContainer.style.background = "#1a1a1a";
+        listContainer.style.background = THEME_SURFACE_BG_HEAVY;
         listContainer.style.fontSize = "13px";
 
         var listTitle = document.createElement("div");
         listTitle.textContent = "Collected Forms:";
         listTitle.style.fontWeight = "600";
         listTitle.style.marginBottom = "8px";
-        listTitle.style.color = "#fff";
+        listTitle.style.color = THEME_TEXT_PRIMARY;
         listContainer.appendChild(listTitle);
 
         var formsList = document.createElement("div");
@@ -10983,22 +10213,22 @@
             listItem.style.justifyContent = "space-between";
             listItem.style.alignItems = "center";
             listItem.style.padding = "6px 8px";
-            listItem.style.background = "#222";
+            listItem.style.background = THEME_SURFACE_BG;
             listItem.style.borderRadius = "4px";
-            listItem.style.border = "1px solid #333";
+            listItem.style.border = "1px solid " + THEME_SURFACE_INNER_BORDER;
 
             var nameSpan = document.createElement("span");
             nameSpan.textContent = formName || "Unknown Form";
-            nameSpan.style.color = "#fff";
+            nameSpan.style.color = THEME_TEXT_PRIMARY;
             nameSpan.style.flex = "1";
 
             var statusSpan = document.createElement("span");
             statusSpan.textContent = formStatus || "Unknown";
-            statusSpan.style.color = "#9df";
+            statusSpan.style.color = THEME_ACCENT;
             statusSpan.style.marginLeft = "12px";
             statusSpan.style.fontSize = "12px";
             statusSpan.style.padding = "2px 8px";
-            statusSpan.style.background = "#333";
+            statusSpan.style.background = THEME_SURFACE_BG_HEAVY;
             statusSpan.style.borderRadius = "3px";
 
             listItem.appendChild(nameSpan);
@@ -11020,7 +10250,7 @@
                     clearInterval(animTimer);
                 } catch (e1) {}
                 statusDiv.textContent = "Cancelled";
-                statusDiv.style.color = "#f99";
+                statusDiv.style.color = THEME_DANGER;
                 return;
             }
 
@@ -11030,7 +10260,7 @@
                     clearInterval(animTimer);
                 } catch (e1) {}
                 statusDiv.textContent = "Paused";
-                statusDiv.style.color = "#ff9";
+                statusDiv.style.color = THEME_WARNING;
                 clearCollectAllData();
                 return;
             }
@@ -11176,7 +10406,7 @@
         } catch (e1) {}
 
         statusDiv.textContent = "Completed";
-        statusDiv.style.color = "#9f9";
+        statusDiv.style.color = THEME_SUCCESS;
         log("CollectAll: completed");
 
         try {
@@ -11689,12 +10919,8 @@
 
         var planPriDefaultBtn = document.createElement("button");
         planPriDefaultBtn.textContent = "Clear All";
-        planPriDefaultBtn.style.background = "#444";
-        planPriDefaultBtn.style.color = "#fff";
-        planPriDefaultBtn.style.border = "none";
+        planPriDefaultBtn.className = "ie-btn-secondary";
         planPriDefaultBtn.style.padding = "4px 12px";
-        planPriDefaultBtn.style.borderRadius = "4px";
-        planPriDefaultBtn.style.cursor = "pointer";
         planPriDefaultBtn.style.fontSize = "12px";
         planPriDefaultBtn.style.whiteSpace = "nowrap";
 
@@ -11704,9 +10930,9 @@
         var planPriInput = document.createElement("textarea");
         planPriInput.style.width = "100%";
         planPriInput.style.height = "70px";
-        planPriInput.style.background = "#222";
-        planPriInput.style.color = "#fff";
-        planPriInput.style.border = "1px solid #555";
+        planPriInput.style.background = THEME_SURFACE_BG_HEAVY;
+        planPriInput.style.color = THEME_TEXT_PRIMARY;
+        planPriInput.style.border = "1px solid " + THEME_SURFACE_BORDER;
         planPriInput.style.borderRadius = "4px";
         planPriInput.value = storedPlanPriStr;
 
@@ -11736,12 +10962,8 @@
 
         var ignoreDefaultBtn = document.createElement("button");
         ignoreDefaultBtn.textContent = "Clear All";
-        ignoreDefaultBtn.style.background = "#444";
-        ignoreDefaultBtn.style.color = "#fff";
-        ignoreDefaultBtn.style.border = "none";
+        ignoreDefaultBtn.className = "ie-btn-secondary";
         ignoreDefaultBtn.style.padding = "4px 12px";
-        ignoreDefaultBtn.style.borderRadius = "4px";
-        ignoreDefaultBtn.style.cursor = "pointer";
         ignoreDefaultBtn.style.fontSize = "12px";
         ignoreDefaultBtn.style.whiteSpace = "nowrap";
 
@@ -11751,9 +10973,9 @@
         var ignoreInput = document.createElement("textarea");
         ignoreInput.style.width = "100%";
         ignoreInput.style.height = "70px";
-        ignoreInput.style.background = "#222";
-        ignoreInput.style.color = "#fff";
-        ignoreInput.style.border = "1px solid #555";
+        ignoreInput.style.background = THEME_SURFACE_BG_HEAVY;
+        ignoreInput.style.color = THEME_TEXT_PRIMARY;
+        ignoreInput.style.border = "1px solid " + THEME_SURFACE_BORDER;
         ignoreInput.style.borderRadius = "4px";
         ignoreInput.value = storedIgnoreStr;
 
@@ -11783,12 +11005,8 @@
 
         var excDefaultBtn = document.createElement("button");
         excDefaultBtn.textContent = "Use Default";
-        excDefaultBtn.style.background = "#444";
-        excDefaultBtn.style.color = "#fff";
-        excDefaultBtn.style.border = "none";
+        excDefaultBtn.className = "ie-btn-secondary";
         excDefaultBtn.style.padding = "4px 12px";
-        excDefaultBtn.style.borderRadius = "4px";
-        excDefaultBtn.style.cursor = "pointer";
         excDefaultBtn.style.fontSize = "12px";
         excDefaultBtn.style.whiteSpace = "nowrap";
 
@@ -11798,9 +11016,9 @@
         var excInput = document.createElement("textarea");
         excInput.style.width = "100%";
         excInput.style.height = "70px";
-        excInput.style.background = "#222";
-        excInput.style.color = "#fff";
-        excInput.style.border = "1px solid #555";
+        excInput.style.background = THEME_SURFACE_BG_HEAVY;
+        excInput.style.color = THEME_TEXT_PRIMARY;
+        excInput.style.border = "1px solid " + THEME_SURFACE_BORDER;
         excInput.style.borderRadius = "4px";
         excInput.value = storedExcStr;
 
@@ -11845,12 +11063,8 @@
 
         var priDefaultBtn = document.createElement("button");
         priDefaultBtn.textContent = "Use Default";
-        priDefaultBtn.style.background = "#444";
-        priDefaultBtn.style.color = "#fff";
-        priDefaultBtn.style.border = "none";
+        priDefaultBtn.className = "ie-btn-secondary";
         priDefaultBtn.style.padding = "4px 12px";
-        priDefaultBtn.style.borderRadius = "4px";
-        priDefaultBtn.style.cursor = "pointer";
         priDefaultBtn.style.fontSize = "12px";
         priDefaultBtn.style.whiteSpace = "nowrap";
 
@@ -11868,9 +11082,9 @@
         var priInput = document.createElement("textarea");
         priInput.style.width = "100%";
         priInput.style.height = "70px";
-        priInput.style.background = "#222";
-        priInput.style.color = "#fff";
-        priInput.style.border = "1px solid #555";
+        priInput.style.background = THEME_SURFACE_BG_HEAVY;
+        priInput.style.color = THEME_TEXT_PRIMARY;
+        priInput.style.border = "1px solid " + THEME_SURFACE_BORDER;
         priInput.style.borderRadius = "4px";
         priInput.value = storedPriStr;
 
@@ -11894,22 +11108,14 @@
 
         var confirmBtn = document.createElement("button");
         confirmBtn.textContent = "Confirm";
-        confirmBtn.style.background = "#0a0";
-        confirmBtn.style.color = "#fff";
-        confirmBtn.style.border = "none";
+        confirmBtn.className = "ie-btn-success";
         confirmBtn.style.padding = "10px";
-        confirmBtn.style.borderRadius = "6px";
-        confirmBtn.style.cursor = "pointer";
         confirmBtn.style.flex = "1";
 
         var clearAllBtn = document.createElement("button");
         clearAllBtn.textContent = "Clear All";
-        clearAllBtn.style.background = "#666";
-        clearAllBtn.style.color = "#fff";
-        clearAllBtn.style.border = "none";
+        clearAllBtn.className = "ie-btn-secondary";
         clearAllBtn.style.padding = "10px";
-        clearAllBtn.style.borderRadius = "6px";
-        clearAllBtn.style.cursor = "pointer";
         clearAllBtn.style.flex = "1";
 
         clearAllBtn.addEventListener("click", function () {
@@ -11936,7 +11142,7 @@
         runningBox.id = "importEligRunningText";
         runningBox.style.textAlign = "center";
         runningBox.style.fontSize = "16px";
-        runningBox.style.color = "#fff";
+        runningBox.style.color = THEME_TEXT_PRIMARY;
         runningBox.style.fontWeight = "500";
         runningBox.textContent = "Running";
         runningContainer.appendChild(runningBox);
@@ -11955,17 +11161,17 @@
         var completedTitle = document.createElement("div");
         completedTitle.textContent = "Completed:";
         completedTitle.style.fontWeight = "600";
-        completedTitle.style.color = "#5cb85c";
+        completedTitle.style.color = THEME_SUCCESS;
         completedTitle.style.fontSize = "13px";
         completedListContainer.appendChild(completedTitle);
         var completedList = document.createElement("div");
         completedList.id = "importEligCompletedList";
         completedList.style.fontSize = "12px";
-        completedList.style.color = "#9f9";
+        completedList.style.color = THEME_SUCCESS;
         completedList.style.maxHeight = "100px";
         completedList.style.overflowY = "auto";
         completedList.style.padding = "4px";
-        completedList.style.background = "#1a1a1a";
+        completedList.style.background = THEME_SURFACE_BG_HEAVY;
         completedList.style.borderRadius = "4px";
         completedListContainer.appendChild(completedList);
         listsContainer.appendChild(completedListContainer);
@@ -11977,17 +11183,17 @@
         var failedTitle = document.createElement("div");
         failedTitle.textContent = "Failed to Collect:";
         failedTitle.style.fontWeight = "600";
-        failedTitle.style.color = "#d9534f";
+        failedTitle.style.color = THEME_DANGER;
         failedTitle.style.fontSize = "13px";
         failedListContainer.appendChild(failedTitle);
         var failedList = document.createElement("div");
         failedList.id = "importEligFailedList";
         failedList.style.fontSize = "12px";
-        failedList.style.color = "#f99";
+        failedList.style.color = THEME_DANGER;
         failedList.style.maxHeight = "100px";
         failedList.style.overflowY = "auto";
         failedList.style.padding = "4px";
-        failedList.style.background = "#1a1a1a";
+        failedList.style.background = THEME_SURFACE_BG_HEAVY;
         failedList.style.borderRadius = "4px";
         failedListContainer.appendChild(failedList);
         listsContainer.appendChild(failedListContainer);
@@ -11999,17 +11205,17 @@
         var excludedTitle = document.createElement("div");
         excludedTitle.textContent = "Form Exclusion:";
         excludedTitle.style.fontWeight = "600";
-        excludedTitle.style.color = "#f0ad4e";
+        excludedTitle.style.color = THEME_WARNING;
         excludedTitle.style.fontSize = "13px";
         excludedListContainer.appendChild(excludedTitle);
         var excludedList = document.createElement("div");
         excludedList.id = "importEligExcludedList";
         excludedList.style.fontSize = "12px";
-        excludedList.style.color = "#ff9";
+        excludedList.style.color = THEME_WARNING;
         excludedList.style.maxHeight = "100px";
         excludedList.style.overflowY = "auto";
         excludedList.style.padding = "4px";
-        excludedList.style.background = "#1a1a1a";
+        excludedList.style.background = THEME_SURFACE_BG_HEAVY;
         excludedList.style.borderRadius = "4px";
         excludedListContainer.appendChild(excludedList);
         listsContainer.appendChild(excludedListContainer);
@@ -13700,7 +12906,7 @@
         var msgEl = document.createElement("div");
         msgEl.style.textAlign = "center";
         msgEl.style.fontSize = "15px";
-        msgEl.style.color = "#fff";
+        msgEl.style.color = THEME_TEXT_PRIMARY;
         msgEl.style.padding = "20px";
         msgEl.style.lineHeight = "1.6";
         msgEl.textContent = message;
@@ -14325,7 +13531,7 @@
         overlay.style.left = "0";
         overlay.style.width = "100%";
         overlay.style.height = "100%";
-        overlay.style.zIndex = "999997";
+        overlay.style.zIndex = String(THEME_Z_OVERLAY);
         overlay.style.background = "rgba(0,0,0,0.7)";
         overlay.style.backdropFilter = "blur(3px)";
         overlay.style.display = "flex";
@@ -14333,11 +13539,11 @@
         overlay.style.justifyContent = "center";
         overlay.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
         overlay.style.fontSize = "13px";
-        overlay.style.color = "#fff";
+        overlay.style.color = THEME_TEXT_PRIMARY;
 
         var container = document.createElement("div");
-        container.style.background = "#111";
-        container.style.border = "1px solid #444";
+        container.style.background = THEME_GRADIENT_BG;
+        container.style.border = "1px solid " + THEME_SURFACE_BORDER;
         container.style.borderRadius = "8px";
         container.style.width = "95%";
         container.style.maxWidth = "1700px";
@@ -14351,9 +13557,9 @@
         headerBar.style.alignItems = "center";
         headerBar.style.justifyContent = "space-between";
         headerBar.style.padding = "14px 18px";
-        headerBar.style.borderBottom = "1px solid #333";
+        headerBar.style.borderBottom = "1px solid " + THEME_SURFACE_BORDER;
         headerBar.style.flexShrink = "0";
-        headerBar.style.background = "linear-gradient(180deg, #1a1a1a, #111)";
+        headerBar.style.background = "linear-gradient(135deg, " + THEME_GRADIENT_START + ", " + THEME_GRADIENT_END + ")";
 
         var headerTitle = document.createElement("div");
         headerTitle.textContent = "Import I/E - Review Mappings";
@@ -14363,7 +13569,7 @@
         var headerCloseBtn = document.createElement("button");
         headerCloseBtn.textContent = "\u2715";
         headerCloseBtn.style.background = "transparent";
-        headerCloseBtn.style.color = "#fff";
+        headerCloseBtn.style.color = THEME_TEXT_PRIMARY;
         headerCloseBtn.style.border = "none";
         headerCloseBtn.style.cursor = "pointer";
         headerCloseBtn.style.fontSize = "18px";
@@ -14371,7 +13577,7 @@
         headerCloseBtn.style.borderRadius = "4px";
         headerCloseBtn.style.transition = "background 0.15s";
         headerCloseBtn.addEventListener("mouseenter", function () {
-            headerCloseBtn.style.background = "#333";
+            headerCloseBtn.style.background = THEME_SURFACE_BG;
         });
         headerCloseBtn.addEventListener("mouseleave", function () {
             headerCloseBtn.style.background = "transparent";
@@ -14393,7 +13599,7 @@
         var leftPanel = document.createElement("div");
         leftPanel.style.width = "220px";
         leftPanel.style.flexShrink = "0";
-        leftPanel.style.borderRight = "1px solid #444";
+        leftPanel.style.borderRight = "1px solid " + THEME_SURFACE_BORDER;
         leftPanel.style.display = "flex";
         leftPanel.style.flexDirection = "column";
         leftPanel.style.padding = "12px";
@@ -14411,9 +13617,9 @@
         leftSearch.style.width = "100%";
         leftSearch.style.padding = "6px 8px";
         leftSearch.style.marginBottom = "8px";
-        leftSearch.style.background = "#222";
-        leftSearch.style.color = "#fff";
-        leftSearch.style.border = "1px solid #555";
+        leftSearch.style.background = THEME_SURFACE_BG_HEAVY;
+        leftSearch.style.color = THEME_TEXT_PRIMARY;
+        leftSearch.style.border = "1px solid " + THEME_SURFACE_BORDER;
         leftSearch.style.borderRadius = "4px";
         leftSearch.style.boxSizing = "border-box";
         leftSearch.style.fontSize = "12px";
@@ -14437,7 +13643,7 @@
                 var row = document.createElement("div");
                 row.style.padding = "3px 6px";
                 row.style.fontSize = "12px";
-                row.style.color = "#aaa";
+                row.style.color = THEME_TEXT_MUTED;
                 row.textContent = c;
                 leftList.appendChild(row);
                 fi = fi + 1;
@@ -14456,7 +13662,7 @@
         rightPanel.style.flexDirection = "column";
         rightPanel.style.padding = "12px";
         rightPanel.style.overflow = "hidden";
-        rightPanel.style.borderRight = "1px solid #444";
+        rightPanel.style.borderRight = "1px solid " + THEME_SURFACE_BORDER;
 
         var rightTitle = document.createElement("div");
         rightTitle.textContent = "Mapped Check Items";
@@ -14471,9 +13677,9 @@
         rightSearch.style.width = "100%";
         rightSearch.style.padding = "6px 8px";
         rightSearch.style.marginBottom = "8px";
-        rightSearch.style.background = "#222";
-        rightSearch.style.color = "#fff";
-        rightSearch.style.border = "1px solid #555";
+        rightSearch.style.background = THEME_SURFACE_BG_HEAVY;
+        rightSearch.style.color = THEME_TEXT_PRIMARY;
+        rightSearch.style.border = "1px solid " + THEME_SURFACE_BORDER;
         rightSearch.style.borderRadius = "4px";
         rightSearch.style.boxSizing = "border-box";
         rightSearch.style.fontSize = "12px";
@@ -14574,9 +13780,9 @@
             log("ImportIE: renderRowGenderControl key=" + key + " gender=" + currentGender + " disabled=" + String(disabled));
             var sel = document.createElement("select");
             sel.className = GENDER_CONTROL_CLASS;
-            sel.style.background = "#222";
-            sel.style.color = "#ccc";
-            sel.style.border = "1px solid #555";
+            sel.style.background = THEME_SURFACE_BG_HEAVY;
+            sel.style.color = THEME_TEXT_MUTED;
+            sel.style.border = "1px solid " + THEME_SURFACE_BORDER;
             sel.style.borderRadius = "3px";
             sel.style.fontSize = "10px";
             sel.style.padding = "1px 2px";
@@ -14931,14 +14137,14 @@
                 row.style.gap = "8px";
                 row.style.padding = "6px 8px";
                 row.style.fontSize = "12px";
-                row.style.borderBottom = "1px solid #2a2a2a";
+                row.style.borderBottom = "1px solid " + THEME_SURFACE_BORDER;
                 row.style.transition = "background 0.1s";
                 row.style.flexWrap = "wrap";
                 row.setAttribute("data-flat-key", fr.key);
 
                 row.addEventListener("mouseenter", (function (r) {
                     return function () {
-                        r.style.background = "#1a1a1a";
+                        r.style.background = THEME_SURFACE_BG;
                     };
                 })(row));
                 row.addEventListener("mouseleave", (function (r) {
@@ -14970,12 +14176,12 @@
                 codeLabel.textContent = fr.codeDisplay;
                 codeLabel.style.fontWeight = "600";
                 codeLabel.style.fontSize = "13px";
-                codeLabel.style.color = "#fff";
+                codeLabel.style.color = THEME_TEXT_PRIMARY;
 
                 var pathLabel = document.createElement("div");
                 pathLabel.textContent = fr.activityPlanText + " -> " + fr.scheduledActivityText + " -> " + fr.checkItemText;
                 pathLabel.style.fontSize = "10px";
-                pathLabel.style.color = "#888";
+                pathLabel.style.color = THEME_TEXT_MUTED;
                 pathLabel.style.marginTop = "2px";
                 pathLabel.style.wordBreak = "break-word";
                 pathLabel.style.lineHeight = "1.3";
@@ -14991,12 +14197,12 @@
                 statusBadge.style.marginTop = "2px";
                 if (isAlreadyExist) {
                     statusBadge.textContent = "Already Exist";
-                    statusBadge.style.background = "#555";
-                    statusBadge.style.color = "#aaa";
+                    statusBadge.style.background = THEME_SURFACE_BG;
+                    statusBadge.style.color = THEME_TEXT_MUTED;
                 } else {
                     statusBadge.textContent = "Not Added";
-                    statusBadge.style.background = "#1a4a1a";
-                    statusBadge.style.color = "#6f6";
+                    statusBadge.style.background = "rgba(16,185,129,0.15)";
+                    statusBadge.style.color = THEME_SUCCESS;
                 }
 
                 var flatDropbox = createDropbox(fr.mapping);
@@ -15323,26 +14529,11 @@
 
         var confirmBtn = document.createElement("button");
         confirmBtn.textContent = "Confirm";
-        confirmBtn.style.background = "#1a7a1a";
-        confirmBtn.style.color = "#fff";
-        confirmBtn.style.border = "1px solid #2a9a2a";
+        confirmBtn.className = "ie-btn-success";
         confirmBtn.style.padding = "8px 24px";
-        confirmBtn.style.borderRadius = "4px";
-        confirmBtn.style.cursor = "pointer";
-        confirmBtn.style.fontWeight = "600";
         confirmBtn.style.transition = "background 0.15s, opacity 0.15s";
         confirmBtn.disabled = true;
         confirmBtn.style.opacity = "0.5";
-        confirmBtn.addEventListener("mouseenter", function () {
-            if (!confirmBtn.disabled) {
-                confirmBtn.style.background = "#228a22";
-            }
-        });
-        confirmBtn.addEventListener("mouseleave", function () {
-            if (!confirmBtn.disabled) {
-                confirmBtn.style.background = "#1a7a1a";
-            }
-        });
 
         function createDropbox(mappingRecord) {
             var mKey = getMappingKeyForPool(mappingRecord);
@@ -15353,10 +14544,10 @@
             box.style.minWidth = "90px";
             box.style.maxWidth = "160px";
             box.style.padding = "2px 6px";
-            box.style.border = "1px dashed #666";
+            box.style.border = "1px dashed " + THEME_SURFACE_BORDER;
             box.style.borderRadius = "4px";
             box.style.fontSize = "10px";
-            box.style.color = "#aaa";
+            box.style.color = THEME_TEXT_MUTED;
             box.style.cursor = "default";
             box.style.overflow = "hidden";
             box.style.textOverflow = "ellipsis";
@@ -15372,9 +14563,9 @@
                 if (poolEntry) {
                     box.textContent = poolEntry.labelShort;
                     box.title = poolEntry.labelFull;
-                    box.style.border = "1px solid #4a4";
-                    box.style.color = "#6f6";
-                    box.style.background = "rgba(30,80,30,0.3)";
+                    box.style.border = "1px solid " + THEME_SUCCESS;
+                    box.style.color = THEME_SUCCESS;
+                    box.style.background = "rgba(16,185,129,0.15)";
                     box.setAttribute("data-elig-value", currentAssigned);
                     box.draggable = true;
                     log("ImportIE: createDropbox pre-filled mKey=" + mKey + " val=" + currentAssigned);
@@ -15384,18 +14575,18 @@
             box.addEventListener("dragover", function (e) {
                 e.preventDefault();
                 e.stopPropagation();
-                box.style.borderColor = "#6f6";
-                box.style.background = "rgba(30,100,30,0.3)";
+                box.style.borderColor = THEME_SUCCESS;
+                box.style.background = "rgba(16,185,129,0.2)";
             });
             box.addEventListener("dragleave", function (e) {
                 e.preventDefault();
                 e.stopPropagation();
                 var cur = assignedEligMap[mKey];
                 if (cur) {
-                    box.style.border = "1px solid #4a4";
-                    box.style.background = "rgba(30,80,30,0.3)";
+                    box.style.border = "1px solid " + THEME_SUCCESS;
+                    box.style.background = "rgba(16,185,129,0.15)";
                 } else {
-                    box.style.borderColor = "#666";
+                    box.style.borderColor = THEME_SURFACE_BORDER;
                     box.style.background = "transparent";
                 }
             });
@@ -15446,9 +14637,9 @@
                     box.textContent = droppedValue;
                     box.title = droppedValue;
                 }
-                box.style.border = "1px solid #4a4";
-                box.style.color = "#6f6";
-                box.style.background = "rgba(30,80,30,0.3)";
+                box.style.border = "1px solid " + THEME_SUCCESS;
+                box.style.color = THEME_SUCCESS;
+                box.style.background = "rgba(16,185,129,0.15)";
                 box.setAttribute("data-elig-value", droppedValue);
                 box.draggable = true;
                 renderPoolList();
@@ -15468,8 +14659,8 @@
                 restoreToAvailablePool(cur);
                 box.textContent = "(drop elig. item)";
                 box.title = "";
-                box.style.border = "1px dashed #666";
-                box.style.color = "#aaa";
+                box.style.border = "1px dashed " + THEME_SURFACE_BORDER;
+                box.style.color = THEME_TEXT_MUTED;
                 box.style.background = "transparent";
                 box.removeAttribute("data-elig-value");
                 box.draggable = false;
@@ -15496,8 +14687,8 @@
                     log("ImportIE: dropbox dragend item reassigned elsewhere mKey=" + mKey + " eligValue=" + String(currentVal));
                     box.textContent = "(drop elig. item)";
                     box.title = "";
-                    box.style.color = "#aaa";
-                    box.style.border = "1px dashed #666";
+                    box.style.color = THEME_TEXT_MUTED;
+                    box.style.border = "1px dashed " + THEME_SURFACE_BORDER;
                     box.style.background = "transparent";
                     box.removeAttribute("data-elig-value");
                     box.draggable = false;
@@ -15512,8 +14703,8 @@
                     restoreToAvailablePool(currentVal);
                     box.textContent = "(drop elig. item)";
                     box.title = "";
-                    box.style.color = "#aaa";
-                    box.style.border = "1px dashed #666";
+                    box.style.color = THEME_TEXT_MUTED;
+                    box.style.border = "1px dashed " + THEME_SURFACE_BORDER;
                     box.style.background = "transparent";
                     box.removeAttribute("data-elig-value");
                     box.draggable = false;
@@ -15545,7 +14736,7 @@
                 planRow.style.padding = "6px 4px";
                 planRow.style.fontWeight = "600";
                 planRow.style.fontSize = "13px";
-                planRow.style.borderBottom = "1px solid #333";
+                planRow.style.borderBottom = "1px solid " + THEME_SURFACE_BORDER;
                 planRow.style.marginTop = hi > 0 ? "10px" : "0";
 
                 var planCb = document.createElement("input");
@@ -15578,7 +14769,7 @@
                     saRow.style.gap = "6px";
                     saRow.style.padding = "4px 4px 4px 24px";
                     saRow.style.fontSize = "12px";
-                    saRow.style.color = "#ccc";
+                    saRow.style.color = THEME_TEXT_MUTED;
 
                     var saCb = document.createElement("input");
                     saCb.type = "checkbox";
@@ -15645,12 +14836,12 @@
                         statusBadge.style.flexShrink = "0";
                         if (alreadyExists) {
                             statusBadge.textContent = "Already Exist";
-                            statusBadge.style.background = "#555";
-                            statusBadge.style.color = "#aaa";
+                            statusBadge.style.background = THEME_SURFACE_BG;
+                            statusBadge.style.color = THEME_TEXT_MUTED;
                         } else {
                             statusBadge.textContent = "Not Added";
-                            statusBadge.style.background = "#1a4a1a";
-                            statusBadge.style.color = "#6f6";
+                            statusBadge.style.background = "rgba(16,185,129,0.15)";
+                            statusBadge.style.color = THEME_SUCCESS;
                         }
                         statusBadge.style.whiteSpace = "nowrap";
 
@@ -15778,9 +14969,9 @@
         poolSearch.style.width = "100%";
         poolSearch.style.padding = "6px 8px";
         poolSearch.style.marginBottom = "8px";
-        poolSearch.style.background = "#1a1a1a";
-        poolSearch.style.color = "#fff";
-        poolSearch.style.border = "1px solid #444";
+        poolSearch.style.background = THEME_SURFACE_BG_HEAVY;
+        poolSearch.style.color = THEME_TEXT_PRIMARY;
+        poolSearch.style.border = "1px solid " + THEME_SURFACE_BORDER;
         poolSearch.style.borderRadius = "4px";
         poolSearch.style.outline = "none";
         poolSearch.style.fontSize = "12px";
@@ -15794,23 +14985,23 @@
         poolList.id = ELIG_POOL_LIST_ID;
         poolList.style.flex = "1";
         poolList.style.overflowY = "auto";
-        poolList.style.border = "1px solid #333";
+        poolList.style.border = "1px solid " + THEME_SURFACE_BORDER;
         poolList.style.borderRadius = "4px";
-        poolList.style.background = "#0d0d0d";
+        poolList.style.background = THEME_SURFACE_BG;
         poolList.style.padding = "4px";
         poolPanel.appendChild(poolList);
 
         poolList.addEventListener("dragover", function (e) {
             e.preventDefault();
-            poolList.style.background = "#1a2a1a";
+            poolList.style.background = "rgba(16,185,129,0.1)";
         });
         poolList.addEventListener("dragleave", function (e) {
             e.preventDefault();
-            poolList.style.background = "#0d0d0d";
+            poolList.style.background = THEME_SURFACE_BG;
         });
         poolList.addEventListener("drop", function (e) {
             e.preventDefault();
-            poolList.style.background = "#0d0d0d";
+            poolList.style.background = THEME_SURFACE_BG;
             var droppedValue = e.dataTransfer.getData(ELIG_DRAG_TYPE);
             log("ImportIE: poolList drop return droppedValue=" + String(droppedValue));
             if (!droppedValue) {
@@ -15873,14 +15064,14 @@
                 poolRow.style.gap = "6px";
                 poolRow.style.padding = "4px 6px";
                 poolRow.style.fontSize = "11px";
-                poolRow.style.color = "#ccc";
+                poolRow.style.color = THEME_TEXT_MUTED;
                 poolRow.style.cursor = "grab";
-                poolRow.style.borderBottom = "1px solid #222";
+                poolRow.style.borderBottom = "1px solid " + THEME_SURFACE_BORDER;
                 poolRow.style.transition = "background 0.1s";
                 poolRow.draggable = true;
                 poolRow.title = pItem.labelFull;
                 poolRow.setAttribute("data-elig-value", pItem.value);
-                poolRow.addEventListener("mouseenter", function () { this.style.background = "#1a1a2a"; });
+                poolRow.addEventListener("mouseenter", function () { this.style.background = THEME_SURFACE_BG_HEAVY; });
                 poolRow.addEventListener("mouseleave", function () { this.style.background = "transparent"; });
                 (function (capturedValue) {
                     poolRow.addEventListener("dragstart", function (e) {
@@ -15896,7 +15087,7 @@
 
                 var codeSpan = document.createElement("span");
                 codeSpan.style.fontWeight = "600";
-                codeSpan.style.color = "#8cf";
+                codeSpan.style.color = THEME_ACCENT;
                 codeSpan.style.flexShrink = "0";
                 codeSpan.textContent = pItem.code || "";
 
@@ -15917,7 +15108,7 @@
                 var emptyMsg = document.createElement("div");
                 emptyMsg.style.padding = "12px";
                 emptyMsg.style.textAlign = "center";
-                emptyMsg.style.color = "#666";
+                emptyMsg.style.color = THEME_TEXT_MUTED;
                 emptyMsg.style.fontSize = "11px";
                 emptyMsg.textContent = availablePool.length === 0 ? "All items assigned" : "No matches";
                 poolList.appendChild(emptyMsg);
@@ -15936,25 +15127,14 @@
         footerBar.style.justifyContent = "flex-end";
         footerBar.style.gap = "10px";
         footerBar.style.padding = "12px 16px";
-        footerBar.style.borderTop = "1px solid #333";
+        footerBar.style.borderTop = "1px solid " + THEME_SURFACE_BORDER;
         footerBar.style.flexShrink = "0";
-        footerBar.style.background = "#0d0d0d";
+        footerBar.style.background = THEME_SURFACE_BG;
 
         var selectAllBtn = document.createElement("button");
         selectAllBtn.textContent = "Select All";
-        selectAllBtn.style.background = "#2a2a2a";
-        selectAllBtn.style.color = "#fff";
-        selectAllBtn.style.border = "1px solid #444";
+        selectAllBtn.className = "ie-btn-secondary";
         selectAllBtn.style.padding = "8px 16px";
-        selectAllBtn.style.borderRadius = "4px";
-        selectAllBtn.style.cursor = "pointer";
-        selectAllBtn.style.transition = "background 0.15s";
-        selectAllBtn.addEventListener("mouseenter", function () {
-            selectAllBtn.style.background = "#3a3a3a";
-        });
-        selectAllBtn.addEventListener("mouseleave", function () {
-            selectAllBtn.style.background = "#2a2a2a";
-        });
         selectAllBtn.addEventListener("click", function () {
             log("ImportIE: Select All clicked mode=" + currentRightPanelMode);
             var xi = 0;
@@ -15980,19 +15160,8 @@
 
         var clearAllBtn = document.createElement("button");
         clearAllBtn.textContent = "Clear All";
-        clearAllBtn.style.background = "#2a2a2a";
-        clearAllBtn.style.color = "#fff";
-        clearAllBtn.style.border = "1px solid #444";
+        clearAllBtn.className = "ie-btn-secondary";
         clearAllBtn.style.padding = "8px 16px";
-        clearAllBtn.style.borderRadius = "4px";
-        clearAllBtn.style.cursor = "pointer";
-        clearAllBtn.style.transition = "background 0.15s";
-        clearAllBtn.addEventListener("mouseenter", function () {
-            clearAllBtn.style.background = "#3a3a3a";
-        });
-        clearAllBtn.addEventListener("mouseleave", function () {
-            clearAllBtn.style.background = "#2a2a2a";
-        });
         clearAllBtn.addEventListener("click", function () {
             log("ImportIE: Clear All clicked mode=" + currentRightPanelMode);
             if (currentRightPanelMode === RIGHT_PANEL_MODE.HIERARCHY) {
@@ -16068,19 +15237,8 @@
         var codeSortToggleBtn = document.createElement("button");
         codeSortToggleBtn.id = CODE_SORT_TOGGLE_BUTTON_ID;
         codeSortToggleBtn.textContent = "Sort by Code";
-        codeSortToggleBtn.style.background = "#2a2a2a";
-        codeSortToggleBtn.style.color = "#fff";
-        codeSortToggleBtn.style.border = "1px solid #444";
+        codeSortToggleBtn.className = "ie-btn-secondary";
         codeSortToggleBtn.style.padding = "8px 16px";
-        codeSortToggleBtn.style.borderRadius = "4px";
-        codeSortToggleBtn.style.cursor = "pointer";
-        codeSortToggleBtn.style.transition = "background 0.15s";
-        codeSortToggleBtn.addEventListener("mouseenter", function () {
-            codeSortToggleBtn.style.background = "#3a3a3a";
-        });
-        codeSortToggleBtn.addEventListener("mouseleave", function () {
-            codeSortToggleBtn.style.background = "#2a2a2a";
-        });
 
         var initialFlatCheck = buildFlatCodeOrderedDataset(mappings, existingCodeSet);
         if (initialFlatCheck.length === 0) {
@@ -16093,36 +15251,21 @@
         var dupToggleBtn = document.createElement("button");
         dupToggleBtn.id = CODE_VIEW_DUP_TOGGLE_BUTTON_ID;
         dupToggleBtn.textContent = "Show Duplicates";
-        dupToggleBtn.style.background = "#2a2a2a";
-        dupToggleBtn.style.color = "#fff";
-        dupToggleBtn.style.border = "1px solid #444";
+        dupToggleBtn.className = "ie-btn-secondary";
         dupToggleBtn.style.padding = "8px 16px";
-        dupToggleBtn.style.borderRadius = "4px";
-        dupToggleBtn.style.cursor = "pointer";
-        dupToggleBtn.style.transition = "background 0.15s";
         dupToggleBtn.style.display = "none";
-        dupToggleBtn.addEventListener("mouseenter", function () {
-            dupToggleBtn.style.background = "#3a3a3a";
-        });
-        dupToggleBtn.addEventListener("mouseleave", function () {
-            if (duplicatesFilterActive) {
-                dupToggleBtn.style.background = "#1a4a1a";
-            } else {
-                dupToggleBtn.style.background = "#2a2a2a";
-            }
-        });
         dupToggleBtn.addEventListener("click", function () {
             log("ImportIE: dupToggleBtn clicked, currently active=" + String(duplicatesFilterActive));
             if (duplicatesFilterActive) {
                 duplicatesFilterActive = false;
                 dupToggleBtn.textContent = "Show Duplicates";
-                dupToggleBtn.style.background = "#2a2a2a";
-                dupToggleBtn.style.border = "1px solid #444";
+                dupToggleBtn.style.background = "";
+                dupToggleBtn.style.border = "";
             } else {
                 duplicatesFilterActive = true;
                 dupToggleBtn.textContent = "Show All";
-                dupToggleBtn.style.background = "#1a4a1a";
-                dupToggleBtn.style.border = "1px solid #4a4";
+                dupToggleBtn.style.background = "rgba(16,185,129,0.15)";
+                dupToggleBtn.style.border = "1px solid " + THEME_SUCCESS;
             }
             toggleDuplicatesFilterOnCodeView(duplicatesFilterActive);
         });
@@ -16141,8 +15284,8 @@
                 duplicatesFilterActive = false;
                 duplicatesSet = null;
                 dupToggleBtn.textContent = "Show Duplicates";
-                dupToggleBtn.style.background = "#2a2a2a";
-                dupToggleBtn.style.border = "1px solid #444";
+                dupToggleBtn.style.background = "";
+                dupToggleBtn.style.border = "";
                 dupToggleBtn.style.display = "none";
                 await toggleRightPanelViewMode(RIGHT_PANEL_MODE.HIERARCHY);
                 codeSortToggleBtn.textContent = "Sort by Code";
@@ -16176,21 +15319,21 @@
         summaryRow.style.justifyContent = "space-between";
         summaryRow.style.fontSize = "13px";
         summaryRow.style.padding = "8px 10px";
-        summaryRow.style.borderBottom = "1px solid #333";
-        summaryRow.style.background = "#1a1a1a";
+        summaryRow.style.borderBottom = "1px solid " + THEME_SURFACE_BORDER;
+        summaryRow.style.background = THEME_SURFACE_BG_HEAVY;
         summaryRow.style.borderRadius = "4px";
 
         var totalEl = document.createElement("span");
         totalEl.textContent = "Total: " + String(selectedMappings.length);
         var successEl = document.createElement("span");
         successEl.textContent = "Success: 0";
-        successEl.style.color = "#5cb85c";
+        successEl.style.color = THEME_SUCCESS;
         var failEl = document.createElement("span");
         failEl.textContent = "Failed: 0";
-        failEl.style.color = "#d9534f";
+        failEl.style.color = THEME_DANGER;
         var statusEl = document.createElement("span");
         statusEl.textContent = "In Progress";
-        statusEl.style.color = "#5bc0de";
+        statusEl.style.color = THEME_ACCENT;
         statusEl.style.fontWeight = "600";
 
         summaryRow.appendChild(totalEl);
@@ -16213,7 +15356,7 @@
             row.style.justifyContent = "space-between";
             row.style.alignItems = "center";
             row.style.padding = "4px 6px";
-            row.style.borderBottom = "1px solid #222";
+            row.style.borderBottom = "1px solid " + THEME_SURFACE_BORDER;
 
             var labelSpan = document.createElement("span");
             labelSpan.textContent = m.code + " - " + m.checkItemText;
@@ -16225,12 +15368,12 @@
 
             var statusSpan = document.createElement("span");
             statusSpan.textContent = "Pending";
-            statusSpan.style.color = "#888";
+            statusSpan.style.color = THEME_TEXT_MUTED;
             statusSpan.style.flexShrink = "0";
             statusSpan.style.fontSize = "11px";
             statusSpan.style.padding = "2px 8px";
             statusSpan.style.borderRadius = "3px";
-            statusSpan.style.background = "#222";
+            statusSpan.style.background = THEME_SURFACE_BG;
 
             row.appendChild(labelSpan);
             row.appendChild(statusSpan);
@@ -16262,9 +15405,9 @@
                 if (index >= 0 && index < rows.length) {
                     rows[index].statusSpan.textContent = status;
                     if (status === "Success") {
-                        rows[index].statusSpan.style.color = "#5cb85c";
+                        rows[index].statusSpan.style.color = THEME_SUCCESS;
                     } else if (status === "Failed") {
-                        rows[index].statusSpan.style.color = "#d9534f";
+                        rows[index].statusSpan.style.color = THEME_DANGER;
                         if (msg) {
                             rows[index].statusSpan.title = msg;
                         }
@@ -16277,7 +15420,7 @@
             },
             setCompleted: function () {
                 statusEl.textContent = "Completed";
-                statusEl.style.color = "#5cb85c";
+                statusEl.style.color = THEME_SUCCESS;
             }
         };
     }
@@ -16335,7 +15478,7 @@
                 if (IMPORT_IE_CANCELED) {
                     log("ImportIE: Operation cancelled by user");
                     progress.statusEl.textContent = "Cancelled";
-                    progress.statusEl.style.color = "#d9534f";
+                    progress.statusEl.style.color = THEME_DANGER;
                     return;
                 }
             }
@@ -16436,7 +15579,7 @@
             if (IMPORT_IE_CANCELED) {
                 log("ImportIE: Operation cancelled by user after sleep");
                 progress.statusEl.textContent = "Cancelled";
-                progress.statusEl.style.color = "#d9534f";
+                progress.statusEl.style.color = THEME_DANGER;
                 return;
             }
 
@@ -16512,7 +15655,7 @@
             if (IMPORT_IE_CANCELED) {
                 log("ImportIE: Operation cancelled by user after sleep");
                 progress.statusEl.textContent = "Cancelled";
-                progress.statusEl.style.color = "#d9534f";
+                progress.statusEl.style.color = THEME_DANGER;
                 return;
             }
             log("ImportIE: step f - selecting check item value='" + String(mapping.ids.checkItemValue) + "'");
@@ -16579,7 +15722,7 @@
             if (IMPORT_IE_CANCELED) {
                 log("ImportIE: Operation cancelled by user after sleep");
                 progress.statusEl.textContent = "Cancelled";
-                progress.statusEl.style.color = "#d9534f";
+                progress.statusEl.style.color = THEME_DANGER;
                 return;
             }
             log("ImportIE: step i - clicking Save");
@@ -16656,7 +15799,7 @@
         if (!isValidEligibilityPage()) {
             createPopup({
                 title: "Import I/E - Error",
-                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">⚠️ Wrong Page</p><p>You must navigate to the Eligibility list page before using Import I/E.</p><p style="margin-top:12px;font-size:12px;color:#888;word-wrap:break-word;word-break:break-all;">Required URL: ' + getBaseUrl() + ELIGIBILITY_LIST_PATH + '</p></div>',
+                content: '<div style="text-align:center;padding:20px;"><p style="color:' + THEME_DANGER + ';font-size:16px;margin-bottom:12px;">⚠️ Wrong Page</p><p>You must navigate to the Eligibility list page before using Import I/E.</p><p style="margin-top:12px;font-size:12px;color:' + THEME_TEXT_MUTED + ';word-wrap:break-word;word-break:break-all;">Required URL: ' + getBaseUrl() + ELIGIBILITY_LIST_PATH + '</p></div>',
                 width: "450px",
                 height: "auto"
             });
@@ -16669,7 +15812,7 @@
         var loadingEl = document.createElement("div");
         loadingEl.style.textAlign = "center";
         loadingEl.style.fontSize = "15px";
-        loadingEl.style.color = "#fff";
+        loadingEl.style.color = THEME_TEXT_PRIMARY;
         loadingEl.style.padding = "20px";
         loadingEl.textContent = "Collecting existing table codes and mappings...";
 
@@ -18169,7 +17312,7 @@
         statusDiv.id = "lockSamplePathsStatus";
         statusDiv.style.textAlign = "center";
         statusDiv.style.fontSize = "18px";
-        statusDiv.style.color = "#fff";
+        statusDiv.style.color = THEME_TEXT_PRIMARY;
         statusDiv.style.fontWeight = "500";
         statusDiv.textContent = "Locking Sample Paths";
 
@@ -18177,22 +17320,22 @@
         progressDiv.id = "lockSamplePathsProgress";
         progressDiv.style.textAlign = "center";
         progressDiv.style.fontSize = "16px";
-        progressDiv.style.color = "#9df";
+        progressDiv.style.color = THEME_ACCENT;
         progressDiv.textContent = "Processing 0/" + String(unlockedPaths.length);
 
         var loadingAnimation = document.createElement("div");
         loadingAnimation.id = "lockSamplePathsLoading";
         loadingAnimation.style.textAlign = "center";
         loadingAnimation.style.fontSize = "14px";
-        loadingAnimation.style.color = "#9df";
+        loadingAnimation.style.color = THEME_ACCENT;
         loadingAnimation.textContent = "Running.";
 
         var countsDiv = document.createElement("div");
         countsDiv.id = "lockSamplePathsCounts";
         countsDiv.style.textAlign = "center";
         countsDiv.style.fontSize = "14px";
-        countsDiv.style.color = "#ccc";
-        countsDiv.innerHTML = "<span style='color:#9f9'>Success: 0</span> | <span style='color:#f99'>Failed: 0</span>";
+        countsDiv.style.color = THEME_TEXT_MUTED;
+        countsDiv.innerHTML = "<span style='color:" + THEME_SUCCESS + "'>Success: 0</span> | <span style='color:" + THEME_DANGER + "'>Failed: 0</span>";
 
         popupContainer.appendChild(statusDiv);
         popupContainer.appendChild(progressDiv);
@@ -18258,7 +17401,7 @@
             }
 
             if (countsDiv) {
-                countsDiv.innerHTML = "<span style='color:#9f9'>Success: " + String(successCount) + "</span> | <span style='color:#f99'>Failed: " + String(failCount) + "</span>";
+                countsDiv.innerHTML = "<span style='color:" + THEME_SUCCESS + "'>Success: " + String(successCount) + "</span> | <span style='color:" + THEME_DANGER + "'>Failed: " + String(failCount) + "</span>";
             }
 
             await sleep(500);
@@ -18271,7 +17414,7 @@
 
         if (statusDiv) {
             statusDiv.textContent = "Completed";
-            statusDiv.style.color = "#9f9";
+            statusDiv.style.color = THEME_SUCCESS;
         }
         if (loadingAnimation) {
             loadingAnimation.textContent = "All sample paths processed";
@@ -19935,7 +19078,7 @@
                 confirmContent.style.gap = "12px";
 
                 var confirmText = document.createElement("div");
-                confirmText.style.color = "#fff";
+                confirmText.style.color = THEME_TEXT_PRIMARY;
                 confirmText.style.fontSize = "14px";
                 confirmText.style.lineHeight = "1.5";
                 confirmText.textContent = "Please select a date from the calendar, then click 'Confirm Date Selection' to continue.";
@@ -19945,21 +19088,13 @@
                 confirmBtn.textContent = "Confirm Date Selection";
                 confirmBtn.style.padding = "10px";
                 confirmBtn.style.cursor = "pointer";
-                confirmBtn.style.background = "#2d7";
-                confirmBtn.style.color = "#000";
+                confirmBtn.className = "ie-btn-success";
                 confirmBtn.style.border = "none";
-                confirmBtn.style.borderRadius = "6px";
                 confirmBtn.style.fontSize = "14px";
                 confirmBtn.style.fontWeight = "500";
                 confirmBtn.style.transition = "background 0.2s";
                 confirmBtn.style.width = "100%";
 
-                confirmBtn.addEventListener("mouseenter", function() {
-                    confirmBtn.style.background = "#3e8";
-                });
-                confirmBtn.addEventListener("mouseleave", function() {
-                    confirmBtn.style.background = "#2d7";
-                });
 
                 confirmBtn.addEventListener("click", function() {
                     dateConfirmed = true;
@@ -20049,7 +19184,7 @@
                 messageContent.style.gap = "12px";
 
                 var messageText = document.createElement("div");
-                messageText.style.color = "#fff";
+                messageText.style.color = THEME_TEXT_PRIMARY;
                 messageText.style.fontSize = "14px";
                 messageText.style.lineHeight = "1.5";
                 messageText.innerHTML = "No assignments found for the selected criteria.";
@@ -20059,21 +19194,13 @@
                 okBtn.textContent = "OK";
                 okBtn.style.padding = "10px";
                 okBtn.style.cursor = "pointer";
-                okBtn.style.background = "#2d7";
-                okBtn.style.color = "#000";
+                okBtn.className = "ie-btn-success";
                 okBtn.style.border = "none";
-                okBtn.style.borderRadius = "6px";
                 okBtn.style.fontSize = "14px";
                 okBtn.style.fontWeight = "500";
                 okBtn.style.transition = "background 0.2s";
                 okBtn.style.width = "100%";
 
-                okBtn.addEventListener("mouseenter", function() {
-                    okBtn.style.background = "#3e8";
-                });
-                okBtn.addEventListener("mouseleave", function() {
-                    okBtn.style.background = "#2d7";
-                });
 
                 var noAssignmentsPopup = null;
                 okBtn.addEventListener("click", function() {
@@ -20341,31 +19468,19 @@
         anchors.forEach(function (a) {
             var btn = document.createElement("button");
             btn.textContent = a.textContent.trim();
+            btn.className = "ie-btn-primary";
             btn.style.display = "block";
             btn.style.width = "100%";
             btn.style.padding = "10px";
-            btn.style.cursor = "pointer";
-            btn.style.background = "#4a90e2";
-            btn.style.color = "#fff";
             btn.style.border = "none";
-            btn.style.borderRadius = "6px";
             btn.style.fontSize = "14px";
             btn.style.fontWeight = "500";
-            btn.style.transition = "background 0.2s";
-
-            btn.addEventListener("mouseenter", function() {
-                btn.style.background = "#357abd";
-            });
-            btn.addEventListener("mouseleave", function() {
-                btn.style.background = "#4a90e2";
-            });
 
             btn.addEventListener("click", async function () {
                 var label = a.textContent.trim();
                 var href = a.getAttribute("href");
                 localStorage.setItem(STORAGE_NON_SCRN_SELECTED_EPOCH, href);
 
-                // Save checkbox preference
                 var checkbox = document.getElementById("manualSelectInitialRefTimeImport");
                 if (checkbox) {
                     try {
@@ -20399,7 +19514,7 @@
         checkboxRow.style.gap = "8px";
         checkboxRow.style.marginTop = "8px";
         checkboxRow.style.padding = "8px";
-        checkboxRow.style.borderTop = "1px solid #444";
+        checkboxRow.style.borderTop = "1px solid " + THEME_SURFACE_BORDER;
 
         var checkbox = document.createElement("input");
         checkbox.type = "checkbox";
@@ -20418,7 +19533,7 @@
         label.htmlFor = "manualSelectInitialRefTimeImport";
         label.textContent = "Manual Select Initial Ref Time";
         label.style.cursor = "pointer";
-        label.style.color = "#fff";
+        label.style.color = THEME_TEXT_PRIMARY;
         label.style.fontSize = "14px";
         label.style.userSelect = "none";
 
@@ -21359,7 +20474,7 @@
                     confirmContent.style.gap = "12px";
 
                     var confirmText = document.createElement("div");
-                    confirmText.style.color = "#fff";
+                    confirmText.style.color = THEME_TEXT_PRIMARY;
                     confirmText.style.fontSize = "14px";
                     confirmText.style.lineHeight = "1.5";
                     confirmText.textContent = "Please select a date from the calendar, then click 'Confirm Date Selection' to continue.";
@@ -21367,23 +20482,12 @@
 
                     var confirmBtn = document.createElement("button");
                     confirmBtn.textContent = "Confirm Date Selection";
+                    confirmBtn.className = "ie-btn-success";
                     confirmBtn.style.padding = "10px";
-                    confirmBtn.style.cursor = "pointer";
-                    confirmBtn.style.background = "#2d7";
-                    confirmBtn.style.color = "#000";
                     confirmBtn.style.border = "none";
-                    confirmBtn.style.borderRadius = "6px";
                     confirmBtn.style.fontSize = "14px";
                     confirmBtn.style.fontWeight = "500";
-                    confirmBtn.style.transition = "background 0.2s";
                     confirmBtn.style.width = "100%";
-
-                    confirmBtn.addEventListener("mouseenter", function() {
-                        confirmBtn.style.background = "#3e8";
-                    });
-                    confirmBtn.addEventListener("mouseleave", function() {
-                        confirmBtn.style.background = "#2d7";
-                    });
 
                     confirmBtn.addEventListener("click", function() {
                         dateConfirmed = true;
@@ -21805,31 +20909,19 @@
         anchors.forEach(function (a) {
             var btn = document.createElement("button");
             btn.textContent = a.textContent.trim();
+            btn.className = "ie-btn-primary";
             btn.style.display = "block";
             btn.style.width = "100%";
             btn.style.padding = "10px";
-            btn.style.cursor = "pointer";
-            btn.style.background = "#4a90e2";
-            btn.style.color = "#fff";
             btn.style.border = "none";
-            btn.style.borderRadius = "6px";
             btn.style.fontSize = "14px";
             btn.style.fontWeight = "500";
-            btn.style.transition = "background 0.2s";
-
-            btn.addEventListener("mouseenter", function() {
-                btn.style.background = "#357abd";
-            });
-            btn.addEventListener("mouseleave", function() {
-                btn.style.background = "#4a90e2";
-            });
 
             btn.addEventListener("click", async function () {
                 var label = a.textContent.trim();
                 var href = a.getAttribute("href");
                 localStorage.setItem(STORAGE_NON_SCRN_SELECTED_EPOCH, href);
 
-                // Save checkbox preference
                 var checkbox = document.getElementById("manualSelectInitialRefTimeAddCohort");
                 if (checkbox) {
                     try {
@@ -21858,7 +20950,7 @@
         checkboxRow.style.gap = "8px";
         checkboxRow.style.marginTop = "8px";
         checkboxRow.style.padding = "8px";
-        checkboxRow.style.borderTop = "1px solid #444";
+        checkboxRow.style.borderTop = "1px solid " + THEME_SURFACE_BORDER;
 
         var checkbox = document.createElement("input");
         checkbox.type = "checkbox";
@@ -21877,7 +20969,7 @@
         label.htmlFor = "manualSelectInitialRefTimeAddCohort";
         label.textContent = "Manual Select Initial Ref Time";
         label.style.cursor = "pointer";
-        label.style.color = "#fff";
+        label.style.color = THEME_TEXT_PRIMARY;
         label.style.fontSize = "14px";
         label.style.userSelect = "none";
 
@@ -22549,7 +21641,7 @@
             statusDiv.id = "lockActivityPlansStatus";
             statusDiv.style.textAlign = "center";
             statusDiv.style.fontSize = "18px";
-            statusDiv.style.color = "#fff";
+            statusDiv.style.color = THEME_TEXT_PRIMARY;
             statusDiv.style.fontWeight = "500";
             statusDiv.textContent = "Locking Activity Plans";
 
@@ -22557,22 +21649,22 @@
             progressDiv.id = "lockActivityPlansProgress";
             progressDiv.style.textAlign = "center";
             progressDiv.style.fontSize = "16px";
-            progressDiv.style.color = "#9df";
+            progressDiv.style.color = THEME_ACCENT;
             progressDiv.textContent = "Processing 0/" + String(planData.length);
 
             loadingAnimation = document.createElement("div");
             loadingAnimation.id = "lockActivityPlansLoading";
             loadingAnimation.style.textAlign = "center";
             loadingAnimation.style.fontSize = "14px";
-            loadingAnimation.style.color = "#9df";
+            loadingAnimation.style.color = THEME_ACCENT;
             loadingAnimation.textContent = "Running.";
 
             countsDiv = document.createElement("div");
             countsDiv.id = "lockActivityPlansCounts";
             countsDiv.style.textAlign = "center";
             countsDiv.style.fontSize = "14px";
-            countsDiv.style.color = "#ccc";
-            countsDiv.innerHTML = "<span style='color:#9f9'>Success: 0</span> | <span style='color:#f99'>Failed: 0</span>";
+            countsDiv.style.color = THEME_TEXT_MUTED;
+            countsDiv.innerHTML = "<span style='color:" + THEME_SUCCESS + "'>Success: 0</span> | <span style='color:" + THEME_DANGER + "'>Failed: 0</span>";
 
             popupContainer.appendChild(statusDiv);
             popupContainer.appendChild(progressDiv);
@@ -22641,7 +21733,7 @@
             }
 
             if (showPopup && countsDiv) {
-                countsDiv.innerHTML = "<span style='color:#9f9'>Success: " + String(successCount) + "</span> | <span style='color:#f99'>Failed: " + String(failCount) + "</span>";
+                countsDiv.innerHTML = "<span style='color:" + THEME_SUCCESS + "'>Success: " + String(successCount) + "</span> | <span style='color:" + THEME_DANGER + "'>Failed: " + String(failCount) + "</span>";
             }
 
             await sleep(500);
@@ -22656,7 +21748,7 @@
 
         if (showPopup && statusDiv) {
             statusDiv.textContent = "Completed";
-            statusDiv.style.color = "#9f9";
+            statusDiv.style.color = THEME_SUCCESS;
         }
         if (showPopup && loadingAnimation) {
             loadingAnimation.textContent = "All activity plans processed";
@@ -23038,7 +22130,7 @@
                     statusDiv.id = "runAllStatus";
                     statusDiv.style.textAlign = "center";
                     statusDiv.style.fontSize = "18px";
-                    statusDiv.style.color = "#fff";
+                    statusDiv.style.color = THEME_TEXT_PRIMARY;
                     statusDiv.style.fontWeight = "500";
                     statusDiv.textContent = savedStatus;
 
@@ -23046,7 +22138,7 @@
                     loadingAnimation.id = "runAllLoading";
                     loadingAnimation.style.textAlign = "center";
                     loadingAnimation.style.fontSize = "14px";
-                    loadingAnimation.style.color = "#9df";
+                    loadingAnimation.style.color = THEME_ACCENT;
                     loadingAnimation.textContent = "Running.";
 
                     popupContainer.appendChild(statusDiv);
@@ -23108,7 +22200,7 @@
                     var statusDiv = document.createElement("div");
                     statusDiv.style.textAlign = "center";
                     statusDiv.style.fontSize = "18px";
-                    statusDiv.style.color = "#fff";
+                    statusDiv.style.color = THEME_TEXT_PRIMARY;
                     statusDiv.style.fontWeight = "500";
                     statusDiv.textContent = "Running Clear Mapping";
 
@@ -23116,7 +22208,7 @@
                     loadingAnimation.id = "clearMappingLoading";
                     loadingAnimation.style.textAlign = "center";
                     loadingAnimation.style.fontSize = "14px";
-                    loadingAnimation.style.color = "#9df";
+                    loadingAnimation.style.color = THEME_ACCENT;
                     loadingAnimation.textContent = "Running.";
 
                     popupContainer.appendChild(statusDiv);
@@ -23175,7 +22267,7 @@
                     statusDiv.id = "importCohortStatus";
                     statusDiv.style.textAlign = "center";
                     statusDiv.style.fontSize = "18px";
-                    statusDiv.style.color = "#fff";
+                    statusDiv.style.color = THEME_TEXT_PRIMARY;
                     statusDiv.style.fontWeight = "500";
                     statusDiv.textContent = "Running Import Cohort Subject";
 
@@ -23183,7 +22275,7 @@
                     loadingAnimation.id = "importCohortLoading";
                     loadingAnimation.style.textAlign = "center";
                     loadingAnimation.style.fontSize = "14px";
-                    loadingAnimation.style.color = "#9df";
+                    loadingAnimation.style.color = THEME_ACCENT;
                     loadingAnimation.textContent = "Running.";
 
                     popupContainer.appendChild(statusDiv);
@@ -23243,7 +22335,7 @@
                     statusDiv.id = "addCohortStatus";
                     statusDiv.style.textAlign = "center";
                     statusDiv.style.fontSize = "18px";
-                    statusDiv.style.color = "#fff";
+                    statusDiv.style.color = THEME_TEXT_PRIMARY;
                     statusDiv.style.fontWeight = "500";
                     statusDiv.textContent = "Running Add Cohort Subjects";
 
@@ -23251,7 +22343,7 @@
                     loadingAnimation.id = "addCohortLoading";
                     loadingAnimation.style.textAlign = "center";
                     loadingAnimation.style.fontSize = "14px";
-                    loadingAnimation.style.color = "#9df";
+                    loadingAnimation.style.color = THEME_ACCENT;
                     loadingAnimation.textContent = "Running.";
 
                     popupContainer.appendChild(statusDiv);
@@ -23756,16 +22848,17 @@
         overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:999999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;";
 
         var msgDiv = document.createElement("div");
-        msgDiv.style.cssText = "color:#fff;font-size:24px;font-weight:600;text-align:center;padding:20px;";
+        msgDiv.style.cssText = "color:" + THEME_TEXT_PRIMARY + ";font-size:24px;font-weight:600;text-align:center;padding:20px;";
         msgDiv.textContent = message;
 
         var subMsg = document.createElement("div");
-        subMsg.style.cssText = "color:#9df;font-size:16px;text-align:center;";
+        subMsg.style.cssText = "color:" + THEME_ACCENT + ";font-size:16px;text-align:center;";
         subMsg.textContent = "Click the button below or press Ctrl+W to close this tab.";
 
         var closeBtn = document.createElement("button");
         closeBtn.textContent = "Close This Tab";
-        closeBtn.style.cssText = "background:#28a745;color:#fff;border:none;border-radius:8px;padding:15px 40px;font-size:18px;font-weight:600;cursor:pointer;";
+        closeBtn.className = "ie-btn-success";
+        closeBtn.style.cssText = "padding:15px 40px;font-size:18px;font-weight:600;";
         closeBtn.addEventListener("click", function() {
             try { window.close(); } catch (e) {}
             // If still here, try focus trick
@@ -24318,13 +23411,9 @@
         }
         var btn = document.createElement("button");
         btn.textContent = label;
-        btn.style.background = "#ddd";
-        btn.style.color = "#000";
-        btn.style.border = "none";
-        btn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        btn.className = "ie-btn-primary";
         btn.style.padding = scale(BUTTON_PADDING_PX);
         btn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        btn.style.cursor = "pointer";
         btn.addEventListener("click", function () {
             try {
                 handler();
@@ -24336,10 +23425,9 @@
     }
 
 
-    // Create a draggable, closeable popup styled like the panel
-
-    // Create a draggable, closeable popup styled like the panel
     function createPopup(options) {
+        log("createPopup: start title='" + (options && options.title || "Popup") + "'");
+        injectThemeStylesIfNeeded();
         options = options || {};
         var title = options.title || "Popup";
         var description = options.description || "";
@@ -24358,16 +23446,14 @@
 
         var popup = document.createElement("div");
         popup.id = popupId;
+        popup.classList.add(THEME_SCOPE_CLASS);
+        popup.classList.add("ie-glass-panel");
         popup.style.position = "fixed";
         popup.style.top = "50%";
         popup.style.left = "50%";
         popup.style.transform = "translate(-50%, -50%)";
-        popup.style.zIndex = "999998";
-        popup.style.background = "#111";
-        popup.style.color = "#fff";
-        popup.style.border = "1px solid #444";
-        popup.style.borderRadius = "8";
-        popup.style.padding = "10px";
+        popup.style.zIndex = String(THEME_Z_OVERLAY);
+        popup.style.padding = "0";
         popup.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
         popup.style.fontSize = "14px";
         popup.style.width = width;
@@ -24377,9 +23463,11 @@
         popup.style.boxSizing = "border-box";
         popup.style.display = "flex";
         popup.style.flexDirection = "column";
-        popup.style.boxShadow = "0 4px 20px rgba(0, 0, 0, 0.5)";
+        popup.style.overflow = "hidden";
+        log("createPopup: popup element created with " + THEME_SCOPE_CLASS);
 
         var headerBar = document.createElement("div");
+        headerBar.classList.add("ie-glass-panel-header");
         headerBar.style.position = "relative";
         headerBar.style.display = "grid";
         headerBar.style.gridTemplateColumns = "1fr auto";
@@ -24388,9 +23476,7 @@
         headerBar.style.height = String(PANEL_HEADER_HEIGHT_PX) + "px";
         headerBar.style.boxSizing = "border-box";
         headerBar.style.padding = "0 12px";
-        headerBar.style.borderBottom = "1px solid #444";
-        headerBar.style.cursor = "move";
-        headerBar.style.userSelect = "none";
+        headerBar.style.borderRadius = THEME_RADIUS + "px " + THEME_RADIUS + "px 0 0";
 
         var titleContainer = document.createElement("div");
         titleContainer.style.display = "flex";
@@ -24401,13 +23487,14 @@
         titleEl.textContent = title;
         titleEl.style.fontWeight = "600";
         titleEl.style.textAlign = "left";
+        titleEl.style.color = THEME_TEXT_PRIMARY;
         titleContainer.appendChild(titleEl);
 
         if (description) {
             var descEl = document.createElement("div");
             descEl.textContent = description;
             descEl.style.fontSize = "12px";
-            descEl.style.color = "#aaa";
+            descEl.style.color = THEME_TEXT_MUTED;
             descEl.style.textAlign = "left";
             descEl.style.marginTop = "2px";
             titleContainer.appendChild(descEl);
@@ -24417,8 +23504,9 @@
 
         var closeBtn = document.createElement("button");
         closeBtn.textContent = "✕";
+        closeBtn.setAttribute("aria-label", "Close");
         closeBtn.style.background = "transparent";
-        closeBtn.style.color = "#fff";
+        closeBtn.style.color = THEME_TEXT_PRIMARY;
         closeBtn.style.border = "none";
         closeBtn.style.cursor = "pointer";
         closeBtn.style.fontSize = "18px";
@@ -24431,7 +23519,7 @@
         closeBtn.style.alignItems = "center";
         closeBtn.style.justifyContent = "center";
         closeBtn.addEventListener("mouseenter", function() {
-            closeBtn.style.background = "#333";
+            closeBtn.style.background = THEME_SURFACE_BG_HEAVY;
         });
         closeBtn.addEventListener("mouseleave", function() {
             closeBtn.style.background = "transparent";
@@ -24598,7 +23686,7 @@
         handle.style.right = "6px";
         handle.style.bottom = "6px";
         handle.style.cursor = "se-resize";
-        handle.style.background = "#333";
+        handle.style.background = THEME_SURFACE_BG_HEAVY;
         handle.style.borderRadius = "2px";
         handle.style.display = "block";
 
@@ -24780,30 +23868,25 @@
     }
 
 
-    //==========================
-    // MAKE PANEL FUNCTIONS
-    //==========================
-    // This section contains functions used to create and manage the panel UI.
-    // These functions are used to create the panel UI and manage its state.
-    //==========================
     function makePanel() {
+        log("makePanel: start");
+        injectThemeStylesIfNeeded();
         var prior = document.getElementById(PANEL_ID);
         if (prior) {
+            log("makePanel: panel already exists, returning existing");
             return prior;
         }
         var panel = document.createElement("div");
         panel.id = PANEL_ID;
+        panel.classList.add(THEME_SCOPE_CLASS);
+        panel.classList.add("ie-glass-panel");
+        panel.style.position = "fixed";
         var savedTop = getStoredPos("activityPlanState.panel.top", "20px");
         var savedRight = getStoredPos("activityPlanState.panel.right", "20px");
         var savedSize = getStoredPanelSize();
         panel.style.top = savedTop;
-        panel.style.position = "fixed";
         panel.style.right = savedRight;
-        panel.style.zIndex = "999999";
-        panel.style.background = "#111";
-        panel.style.color = "#fff";
-        panel.style.border = "1px solid #444";
-        panel.style.borderRadius = scale(PANEL_BORDER_RADIUS_PX);
+        panel.style.zIndex = String(THEME_Z_BASE);
         panel.style.padding = scale(PANEL_PADDING_PX);
         panel.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
         panel.style.fontSize = scale(PANEL_FONT_SIZE_PX);
@@ -24816,8 +23899,10 @@
         }
         panel.style.boxSizing = "border-box";
         panel.style.overflow = "hidden";
+        log("makePanel: panel element created with " + THEME_SCOPE_CLASS);
 
         var headerBar = document.createElement("div");
+        headerBar.classList.add("ie-glass-panel-header");
         headerBar.style.position = "relative";
         headerBar.style.display = "grid";
         headerBar.style.gridTemplateColumns = "auto 1fr auto";
@@ -24825,8 +23910,8 @@
         headerBar.style.gap = String(scale(PANEL_HEADER_GAP_PX)) + "px";
         headerBar.style.height = String(scale(PANEL_HEADER_HEIGHT_PX)) + "px";
         headerBar.style.boxSizing = "border-box";
-        headerBar.style.cursor = "grab";
-        headerBar.style.userSelect = "none";
+        headerBar.style.borderRadius = THEME_RADIUS + "px " + THEME_RADIUS + "px 0 0";
+        log("makePanel: header bar created with gradient");
         var leftSpacer = document.createElement("div");
         leftSpacer.style.width = scale(HEADER_LEFT_SPACER_WIDTH_PX);
         var title = document.createElement("div");
@@ -24836,6 +23921,7 @@
         title.style.justifySelf = "center";
         title.style.transform = "translateX(" + scale(HEADER_TITLE_OFFSET_PX) + ")";
         title.style.paddingBottom = scale(8);
+        title.style.color = THEME_TEXT_PRIMARY;
         headerBar.appendChild(title);
         headerBar.appendChild(leftSpacer);
         var rightControls = document.createElement("div");
@@ -24845,7 +23931,7 @@
         var collapseBtn = document.createElement("button");
         collapseBtn.textContent = getPanelCollapsed() ? "Expand" : "Collapse";
         collapseBtn.style.background = "transparent";
-        collapseBtn.style.color = "#fff";
+        collapseBtn.style.color = THEME_TEXT_PRIMARY;
         collapseBtn.style.border = "none";
         collapseBtn.style.cursor = "pointer";
         collapseBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
@@ -24853,15 +23939,16 @@
         closeBtn.textContent = CLOSE_BTN_TEXT;
         closeBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         closeBtn.style.background = "transparent";
-        closeBtn.style.color = "#fff";
+        closeBtn.style.color = THEME_TEXT_PRIMARY;
         closeBtn.style.border = "none";
         closeBtn.style.cursor = "pointer";
 
         var settingsBtn = document.createElement("button");
         settingsBtn.textContent = "⚙";
         settingsBtn.title = "Settings";
+        settingsBtn.setAttribute("aria-label", "Settings");
         settingsBtn.style.background = "transparent";
-        settingsBtn.style.color = "#fff";
+        settingsBtn.style.color = THEME_TEXT_PRIMARY;
         settingsBtn.style.border = "none";
         settingsBtn.style.cursor = "pointer";
         settingsBtn.style.fontSize = scale(16);
@@ -24900,185 +23987,77 @@
         btnRowRef = btnRow;
         var runPlansBtn = document.createElement("button");
         runPlansBtn.textContent = "Lock Activity Plans";
-        runPlansBtn.style.background = "#4a90e2";
-        runPlansBtn.style.color = "#fff";
-        runPlansBtn.style.border = "none";
-        runPlansBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        runPlansBtn.className = "ie-btn-primary";
         runPlansBtn.style.padding = scale(BUTTON_PADDING_PX);
         runPlansBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        runPlansBtn.style.cursor = "pointer";
-        runPlansBtn.style.fontWeight = "500";
-        runPlansBtn.style.transition = "background 0.2s";
-        runPlansBtn.onmouseenter = () => { runPlansBtn.style.background = "#357abd"; };
-        runPlansBtn.onmouseleave = () => { runPlansBtn.style.background = "#4a90e2"; };
         var runStudyBtn = document.createElement("button");
         runStudyBtn.textContent = "Update Study Status";
-        runStudyBtn.style.background = "#4a90e2";
-        runStudyBtn.style.color = "#fff";
-        runStudyBtn.style.border = "none";
-        runStudyBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        runStudyBtn.className = "ie-btn-primary";
         runStudyBtn.style.padding = scale(BUTTON_PADDING_PX);
         runStudyBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        runStudyBtn.style.cursor = "pointer";
-        runStudyBtn.style.fontWeight = "500";
-        runStudyBtn.style.transition = "background 0.2s";
-        runStudyBtn.onmouseenter = () => { runStudyBtn.style.background = "#357abd"; };
-        runStudyBtn.onmouseleave = () => { runStudyBtn.style.background = "#4a90e2"; };
         var runAddCohortBtn = document.createElement("button");
         runAddCohortBtn.textContent = "Add Cohort Subjects";
-        runAddCohortBtn.style.background = "#4a90e2";
-        runAddCohortBtn.style.color = "#fff";
-        runAddCohortBtn.style.border = "none";
-        runAddCohortBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        runAddCohortBtn.className = "ie-btn-primary";
         runAddCohortBtn.style.padding = scale(BUTTON_PADDING_PX);
         runAddCohortBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        runAddCohortBtn.style.cursor = "pointer";
-        runAddCohortBtn.style.fontWeight = "500";
-        runAddCohortBtn.style.transition = "background 0.2s";
-        runAddCohortBtn.onmouseenter = () => { runAddCohortBtn.style.background = "#357abd"; };
-        runAddCohortBtn.onmouseleave = () => { runAddCohortBtn.style.background = "#4a90e2"; };
         var runConsentBtn = document.createElement("button");
         runConsentBtn.textContent = "Run ICF Barcode";
-        runConsentBtn.style.background = "#4a90e2";
-        runConsentBtn.style.color = "#fff";
-        runConsentBtn.style.border = "none";
-        runConsentBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        runConsentBtn.className = "ie-btn-primary";
         runConsentBtn.style.padding = scale(BUTTON_PADDING_PX);
         runConsentBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        runConsentBtn.style.cursor = "pointer";
-        runConsentBtn.style.fontWeight = "500";
-        runConsentBtn.style.transition = "background 0.2s";
-        runConsentBtn.onmouseenter = () => { runConsentBtn.style.background = "#357abd"; };
-        runConsentBtn.onmouseleave = () => { runConsentBtn.style.background = "#4a90e2"; };
         var runAllBtn = document.createElement("button");
         runAllBtn.textContent = "Run Button (1-5)";
-        runAllBtn.style.background = "#5cb85c";
-        runAllBtn.style.color = "#fff";
-        runAllBtn.style.border = "none";
-        runAllBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        runAllBtn.className = "ie-btn-primary";
         runAllBtn.style.padding = scale(BUTTON_PADDING_PX);
         runAllBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        runAllBtn.style.cursor = "pointer";
-        runAllBtn.style.fontWeight = "600";
-        runAllBtn.style.transition = "background 0.2s";
-        runAllBtn.onmouseenter = () => { runAllBtn.style.background = "#449d44"; };
-        runAllBtn.onmouseleave = () => { runAllBtn.style.background = "#5cb85c"; };
         var runNonScrnBtn = document.createElement("button");
         runNonScrnBtn.textContent = "Import Cohort Subject";
-        runNonScrnBtn.style.background = "#5b43c7";
-        runNonScrnBtn.style.color = "#fff";
-        runNonScrnBtn.style.border = "none";
-        runNonScrnBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        runNonScrnBtn.className = "ie-btn-primary";
         runNonScrnBtn.style.padding = scale(BUTTON_PADDING_PX);
         runNonScrnBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        runNonScrnBtn.style.cursor = "pointer";
-        runNonScrnBtn.style.fontWeight = "500";
-        runNonScrnBtn.style.transition = "background 0.2s";
-        runNonScrnBtn.onmouseenter = () => { runNonScrnBtn.style.background = "#4a37a0"; };
-        runNonScrnBtn.onmouseleave = () => { runNonScrnBtn.style.background = "#5b43c7"; };
 
         var addExistingSubjectBtn = document.createElement("button");
         addExistingSubjectBtn.textContent = "Add Existing Subject";
-        addExistingSubjectBtn.style.background = "#5b43c7";
-        addExistingSubjectBtn.style.color = "#fff";
-        addExistingSubjectBtn.style.border = "none";
-        addExistingSubjectBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        addExistingSubjectBtn.className = "ie-btn-primary";
         addExistingSubjectBtn.style.padding = scale(BUTTON_PADDING_PX);
         addExistingSubjectBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        addExistingSubjectBtn.style.cursor = "pointer";
-        addExistingSubjectBtn.style.fontWeight = "500";
-        addExistingSubjectBtn.style.transition = "background 0.2s";
-        addExistingSubjectBtn.onmouseenter = () => { addExistingSubjectBtn.style.background = "#4a37a0"; };
-        addExistingSubjectBtn.onmouseleave = () => { addExistingSubjectBtn.style.background = "#5b43c7"; };
 
         var saBuilderBtn = document.createElement("button");
         saBuilderBtn.textContent = "Scheduled Activities Builder";
-        saBuilderBtn.style.background = "#5b43c7";
-        saBuilderBtn.style.color = "#fff";
-        saBuilderBtn.style.border = "none";
-        saBuilderBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        saBuilderBtn.className = "ie-btn-primary";
         saBuilderBtn.style.padding = scale(BUTTON_PADDING_PX);
         saBuilderBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        saBuilderBtn.style.cursor = "pointer";
-        saBuilderBtn.style.fontWeight = "500";
-        saBuilderBtn.style.transition = "background 0.2s";
-        saBuilderBtn.onmouseenter = () => { saBuilderBtn.style.background = "#4a37a0"; };
-        saBuilderBtn.onmouseleave = () => { saBuilderBtn.style.background = "#5b43c7"; };
 
         var runBarcodeBtn = document.createElement("button");
-        runBarcodeBtn.textContent = "Pull Barcode";
-        runBarcodeBtn.style.background = "#5b43c7";
-        runBarcodeBtn.style.color = "#fff";
-        runBarcodeBtn.style.border = "none";
-        runBarcodeBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        runBarcodeBtn.textContent = "Run Barcode";
+        runBarcodeBtn.className = "ie-btn-primary";
         runBarcodeBtn.style.padding = scale(BUTTON_PADDING_PX);
         runBarcodeBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        runBarcodeBtn.style.cursor = "pointer";
-        runBarcodeBtn.style.fontWeight = "500";
-        runBarcodeBtn.style.transition = "background 0.2s";
-        runBarcodeBtn.onmouseenter = () => { runBarcodeBtn.style.background = "#4a37a0"; };
-        runBarcodeBtn.onmouseleave = () => { runBarcodeBtn.style.background = "#5b43c7"; };
         var runFormOORBtn = document.createElement("button");
         runFormOORBtn.textContent = "Run Form (OOR) Below Range";
-        runFormOORBtn.style.background = "#f0ad4e";
-        runFormOORBtn.style.color = "#fff";
-        runFormOORBtn.style.border = "none";
-        runFormOORBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        runFormOORBtn.className = "ie-btn-primary";
         runFormOORBtn.style.padding = scale(BUTTON_PADDING_PX);
         runFormOORBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        runFormOORBtn.style.cursor = "pointer";
-        runFormOORBtn.style.fontWeight = "500";
-        runFormOORBtn.style.transition = "background 0.2s";
-        runFormOORBtn.onmouseenter = () => { runFormOORBtn.style.background = "#ec971f"; };
-        runFormOORBtn.onmouseleave = () => { runFormOORBtn.style.background = "#f0ad4e"; };
         var runFormOORABtn = document.createElement("button");
         runFormOORABtn.textContent = "Run Form (OOR) Above Range";
-        runFormOORABtn.style.background = "#f0ad4e";
-        runFormOORABtn.style.color = "#fff";
-        runFormOORABtn.style.border = "none";
-        runFormOORABtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        runFormOORABtn.className = "ie-btn-primary";
         runFormOORABtn.style.padding = scale(BUTTON_PADDING_PX);
         runFormOORABtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        runFormOORABtn.style.cursor = "pointer";
-        runFormOORABtn.style.fontWeight = "500";
-        runFormOORABtn.style.transition = "background 0.2s";
-        runFormOORABtn.onmouseenter = () => { runFormOORABtn.style.background = "#ec971f"; };
-        runFormOORABtn.onmouseleave = () => { runFormOORABtn.style.background = "#f0ad4e"; };
         var runFormIRBtn = document.createElement("button");
         runFormIRBtn.textContent = "Run Form (In Range)";
-        runFormIRBtn.style.background = "#f0ad4e";
-        runFormIRBtn.style.color = "#fff";
-        runFormIRBtn.style.border = "none";
-        runFormIRBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        runFormIRBtn.className = "ie-btn-primary";
         runFormIRBtn.style.padding = scale(BUTTON_PADDING_PX);
         runFormIRBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        runFormIRBtn.style.cursor = "pointer";
-        runFormIRBtn.style.fontWeight = "500";
-        runFormIRBtn.style.transition = "background 0.2s";
-        runFormIRBtn.onmouseenter = () => { runFormIRBtn.style.background = "#ec971f"; };
-        runFormIRBtn.onmouseleave = () => { runFormIRBtn.style.background = "#f0ad4e"; };
         var parseMethodBtn = document.createElement("button");
         parseMethodBtn.textContent = "Item Method Forms";
-        parseMethodBtn.style.background = "#4a90e2";
-        parseMethodBtn.style.color = "#fff";
-        parseMethodBtn.style.border = "none";
-        parseMethodBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        parseMethodBtn.className = "ie-btn-primary";
         parseMethodBtn.style.padding = scale(BUTTON_PADDING_PX);
         parseMethodBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        parseMethodBtn.style.cursor = "pointer";
-        parseMethodBtn.onmouseenter = () => { parseMethodBtn.style.background = "#58a1f5"; };
-        parseMethodBtn.onmouseleave = () => { parseMethodBtn.style.background = "#4a90e2"; };
 
         var searchMethodsBtn = document.createElement("button");
         searchMethodsBtn.textContent = "Search Methods";
-        searchMethodsBtn.style.background = "#5b43c7";
-        searchMethodsBtn.style.color = "#fff";
-        searchMethodsBtn.style.border = "none";
-        searchMethodsBtn.style.borderRadius = "6px";
+        searchMethodsBtn.className = "ie-btn-primary";
         searchMethodsBtn.style.padding = "8px";
-        searchMethodsBtn.style.cursor = "pointer";
-        searchMethodsBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
-        searchMethodsBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
         searchMethodsBtn.addEventListener("click", function() {
             log("[SearchMethods] Button clicked");
             openMethodsLibraryModal();
@@ -25086,16 +24065,8 @@
 
         var archiveUpdateFormsBtn = document.createElement("button");
         archiveUpdateFormsBtn.textContent = "Archive/Update Forms";
-        archiveUpdateFormsBtn.style.background = "#38dae6";
-        archiveUpdateFormsBtn.style.color = "#fff";
-        archiveUpdateFormsBtn.style.border = "none";
-        archiveUpdateFormsBtn.style.borderRadius = "6px";
+        archiveUpdateFormsBtn.className = "ie-btn-primary";
         archiveUpdateFormsBtn.style.padding = "8px";
-        archiveUpdateFormsBtn.style.cursor = "pointer";
-        archiveUpdateFormsBtn.style.fontWeight = "500";
-        archiveUpdateFormsBtn.style.transition = "background 0.2s";
-        archiveUpdateFormsBtn.onmouseenter = function() { this.style.background = "#2bb9c4"; };
-        archiveUpdateFormsBtn.onmouseleave = function() { this.style.background = "#38dae6"; };
         archiveUpdateFormsBtn.addEventListener("click", async function () {
             ARCHIVE_UPDATE_FORMS_CANCELLED = false;
             log("Archive/Update Forms: button clicked");
@@ -25104,16 +24075,8 @@
 
         var copyFormsBtn = document.createElement("button");
         copyFormsBtn.textContent = "Copy Activity Forms";
-        copyFormsBtn.style.background = "#38dae6";
-        copyFormsBtn.style.color = "#fff";
-        copyFormsBtn.style.border = "none";
-        copyFormsBtn.style.borderRadius = "6px";
+        copyFormsBtn.className = "ie-btn-primary";
         copyFormsBtn.style.padding = "8px";
-        copyFormsBtn.style.cursor = "pointer";
-        copyFormsBtn.style.fontWeight = "500";
-        copyFormsBtn.style.transition = "background 0.2s";
-        copyFormsBtn.onmouseenter = function() { this.style.background = "#2bb9c4"; };
-        copyFormsBtn.onmouseleave = function() { this.style.background = "#38dae6"; };
         copyFormsBtn.addEventListener("click", async function () {
             COPY_FORMS_CANCELLED = false;
             log("Copy Forms: button clicked");
@@ -25123,150 +24086,57 @@
 
         var pauseBtn = document.createElement("button");
         pauseBtn.textContent = isPaused() ? "Resume" : "Pause";
-        pauseBtn.style.background = "#6c757d";
-        pauseBtn.style.color = "#fff";
-        pauseBtn.style.border = "none";
-        pauseBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        pauseBtn.className = "ie-btn-primary";
         pauseBtn.style.padding = scale(BUTTON_PADDING_PX);
         pauseBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        pauseBtn.style.cursor = "pointer";
-        pauseBtn.style.fontWeight = "500";
-        pauseBtn.style.transition = "background 0.2s";
-        pauseBtn.onmouseenter = () => { pauseBtn.style.background = "#5a6268"; };
-        pauseBtn.onmouseleave = () => { pauseBtn.style.background = "#6c757d"; };
-
         var clearLogsBtn = document.createElement("button");
         clearLogsBtn.textContent = "Clear Logs";
-        clearLogsBtn.style.background = "#6c757d";
-        clearLogsBtn.style.color = "#fff";
-        clearLogsBtn.style.border = "none";
-        clearLogsBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        clearLogsBtn.className = "ie-btn-primary";
         clearLogsBtn.style.padding = scale(BUTTON_PADDING_PX);
         clearLogsBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        clearLogsBtn.style.cursor = "pointer";
-        clearLogsBtn.style.fontWeight = "500";
-        clearLogsBtn.style.transition = "background 0.2s";
-        clearLogsBtn.onmouseenter = () => { clearLogsBtn.style.background = "#5a6268"; };
-        clearLogsBtn.onmouseleave = () => { clearLogsBtn.style.background = "#6c757d"; };
 
         var toggleLogsBtn = document.createElement("button");
         var logVisible = getLogVisible();
         toggleLogsBtn.textContent = logVisible ? "Hide Logs" : "Show Logs";
-        toggleLogsBtn.style.background = "#6c757d";
-        toggleLogsBtn.style.color = "#fff";
-        toggleLogsBtn.style.border = "none";
-        toggleLogsBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        toggleLogsBtn.className = "ie-btn-primary";
         toggleLogsBtn.style.padding = scale(BUTTON_PADDING_PX);
         toggleLogsBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        toggleLogsBtn.style.cursor = "pointer";
-        toggleLogsBtn.style.fontWeight = "500";
-        toggleLogsBtn.style.transition = "background 0.2s";
-        toggleLogsBtn.onmouseenter = () => { toggleLogsBtn.style.background = "#5a6268"; };
-        toggleLogsBtn.onmouseleave = () => { toggleLogsBtn.style.background = "#6c757d"; };
 
         var runLockSamplePathsBtn = document.createElement("button");
         runLockSamplePathsBtn.textContent = "Lock Sample Paths";
-        runLockSamplePathsBtn.style.background = "#4a90e2";
-        runLockSamplePathsBtn.style.color = "#fff";
-        runLockSamplePathsBtn.style.border = "none";
-        runLockSamplePathsBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        runLockSamplePathsBtn.className = "ie-btn-primary";
         runLockSamplePathsBtn.style.padding = scale(BUTTON_PADDING_PX);
         runLockSamplePathsBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        runLockSamplePathsBtn.style.cursor = "pointer";
-        runLockSamplePathsBtn.style.fontWeight = "500";
-        runLockSamplePathsBtn.style.transition = "background 0.2s";
-        runLockSamplePathsBtn.onmouseenter = () => { runLockSamplePathsBtn.style.background = "#357abd"; };
-        runLockSamplePathsBtn.onmouseleave = () => { runLockSamplePathsBtn.style.background = "#4a90e2"; };
 
         var importEligBtn = document.createElement("button");
         importEligBtn.textContent = "Import I/E";
-        importEligBtn.style.background = "#38dae6";
-        importEligBtn.style.color = "#fff";
-        importEligBtn.style.border = "none";
-        importEligBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        importEligBtn.className = "ie-btn-primary";
         importEligBtn.style.padding = scale(BUTTON_PADDING_PX);
         importEligBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        importEligBtn.style.cursor = "pointer";
-        importEligBtn.style.fontWeight = "500";
-        importEligBtn.style.transition = "background 0.2s";
-        importEligBtn.onmouseenter = () => { importEligBtn.style.background = "#2bb9c4"; };
-        importEligBtn.onmouseleave = () => { importEligBtn.style.background = "#38dae6"; };
 
         var findFormBtn = document.createElement("button");
         findFormBtn.textContent = "Find Form";
-        findFormBtn.style.background = "#4a90e2";
-        findFormBtn.style.color = "#fff";
-        findFormBtn.style.border = "none";
-        findFormBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        findFormBtn.className = "ie-btn-primary";
         findFormBtn.style.padding = scale(BUTTON_PADDING_PX);
         findFormBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        findFormBtn.style.cursor = "pointer";
-        findFormBtn.onmouseenter = () => { findFormBtn.style.background = "#58a1f5"; };
-        findFormBtn.onmouseleave = () => { findFormBtn.style.background = "#4a90e2"; };
-
-        var pullLabBarcodeBtn = document.createElement("button");
-        pullLabBarcodeBtn.textContent = BARCODE_LABELS.featureButton;
-        pullLabBarcodeBtn.style.background = "#5b43c7";
-        pullLabBarcodeBtn.style.color = "#fff";
-        pullLabBarcodeBtn.style.border = "none";
-        pullLabBarcodeBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
-        pullLabBarcodeBtn.style.padding = scale(BUTTON_PADDING_PX);
-        pullLabBarcodeBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        pullLabBarcodeBtn.style.cursor = "pointer";
-        pullLabBarcodeBtn.style.fontWeight = "500";
-        pullLabBarcodeBtn.style.transition = "background 0.2s";
-        pullLabBarcodeBtn.setAttribute("aria-label", BARCODE_LABELS.featureButton);
-        pullLabBarcodeBtn.onmouseenter = function () {
-            this.style.background = "#4a37a0";
-        };
-        pullLabBarcodeBtn.onmouseleave = function () {
-            this.style.background = "#5b43c7";
-        };
-        pullLabBarcodeBtn.addEventListener("click", function () {
-            log("[PullLabBarcode] Button clicked");
-            pullLabBarcodeInit();
-        });
-        PULL_LAB_BARCODE_BUTTON_REF = pullLabBarcodeBtn;
 
         var findStudyEventsBtn = document.createElement("button");
         findStudyEventsBtn.textContent = "Find Study Events";
-        findStudyEventsBtn.style.background = "#4a90e2";
-        findStudyEventsBtn.style.color = "#fff";
-        findStudyEventsBtn.style.border = "none";
-        findStudyEventsBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        findStudyEventsBtn.className = "ie-btn-primary";
         findStudyEventsBtn.style.padding = scale(BUTTON_PADDING_PX);
         findStudyEventsBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        findStudyEventsBtn.style.cursor = "pointer";
-        findStudyEventsBtn.onmouseenter = () => { findStudyEventsBtn.style.background = "#58a1f5"; };
-        findStudyEventsBtn.onmouseleave = () => { findStudyEventsBtn.style.background = "#4a90e2"; };
 
         var clearMappingBtn = document.createElement("button");
         clearMappingBtn.textContent = "Clear Mapping";
-        clearMappingBtn.style.background = "#38dae6";
-        clearMappingBtn.style.color = "#fff";
-        clearMappingBtn.style.border = "none";
-        clearMappingBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        clearMappingBtn.className = "ie-btn-primary";
         clearMappingBtn.style.padding = scale(BUTTON_PADDING_PX);
         clearMappingBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        clearMappingBtn.style.cursor = "pointer";
-        clearMappingBtn.style.fontWeight = "500";
-        clearMappingBtn.style.transition = "background 0.2s";
-        clearMappingBtn.onmouseenter = () => { clearMappingBtn.style.background = "#2bb9c4"; };
-        clearMappingBtn.onmouseleave = () => { clearMappingBtn.style.background = "#38dae6"; };
 
         var collectAllBtn = document.createElement("button");
         collectAllBtn.textContent = "Collect All";
-        collectAllBtn.style.background = "#f0ad4e";
-        collectAllBtn.style.color = "#fff";
-        collectAllBtn.style.border = "none";
-        collectAllBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        collectAllBtn.className = "ie-btn-primary";
         collectAllBtn.style.padding = scale(BUTTON_PADDING_PX);
         collectAllBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        collectAllBtn.style.cursor = "pointer";
-        collectAllBtn.style.fontWeight = "500";
-        collectAllBtn.style.transition = "background 0.2s";
-        collectAllBtn.onmouseenter = () => { collectAllBtn.style.background = "#ec971f"; };
-        collectAllBtn.onmouseleave = () => { collectAllBtn.style.background = "#f0ad4e"; };
 
         var panelButtons = [
             { el: runPlansBtn, label: "Lock Activity Plans" },
@@ -25276,8 +24146,7 @@
             { el: runConsentBtn, label: "Run ICF Consent" },
             { el: runAllBtn, label: "Run Button (1-5)" },
             { el: runNonScrnBtn, label: "Import Cohort Subjects" },
-            { el: runBarcodeBtn, label: "Pull Barcode" },
-            { el: pullLabBarcodeBtn, label: "Pull Lab Barcode" },
+            { el: runBarcodeBtn, label: "Run Barcode" },
             { el: addExistingSubjectBtn, label: "Add Existing Subject" },
             { el: searchMethodsBtn, label: "Search Methods" },
             { el: saBuilderBtn, label: "Scheduled Activities Builder" },
@@ -25317,21 +24186,22 @@
         bodyContainer.appendChild(btnRow);
         var status = document.createElement("div");
         status.style.marginTop = scale(STATUS_MARGIN_TOP_PX);
-        status.style.background = "#1a1a1a";
-        status.style.border = "1px solid #333";
+        status.style.background = THEME_SURFACE_BG;
+        status.style.border = "1px solid " + THEME_SURFACE_INNER_BORDER;
         status.style.borderRadius = scale(STATUS_BORDER_RADIUS_PX);
         status.style.padding = scale(STATUS_PADDING_PX);
         status.style.fontSize = scale(STATUS_FONT_SIZE_PX);
         status.style.whiteSpace = "pre-wrap";
+        status.style.color = THEME_TEXT_PRIMARY;
         status.textContent = "Ready";
         bodyContainer.appendChild(status);
+        log("makePanel: status area created with theme");
 
 
-        // UI Scale Control
         var scaleControl = document.createElement("div");
         scaleControl.style.marginTop = scale(STATUS_MARGIN_TOP_PX);
-        scaleControl.style.background = "#1a1a1a";
-        scaleControl.style.border = "1px solid #333";
+        scaleControl.style.background = THEME_SURFACE_BG;
+        scaleControl.style.border = "1px solid " + THEME_SURFACE_INNER_BORDER;
         scaleControl.style.borderRadius = scale(STATUS_BORDER_RADIUS_PX);
         scaleControl.style.padding = scale(STATUS_PADDING_PX);
         scaleControl.style.fontSize = scale(STATUS_FONT_SIZE_PX);
@@ -25339,7 +24209,7 @@
         var scaleLabel = document.createElement("div");
         scaleLabel.textContent = "UI Scale: " + Math.round(UI_SCALE * 100) + "%";
         scaleLabel.style.marginBottom = "4px";
-        scaleLabel.style.color = "#fff";
+        scaleLabel.style.color = THEME_TEXT_PRIMARY;
 
         var scaleSlider = document.createElement("input");
         scaleSlider.type = "range";
@@ -25369,15 +24239,16 @@
         logBox.style.marginTop = scale(LOG_MARGIN_TOP_PX);
         logBox.style.height = scale(LOG_HEIGHT_PX);
         logBox.style.overflowY = "auto";
-        logBox.style.background = "#141414";
-        logBox.style.border = "1px solid #333";
+        logBox.style.background = THEME_SURFACE_BG;
+        logBox.style.border = "1px solid " + THEME_SURFACE_INNER_BORDER;
         logBox.style.borderRadius = scale(LOG_BORDER_RADIUS_PX);
         logBox.style.padding = scale(LOG_PADDING_PX);
         logBox.style.fontSize = scale(LOG_FONT_SIZE_PX);
-        logBox.style.color = "#00000";
+        logBox.style.color = THEME_TEXT_MUTED;
         logBox.style.whiteSpace = "pre-wrap";
         logBox.style.wordBreak = "break-word";
         logBox.style.overflowWrap = "anywhere";
+        log("makePanel: log box created with theme");
         if (!logVisible) {
             logBox.style.display = "none";
         }
@@ -25388,7 +24259,6 @@
             log("Run Add non-SCRN Subject clicked");
             localStorage.setItem(STORAGE_RUN_MODE, "nonscrn");
 
-            // Create progress popup
             var popupContainer = document.createElement("div");
             popupContainer.style.display = "flex";
             popupContainer.style.flexDirection = "column";
@@ -25399,7 +24269,7 @@
             statusDiv.id = "importCohortStatus";
             statusDiv.style.textAlign = "center";
             statusDiv.style.fontSize = "18px";
-            statusDiv.style.color = "#fff";
+            statusDiv.style.color = THEME_TEXT_PRIMARY;
             statusDiv.style.fontWeight = "500";
             statusDiv.textContent = "Running Import Cohort Subject";
 
@@ -25407,7 +24277,7 @@
             loadingAnimation.id = "importCohortLoading";
             loadingAnimation.style.textAlign = "center";
             loadingAnimation.style.fontSize = "14px";
-            loadingAnimation.style.color = "#9df";
+            loadingAnimation.style.color = THEME_ACCENT_HOVER;
             loadingAnimation.textContent = "Running.";
 
             popupContainer.appendChild(statusDiv);
@@ -25471,7 +24341,6 @@
                 log("Cleared cohortAdd.editDoneMap for new run");
             } catch (e) {}
 
-            // Create progress popup
             var popupContainer = document.createElement("div");
             popupContainer.style.display = "flex";
             popupContainer.style.flexDirection = "column";
@@ -25482,7 +24351,7 @@
             statusDiv.id = "addCohortStatus";
             statusDiv.style.textAlign = "center";
             statusDiv.style.fontSize = "18px";
-            statusDiv.style.color = "#fff";
+            statusDiv.style.color = THEME_TEXT_PRIMARY;
             statusDiv.style.fontWeight = "500";
             statusDiv.textContent = "Running Add Cohort Subjects";
 
@@ -25490,7 +24359,7 @@
             loadingAnimation.id = "addCohortLoading";
             loadingAnimation.style.textAlign = "center";
             loadingAnimation.style.fontSize = "14px";
-            loadingAnimation.style.color = "#9df";
+            loadingAnimation.style.color = THEME_ACCENT_HOVER;
             loadingAnimation.textContent = "Running.";
 
             popupContainer.appendChild(statusDiv);
@@ -25597,7 +24466,7 @@
             statusDiv.id = "icfBarcodeStatus";
             statusDiv.style.textAlign = "center";
             statusDiv.style.fontSize = "18px";
-            statusDiv.style.color = "#fff";
+            statusDiv.style.color = THEME_TEXT_PRIMARY;
             statusDiv.style.fontWeight = "500";
             statusDiv.textContent = "Running ICF Barcode";
 
@@ -25605,7 +24474,7 @@
             loadingAnimation.id = "icfBarcodeLoading";
             loadingAnimation.style.textAlign = "center";
             loadingAnimation.style.fontSize = "14px";
-            loadingAnimation.style.color = "#9df";
+            loadingAnimation.style.color = THEME_ACCENT_HOVER;
             loadingAnimation.textContent = "Running.";
 
             popupContainer.appendChild(statusDiv);
@@ -25666,7 +24535,6 @@
             status.textContent = "Starting ALL: Activity Plans…";
             log("Run ALL clicked");
 
-            // Create progress popup
             var popupContainer = document.createElement("div");
             popupContainer.style.display = "flex";
             popupContainer.style.flexDirection = "column";
@@ -25677,7 +24545,7 @@
             statusDiv.id = "runAllStatus";
             statusDiv.style.textAlign = "center";
             statusDiv.style.fontSize = "18px";
-            statusDiv.style.color = "#fff";
+            statusDiv.style.color = THEME_TEXT_PRIMARY;
             statusDiv.style.fontWeight = "500";
             statusDiv.textContent = "Running Lock Activity Plans";
 
@@ -25685,7 +24553,7 @@
             loadingAnimation.id = "runAllLoading";
             loadingAnimation.style.textAlign = "center";
             loadingAnimation.style.fontSize = "14px";
-            loadingAnimation.style.color = "#9df";
+            loadingAnimation.style.color = THEME_ACCENT_HOVER;
             loadingAnimation.textContent = "Running.";
 
             popupContainer.appendChild(statusDiv);
@@ -25760,7 +24628,7 @@
                         var runAllStatusDiv = RUN_ALL_POPUP_REF.element.querySelector("#runAllStatus");
                         if (runAllStatusDiv) {
                             runAllStatusDiv.textContent = "⏸ Paused";
-                            runAllStatusDiv.style.color = "#ffa500";
+                            runAllStatusDiv.style.color = THEME_WARNING;
                         }
                         var runAllLoading = RUN_ALL_POPUP_REF.element.querySelector("#runAllLoading");
                         if (runAllLoading) {
@@ -25774,7 +24642,7 @@
                         var lockStatusDiv = LOCK_SAMPLE_PATHS_POPUP_REF.element.querySelector("#lockSamplePathsStatus");
                         if (lockStatusDiv) {
                             lockStatusDiv.textContent = "⏸ Paused";
-                            lockStatusDiv.style.color = "#ffa500";
+                            lockStatusDiv.style.color = THEME_WARNING;
                         }
                         var lockLoading = LOCK_SAMPLE_PATHS_POPUP_REF.element.querySelector("#lockSamplePathsLoading");
                         if (lockLoading) {
@@ -25788,7 +24656,7 @@
                         var eligStatusDiv = IMPORT_ELIG_POPUP_REF.element.querySelector("#importEligStatus");
                         if (eligStatusDiv) {
                             eligStatusDiv.textContent = "⏸ Paused";
-                            eligStatusDiv.style.color = "#ffa500";
+                            eligStatusDiv.style.color = THEME_WARNING;
                         }
                         var eligLoading = IMPORT_ELIG_POPUP_REF.element.querySelector("#importEligLoading");
                         if (eligLoading) {
@@ -25802,7 +24670,7 @@
                         var cohortStatusDiv = IMPORT_COHORT_POPUP_REF.element.querySelector("#importCohortStatus");
                         if (cohortStatusDiv) {
                             cohortStatusDiv.textContent = "⏸ Paused";
-                            cohortStatusDiv.style.color = "#ffa500";
+                            cohortStatusDiv.style.color = THEME_WARNING;
                         }
                         var cohortLoading = IMPORT_COHORT_POPUP_REF.element.querySelector("#importCohortLoading");
                         if (cohortLoading) {
@@ -25816,7 +24684,7 @@
                         var collectStatusDiv = COLLECT_ALL_POPUP_REF.element.querySelector("#collectAllStatus");
                         if (collectStatusDiv) {
                             collectStatusDiv.textContent = "⏸ Paused";
-                            collectStatusDiv.style.color = "#ffa500";
+                            collectStatusDiv.style.color = THEME_WARNING;
                         }
                         var collectLoading = COLLECT_ALL_POPUP_REF.element.querySelector("#collectAllLoading");
                         if (collectLoading) {
@@ -25830,7 +24698,7 @@
                         var clearStatusDiv = CLEAR_MAPPING_POPUP_REF.element.querySelector("#clearMappingStatus");
                         if (clearStatusDiv) {
                             clearStatusDiv.textContent = "⏸ Paused";
-                            clearStatusDiv.style.color = "#ffa500";
+                            clearStatusDiv.style.color = THEME_WARNING;
                         }
                         var clearLoading = CLEAR_MAPPING_POPUP_REF.element.querySelector("#clearMappingLoading");
                         if (clearLoading) {
@@ -25955,7 +24823,7 @@
             var statusDiv = document.createElement("div");
             statusDiv.style.textAlign = "center";
             statusDiv.style.fontSize = "18px";
-            statusDiv.style.color = "#fff";
+            statusDiv.style.color = THEME_TEXT_PRIMARY;
             statusDiv.style.fontWeight = "500";
             statusDiv.textContent = "Running Clear Mapping";
 
@@ -25963,7 +24831,7 @@
             loadingAnimation.id = "clearMappingLoading";
             loadingAnimation.style.textAlign = "center";
             loadingAnimation.style.fontSize = "14px";
-            loadingAnimation.style.color = "#9df";
+            loadingAnimation.style.color = THEME_ACCENT;
             loadingAnimation.textContent = "Running.";
 
             popupContainer.appendChild(statusDiv);
@@ -26147,6 +25015,7 @@
 
     // Initialize the panel, register APS_AddButton, and route to the appropriate processing function.
     function init() {
+        injectThemeStylesIfNeeded();
         makePanel();
         window.APS_AddButton = function (label, handler) {
             addButtonToPanel(label, handler);
@@ -26350,7 +25219,7 @@
                 runningBox.id = "importEligRunningText";
                 runningBox.style.textAlign = "center";
                 runningBox.style.fontSize = "16px";
-                runningBox.style.color = "#fff";
+                runningBox.style.color = THEME_TEXT_PRIMARY;
                 runningBox.style.fontWeight = "500";
                 runningBox.textContent = "Running";
                 runningContainer.appendChild(runningBox);
@@ -26389,17 +25258,17 @@
                 var completedTitle = document.createElement("div");
                 completedTitle.textContent = "Completed:";
                 completedTitle.style.fontWeight = "600";
-                completedTitle.style.color = "#5cb85c";
+                completedTitle.style.color = THEME_SUCCESS;
                 completedTitle.style.fontSize = "13px";
                 completedListContainer.appendChild(completedTitle);
                 var completedList = document.createElement("div");
                 completedList.id = "importEligCompletedList";
                 completedList.style.fontSize = "12px";
-                completedList.style.color = "#9f9";
+                completedList.style.color = THEME_SUCCESS;
                 completedList.style.maxHeight = "100px";
                 completedList.style.overflowY = "auto";
                 completedList.style.padding = "4px";
-                completedList.style.background = "#1a1a1a";
+                completedList.style.background = THEME_SURFACE_BG_HEAVY;
                 completedList.style.borderRadius = "4px";
                 completedListContainer.appendChild(completedList);
                 listsContainer.appendChild(completedListContainer);
@@ -26411,17 +25280,17 @@
                 var failedTitle = document.createElement("div");
                 failedTitle.textContent = "Failed to Collect:";
                 failedTitle.style.fontWeight = "600";
-                failedTitle.style.color = "#d9534f";
+                failedTitle.style.color = THEME_DANGER;
                 failedTitle.style.fontSize = "13px";
                 failedListContainer.appendChild(failedTitle);
                 var failedList = document.createElement("div");
                 failedList.id = "importEligFailedList";
                 failedList.style.fontSize = "12px";
-                failedList.style.color = "#f99";
+                failedList.style.color = THEME_DANGER;
                 failedList.style.maxHeight = "100px";
                 failedList.style.overflowY = "auto";
                 failedList.style.padding = "4px";
-                failedList.style.background = "#1a1a1a";
+                failedList.style.background = THEME_SURFACE_BG_HEAVY;
                 failedList.style.borderRadius = "4px";
                 failedListContainer.appendChild(failedList);
                 listsContainer.appendChild(failedListContainer);
@@ -26433,17 +25302,17 @@
                 var excludedTitle = document.createElement("div");
                 excludedTitle.textContent = "Form Exclusion:";
                 excludedTitle.style.fontWeight = "600";
-                excludedTitle.style.color = "#f0ad4e";
+                excludedTitle.style.color = THEME_WARNING;
                 excludedTitle.style.fontSize = "13px";
                 excludedListContainer.appendChild(excludedTitle);
                 var excludedList = document.createElement("div");
                 excludedList.id = "importEligExcludedList";
                 excludedList.style.fontSize = "12px";
-                excludedList.style.color = "#ff9";
+                excludedList.style.color = THEME_WARNING;
                 excludedList.style.maxHeight = "100px";
                 excludedList.style.overflowY = "auto";
                 excludedList.style.padding = "4px";
-                excludedList.style.background = "#1a1a1a";
+                excludedList.style.background = THEME_SURFACE_BG_HEAVY;
                 excludedList.style.borderRadius = "4px";
                 excludedListContainer.appendChild(excludedList);
                 listsContainer.appendChild(excludedListContainer);
