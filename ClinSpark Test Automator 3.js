@@ -109,6 +109,7 @@
     const IMPORT_IE_SHORT_DELAY_MIN = 150;
     const IMPORT_IE_SHORT_DELAY_MAX = 400;
     var IMPORT_IE_CANCELED = false;
+    var IMPORT_IE_COLLECTION_STOPPED = false;
     var RIGHT_PANEL_MODE = { HIERARCHY: "hierarchy", CODE: "code" };
     var CODE_SORT_TOGGLE_BUTTON_ID = "ieCodeSortToggle";
     var RIGHT_PANEL_BODY_ID = "ieRightPanelBody";
@@ -13416,6 +13417,16 @@
 
 
 
+    function formatElapsedTime(ms) {
+        var totalSec = Math.floor(ms / 1000);
+        var min = Math.floor(totalSec / 60);
+        var sec = totalSec % 60;
+        if (min > 0) {
+            return String(min) + "m " + String(sec) + "s";
+        }
+        return String(sec) + "s";
+    }
+
     function importIERandomDelay() {
         var range = IMPORT_IE_SHORT_DELAY_MAX - IMPORT_IE_SHORT_DELAY_MIN;
         var val = IMPORT_IE_SHORT_DELAY_MIN + Math.floor(Math.random() * range);
@@ -14182,6 +14193,10 @@
         log("ImportIE: collectMappingsFromModal plan option count=" + String(planOpts.length));
         var pi = 0;
         while (pi < planOpts.length) {
+            if (IMPORT_IE_COLLECTION_STOPPED) {
+                log("ImportIE: collectMappingsFromModal stopped early by user at plan " + String(pi));
+                break;
+            }
             var pVal = (planOpts[pi].value + "").trim();
             var pTxt = (planOpts[pi].textContent + "").trim().replace(/\s+/g, " ");
             if (pVal.length === 0) {
@@ -14219,6 +14234,10 @@
             log("ImportIE: collectMappingsFromModal SA option count=" + String(schedOpts.length) + " for plan='" + String(pTxt) + "'");
             var si = 0;
             while (si < schedOpts.length) {
+                if (IMPORT_IE_COLLECTION_STOPPED) {
+                    log("ImportIE: collectMappingsFromModal stopped early by user at SA " + String(si) + " of plan='" + String(pTxt) + "'");
+                    break;
+                }
                 var sVal = (schedOpts[si].value + "").trim();
                 var sTxt = (schedOpts[si].textContent + "").trim().replace(/\s+/g, " ");
                 if (sVal.length === 0) {
@@ -14383,8 +14402,8 @@
         return plans;
     }
 
-    function buildImportIEReviewPanel(existingCodeSet, mappings, eligibilityItemPool, onConfirm) {
-        log("ImportIE: buildImportIEReviewPanel start existingCodes=" + String(existingCodeSet.size) + " mappings=" + String(mappings.length) + " pool=" + String(eligibilityItemPool.length));
+    function buildImportIEReviewPanel(existingCodeSet, mappings, eligibilityItemPool, collectionDurationMs, onConfirm) {
+        log("ImportIE: buildImportIEReviewPanel start existingCodes=" + String(existingCodeSet.size) + " mappings=" + String(mappings.length) + " pool=" + String(eligibilityItemPool.length) + " collectionTime=" + formatElapsedTime(collectionDurationMs));
         var hierarchy = buildHierarchy(mappings);
         var existingArr = Array.from(existingCodeSet);
         existingArr.sort();
@@ -14518,10 +14537,38 @@
         headerBar.style.flexShrink = "0";
         headerBar.style.background = "linear-gradient(180deg, #1a1a1a, #111)";
 
+        var headerLeft = document.createElement("div");
+        headerLeft.style.display = "flex";
+        headerLeft.style.alignItems = "center";
+        headerLeft.style.gap = "12px";
+
         var headerTitle = document.createElement("div");
         headerTitle.textContent = "Import I/E - Review Mappings";
         headerTitle.style.fontWeight = "600";
         headerTitle.style.fontSize = "16px";
+        headerLeft.appendChild(headerTitle);
+
+        var collectionTimeBadge = document.createElement("span");
+        collectionTimeBadge.textContent = "Collection: " + formatElapsedTime(collectionDurationMs);
+        collectionTimeBadge.style.fontSize = "11px";
+        collectionTimeBadge.style.color = "#5bc0de";
+        collectionTimeBadge.style.background = "#1a2a3a";
+        collectionTimeBadge.style.padding = "3px 8px";
+        collectionTimeBadge.style.borderRadius = "3px";
+        collectionTimeBadge.style.fontWeight = "500";
+        headerLeft.appendChild(collectionTimeBadge);
+
+        if (IMPORT_IE_COLLECTION_STOPPED) {
+            var stoppedBadge = document.createElement("span");
+            stoppedBadge.textContent = "Stopped Early";
+            stoppedBadge.style.fontSize = "11px";
+            stoppedBadge.style.color = "#e67e22";
+            stoppedBadge.style.background = "#3a2a1a";
+            stoppedBadge.style.padding = "3px 8px";
+            stoppedBadge.style.borderRadius = "3px";
+            stoppedBadge.style.fontWeight = "500";
+            headerLeft.appendChild(stoppedBadge);
+        }
 
         var headerCloseBtn = document.createElement("button");
         headerCloseBtn.textContent = "\u2715";
@@ -14544,7 +14591,7 @@
             overlay.remove();
         });
 
-        headerBar.appendChild(headerTitle);
+        headerBar.appendChild(headerLeft);
         headerBar.appendChild(headerCloseBtn);
         container.appendChild(headerBar);
 
@@ -16362,6 +16409,19 @@
         summaryRow.appendChild(statusEl);
         container.appendChild(summaryRow);
 
+        var timerRow = document.createElement("div");
+        timerRow.style.textAlign = "center";
+        timerRow.style.fontSize = "12px";
+        timerRow.style.color = "#888";
+        timerRow.style.padding = "2px 0";
+        timerRow.textContent = "Execution Time: 0s";
+        container.appendChild(timerRow);
+
+        var execStartTime = Date.now();
+        var execTimerInterval = setInterval(function () {
+            timerRow.textContent = "Execution Time: " + formatElapsedTime(Date.now() - execStartTime);
+        }, 500);
+
         var listEl = document.createElement("div");
         listEl.style.maxHeight = "400px";
         listEl.style.overflowY = "auto";
@@ -16439,8 +16499,20 @@
                 failEl.textContent = "Failed: " + String(failures);
             },
             setCompleted: function () {
+                clearInterval(execTimerInterval);
+                var finalTime = formatElapsedTime(Date.now() - execStartTime);
+                timerRow.textContent = "Execution Time: " + finalTime;
+                timerRow.style.color = "#5cb85c";
                 statusEl.textContent = "Completed";
                 statusEl.style.color = "#5cb85c";
+            },
+            stopTimer: function () {
+                clearInterval(execTimerInterval);
+                var finalTime = formatElapsedTime(Date.now() - execStartTime);
+                timerRow.textContent = "Execution Time: " + finalTime;
+            },
+            getExecutionTime: function () {
+                return Date.now() - execStartTime;
             }
         };
     }
@@ -16497,6 +16569,7 @@
                 }
                 if (IMPORT_IE_CANCELED) {
                     log("ImportIE: Operation cancelled by user");
+                    progress.stopTimer();
                     progress.statusEl.textContent = "Cancelled";
                     progress.statusEl.style.color = "#d9534f";
                     return;
@@ -16598,6 +16671,7 @@
 
             if (IMPORT_IE_CANCELED) {
                 log("ImportIE: Operation cancelled by user after sleep");
+                progress.stopTimer();
                 progress.statusEl.textContent = "Cancelled";
                 progress.statusEl.style.color = "#d9534f";
                 return;
@@ -16674,6 +16748,7 @@
             await sleep(importIERandomDelay() + 300);
             if (IMPORT_IE_CANCELED) {
                 log("ImportIE: Operation cancelled by user after sleep");
+                progress.stopTimer();
                 progress.statusEl.textContent = "Cancelled";
                 progress.statusEl.style.color = "#d9534f";
                 return;
@@ -16741,6 +16816,7 @@
             }
             if (IMPORT_IE_CANCELED) {
                 log("ImportIE: Operation cancelled by user after sleep");
+                progress.stopTimer();
                 progress.statusEl.textContent = "Cancelled";
                 progress.statusEl.style.color = "#d9534f";
                 return;
@@ -16828,45 +16904,100 @@
         }
 
         log("ImportIE: page validated, starting collection flow");
+        IMPORT_IE_COLLECTION_STOPPED = false;
 
-        var loadingEl = document.createElement("div");
-        loadingEl.style.textAlign = "center";
-        loadingEl.style.fontSize = "15px";
-        loadingEl.style.color = "#fff";
-        loadingEl.style.padding = "20px";
-        loadingEl.textContent = "Collecting existing table codes and mappings...";
+        var loadingContainer = document.createElement("div");
+        loadingContainer.style.display = "flex";
+        loadingContainer.style.flexDirection = "column";
+        loadingContainer.style.gap = "10px";
+        loadingContainer.style.padding = "16px 20px";
+        loadingContainer.style.color = "#fff";
+        loadingContainer.style.fontSize = "13px";
+
+        var dotsRow = document.createElement("div");
+        dotsRow.style.textAlign = "center";
+        dotsRow.style.fontSize = "15px";
+        dotsRow.style.fontWeight = "600";
+        dotsRow.style.color = "#5bc0de";
+        dotsRow.textContent = "Please wait. Collecting Data...";
+        loadingContainer.appendChild(dotsRow);
+
+        var stepRow = document.createElement("div");
+        stepRow.style.textAlign = "center";
+        stepRow.style.fontSize = "13px";
+        stepRow.style.color = "#ccc";
+        stepRow.style.minHeight = "18px";
+        stepRow.textContent = "Initializing...";
+        loadingContainer.appendChild(stepRow);
+
+        var timerRow = document.createElement("div");
+        timerRow.style.textAlign = "center";
+        timerRow.style.fontSize = "12px";
+        timerRow.style.color = "#888";
+        timerRow.textContent = "Elapsed: 0s";
+        loadingContainer.appendChild(timerRow);
+
+        var stopBtnRow = document.createElement("div");
+        stopBtnRow.style.textAlign = "center";
+        stopBtnRow.style.marginTop = "4px";
+
+        var stopBtn = document.createElement("button");
+        stopBtn.textContent = "Stop and Continue";
+        stopBtn.style.padding = "6px 18px";
+        stopBtn.style.fontSize = "12px";
+        stopBtn.style.fontWeight = "600";
+        stopBtn.style.background = "#e67e22";
+        stopBtn.style.color = "#fff";
+        stopBtn.style.border = "none";
+        stopBtn.style.borderRadius = "4px";
+        stopBtn.style.cursor = "pointer";
+        stopBtn.style.transition = "background 0.15s";
+        stopBtn.addEventListener("mouseenter", function () { stopBtn.style.background = "#d35400"; });
+        stopBtn.addEventListener("mouseleave", function () { stopBtn.style.background = "#e67e22"; });
+        stopBtn.addEventListener("click", function () {
+            log("ImportIE: Stop and Continue clicked by user");
+            IMPORT_IE_COLLECTION_STOPPED = true;
+            stopBtn.disabled = true;
+            stopBtn.textContent = "Stopping...";
+            stopBtn.style.background = "#555";
+            stopBtn.style.cursor = "default";
+        });
+        stopBtnRow.appendChild(stopBtn);
+        loadingContainer.appendChild(stopBtnRow);
 
         var loadingPopup = createPopup({
             title: "Import I/E - Scanning",
-            content: loadingEl,
-            width: "500px",
+            content: loadingContainer,
+            width: "520px",
             height: "auto"
         });
 
         var dots = 1;
+        var collectionStartTime = Date.now();
         var loadingInterval = setInterval(function () {
             dots = dots + 1;
             if (dots > 3) {
                 dots = 1;
             }
-            var t = " Please wait. Collecting Data";
+            var t = "Please wait. Collecting Data";
             var di = 0;
             while (di < dots) {
                 t = t + ".";
                 di = di + 1;
             }
-            loadingEl.textContent = t;
+            dotsRow.textContent = t;
+            timerRow.textContent = "Elapsed: " + formatElapsedTime(Date.now() - collectionStartTime);
         }, 400);
 
         setTimeout(async function () {
             try {
                 log("ImportIE: step 1 - collecting existing codes from table");
-                loadingEl.textContent = "Step 1: Collecting existing table codes...";
+                stepRow.textContent = "Step 1: Collecting existing table codes...";
                 var existingCodeSet = await collectAllTableCodes();
                 log("ImportIE: existing codes collected count=" + String(existingCodeSet.size));
 
                 log("ImportIE: step 2 - checking Add button");
-                loadingEl.textContent = "Step 2: Checking Add button...";
+                stepRow.textContent = "Step 2: Checking Add button...";
                 var addBtn = document.querySelector("a#addEligButton");
                 if (!addBtn) {
                     addBtn = document.querySelector("#addEligButton");
@@ -16887,7 +17018,7 @@
                 }
 
                 log("ImportIE: step 3 - clicking Add to open modal");
-                loadingEl.textContent = "Step 3: Opening modal...";
+                stepRow.textContent = "Step 3: Opening modal...";
                 addBtn.click();
                 var modalOpened = await waitForModalOpen(IMPORT_IE_MODAL_TIMEOUT);
                 if (!modalOpened) {
@@ -16905,16 +17036,22 @@
                 await sleep(800);
 
                 log("ImportIE: step 3b - collecting eligibility item pool from modal");
-                loadingEl.textContent = "Step 3b: Collecting Eligibility Items...";
+                stepRow.textContent = "Step 3b: Collecting Eligibility Items...";
                 var eligibilityItemPool = await collectEligibilityItemPool();
                 log("ImportIE: eligibility item pool collected count=" + String(eligibilityItemPool.length));
 
                 log("ImportIE: step 4 - collecting mappings from modal");
-                loadingEl.textContent = "Step 4: Scanning all Activity Plans, Scheduled Activities, and Check Items...";
+                stepRow.textContent = "Step 4: Scanning Activity Plans, Scheduled Activities, and Check Items...";
                 var rawMappings = await collectMappingsFromModal(existingCodeSet, function(progressMsg) {
-                    loadingEl.textContent = "Step 4: " + progressMsg;
+                    stepRow.textContent = "Step 4: " + progressMsg;
                 });
-                log("ImportIE: raw mappings collected count=" + String(rawMappings.length));
+                var collectionEndTime = Date.now();
+                var collectionDurationMs = collectionEndTime - collectionStartTime;
+                log("ImportIE: raw mappings collected count=" + String(rawMappings.length) + " collectionTime=" + formatElapsedTime(collectionDurationMs));
+
+                if (IMPORT_IE_COLLECTION_STOPPED) {
+                    log("ImportIE: collection was stopped early by user");
+                }
 
                 var mappings = deduplicateMappings(rawMappings);
                 log("ImportIE: deduplicated mappings count=" + String(mappings.length));
@@ -16930,13 +17067,13 @@
                 loadingPopup.close();
 
                 if (mappings.length === 0) {
-                    showWarningPopup("Import I/E - No Mappings", "No INC/EXC check items were found across any Activity Plans and Scheduled Activities.");
+                    showWarningPopup("Import I/E - No Mappings", "No INC/EXC check items were found across any Activity Plans and Scheduled Activities." + (IMPORT_IE_COLLECTION_STOPPED ? " (Collection was stopped early)" : ""));
                     log("ImportIE: no mappings found, stopping");
                     return;
                 }
 
                 log("ImportIE: step 5 - showing review panel");
-                buildImportIEReviewPanel(existingCodeSet, mappings, eligibilityItemPool, function (selectedMappings) {
+                buildImportIEReviewPanel(existingCodeSet, mappings, eligibilityItemPool, collectionDurationMs, function (selectedMappings) {
                     log("ImportIE: user confirmed " + String(selectedMappings.length) + " mappings");
                     if (selectedMappings.length === 0) {
                         log("ImportIE: no items selected, stopping");
