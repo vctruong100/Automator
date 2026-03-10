@@ -453,5 +453,12 @@
     "tags": ["Weight", "Screening"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Weight%20(Screening).md",
     "updated": "2026-03-05"
+  },
+  {
+    "id": "M-064",
+    "title": "Function Is Within Last Year",
+    "tags": ["Function", "Year"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Function%20Is%20Within%20Last%20Year.md",
+    "updated": "2026-03-10"
   }
 ]

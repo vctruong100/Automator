@@ -16298,7 +16298,7 @@
         pauseBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
         pauseBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
         var runBarcodeBtn = document.createElement("button");
-        runBarcodeBtn.textContent = "Run Barcode";
+        runBarcodeBtn.textContent = "Pull Barcode";
         runBarcodeBtn.style.background = "#5b43c7";
         runBarcodeBtn.style.color = "#fff";
         runBarcodeBtn.style.border = "none";
@@ -16500,7 +16500,7 @@
         clearLogsBtn.onmouseleave = () => { clearLogsBtn.style.background = "#6c757d"; };
 
         var panelButtons = [
-            { el: runBarcodeBtn, label: "Run Barcode" },
+            { el: runBarcodeBtn, label: "Pull Barcode" },
             { el: pullLabBarcodeBtn, label: "Pull Lab Barcode" },
             { el: saBuilderBtn, label: "Scheduled Activities Builder" },
             { el: searchMethodsBtn, label: "Search Methods" },
