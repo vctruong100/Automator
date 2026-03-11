@@ -1,8 +1,8 @@
 
 // ==UserScript==
-// @name ClinSpark Test Automator
+// @name ClinSpark Test Automator 3
 // @namespace vinh.activity.plan.state
-// @version 3.4.0
+// @version 3.5.0
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -109,6 +109,7 @@
     const IMPORT_IE_SHORT_DELAY_MIN = 150;
     const IMPORT_IE_SHORT_DELAY_MAX = 400;
     var IMPORT_IE_CANCELED = false;
+    var IMPORT_IE_COLLECTION_STOPPED = false;
     var RIGHT_PANEL_MODE = { HIERARCHY: "hierarchy", CODE: "code" };
     var CODE_SORT_TOGGLE_BUTTON_ID = "ieCodeSortToggle";
     var RIGHT_PANEL_BODY_ID = "ieRightPanelBody";
@@ -126,6 +127,62 @@
     var GENDER_FEMALE = "Female";
     var GENDER_CONTROL_CLASS = "ieGenderControl";
     var CODE_VIEW_DUP_TOGGLE_BUTTON_ID = "ieCodeViewDupToggle";
+
+    // Theme Mode
+    var STORAGE_THEME_MODE = "activityPlanState.themeMode";
+    var THEME_MODE_BLACK = "black";
+    var THEME_MODE_GLASS = "glass";
+
+    // Glassmorphism Theme Variables (from Test Automator 2)
+    var THEME_GRADIENT_START = "#667eea";
+    var THEME_GRADIENT_END = "#764ba2";
+    var THEME_GRADIENT_BG = "linear-gradient(135deg, #667eea 0%, #764ba2 100%)";
+    var THEME_SURFACE_BG = "rgba(15,10,40,0.55)";
+    var THEME_SURFACE_BG_HEAVY = "rgba(15,10,40,0.7)";
+    var THEME_SURFACE_BORDER = "rgba(255,255,255,0.25)";
+    var THEME_SURFACE_INNER_BORDER = "rgba(255,255,255,0.35)";
+    var THEME_BLUR_PX = 16;
+    var THEME_TEXT_PRIMARY = "#ffffff";
+    var THEME_TEXT_MUTED = "rgba(255,255,255,0.75)";
+    var THEME_TEXT_INVERSE = "#0f1020";
+    var THEME_ACCENT = "#a78bfa";
+    var THEME_ACCENT_HOVER = "#c4b5fd";
+    var THEME_DANGER = "#ef4444";
+    var THEME_DANGER_DARK = "#b91c1c";
+    var THEME_WARNING = "#f59e0b";
+    var THEME_WARNING_DARK = "#d97706";
+    var THEME_SUCCESS = "#10b981";
+    var THEME_SUCCESS_DARK = "#059669";
+    var THEME_DISABLED_OPACITY = 0.5;
+    var THEME_SELECT_OPTION_BG = "#2d1b69";
+    var THEME_SHADOW = "0 8px 30px rgba(0,0,0,0.3)";
+    var THEME_RADIUS = 14;
+    var THEME_OUTLINE_FOCUS = "0 0 0 3px rgba(199,210,254,0.6)";
+    var THEME_SCROLLBAR_TRACK = "rgba(255,255,255,0.12)";
+    var THEME_SCROLLBAR_THUMB = "rgba(255,255,255,0.35)";
+    var THEME_STYLE_TAG_ID = "ieThemeStyles";
+    var THEME_SCOPE_CLASS = "ie-theme-scope";
+    var THEME_Z_BASE = 999999;
+    var THEME_Z_OVERLAY = 1000000;
+    var THEME_Z_TOAST = 1000001;
+
+    function getThemeMode() {
+        try {
+            var saved = localStorage.getItem(STORAGE_THEME_MODE);
+            if (saved === THEME_MODE_GLASS) return THEME_MODE_GLASS;
+        } catch (e) {}
+        return THEME_MODE_BLACK;
+    }
+
+    function setThemeMode(mode) {
+        try {
+            localStorage.setItem(STORAGE_THEME_MODE, mode);
+        } catch (e) {}
+    }
+
+    function isGlassTheme() {
+        return getThemeMode() === THEME_MODE_GLASS;
+    }
 
     // Run Find Study Event
 
@@ -2062,7 +2119,7 @@
         if (!isOnCopyFormsPage()) {
             createPopup({
                 title: "Copy Forms - Error",
-                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">⚠️ Wrong Page</p><p>Navigate to the Activity Plans Show page first.</p><p style="margin-top:12px;font-size:12px;color:#888;">Required URL: https://cenexeltest.clinspark.com/secure/crfdesign/activityplans/show/{id}</p></div>',
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">⚠️ Wrong Page</p><p>Navigate to the Activity Plans Show page first.</p><p style="margin-top:12px;font-size:12px;color:#ffffffff;">Required URL: https://cenexeltest.clinspark.com/secure/crfdesign/activityplans/show/{id}</p></div>',
                 width: "450px",
                 height: "auto"
             });
@@ -3993,7 +4050,7 @@
         if (!isOnArchiveUpdateFormsPage()) {
             createPopup({
                 title: "Archive/Update Forms - Error",
-                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">⚠️ Wrong Page</p><p>Navigate to the Activity Plans Show page first.</p><p style="margin-top:12px;font-size:12px;color:#888;">Required URL: https://cenexeltest.clinspark.com/secure/crfdesign/activityplans/show/{id}</p></div>',
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">⚠️ Wrong Page</p><p>Navigate to the Activity Plans Show page first.</p><p style="margin-top:12px;font-size:12px;color:#ffffffff;">Required URL: https://cenexeltest.clinspark.com/secure/crfdesign/activityplans/show/{id}</p></div>',
                 width: "450px",
                 height: "auto"
             });
@@ -4353,6 +4410,8 @@
     }
 
     function openMethodsLibraryModal() {
+        var glass = isGlassTheme();
+        if (glass) injectThemeStylesIfNeeded();
         if (METHODS_LIBRARY_MODAL_REF && document.body.contains(METHODS_LIBRARY_MODAL_REF)) {
             METHODS_LIBRARY_MODAL_REF.focus();
             return;
@@ -4369,8 +4428,8 @@
         overlay.style.left = "0";
         overlay.style.width = "100%";
         overlay.style.height = "100%";
-        overlay.style.background = "rgba(0,0,0,0.6)";
-        overlay.style.zIndex = "999997";
+        overlay.style.background = glass ? "rgba(0,0,0,0.4)" : "rgba(0,0,0,0.6)";
+        overlay.style.zIndex = glass ? String(THEME_Z_OVERLAY - 1) : "999997";
 
         var modal = document.createElement("div");
         modal.setAttribute("role", "dialog");
@@ -4385,16 +4444,21 @@
         modal.style.maxWidth = "95vw";
         modal.style.height = "600px";
         modal.style.maxHeight = "90vh";
-        modal.style.background = "#1a1a1a";
-        modal.style.color = "#fff";
-        modal.style.border = "1px solid #444";
+        if (glass) {
+            modal.classList.add(THEME_SCOPE_CLASS);
+            modal.classList.add("ie-glass-panel");
+        } else {
+            modal.style.background = "#1a1a1a";
+            modal.style.color = "#fff";
+            modal.style.border = "1px solid #444";
+            modal.style.boxShadow = "0 8px 32px rgba(0,0,0,0.5)";
+        }
         modal.style.borderRadius = "10px";
-        modal.style.boxShadow = "0 8px 32px rgba(0,0,0,0.5)";
         modal.style.display = "flex";
         modal.style.flexDirection = "column";
         modal.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
         modal.style.fontSize = "14px";
-        modal.style.zIndex = "999998";
+        modal.style.zIndex = glass ? String(THEME_Z_OVERLAY) : "999998";
         modal.style.outline = "none";
 
         METHODS_LIBRARY_MODAL_REF = modal;
@@ -4404,7 +4468,12 @@
         header.style.alignItems = "center";
         header.style.justifyContent = "space-between";
         header.style.padding = "12px 16px";
-        header.style.borderBottom = "1px solid #333";
+        if (glass) {
+            header.classList.add("ie-glass-panel-header");
+            header.style.borderRadius = THEME_RADIUS + "px " + THEME_RADIUS + "px 0 0";
+        } else {
+            header.style.borderBottom = "1px solid #333";
+        }
         header.style.cursor = "move";
         header.style.userSelect = "none";
 
@@ -4412,19 +4481,20 @@
         titleEl.textContent = "ClinSpark Methods Library";
         titleEl.style.fontWeight = "600";
         titleEl.style.fontSize = "16px";
+        if (glass) titleEl.style.color = THEME_TEXT_PRIMARY;
         header.appendChild(titleEl);
 
         var closeBtn = document.createElement("button");
         closeBtn.textContent = "✕";
         closeBtn.setAttribute("aria-label", "Close");
         closeBtn.style.background = "transparent";
-        closeBtn.style.color = "#fff";
+        closeBtn.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
         closeBtn.style.border = "none";
         closeBtn.style.fontSize = "18px";
         closeBtn.style.cursor = "pointer";
         closeBtn.style.padding = "4px 8px";
         closeBtn.style.borderRadius = "4px";
-        closeBtn.onmouseenter = function() { closeBtn.style.background = "#333"; };
+        closeBtn.onmouseenter = function() { closeBtn.style.background = glass ? THEME_SURFACE_BG_HEAVY : "#333"; };
         closeBtn.onmouseleave = function() { closeBtn.style.background = "transparent"; };
         header.appendChild(closeBtn);
         modal.appendChild(header);
@@ -4434,46 +4504,49 @@
         toolbar.style.alignItems = "center";
         toolbar.style.gap = "10px";
         toolbar.style.padding = "10px 16px";
-        toolbar.style.borderBottom = "1px solid #333";
+        toolbar.style.borderBottom = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #333";
         toolbar.style.flexWrap = "wrap";
 
         var searchInput = document.createElement("input");
         searchInput.type = "text";
         searchInput.placeholder = "Search methods...";
         searchInput.setAttribute("aria-label", "Search methods");
+        if (glass) searchInput.className = "ie-input";
         searchInput.style.flex = "1";
         searchInput.style.minWidth = "150px";
         searchInput.style.padding = "8px 12px";
-        searchInput.style.background = "#2a2a2a";
-        searchInput.style.border = "1px solid #444";
+        searchInput.style.background = glass ? THEME_SURFACE_BG : "#2a2a2a";
+        searchInput.style.border = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #444";
         searchInput.style.borderRadius = "6px";
-        searchInput.style.color = "#fff";
+        searchInput.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
         searchInput.style.fontSize = "14px";
         searchInput.style.outline = "none";
-        searchInput.onfocus = function() { searchInput.style.borderColor = "#5b43c7"; };
-        searchInput.onblur = function() { searchInput.style.borderColor = "#444"; };
+        searchInput.onfocus = function() { searchInput.style.borderColor = glass ? THEME_ACCENT : "#5b43c7"; };
+        searchInput.onblur = function() { searchInput.style.borderColor = glass ? THEME_SURFACE_BORDER : "#444"; };
         toolbar.appendChild(searchInput);
 
         var tagSelect = document.createElement("select");
         tagSelect.setAttribute("aria-label", "Filter by tag");
         tagSelect.style.padding = "8px 12px";
-        tagSelect.style.background = "#2a2a2a";
-        tagSelect.style.border = "1px solid #444";
+        tagSelect.style.background = glass ? THEME_SURFACE_BG : "#2a2a2a";
+        tagSelect.style.border = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #444";
         tagSelect.style.borderRadius = "6px";
-        tagSelect.style.color = "#fff";
+        tagSelect.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
         tagSelect.style.fontSize = "14px";
         tagSelect.style.cursor = "pointer";
+        if (glass) tagSelect.className = "ie-select";
         toolbar.appendChild(tagSelect);
 
         var sortSelect = document.createElement("select");
         sortSelect.setAttribute("aria-label", "Sort order");
         sortSelect.style.padding = "8px 12px";
-        sortSelect.style.background = "#2a2a2a";
-        sortSelect.style.border = "1px solid #444";
+        sortSelect.style.background = glass ? THEME_SURFACE_BG : "#2a2a2a";
+        sortSelect.style.border = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #444";
         sortSelect.style.borderRadius = "6px";
-        sortSelect.style.color = "#fff";
+        sortSelect.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
         sortSelect.style.fontSize = "14px";
         sortSelect.style.cursor = "pointer";
+        if (glass) sortSelect.className = "ie-select";
         var sortOpts = [
             { value: "relevance", text: "Sort: Relevance" },
             { value: "title", text: "Sort: Title" },
@@ -4493,7 +4566,7 @@
         searchBodyLabel.style.gap = "6px";
         searchBodyLabel.style.cursor = "pointer";
         searchBodyLabel.style.fontSize = "13px";
-        searchBodyLabel.style.color = "#aaa";
+        searchBodyLabel.style.color = glass ? THEME_TEXT_MUTED : "#aaa";
         var searchBodyCheckbox = document.createElement("input");
         searchBodyCheckbox.type = "checkbox";
         searchBodyCheckbox.setAttribute("aria-label", "Search in body content");
@@ -4507,7 +4580,7 @@
         favoritesLabel.style.gap = "6px";
         favoritesLabel.style.cursor = "pointer";
         favoritesLabel.style.fontSize = "13px";
-        favoritesLabel.style.color = "#aaa";
+        favoritesLabel.style.color = glass ? THEME_TEXT_MUTED : "#aaa";
         var favoritesCheckbox = document.createElement("input");
         favoritesCheckbox.type = "checkbox";
         favoritesCheckbox.setAttribute("aria-label", "Show only favorites");
@@ -4523,17 +4596,21 @@
             var btn = document.createElement("button");
             btn.textContent = text;
             btn.setAttribute("aria-label", ariaLabel);
+            if (glass) {
+                btn.className = "ie-btn-secondary";
+            } else {
+                btn.style.background = "#333";
+                btn.style.color = "#fff";
+                btn.style.border = "1px solid #444";
+                btn.onmouseenter = function() { btn.style.background = "#444"; };
+                btn.onmouseleave = function() { btn.style.background = "#333"; };
+            }
             btn.style.padding = "8px 14px";
-            btn.style.background = "#333";
-            btn.style.color = "#fff";
-            btn.style.border = "1px solid #444";
             btn.style.borderRadius = "6px";
             btn.style.cursor = "pointer";
             btn.style.fontSize = "13px";
             btn.style.fontWeight = "500";
             btn.style.transition = "background 0.15s";
-            btn.onmouseenter = function() { btn.style.background = "#444"; };
-            btn.onmouseleave = function() { btn.style.background = "#333"; };
             return btn;
         }
 
@@ -4552,9 +4629,9 @@
         var listPane = document.createElement("div");
         listPane.style.width = "280px";
         listPane.style.minWidth = "200px";
-        listPane.style.borderRight = "1px solid #333";
+        listPane.style.borderRight = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #333";
         listPane.style.overflowY = "auto";
-        listPane.style.background = "#1a1a1a";
+        listPane.style.background = glass ? THEME_SURFACE_BG : "#1a1a1a";
         listPane.setAttribute("role", "listbox");
         listPane.setAttribute("aria-label", "Methods list");
 
@@ -4563,12 +4640,12 @@
         previewPane.style.display = "flex";
         previewPane.style.flexDirection = "column";
         previewPane.style.overflow = "hidden";
-        previewPane.style.background = "#111";
+        previewPane.style.background = glass ? "transparent" : "#111";
 
         var previewHeader = document.createElement("div");
         previewHeader.style.padding = "12px 16px";
-        previewHeader.style.borderBottom = "1px solid #333";
-        previewHeader.style.background = "#1a1a1a";
+        previewHeader.style.borderBottom = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #333";
+        previewHeader.style.background = glass ? THEME_SURFACE_BG : "#1a1a1a";
 
         var previewTitle = document.createElement("div");
         previewTitle.style.fontWeight = "600";
@@ -4579,7 +4656,7 @@
 
         var previewMeta = document.createElement("div");
         previewMeta.style.fontSize = "12px";
-        previewMeta.style.color = "#888";
+        previewMeta.style.color = glass ? THEME_TEXT_MUTED : "#888";
         previewHeader.appendChild(previewMeta);
 
         var previewBody = document.createElement("pre");
@@ -4587,12 +4664,12 @@
         previewBody.style.margin = "0";
         previewBody.style.padding = "16px";
         previewBody.style.overflowY = "auto";
-        previewBody.style.background = "#0d0d0d";
+        previewBody.style.background = glass ? THEME_SURFACE_BG : "#0d0d0d";
         previewBody.style.fontSize = "13px";
         previewBody.style.fontFamily = "Consolas, Monaco, 'Courier New', monospace";
         previewBody.style.whiteSpace = "pre-wrap";
         previewBody.style.wordBreak = "break-word";
-        previewBody.style.color = "#e0e0e0";
+        previewBody.style.color = glass ? THEME_TEXT_PRIMARY : "#e0e0e0";
         previewBody.style.lineHeight = "1.5";
 
         previewPane.appendChild(previewHeader);
@@ -4603,16 +4680,16 @@
 
         var statusBar = document.createElement("div");
         statusBar.style.padding = "8px 16px";
-        statusBar.style.borderTop = "1px solid #333";
+        statusBar.style.borderTop = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #333";
         statusBar.style.fontSize = "12px";
-        statusBar.style.color = "#888";
-        statusBar.style.background = "#1a1a1a";
+        statusBar.style.color = glass ? THEME_TEXT_MUTED : "#888";
+        statusBar.style.background = glass ? THEME_SURFACE_BG : "#1a1a1a";
         statusBar.textContent = "Loading...";
         modal.appendChild(statusBar);
 
         function updateStatus(msg, isError) {
             statusBar.textContent = msg;
-            statusBar.style.color = isError ? "#e74c3c" : "#888";
+            statusBar.style.color = isError ? "#e74c3c" : (glass ? THEME_TEXT_MUTED : "#888");
         }
 
         function populateTagSelect() {
@@ -4634,7 +4711,7 @@
             if (methods.length === 0) {
                 var empty = document.createElement("div");
                 empty.style.padding = "20px";
-                empty.style.color = "#666";
+                empty.style.color = glass ? THEME_TEXT_MUTED : "#666";
                 empty.style.textAlign = "center";
                 empty.textContent = "No methods found";
                 listPane.appendChild(empty);
@@ -4653,14 +4730,14 @@
                     item.setAttribute("data-method-id", m.id);
                     item.tabIndex = 0;
                     item.style.padding = "10px 14px";
-                    item.style.borderBottom = "1px solid #2a2a2a";
+                    item.style.borderBottom = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #2a2a2a";
                     item.style.cursor = "pointer";
                     item.style.transition = "background 0.1s";
                     item.style.position = "relative";
 
                     var itemId = document.createElement("div");
                     itemId.style.fontSize = "11px";
-                    itemId.style.color = "#5b43c7";
+                    itemId.style.color = glass ? THEME_ACCENT : "#5b43c7";
                     itemId.style.marginBottom = "2px";
                     itemId.textContent = m.id || "";
                     item.appendChild(itemId);
@@ -4674,7 +4751,7 @@
                     if (m.tags && m.tags.length > 0) {
                         var itemTags = document.createElement("div");
                         itemTags.style.fontSize = "11px";
-                        itemTags.style.color = "#666";
+                        itemTags.style.color = glass ? THEME_TEXT_MUTED : "#666";
                         itemTags.style.marginTop = "4px";
                         itemTags.textContent = m.tags.join(", ");
                         item.appendChild(itemTags);
@@ -4762,7 +4839,7 @@
                     item.appendChild(actions);
 
                     item.onmouseenter = function() {
-                        if (selectedMethod !== m) item.style.background = "#252525";
+                        if (selectedMethod !== m) item.style.background = glass ? THEME_SURFACE_BG_HEAVY : "#252525";
                         actions.style.display = "flex";
                     };
                     item.onmouseleave = function() {
@@ -4797,7 +4874,7 @@
             }
             if (itemEl) {
                 itemEl.setAttribute("aria-selected", "true");
-                itemEl.style.background = "#2a2a2a";
+                itemEl.style.background = glass ? THEME_SURFACE_BG_HEAVY : "#2a2a2a";
                 itemEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
             }
 
@@ -5215,6 +5292,7 @@
     }
 
     function openSettingsPopup() {
+        var glass = isGlassTheme();
         var buttonLabels = [
             "Lock Activity Plans",
             "Lock Sample Paths",
@@ -5255,7 +5333,7 @@
         var description = document.createElement("div");
         description.textContent = "Select which buttons to display in the panel:";
         description.style.fontSize = "13px";
-        description.style.color = "#aaa";
+        description.style.color = glass ? THEME_TEXT_MUTED : "#aaa";
         description.style.marginBottom = "12px";
         container.appendChild(description);
 
@@ -5278,12 +5356,12 @@
             row.style.alignItems = "center";
             row.style.gap = "10px";
             row.style.padding = "8px 12px";
-            row.style.background = "#1a1a1a";
+            row.style.background = glass ? THEME_SURFACE_BG : "#1a1a1a";
             row.style.borderRadius = "6px";
             row.style.cursor = "pointer";
             row.style.transition = "background 0.15s";
-            row.onmouseenter = function() { this.style.background = "#252525"; };
-            row.onmouseleave = function() { this.style.background = "#1a1a1a"; };
+            row.onmouseenter = (function(r) { return function() { r.style.background = glass ? THEME_SURFACE_BG_HEAVY : "#252525"; }; })(row);
+            row.onmouseleave = (function(r) { return function() { r.style.background = glass ? THEME_SURFACE_BG : "#1a1a1a"; }; })(row);
 
             var checkbox = document.createElement("input");
             checkbox.type = "checkbox";
@@ -5291,13 +5369,13 @@
             checkbox.style.width = "18px";
             checkbox.style.height = "18px";
             checkbox.style.cursor = "pointer";
-            checkbox.style.accentColor = "#5b43c7";
+            checkbox.style.accentColor = glass ? THEME_ACCENT : "#5b43c7";
             checkbox.dataset.label = label;
 
             var labelText = document.createElement("span");
             labelText.textContent = label;
             labelText.style.fontSize = "14px";
-            labelText.style.color = "#fff";
+            labelText.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
 
             row.appendChild(checkbox);
             row.appendChild(labelText);
@@ -5307,16 +5385,90 @@
 
         container.appendChild(checkboxContainer);
 
+        // Theme Toggle Section
+        var themeSection = document.createElement("div");
+        themeSection.style.marginTop = "20px";
+        themeSection.style.paddingTop = "20px";
+        themeSection.style.borderTop = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #333";
+
+        var themeLabel = document.createElement("div");
+        themeLabel.textContent = "UI Theme:";
+        themeLabel.style.fontSize = "13px";
+        themeLabel.style.color = glass ? THEME_TEXT_MUTED : "#aaa";
+        themeLabel.style.marginBottom = "8px";
+        themeSection.appendChild(themeLabel);
+
+        var themeRow = document.createElement("div");
+        themeRow.style.display = "flex";
+        themeRow.style.gap = "10px";
+
+        var themes = [
+            { value: THEME_MODE_BLACK, label: "Black" },
+            { value: THEME_MODE_GLASS, label: "Glassmorphism" }
+        ];
+        for (var ti = 0; ti < themes.length; ti++) {
+            var themeOpt = themes[ti];
+            var themeBtn = document.createElement("button");
+            themeBtn.textContent = themeOpt.label;
+            themeBtn.dataset.themeValue = themeOpt.value;
+            var isActive = (glass && themeOpt.value === THEME_MODE_GLASS) || (!glass && themeOpt.value === THEME_MODE_BLACK);
+            if (isActive) {
+                themeBtn.style.background = glass ? THEME_ACCENT : "#5b43c7";
+                themeBtn.style.color = glass ? THEME_TEXT_INVERSE : "#fff";
+                themeBtn.style.fontWeight = "600";
+            } else {
+                themeBtn.style.background = glass ? THEME_SURFACE_BG : "#333";
+                themeBtn.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
+                themeBtn.style.fontWeight = "400";
+            }
+            themeBtn.style.border = "none";
+            themeBtn.style.borderRadius = "6px";
+            themeBtn.style.padding = "8px 16px";
+            themeBtn.style.cursor = "pointer";
+            themeBtn.style.fontSize = "13px";
+            themeBtn.style.flex = "1";
+            themeBtn.addEventListener("click", (function(val, allBtns) {
+                return function() {
+                    try { localStorage.setItem(STORAGE_THEME_MODE, val); } catch(e) {}
+                    // Update button appearances
+                    var siblings = themeRow.querySelectorAll("button");
+                    for (var si = 0; si < siblings.length; si++) {
+                        if (siblings[si].dataset.themeValue === val) {
+                            siblings[si].style.background = val === THEME_MODE_GLASS ? THEME_ACCENT : "#5b43c7";
+                            siblings[si].style.color = val === THEME_MODE_GLASS ? THEME_TEXT_INVERSE : "#fff";
+                            siblings[si].style.fontWeight = "600";
+                        } else {
+                            siblings[si].style.background = val === THEME_MODE_GLASS ? THEME_SURFACE_BG : "#333";
+                            siblings[si].style.color = val === THEME_MODE_GLASS ? THEME_TEXT_PRIMARY : "#fff";
+                            siblings[si].style.fontWeight = "400";
+                        }
+                    }
+                };
+            })(themeOpt.value));
+            themeRow.appendChild(themeBtn);
+        }
+        themeSection.appendChild(themeRow);
+
+        var themeHint = document.createElement("div");
+        themeHint.textContent = "Theme change will apply after Save & Refresh";
+        themeHint.style.fontSize = "11px";
+        themeHint.style.color = glass ? THEME_TEXT_MUTED : "#666";
+        themeHint.style.marginTop = "6px";
+        themeHint.style.fontStyle = "italic";
+        themeSection.appendChild(themeHint);
+
+        container.appendChild(themeSection);
+
         // Hotkey Configuration Section
         var hotkeySection = document.createElement("div");
         hotkeySection.style.marginTop = "20px";
         hotkeySection.style.paddingTop = "20px";
-        hotkeySection.style.borderTop = "1px solid #333";
+        hotkeySection.style.borderTop = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #333";
 
         var hotkeyLabel = document.createElement("div");
         hotkeyLabel.textContent = "Panel Toggle Hotkey:";
         hotkeyLabel.style.fontSize = "13px";
-        hotkeyLabel.style.color = "#aaa";
+        hotkeyLabel.style.color = glass ? THEME_TEXT_MUTED : "#aaa";
         hotkeyLabel.style.marginBottom = "8px";
         hotkeySection.appendChild(hotkeyLabel);
 
@@ -5331,21 +5483,21 @@
         hotkeyInput.placeholder = "Press a key...";
         hotkeyInput.style.flex = "1";
         hotkeyInput.style.padding = "10px 12px";
-        hotkeyInput.style.background = "#2a2a2a";
-        hotkeyInput.style.border = "1px solid #444";
+        hotkeyInput.style.background = glass ? THEME_SURFACE_BG : "#2a2a2a";
+        hotkeyInput.style.border = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #444";
         hotkeyInput.style.borderRadius = "6px";
-        hotkeyInput.style.color = "#fff";
+        hotkeyInput.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
         hotkeyInput.style.fontSize = "14px";
         hotkeyInput.style.outline = "none";
         hotkeyInput.style.fontFamily = "monospace";
         hotkeyInput.style.cursor = "pointer";
 
         hotkeyInput.addEventListener("focus", function() {
-            this.style.borderColor = "#5b43c7";
+            this.style.borderColor = glass ? THEME_ACCENT : "#5b43c7";
         });
 
         hotkeyInput.addEventListener("blur", function() {
-            this.style.borderColor = "#333";
+            this.style.borderColor = glass ? THEME_SURFACE_BORDER : "#333";
         });
 
         hotkeyInput.addEventListener("keydown", function(e) {
@@ -5384,15 +5536,16 @@
 
         var hotkeyResetBtn = document.createElement("button");
         hotkeyResetBtn.textContent = "Reset";
-        hotkeyResetBtn.style.background = "#333";
-        hotkeyResetBtn.style.color = "#fff";
+        hotkeyResetBtn.style.background = glass ? THEME_SURFACE_BG : "#333";
+        hotkeyResetBtn.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
         hotkeyResetBtn.style.border = "none";
         hotkeyResetBtn.style.borderRadius = "6px";
         hotkeyResetBtn.style.padding = "10px 16px";
         hotkeyResetBtn.style.cursor = "pointer";
         hotkeyResetBtn.style.fontSize = "13px";
-        hotkeyResetBtn.onmouseenter = function() { this.style.background = "#444"; };
-        hotkeyResetBtn.onmouseleave = function() { this.style.background = "#333"; };
+        if (glass) hotkeyResetBtn.className = "ie-btn-secondary";
+        hotkeyResetBtn.onmouseenter = function() { this.style.background = glass ? THEME_SURFACE_BG_HEAVY : "#444"; };
+        hotkeyResetBtn.onmouseleave = function() { this.style.background = glass ? THEME_SURFACE_BG : "#333"; };
         hotkeyResetBtn.addEventListener("click", function() {
             hotkeyInput.value = "F2";
         });
@@ -5404,7 +5557,7 @@
         var hotkeyHint = document.createElement("div");
         hotkeyHint.textContent = "Click the input field and press any key to set a new hotkey";
         hotkeyHint.style.fontSize = "11px";
-        hotkeyHint.style.color = "#666";
+        hotkeyHint.style.color = glass ? THEME_TEXT_MUTED : "#666";
         hotkeyHint.style.marginTop = "6px";
         hotkeyHint.style.fontStyle = "italic";
         hotkeySection.appendChild(hotkeyHint);
@@ -5420,15 +5573,16 @@
 
         var selectAllBtn = document.createElement("button");
         selectAllBtn.textContent = "Select All";
-        selectAllBtn.style.background = "#333";
-        selectAllBtn.style.color = "#fff";
+        selectAllBtn.style.background = glass ? THEME_SURFACE_BG : "#333";
+        selectAllBtn.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
         selectAllBtn.style.border = "none";
         selectAllBtn.style.borderRadius = "6px";
         selectAllBtn.style.padding = "8px 16px";
         selectAllBtn.style.cursor = "pointer";
         selectAllBtn.style.fontSize = "13px";
-        selectAllBtn.onmouseenter = function() { this.style.background = "#444"; };
-        selectAllBtn.onmouseleave = function() { this.style.background = "#333"; };
+        if (glass) selectAllBtn.className = "ie-btn-secondary";
+        selectAllBtn.onmouseenter = function() { this.style.background = glass ? THEME_SURFACE_BG_HEAVY : "#444"; };
+        selectAllBtn.onmouseleave = function() { this.style.background = glass ? THEME_SURFACE_BG : "#333"; };
         selectAllBtn.addEventListener("click", function() {
             for (var j = 0; j < checkboxes.length; j++) {
                 checkboxes[j].checked = true;
@@ -5437,15 +5591,16 @@
 
         var deselectAllBtn = document.createElement("button");
         deselectAllBtn.textContent = "Deselect All";
-        deselectAllBtn.style.background = "#333";
-        deselectAllBtn.style.color = "#fff";
+        deselectAllBtn.style.background = glass ? THEME_SURFACE_BG : "#333";
+        deselectAllBtn.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
         deselectAllBtn.style.border = "none";
         deselectAllBtn.style.borderRadius = "6px";
         deselectAllBtn.style.padding = "8px 16px";
         deselectAllBtn.style.cursor = "pointer";
         deselectAllBtn.style.fontSize = "13px";
-        deselectAllBtn.onmouseenter = function() { this.style.background = "#444"; };
-        deselectAllBtn.onmouseleave = function() { this.style.background = "#333"; };
+        if (glass) deselectAllBtn.className = "ie-btn-secondary";
+        deselectAllBtn.onmouseenter = function() { this.style.background = glass ? THEME_SURFACE_BG_HEAVY : "#444"; };
+        deselectAllBtn.onmouseleave = function() { this.style.background = glass ? THEME_SURFACE_BG : "#333"; };
         deselectAllBtn.addEventListener("click", function() {
             for (var j = 0; j < checkboxes.length; j++) {
                 checkboxes[j].checked = false;
@@ -5454,16 +5609,19 @@
 
         var saveBtn = document.createElement("button");
         saveBtn.textContent = "Save & Refresh";
-        saveBtn.style.background = "#5b43c7";
-        saveBtn.style.color = "#fff";
+        if (glass) saveBtn.className = "ie-btn-primary";
+        saveBtn.style.background = glass ? "" : "#5b43c7";
+        saveBtn.style.color = glass ? "" : "#fff";
         saveBtn.style.border = "none";
         saveBtn.style.borderRadius = "6px";
         saveBtn.style.padding = "10px 20px";
         saveBtn.style.cursor = "pointer";
         saveBtn.style.fontSize = "14px";
         saveBtn.style.fontWeight = "600";
-        saveBtn.onmouseenter = function() { this.style.background = "#4a35a6"; };
-        saveBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
+        if (!glass) {
+            saveBtn.onmouseenter = function() { this.style.background = "#4a35a6"; };
+            saveBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
+        }
 
         buttonRow.appendChild(selectAllBtn);
         buttonRow.appendChild(deselectAllBtn);
@@ -5748,7 +5906,7 @@
 
         var descDiv = document.createElement("div");
         descDiv.style.fontSize = "13px";
-        descDiv.style.color = "#aaa";
+        descDiv.style.color = "#ffffffff";
         descDiv.style.marginBottom = "12px";
         descDiv.textContent = "Choose the epoch where you want to add the existing subject. Screening epochs are excluded.";
         popupContent.appendChild(descDiv);
@@ -8482,7 +8640,7 @@
         if (!isOnSABuilderPage()) {
             var errorPopup = createPopup({
                 title: "Scheduled Activities Builder",
-                content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;font-size:16px;margin-bottom:16px;">⚠️ Wrong Page</p><p>You must be on the Activity Plans Show page to use this feature.</p><p style="margin-top:12px;font-size:12px;color:#888;">Required URL: ' + SA_BUILDER_TARGET_URL + '</p></div>',
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;font-size:16px;margin-bottom:16px;">⚠️ Wrong Page</p><p>You must be on the Activity Plans Show page to use this feature.</p><p style="margin-top:12px;font-size:12px;color:#ffffffff;">Required URL: ' + SA_BUILDER_TARGET_URL + '</p></div>',
                 width: "450px",
                 height: "auto"
             });
@@ -11634,11 +11792,12 @@
 
     async function waitForItemRefReload(prevSig, timeoutMs) {
         var start = Date.now();
-        var step = 500;
+        var step = 80;
         var max = typeof timeoutMs === "number" ? timeoutMs : 900;
         while (Date.now() - start < max) {
             var curSig = getItemRefOptionsSignature();
             if (curSig && curSig !== prevSig) {
+                log("ImportElig: itemRef reloaded in " + String(Date.now() - start) + "ms");
                 return true;
             }
             await sleep(step);
@@ -13258,6 +13417,16 @@
 
 
 
+    function formatElapsedTime(ms) {
+        var totalSec = Math.floor(ms / 1000);
+        var min = Math.floor(totalSec / 60);
+        var sec = totalSec % 60;
+        if (min > 0) {
+            return String(min) + "m " + String(sec) + "s";
+        }
+        return String(sec) + "s";
+    }
+
     function importIERandomDelay() {
         var range = IMPORT_IE_SHORT_DELAY_MAX - IMPORT_IE_SHORT_DELAY_MIN;
         var val = IMPORT_IE_SHORT_DELAY_MIN + Math.floor(Math.random() * range);
@@ -13999,10 +14168,17 @@
         return pool;
     }
 
-    async function collectMappingsFromModal(existingCodeSet) {
+    async function collectMappingsFromModal(existingCodeSet, progressCallback) {
         log("ImportIE: collectMappingsFromModal start");
         var mappings = [];
         var seenKeys = {};
+        var totalSAProcessed = 0;
+        var totalSACount = 0;
+        function reportProgress(msg) {
+            if (typeof progressCallback === "function") {
+                try { progressCallback(msg); } catch (e) {}
+            }
+        }
         var planSel = document.querySelector("select#activityPlan");
         if (!planSel) {
             planSel = await waitForElement("select#activityPlan", 8000);
@@ -14017,6 +14193,10 @@
         log("ImportIE: collectMappingsFromModal plan option count=" + String(planOpts.length));
         var pi = 0;
         while (pi < planOpts.length) {
+            if (IMPORT_IE_COLLECTION_STOPPED) {
+                log("ImportIE: collectMappingsFromModal stopped early by user at plan " + String(pi));
+                break;
+            }
             var pVal = (planOpts[pi].value + "").trim();
             var pTxt = (planOpts[pi].textContent + "").trim().replace(/\s+/g, " ");
             if (pVal.length === 0) {
@@ -14024,52 +14204,56 @@
                 continue;
             }
             log("ImportIE: collectMappingsFromModal selecting plan='" + String(pTxt) + "' value='" + String(pVal) + "'");
+            reportProgress("Plan " + String(pi) + "/" + String(planOpts.length) + ": " + pTxt);
             planSel.value = pVal;
             select2TriggerChange(planSel);
-            var planDelay = 200 + Math.floor(Math.random() * 250);
-            await sleep(planDelay);
+            await sleep(50);
             var schedSel = document.querySelector("select#scheduledActivity");
             if (!schedSel) {
-                schedSel = await waitForElement("select#scheduledActivity", 8000);
+                schedSel = await waitForElement("select#scheduledActivity", 5000);
             }
             if (!schedSel) {
                 log("ImportIE: collectMappingsFromModal schedSel not found for plan='" + String(pTxt) + "'");
                 pi = pi + 1;
                 continue;
             }
-            var hasSchedOpts = await waitForSelectOptions(schedSel, 1, 8000);
+            var hasSchedOpts = await waitForSelectOptions(schedSel, 1, 5000);
             if (!hasSchedOpts) {
                 log("ImportIE: collectMappingsFromModal no SA options for plan='" + String(pTxt) + "', retrying parent selection");
                 planSel.value = pVal;
                 select2TriggerChange(planSel);
-                await sleep(400 + Math.floor(Math.random() * 200));
-                hasSchedOpts = await waitForSelectOptions(schedSel, 1, 6000);
+                await sleep(200);
+                hasSchedOpts = await waitForSelectOptions(schedSel, 1, 5000);
                 if (!hasSchedOpts) {
                     log("ImportIE: collectMappingsFromModal SA still empty after retry for plan='" + String(pTxt) + "', skipping");
                     pi = pi + 1;
                     continue;
                 }
             }
-            await loadAllSelect2Options(schedSel, 10, 5000);
             var schedOpts = schedSel.querySelectorAll("option");
             log("ImportIE: collectMappingsFromModal SA option count=" + String(schedOpts.length) + " for plan='" + String(pTxt) + "'");
             var si = 0;
             while (si < schedOpts.length) {
+                if (IMPORT_IE_COLLECTION_STOPPED) {
+                    log("ImportIE: collectMappingsFromModal stopped early by user at SA " + String(si) + " of plan='" + String(pTxt) + "'");
+                    break;
+                }
                 var sVal = (schedOpts[si].value + "").trim();
                 var sTxt = (schedOpts[si].textContent + "").trim().replace(/\s+/g, " ");
                 if (sVal.length === 0) {
                     si = si + 1;
                     continue;
                 }
+                totalSAProcessed = totalSAProcessed + 1;
+                reportProgress("SA " + String(totalSAProcessed) + ": " + sTxt + " (" + String(mappings.length) + " found)");
                 log("ImportIE: collectMappingsFromModal selecting SA='" + String(sTxt) + "' value='" + String(sVal) + "'");
                 var prevItemSig = getItemRefOptionsSignature();
                 schedSel.value = sVal;
                 select2TriggerChange(schedSel);
-                var saDelay = 200 + Math.floor(Math.random() * 250);
-                await sleep(saDelay);
+                await sleep(50);
                 var itemRefSel = document.querySelector("select#itemRef");
                 if (!itemRefSel) {
-                    itemRefSel = await waitForElement("select#itemRef", 6000);
+                    itemRefSel = await waitForElement("select#itemRef", 3000);
                 }
                 if (!itemRefSel) {
                     log("ImportIE: collectMappingsFromModal itemRefSel not found for SA='" + String(sTxt) + "'");
@@ -14080,17 +14264,16 @@
                 if (!reloaded) {
                     log("ImportIE: collectMappingsFromModal itemRef did not reload for SA='" + String(sTxt) + "', checking current options");
                 }
-                await sleep(200);
                 var stabilizeAttempt = 0;
                 var stableCount1 = -1;
                 var stableCount2 = -2;
-                while (stabilizeAttempt < 5) {
+                while (stabilizeAttempt < 3) {
                     itemRefSel = document.querySelector("select#itemRef");
                     if (!itemRefSel) {
                         break;
                     }
                     stableCount1 = itemRefSel.querySelectorAll("option").length;
-                    await sleep(300);
+                    await sleep(100);
                     stableCount2 = itemRefSel.querySelectorAll("option").length;
                     if (stableCount1 === stableCount2 && stableCount1 > 0) {
                         log("ImportIE: collectMappingsFromModal itemRef stabilized at " + String(stableCount1) + " options after attempt " + String(stabilizeAttempt));
@@ -14108,9 +14291,9 @@
                     log("ImportIE: collectMappingsFromModal itemRef has no items for SA='" + String(sTxt) + "', retrying parent");
                     schedSel.value = sVal;
                     select2TriggerChange(schedSel);
-                    await sleep(500);
+                    await sleep(200);
                     await waitForItemRefReload(getItemRefOptionsSignature(), 4000);
-                    await sleep(300);
+                    await sleep(100);
                     itemRefSel = document.querySelector("select#itemRef");
                     if (!itemRefSel) {
                         log("ImportIE: collectMappingsFromModal itemRefSel still missing after retry");
@@ -14118,10 +14301,9 @@
                         continue;
                     }
                 }
-                await loadAllSelect2Options(itemRefSel, 15, 6000);
                 itemRefSel = document.querySelector("select#itemRef");
                 if (!itemRefSel) {
-                    log("ImportIE: collectMappingsFromModal itemRefSel gone after loadAll");
+                    log("ImportIE: collectMappingsFromModal itemRefSel gone after stabilize");
                     si = si + 1;
                     continue;
                 }
@@ -14164,7 +14346,7 @@
             }
             pi = pi + 1;
         }
-        log("ImportIE: collectMappingsFromModal done total=" + String(mappings.length));
+        log("ImportIE: collectMappingsFromModal done total=" + String(mappings.length) + " processed " + String(totalSAProcessed) + " SAs");
         return mappings;
     }
 
@@ -14220,8 +14402,8 @@
         return plans;
     }
 
-    function buildImportIEReviewPanel(existingCodeSet, mappings, eligibilityItemPool, onConfirm) {
-        log("ImportIE: buildImportIEReviewPanel start existingCodes=" + String(existingCodeSet.size) + " mappings=" + String(mappings.length) + " pool=" + String(eligibilityItemPool.length));
+    function buildImportIEReviewPanel(existingCodeSet, mappings, eligibilityItemPool, collectionDurationMs, onConfirm) {
+        log("ImportIE: buildImportIEReviewPanel start existingCodes=" + String(existingCodeSet.size) + " mappings=" + String(mappings.length) + " pool=" + String(eligibilityItemPool.length) + " collectionTime=" + formatElapsedTime(collectionDurationMs));
         var hierarchy = buildHierarchy(mappings);
         var existingArr = Array.from(existingCodeSet);
         existingArr.sort();
@@ -14355,10 +14537,38 @@
         headerBar.style.flexShrink = "0";
         headerBar.style.background = "linear-gradient(180deg, #1a1a1a, #111)";
 
+        var headerLeft = document.createElement("div");
+        headerLeft.style.display = "flex";
+        headerLeft.style.alignItems = "center";
+        headerLeft.style.gap = "12px";
+
         var headerTitle = document.createElement("div");
         headerTitle.textContent = "Import I/E - Review Mappings";
         headerTitle.style.fontWeight = "600";
         headerTitle.style.fontSize = "16px";
+        headerLeft.appendChild(headerTitle);
+
+        var collectionTimeBadge = document.createElement("span");
+        collectionTimeBadge.textContent = "Collection: " + formatElapsedTime(collectionDurationMs);
+        collectionTimeBadge.style.fontSize = "11px";
+        collectionTimeBadge.style.color = "#5bc0de";
+        collectionTimeBadge.style.background = "#1a2a3a";
+        collectionTimeBadge.style.padding = "3px 8px";
+        collectionTimeBadge.style.borderRadius = "3px";
+        collectionTimeBadge.style.fontWeight = "500";
+        headerLeft.appendChild(collectionTimeBadge);
+
+        if (IMPORT_IE_COLLECTION_STOPPED) {
+            var stoppedBadge = document.createElement("span");
+            stoppedBadge.textContent = "Stopped Early";
+            stoppedBadge.style.fontSize = "11px";
+            stoppedBadge.style.color = "#e67e22";
+            stoppedBadge.style.background = "#3a2a1a";
+            stoppedBadge.style.padding = "3px 8px";
+            stoppedBadge.style.borderRadius = "3px";
+            stoppedBadge.style.fontWeight = "500";
+            headerLeft.appendChild(stoppedBadge);
+        }
 
         var headerCloseBtn = document.createElement("button");
         headerCloseBtn.textContent = "\u2715";
@@ -14381,7 +14591,7 @@
             overlay.remove();
         });
 
-        headerBar.appendChild(headerTitle);
+        headerBar.appendChild(headerLeft);
         headerBar.appendChild(headerCloseBtn);
         container.appendChild(headerBar);
 
@@ -16199,6 +16409,19 @@
         summaryRow.appendChild(statusEl);
         container.appendChild(summaryRow);
 
+        var timerRow = document.createElement("div");
+        timerRow.style.textAlign = "center";
+        timerRow.style.fontSize = "12px";
+        timerRow.style.color = "#888";
+        timerRow.style.padding = "2px 0";
+        timerRow.textContent = "Execution Time: 0s";
+        container.appendChild(timerRow);
+
+        var execStartTime = Date.now();
+        var execTimerInterval = setInterval(function () {
+            timerRow.textContent = "Execution Time: " + formatElapsedTime(Date.now() - execStartTime);
+        }, 500);
+
         var listEl = document.createElement("div");
         listEl.style.maxHeight = "400px";
         listEl.style.overflowY = "auto";
@@ -16276,8 +16499,20 @@
                 failEl.textContent = "Failed: " + String(failures);
             },
             setCompleted: function () {
+                clearInterval(execTimerInterval);
+                var finalTime = formatElapsedTime(Date.now() - execStartTime);
+                timerRow.textContent = "Execution Time: " + finalTime;
+                timerRow.style.color = "#5cb85c";
                 statusEl.textContent = "Completed";
                 statusEl.style.color = "#5cb85c";
+            },
+            stopTimer: function () {
+                clearInterval(execTimerInterval);
+                var finalTime = formatElapsedTime(Date.now() - execStartTime);
+                timerRow.textContent = "Execution Time: " + finalTime;
+            },
+            getExecutionTime: function () {
+                return Date.now() - execStartTime;
             }
         };
     }
@@ -16334,6 +16569,7 @@
                 }
                 if (IMPORT_IE_CANCELED) {
                     log("ImportIE: Operation cancelled by user");
+                    progress.stopTimer();
                     progress.statusEl.textContent = "Cancelled";
                     progress.statusEl.style.color = "#d9534f";
                     return;
@@ -16435,6 +16671,7 @@
 
             if (IMPORT_IE_CANCELED) {
                 log("ImportIE: Operation cancelled by user after sleep");
+                progress.stopTimer();
                 progress.statusEl.textContent = "Cancelled";
                 progress.statusEl.style.color = "#d9534f";
                 return;
@@ -16511,6 +16748,7 @@
             await sleep(importIERandomDelay() + 300);
             if (IMPORT_IE_CANCELED) {
                 log("ImportIE: Operation cancelled by user after sleep");
+                progress.stopTimer();
                 progress.statusEl.textContent = "Cancelled";
                 progress.statusEl.style.color = "#d9534f";
                 return;
@@ -16578,6 +16816,7 @@
             }
             if (IMPORT_IE_CANCELED) {
                 log("ImportIE: Operation cancelled by user after sleep");
+                progress.stopTimer();
                 progress.statusEl.textContent = "Cancelled";
                 progress.statusEl.style.color = "#d9534f";
                 return;
@@ -16656,7 +16895,7 @@
         if (!isValidEligibilityPage()) {
             createPopup({
                 title: "Import I/E - Error",
-                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">⚠️ Wrong Page</p><p>You must navigate to the Eligibility list page before using Import I/E.</p><p style="margin-top:12px;font-size:12px;color:#888;word-wrap:break-word;word-break:break-all;">Required URL: ' + getBaseUrl() + ELIGIBILITY_LIST_PATH + '</p></div>',
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">⚠️ Wrong Page</p><p>You must navigate to the Eligibility list page before using Import I/E.</p><p style="margin-top:12px;font-size:12px;color:#ffffffff;word-wrap:break-word;word-break:break-all;">Required URL: ' + getBaseUrl() + ELIGIBILITY_LIST_PATH + '</p></div>',
                 width: "450px",
                 height: "auto"
             });
@@ -16665,45 +16904,100 @@
         }
 
         log("ImportIE: page validated, starting collection flow");
+        IMPORT_IE_COLLECTION_STOPPED = false;
 
-        var loadingEl = document.createElement("div");
-        loadingEl.style.textAlign = "center";
-        loadingEl.style.fontSize = "15px";
-        loadingEl.style.color = "#fff";
-        loadingEl.style.padding = "20px";
-        loadingEl.textContent = "Collecting existing table codes and mappings...";
+        var loadingContainer = document.createElement("div");
+        loadingContainer.style.display = "flex";
+        loadingContainer.style.flexDirection = "column";
+        loadingContainer.style.gap = "10px";
+        loadingContainer.style.padding = "16px 20px";
+        loadingContainer.style.color = "#fff";
+        loadingContainer.style.fontSize = "13px";
+
+        var dotsRow = document.createElement("div");
+        dotsRow.style.textAlign = "center";
+        dotsRow.style.fontSize = "15px";
+        dotsRow.style.fontWeight = "600";
+        dotsRow.style.color = "#5bc0de";
+        dotsRow.textContent = "Please wait. Collecting Data...";
+        loadingContainer.appendChild(dotsRow);
+
+        var stepRow = document.createElement("div");
+        stepRow.style.textAlign = "center";
+        stepRow.style.fontSize = "13px";
+        stepRow.style.color = "#ccc";
+        stepRow.style.minHeight = "18px";
+        stepRow.textContent = "Initializing...";
+        loadingContainer.appendChild(stepRow);
+
+        var timerRow = document.createElement("div");
+        timerRow.style.textAlign = "center";
+        timerRow.style.fontSize = "12px";
+        timerRow.style.color = "#888";
+        timerRow.textContent = "Elapsed: 0s";
+        loadingContainer.appendChild(timerRow);
+
+        var stopBtnRow = document.createElement("div");
+        stopBtnRow.style.textAlign = "center";
+        stopBtnRow.style.marginTop = "4px";
+
+        var stopBtn = document.createElement("button");
+        stopBtn.textContent = "Stop and Continue";
+        stopBtn.style.padding = "6px 18px";
+        stopBtn.style.fontSize = "12px";
+        stopBtn.style.fontWeight = "600";
+        stopBtn.style.background = "#e67e22";
+        stopBtn.style.color = "#fff";
+        stopBtn.style.border = "none";
+        stopBtn.style.borderRadius = "4px";
+        stopBtn.style.cursor = "pointer";
+        stopBtn.style.transition = "background 0.15s";
+        stopBtn.addEventListener("mouseenter", function () { stopBtn.style.background = "#d35400"; });
+        stopBtn.addEventListener("mouseleave", function () { stopBtn.style.background = "#e67e22"; });
+        stopBtn.addEventListener("click", function () {
+            log("ImportIE: Stop and Continue clicked by user");
+            IMPORT_IE_COLLECTION_STOPPED = true;
+            stopBtn.disabled = true;
+            stopBtn.textContent = "Stopping...";
+            stopBtn.style.background = "#555";
+            stopBtn.style.cursor = "default";
+        });
+        stopBtnRow.appendChild(stopBtn);
+        loadingContainer.appendChild(stopBtnRow);
 
         var loadingPopup = createPopup({
             title: "Import I/E - Scanning",
-            content: loadingEl,
-            width: "500px",
+            content: loadingContainer,
+            width: "520px",
             height: "auto"
         });
 
         var dots = 1;
+        var collectionStartTime = Date.now();
         var loadingInterval = setInterval(function () {
             dots = dots + 1;
             if (dots > 3) {
                 dots = 1;
             }
-            var t = " Please wait. Collecting Data";
+            var t = "Please wait. Collecting Data";
             var di = 0;
             while (di < dots) {
                 t = t + ".";
                 di = di + 1;
             }
-            loadingEl.textContent = t;
+            dotsRow.textContent = t;
+            timerRow.textContent = "Elapsed: " + formatElapsedTime(Date.now() - collectionStartTime);
         }, 400);
 
         setTimeout(async function () {
             try {
                 log("ImportIE: step 1 - collecting existing codes from table");
-                loadingEl.textContent = "Step 1: Collecting existing table codes...";
+                stepRow.textContent = "Step 1: Collecting existing table codes...";
                 var existingCodeSet = await collectAllTableCodes();
                 log("ImportIE: existing codes collected count=" + String(existingCodeSet.size));
 
                 log("ImportIE: step 2 - checking Add button");
-                loadingEl.textContent = "Step 2: Checking Add button...";
+                stepRow.textContent = "Step 2: Checking Add button...";
                 var addBtn = document.querySelector("a#addEligButton");
                 if (!addBtn) {
                     addBtn = document.querySelector("#addEligButton");
@@ -16724,7 +17018,7 @@
                 }
 
                 log("ImportIE: step 3 - clicking Add to open modal");
-                loadingEl.textContent = "Step 3: Opening modal...";
+                stepRow.textContent = "Step 3: Opening modal...";
                 addBtn.click();
                 var modalOpened = await waitForModalOpen(IMPORT_IE_MODAL_TIMEOUT);
                 if (!modalOpened) {
@@ -16742,14 +17036,22 @@
                 await sleep(800);
 
                 log("ImportIE: step 3b - collecting eligibility item pool from modal");
-                loadingEl.textContent = "Step 3b: Collecting Eligibility Items...";
+                stepRow.textContent = "Step 3b: Collecting Eligibility Items...";
                 var eligibilityItemPool = await collectEligibilityItemPool();
                 log("ImportIE: eligibility item pool collected count=" + String(eligibilityItemPool.length));
 
                 log("ImportIE: step 4 - collecting mappings from modal");
-                loadingEl.textContent = "Step 4: Scanning all Activity Plans, Scheduled Activities, and Check Items...";
-                var rawMappings = await collectMappingsFromModal(existingCodeSet);
-                log("ImportIE: raw mappings collected count=" + String(rawMappings.length));
+                stepRow.textContent = "Step 4: Scanning Activity Plans, Scheduled Activities, and Check Items...";
+                var rawMappings = await collectMappingsFromModal(existingCodeSet, function(progressMsg) {
+                    stepRow.textContent = "Step 4: " + progressMsg;
+                });
+                var collectionEndTime = Date.now();
+                var collectionDurationMs = collectionEndTime - collectionStartTime;
+                log("ImportIE: raw mappings collected count=" + String(rawMappings.length) + " collectionTime=" + formatElapsedTime(collectionDurationMs));
+
+                if (IMPORT_IE_COLLECTION_STOPPED) {
+                    log("ImportIE: collection was stopped early by user");
+                }
 
                 var mappings = deduplicateMappings(rawMappings);
                 log("ImportIE: deduplicated mappings count=" + String(mappings.length));
@@ -16765,13 +17067,13 @@
                 loadingPopup.close();
 
                 if (mappings.length === 0) {
-                    showWarningPopup("Import I/E - No Mappings", "No INC/EXC check items were found across any Activity Plans and Scheduled Activities.");
+                    showWarningPopup("Import I/E - No Mappings", "No INC/EXC check items were found across any Activity Plans and Scheduled Activities." + (IMPORT_IE_COLLECTION_STOPPED ? " (Collection was stopped early)" : ""));
                     log("ImportIE: no mappings found, stopping");
                     return;
                 }
 
                 log("ImportIE: step 5 - showing review panel");
-                buildImportIEReviewPanel(existingCodeSet, mappings, eligibilityItemPool, function (selectedMappings) {
+                buildImportIEReviewPanel(existingCodeSet, mappings, eligibilityItemPool, collectionDurationMs, function (selectedMappings) {
                     log("ImportIE: user confirmed " + String(selectedMappings.length) + " mappings");
                     if (selectedMappings.length === 0) {
                         log("ImportIE: no items selected, stopping");
@@ -24336,10 +24638,307 @@
     }
 
 
+    // Glassmorphism Theme Style Injection (from Test Automator 2)
+    function injectThemeStylesIfNeeded() {
+        if (!isGlassTheme()) return;
+        var existing = document.getElementById(THEME_STYLE_TAG_ID);
+        if (existing) return;
+        var style = document.createElement("style");
+        style.id = THEME_STYLE_TAG_ID;
+        style.textContent = [
+            "." + THEME_SCOPE_CLASS + " {",
+            "  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;",
+            "  color: " + THEME_TEXT_PRIMARY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-theme-backdrop {",
+            "  position: fixed; top:0; left:0; width:100%; height:100%;",
+            "  background: linear-gradient(135deg, " + THEME_GRADIENT_START + " 0%, " + THEME_GRADIENT_END + " 100%);",
+            "  z-index: " + (THEME_Z_BASE - 1) + ";",
+            "  pointer-events: none;",
+            "}",
+            "." + THEME_SCOPE_CLASS + ".ie-glass-panel,",
+            "." + THEME_SCOPE_CLASS + " .ie-glass-panel {",
+            "  background: " + THEME_GRADIENT_BG + ";",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  box-shadow: inset 0 0 0 1px " + THEME_SURFACE_INNER_BORDER + ", " + THEME_SHADOW + ";",
+            "  border-radius: " + THEME_RADIUS + "px;",
+            "  color: " + THEME_TEXT_PRIMARY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + ".ie-glass-panel-header,",
+            "." + THEME_SCOPE_CLASS + " .ie-glass-panel-header {",
+            "  background: linear-gradient(135deg, " + THEME_GRADIENT_START + " 0%, " + THEME_GRADIENT_END + " 100%);",
+            "  border-bottom: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  color: " + THEME_TEXT_PRIMARY + ";",
+            "  cursor: move; user-select: none;",
+            "}",
+            "." + THEME_SCOPE_CLASS + ".ie-glass-panel-header-danger,",
+            "." + THEME_SCOPE_CLASS + " .ie-glass-panel-header-danger {",
+            "  background: linear-gradient(135deg, " + THEME_DANGER + " 0%, " + THEME_DANGER_DARK + " 100%);",
+            "  border-bottom: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  color: " + THEME_TEXT_PRIMARY + ";",
+            "  cursor: move; user-select: none;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-primary {",
+            "  background: linear-gradient(135deg, " + THEME_GRADIENT_START + " 0%, " + THEME_GRADIENT_END + " 100%);",
+            "  color: " + THEME_TEXT_PRIMARY + "; border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 600;",
+            "  font-size: 14px; transition: opacity 0.2s, box-shadow 0.2s;",
+            "  box-shadow: " + THEME_SHADOW + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-primary:hover {",
+            "  opacity: 0.9; box-shadow: 0 0 0 2px " + THEME_ACCENT_HOVER + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-primary:focus-visible {",
+            "  box-shadow: " + THEME_OUTLINE_FOCUS + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-primary:disabled {",
+            "  opacity: " + THEME_DISABLED_OPACITY + "; cursor: default;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-secondary {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  color: " + THEME_TEXT_PRIMARY + "; border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 500;",
+            "  font-size: 13px; transition: background-color 0.2s, box-shadow 0.2s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-secondary:hover {",
+            "  background-color: " + THEME_SURFACE_BG_HEAVY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-secondary:disabled {",
+            "  opacity: " + THEME_DISABLED_OPACITY + "; cursor: default;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-secondary:focus-visible {",
+            "  box-shadow: " + THEME_OUTLINE_FOCUS + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-danger {",
+            "  background: linear-gradient(135deg, " + THEME_DANGER + " 0%, " + THEME_DANGER_DARK + " 100%);",
+            "  color: " + THEME_TEXT_PRIMARY + "; border: 1px solid rgba(239,68,68,0.4);",
+            "  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 600;",
+            "  font-size: 14px; transition: opacity 0.2s, box-shadow 0.2s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-danger:hover {",
+            "  opacity: 0.9;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-danger:focus-visible {",
+            "  box-shadow: " + THEME_OUTLINE_FOCUS + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-success {",
+            "  background: linear-gradient(135deg, " + THEME_SUCCESS + " 0%, " + THEME_SUCCESS_DARK + " 100%);",
+            "  color: " + THEME_TEXT_PRIMARY + "; border: 1px solid rgba(16,185,129,0.4);",
+            "  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 600;",
+            "  font-size: 14px; transition: opacity 0.2s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-success:hover { opacity: 0.9; }",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-success:disabled {",
+            "  opacity: " + THEME_DISABLED_OPACITY + "; cursor: default;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-warning {",
+            "  background: linear-gradient(135deg, " + THEME_WARNING + " 0%, " + THEME_WARNING_DARK + " 100%);",
+            "  color: " + THEME_TEXT_INVERSE + "; border: 1px solid rgba(245,158,11,0.4);",
+            "  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 600;",
+            "  font-size: 14px; transition: opacity 0.2s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-warning:hover { opacity: 0.9; }",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-warning:disabled {",
+            "  opacity: " + THEME_DISABLED_OPACITY + "; cursor: default;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-input {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; padding: 10px 12px; color: " + THEME_TEXT_PRIMARY + ";",
+            "  font-size: 14px; outline: none; transition: border-color 0.2s, box-shadow 0.2s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-input:focus {",
+            "  border-color: " + THEME_ACCENT + "; box-shadow: " + THEME_OUTLINE_FOCUS + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-input::placeholder { color: " + THEME_TEXT_MUTED + "; }",
+            "." + THEME_SCOPE_CLASS + " .ie-select {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; padding: 8px 12px; color: " + THEME_TEXT_PRIMARY + ";",
+            "  font-size: 14px; cursor: pointer; outline: none;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-select:focus {",
+            "  border-color: " + THEME_ACCENT + "; box-shadow: " + THEME_OUTLINE_FOCUS + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-select option {",
+            "  background: " + THEME_SELECT_OPTION_BG + "; color: " + THEME_TEXT_PRIMARY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-checkbox-row {",
+            "  display: flex; align-items: center; gap: 10px;",
+            "  padding: 8px 12px; background-color: " + THEME_SURFACE_BG + ";",
+            "  border-radius: 8px; cursor: pointer; transition: background-color 0.15s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-checkbox-row:hover {",
+            "  background-color: " + THEME_SURFACE_BG_HEAVY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " input[type='checkbox'] {",
+            "  accent-color: " + THEME_ACCENT + "; cursor: pointer;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " input[type='range'] {",
+            "  accent-color: " + THEME_ACCENT + "; cursor: pointer;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-pill-success {",
+            "  background: rgba(16,185,129,0.25); color: " + THEME_SUCCESS + ";",
+            "  padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-pill-danger {",
+            "  background: rgba(239,68,68,0.25); color: " + THEME_DANGER + ";",
+            "  padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-pill-warning {",
+            "  background: rgba(245,158,11,0.25); color: " + THEME_WARNING + ";",
+            "  padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-pill-muted {",
+            "  background: " + THEME_SURFACE_BG + "; color: " + THEME_TEXT_MUTED + ";",
+            "  padding: 2px 10px; border-radius: 10px; font-size: 11px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-pill-accent {",
+            "  background: rgba(167,139,250,0.25); color: " + THEME_ACCENT + ";",
+            "  padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-pill-info {",
+            "  background: rgba(102,126,234,0.25); color: " + THEME_GRADIENT_START + ";",
+            "  padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-progress-track {",
+            "  width: 100%; height: 8px; background: " + THEME_SURFACE_BG + ";",
+            "  border-radius: 4px; overflow: hidden;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-progress-fill {",
+            "  height: 100%; transition: width 0.3s;",
+            "  background: linear-gradient(135deg, " + THEME_GRADIENT_START + " 0%, " + THEME_GRADIENT_END + " 100%);",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-spinner {",
+            "  width: 40px; height: 40px;",
+            "  border: 4px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-top: 4px solid " + THEME_ACCENT + ";",
+            "  border-radius: 50%; margin: 0 auto 16px;",
+            "  animation: ieThemeSpin 1s linear infinite;",
+            "}",
+            "@keyframes ieThemeSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }",
+            "@media (prefers-reduced-motion: reduce) {",
+            "  ." + THEME_SCOPE_CLASS + " .ie-spinner { animation: none; }",
+            "  ." + THEME_SCOPE_CLASS + " * { transition-duration: 0s !important; animation-duration: 0s !important; }",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-list-item {",
+            "  display: flex; align-items: center; gap: 10px;",
+            "  padding: 10px; margin-bottom: 6px;",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; background-color: " + THEME_SURFACE_BG + ";",
+            "  cursor: pointer; transition: background-color 0.2s, border-color 0.2s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-list-item:hover {",
+            "  background-color: " + THEME_SURFACE_BG_HEAVY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-list-item.ie-selected {",
+            "  background-color: rgba(167,139,250,0.2); border-color: " + THEME_ACCENT + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-list-item.ie-selected-success {",
+            "  background-color: rgba(16,185,129,0.15); border-color: " + THEME_SUCCESS + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-list-item.ie-selected-danger {",
+            "  background-color: rgba(239,68,68,0.15); border-color: " + THEME_DANGER + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-section-header {",
+            "  font-weight: 600; font-size: 14px; color: " + THEME_ACCENT + ";",
+            "  padding: 8px; background-color: " + THEME_SURFACE_BG + ";",
+            "  border-radius: " + THEME_RADIUS + "px " + THEME_RADIUS + "px 0 0;",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + "; border-bottom: none;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-section-body {",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 0 0 " + THEME_RADIUS + "px " + THEME_RADIUS + "px;",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-count-badge {",
+            "  font-size: 11px; color: " + THEME_TEXT_MUTED + ";",
+            "  background: " + THEME_SURFACE_BG + "; padding: 2px 8px;",
+            "  border-radius: 10px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-radio-indicator {",
+            "  width: 18px; height: 18px; border: 2px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 50%; flex-shrink: 0; display: flex;",
+            "  align-items: center; justify-content: center;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-sub-surface {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-status-area {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; padding: 6px; font-size: 13px;",
+            "  white-space: pre-wrap; color: " + THEME_TEXT_PRIMARY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-log-box {",
+            "  background-color: rgba(0,0,0,0.25);",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; padding: 6px; font-size: 12px;",
+            "  color: " + THEME_TEXT_MUTED + "; white-space: pre-wrap;",
+            "  word-break: break-word; overflow-wrap: anywhere;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-resize-handle {",
+            "  position: absolute; width: 12px; height: 12px;",
+            "  right: 6px; bottom: 6px; cursor: se-resize;",
+            "  background: " + THEME_SURFACE_BORDER + "; border-radius: 2px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-error-text {",
+            "  color: " + THEME_DANGER + "; text-align: center; font-size: 14px; min-height: 20px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-muted-text {",
+            "  color: " + THEME_TEXT_MUTED + "; font-size: 13px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-selection-info {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  border-radius: 8px; padding: 10px; font-size: 13px;",
+            "  color: " + THEME_TEXT_MUTED + "; text-align: center;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-summary-box {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  border-radius: 8px; padding: 12px; text-align: center;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " ::-webkit-scrollbar { width: 8px; height: 8px; }",
+            "." + THEME_SCOPE_CLASS + " ::-webkit-scrollbar-track {",
+            "  background: " + THEME_SCROLLBAR_TRACK + "; border-radius: 4px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " ::-webkit-scrollbar-thumb {",
+            "  background: " + THEME_SCROLLBAR_THUMB + "; border-radius: 4px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " ::-webkit-scrollbar-thumb:hover {",
+            "  background: rgba(255,255,255,0.5);",
+            "}",
+            ""
+        ].join("\n");
+        document.head.appendChild(style);
+    }
+
+    function removeThemeStyles() {
+        var existing = document.getElementById(THEME_STYLE_TAG_ID);
+        if (existing) existing.remove();
+    }
+
+    function applyThemeToUiRoots() {
+        if (!isGlassTheme()) return;
+        var panel = document.getElementById(PANEL_ID);
+        if (panel && !panel.classList.contains(THEME_SCOPE_CLASS)) {
+            panel.classList.add(THEME_SCOPE_CLASS);
+        }
+        var popups = document.querySelectorAll("[id^='clinsparkPopup_']");
+        for (var i = 0; i < popups.length; i++) {
+            if (!popups[i].classList.contains(THEME_SCOPE_CLASS)) {
+                popups[i].classList.add(THEME_SCOPE_CLASS);
+            }
+        }
+    }
+
     // Create a draggable, closeable popup styled like the panel
 
     // Create a draggable, closeable popup styled like the panel
     function createPopup(options) {
+        var glass = isGlassTheme();
+        if (glass) injectThemeStylesIfNeeded();
         options = options || {};
         var title = options.title || "Popup";
         var description = options.description || "";
@@ -24358,16 +24957,26 @@
 
         var popup = document.createElement("div");
         popup.id = popupId;
+        if (glass) {
+            popup.classList.add(THEME_SCOPE_CLASS);
+            popup.classList.add("ie-glass-panel");
+        }
         popup.style.position = "fixed";
         popup.style.top = "50%";
         popup.style.left = "50%";
         popup.style.transform = "translate(-50%, -50%)";
-        popup.style.zIndex = "999998";
-        popup.style.background = "#111";
-        popup.style.color = "#fff";
-        popup.style.border = "1px solid #444";
-        popup.style.borderRadius = "8";
-        popup.style.padding = "10px";
+        popup.style.zIndex = glass ? String(THEME_Z_OVERLAY) : "999998";
+        if (!glass) {
+            popup.style.background = "#111";
+            popup.style.color = "#fff";
+            popup.style.border = "1px solid #444";
+            popup.style.borderRadius = "8";
+            popup.style.padding = "10px";
+            popup.style.boxShadow = "0 4px 20px rgba(0, 0, 0, 0.5)";
+        } else {
+            popup.style.padding = "0";
+            popup.style.overflow = "hidden";
+        }
         popup.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
         popup.style.fontSize = "14px";
         popup.style.width = width;
@@ -24377,9 +24986,11 @@
         popup.style.boxSizing = "border-box";
         popup.style.display = "flex";
         popup.style.flexDirection = "column";
-        popup.style.boxShadow = "0 4px 20px rgba(0, 0, 0, 0.5)";
 
         var headerBar = document.createElement("div");
+        if (glass) {
+            headerBar.classList.add("ie-glass-panel-header");
+        }
         headerBar.style.position = "relative";
         headerBar.style.display = "grid";
         headerBar.style.gridTemplateColumns = "1fr auto";
@@ -24388,7 +24999,11 @@
         headerBar.style.height = String(PANEL_HEADER_HEIGHT_PX) + "px";
         headerBar.style.boxSizing = "border-box";
         headerBar.style.padding = "0 12px";
-        headerBar.style.borderBottom = "1px solid #444";
+        if (!glass) {
+            headerBar.style.borderBottom = "1px solid #444";
+        } else {
+            headerBar.style.borderRadius = THEME_RADIUS + "px " + THEME_RADIUS + "px 0 0";
+        }
         headerBar.style.cursor = "move";
         headerBar.style.userSelect = "none";
 
@@ -24401,13 +25016,14 @@
         titleEl.textContent = title;
         titleEl.style.fontWeight = "600";
         titleEl.style.textAlign = "left";
+        if (glass) titleEl.style.color = THEME_TEXT_PRIMARY;
         titleContainer.appendChild(titleEl);
 
         if (description) {
             var descEl = document.createElement("div");
             descEl.textContent = description;
             descEl.style.fontSize = "12px";
-            descEl.style.color = "#aaa";
+            descEl.style.color = glass ? THEME_TEXT_MUTED : "#aaa";
             descEl.style.textAlign = "left";
             descEl.style.marginTop = "2px";
             titleContainer.appendChild(descEl);
@@ -24418,7 +25034,7 @@
         var closeBtn = document.createElement("button");
         closeBtn.textContent = "✕";
         closeBtn.style.background = "transparent";
-        closeBtn.style.color = "#fff";
+        closeBtn.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
         closeBtn.style.border = "none";
         closeBtn.style.cursor = "pointer";
         closeBtn.style.fontSize = "18px";
@@ -24431,7 +25047,7 @@
         closeBtn.style.alignItems = "center";
         closeBtn.style.justifyContent = "center";
         closeBtn.addEventListener("mouseenter", function() {
-            closeBtn.style.background = "#333";
+            closeBtn.style.background = glass ? THEME_SURFACE_BG_HEAVY : "#333";
         });
         closeBtn.addEventListener("mouseleave", function() {
             closeBtn.style.background = "transparent";
@@ -24598,7 +25214,7 @@
         handle.style.right = "6px";
         handle.style.bottom = "6px";
         handle.style.cursor = "se-resize";
-        handle.style.background = "#333";
+        handle.style.background = isGlassTheme() ? THEME_SURFACE_BG_HEAVY : "#333";
         handle.style.borderRadius = "2px";
         handle.style.display = "block";
 
@@ -24787,22 +25403,30 @@
     // These functions are used to create the panel UI and manage its state.
     //==========================
     function makePanel() {
+        var glass = isGlassTheme();
+        if (glass) injectThemeStylesIfNeeded();
         var prior = document.getElementById(PANEL_ID);
         if (prior) {
             return prior;
         }
         var panel = document.createElement("div");
         panel.id = PANEL_ID;
+        if (glass) {
+            panel.classList.add(THEME_SCOPE_CLASS);
+            panel.classList.add("ie-glass-panel");
+        }
         var savedTop = getStoredPos("activityPlanState.panel.top", "20px");
         var savedRight = getStoredPos("activityPlanState.panel.right", "20px");
         var savedSize = getStoredPanelSize();
         panel.style.top = savedTop;
         panel.style.position = "fixed";
         panel.style.right = savedRight;
-        panel.style.zIndex = "999999";
-        panel.style.background = "#111";
-        panel.style.color = "#fff";
-        panel.style.border = "1px solid #444";
+        panel.style.zIndex = glass ? String(THEME_Z_BASE) : "999999";
+        if (!glass) {
+            panel.style.background = "#111";
+            panel.style.color = "#fff";
+            panel.style.border = "1px solid #444";
+        }
         panel.style.borderRadius = scale(PANEL_BORDER_RADIUS_PX);
         panel.style.padding = scale(PANEL_PADDING_PX);
         panel.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
@@ -24818,6 +25442,10 @@
         panel.style.overflow = "hidden";
 
         var headerBar = document.createElement("div");
+        if (glass) {
+            headerBar.classList.add("ie-glass-panel-header");
+            headerBar.style.borderRadius = THEME_RADIUS + "px " + THEME_RADIUS + "px 0 0";
+        }
         headerBar.style.position = "relative";
         headerBar.style.display = "grid";
         headerBar.style.gridTemplateColumns = "auto 1fr auto";
@@ -24836,6 +25464,7 @@
         title.style.justifySelf = "center";
         title.style.transform = "translateX(" + scale(HEADER_TITLE_OFFSET_PX) + ")";
         title.style.paddingBottom = scale(8);
+        if (glass) title.style.color = THEME_TEXT_PRIMARY;
         headerBar.appendChild(title);
         headerBar.appendChild(leftSpacer);
         var rightControls = document.createElement("div");
@@ -24845,7 +25474,7 @@
         var collapseBtn = document.createElement("button");
         collapseBtn.textContent = getPanelCollapsed() ? "Expand" : "Collapse";
         collapseBtn.style.background = "transparent";
-        collapseBtn.style.color = "#fff";
+        collapseBtn.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
         collapseBtn.style.border = "none";
         collapseBtn.style.cursor = "pointer";
         collapseBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
@@ -24853,7 +25482,7 @@
         closeBtn.textContent = CLOSE_BTN_TEXT;
         closeBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         closeBtn.style.background = "transparent";
-        closeBtn.style.color = "#fff";
+        closeBtn.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
         closeBtn.style.border = "none";
         closeBtn.style.cursor = "pointer";
 
@@ -24861,7 +25490,7 @@
         settingsBtn.textContent = "⚙";
         settingsBtn.title = "Settings";
         settingsBtn.style.background = "transparent";
-        settingsBtn.style.color = "#fff";
+        settingsBtn.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
         settingsBtn.style.border = "none";
         settingsBtn.style.cursor = "pointer";
         settingsBtn.style.fontSize = scale(16);
@@ -25268,6 +25897,25 @@
         collectAllBtn.onmouseenter = () => { collectAllBtn.style.background = "#ec971f"; };
         collectAllBtn.onmouseleave = () => { collectAllBtn.style.background = "#f0ad4e"; };
 
+        // Apply glassmorphism theme to all panel buttons if glass theme is active
+        if (glass) {
+            var allPanelBtns = [runPlansBtn, runStudyBtn, runAddCohortBtn, runConsentBtn, runAllBtn, runNonScrnBtn, addExistingSubjectBtn, saBuilderBtn, runBarcodeBtn, runFormOORBtn, runFormOORABtn, runFormIRBtn, parseMethodBtn, searchMethodsBtn, archiveUpdateFormsBtn, copyFormsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn, runLockSamplePathsBtn, importEligBtn, findFormBtn, pullLabBarcodeBtn, findStudyEventsBtn, clearMappingBtn, collectAllBtn];
+            for (var gi = 0; gi < allPanelBtns.length; gi++) {
+                var gb = allPanelBtns[gi];
+                gb.className = "ie-btn-primary";
+                gb.style.background = "";
+                gb.style.color = "";
+                gb.style.border = "";
+                gb.style.borderRadius = "";
+                gb.style.fontWeight = "";
+                gb.style.transition = "";
+                gb.onmouseenter = null;
+                gb.onmouseleave = null;
+                gb.style.padding = scale(BUTTON_PADDING_PX);
+                gb.style.fontSize = scale(PANEL_FONT_SIZE_PX);
+            }
+        }
+
         var panelButtons = [
             { el: runPlansBtn, label: "Lock Activity Plans" },
             { el: runLockSamplePathsBtn, label: "Lock Sample Paths" },
@@ -25317,12 +25965,13 @@
         bodyContainer.appendChild(btnRow);
         var status = document.createElement("div");
         status.style.marginTop = scale(STATUS_MARGIN_TOP_PX);
-        status.style.background = "#1a1a1a";
-        status.style.border = "1px solid #333";
+        status.style.background = glass ? THEME_SURFACE_BG : "#1a1a1a";
+        status.style.border = glass ? ("1px solid " + THEME_SURFACE_INNER_BORDER) : "1px solid #333";
         status.style.borderRadius = scale(STATUS_BORDER_RADIUS_PX);
         status.style.padding = scale(STATUS_PADDING_PX);
         status.style.fontSize = scale(STATUS_FONT_SIZE_PX);
         status.style.whiteSpace = "pre-wrap";
+        if (glass) status.style.color = THEME_TEXT_PRIMARY;
         status.textContent = "Ready";
         bodyContainer.appendChild(status);
 
@@ -25330,8 +25979,8 @@
         // UI Scale Control
         var scaleControl = document.createElement("div");
         scaleControl.style.marginTop = scale(STATUS_MARGIN_TOP_PX);
-        scaleControl.style.background = "#1a1a1a";
-        scaleControl.style.border = "1px solid #333";
+        scaleControl.style.background = glass ? THEME_SURFACE_BG : "#1a1a1a";
+        scaleControl.style.border = glass ? ("1px solid " + THEME_SURFACE_INNER_BORDER) : "1px solid #333";
         scaleControl.style.borderRadius = scale(STATUS_BORDER_RADIUS_PX);
         scaleControl.style.padding = scale(STATUS_PADDING_PX);
         scaleControl.style.fontSize = scale(STATUS_FONT_SIZE_PX);
@@ -25339,7 +25988,7 @@
         var scaleLabel = document.createElement("div");
         scaleLabel.textContent = "UI Scale: " + Math.round(UI_SCALE * 100) + "%";
         scaleLabel.style.marginBottom = "4px";
-        scaleLabel.style.color = "#fff";
+        scaleLabel.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
 
         var scaleSlider = document.createElement("input");
         scaleSlider.type = "range";
@@ -25369,12 +26018,12 @@
         logBox.style.marginTop = scale(LOG_MARGIN_TOP_PX);
         logBox.style.height = scale(LOG_HEIGHT_PX);
         logBox.style.overflowY = "auto";
-        logBox.style.background = "#141414";
-        logBox.style.border = "1px solid #333";
+        logBox.style.background = glass ? THEME_SURFACE_BG : "#141414";
+        logBox.style.border = glass ? ("1px solid " + THEME_SURFACE_INNER_BORDER) : "1px solid #333";
         logBox.style.borderRadius = scale(LOG_BORDER_RADIUS_PX);
         logBox.style.padding = scale(LOG_PADDING_PX);
         logBox.style.fontSize = scale(LOG_FONT_SIZE_PX);
-        logBox.style.color = "#00000";
+        logBox.style.color = glass ? THEME_TEXT_MUTED : "#00000";
         logBox.style.whiteSpace = "pre-wrap";
         logBox.style.wordBreak = "break-word";
         logBox.style.overflowWrap = "anywhere";
