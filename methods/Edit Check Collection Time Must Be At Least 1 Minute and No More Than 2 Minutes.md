@@ -13,23 +13,24 @@ if (!startTime || startTime.value == null || !endTime || endTime.value == null) 
 var startTimeMs = startTime.dateValueMs;
 var endTimeMs = endTime.dateValueMs;
 
-logger("Start Time :"  + formatDateTimeByType(startTime));
-logger("End Time: " + formatDateTimeByType(endTime));
+logger("Previous Collection Time :"  + formatDateTimeByType(startTime));
+logger("Collection Time: " + formatDateTimeByType(endTime));
 
 const differenceMs = endTimeMs - startTimeMs;
 logger(differenceMs)
 if (differenceMs < 0) {
-    customErrorMessage("Collected End Time is less than Start Time. Start Time: " + formatDateTimeByType(startTime))
+    customErrorMessage("Collected Time is less than Previous Collection Time. Previous Collection Time: " + formatDateTimeByType(startTime))
     return false;
 }
-const differenceInMins = Math.abs(Math.floor(differenceMs / (1000 * 60)))
+const differenceInMins = Math.abs(differenceMs / (1000 * 60))
 
-logger("Difference in minutes: " + differenceInMins)
 if(differenceInMins >= minimum && differenceInMins <= maximum ){
     return true;
 }
 
-customErrorMessage("Difference is out of range: " + Math.abs(differenceInMins) + " minutes. Must be at least 1 minute and no more than 2 minutes before previous collection");
+const differenceInSeconds = Math.abs(Math.floor(differenceMs / 1000));
+logger("Difference in seconds: " + differenceInSeconds)
+customErrorMessage("Difference is out of range: " + Math.abs(differenceInSeconds) + " seconds. Must be at least 1 minute and no more than 2 minutes before previous collection");
 return false;
 
 

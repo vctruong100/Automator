@@ -1,3 +1,28 @@
+Button Redirect to Image Page (use direct link):
+<a href="https://i.ibb.co/Kj0sKf2W/image-4.png" 
+   target="_blank"
+   class="img-link-btn">
+  Click to View Image
+</a>
+
+<style>
+  .img-link-btn {
+    display: inline-block;
+    padding: 10px 20px;
+    background-color: #4CAF50;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    font-family: sans-serif;
+    font-size: 14px;
+  }
+
+  .img-link-btn:hover {
+    background-color: #45a049;
+  }
+</style>
+ 
+
 Auto-navigate to AEs:
 Copy and paste the code below:
 

@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.0.0
+// @version     2.1.0
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -271,6 +271,3104 @@
     var PULL_LAB_BARCODE_RIGHT_LIST_EL = null;
     var PULL_LAB_BARCODE_SUMMARY_EL = null;
     var PULL_LAB_BARCODE_STATUS_MAP = {};
+
+    // Theme Mode
+    var STORAGE_THEME_MODE = "activityPlanState.themeMode";
+    var THEME_MODE_BLACK = "black";
+    var THEME_MODE_GLASS = "glass";
+
+    // Glassmorphism Theme Variables (from Test Automator 2)
+    var THEME_GRADIENT_START = "#667eea";
+    var THEME_GRADIENT_END = "#764ba2";
+    var THEME_GRADIENT_BG = "linear-gradient(135deg, #667eea 0%, #764ba2 100%)";
+    var THEME_SURFACE_BG = "rgba(15,10,40,0.55)";
+    var THEME_SURFACE_BG_HEAVY = "rgba(15,10,40,0.7)";
+    var THEME_SURFACE_BORDER = "rgba(255,255,255,0.25)";
+    var THEME_SURFACE_INNER_BORDER = "rgba(255,255,255,0.35)";
+    var THEME_BLUR_PX = 16;
+    var THEME_TEXT_PRIMARY = "#ffffff";
+    var THEME_TEXT_MUTED = "rgba(255,255,255,0.75)";
+    var THEME_TEXT_INVERSE = "#0f1020";
+    var THEME_ACCENT = "#a78bfa";
+    var THEME_ACCENT_HOVER = "#c4b5fd";
+    var THEME_DANGER = "#ef4444";
+    var THEME_DANGER_DARK = "#b91c1c";
+    var THEME_WARNING = "#f59e0b";
+    var THEME_WARNING_DARK = "#d97706";
+    var THEME_SUCCESS = "#10b981";
+    var THEME_SUCCESS_DARK = "#059669";
+    var THEME_DISABLED_OPACITY = 0.5;
+    var THEME_SELECT_OPTION_BG = "#2d1b69";
+    var THEME_SHADOW = "0 8px 30px rgba(0,0,0,0.3)";
+    var THEME_RADIUS = 14;
+    var THEME_OUTLINE_FOCUS = "0 0 0 3px rgba(199,210,254,0.6)";
+    var THEME_SCROLLBAR_TRACK = "rgba(255,255,255,0.12)";
+    var THEME_SCROLLBAR_THUMB = "rgba(255,255,255,0.35)";
+    var THEME_STYLE_TAG_ID = "ieThemeStyles";
+    var THEME_SCOPE_CLASS = "ie-theme-scope";
+    var THEME_Z_BASE = 999999;
+    var THEME_Z_OVERLAY = 1000000;
+    var THEME_Z_TOAST = 1000001;
+
+    function getThemeMode() {
+        try {
+            var saved = localStorage.getItem(STORAGE_THEME_MODE);
+            if (saved === THEME_MODE_GLASS) return THEME_MODE_GLASS;
+        } catch (e) {}
+        return THEME_MODE_BLACK;
+    }
+
+    function setThemeMode(mode) {
+        try {
+            localStorage.setItem(STORAGE_THEME_MODE, mode);
+        } catch (e) {}
+    }
+
+    function isGlassTheme() {
+        return getThemeMode() === THEME_MODE_GLASS;
+    }
+
+    // Glassmorphism Theme Style Injection (from Test Automator 2)
+    function injectThemeStylesIfNeeded() {
+        if (!isGlassTheme()) return;
+        var existing = document.getElementById(THEME_STYLE_TAG_ID);
+        if (existing) return;
+        var style = document.createElement("style");
+        style.id = THEME_STYLE_TAG_ID;
+        style.textContent = [
+            "." + THEME_SCOPE_CLASS + " {",
+            "  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;",
+            "  color: " + THEME_TEXT_PRIMARY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-theme-backdrop {",
+            "  position: fixed; top:0; left:0; width:100%; height:100%;",
+            "  background: linear-gradient(135deg, " + THEME_GRADIENT_START + " 0%, " + THEME_GRADIENT_END + " 100%);",
+            "  z-index: " + (THEME_Z_BASE - 1) + ";",
+            "  pointer-events: none;",
+            "}",
+            "." + THEME_SCOPE_CLASS + ".ie-glass-panel,",
+            "." + THEME_SCOPE_CLASS + " .ie-glass-panel {",
+            "  background: " + THEME_GRADIENT_BG + ";",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  box-shadow: inset 0 0 0 1px " + THEME_SURFACE_INNER_BORDER + ", " + THEME_SHADOW + ";",
+            "  border-radius: " + THEME_RADIUS + "px;",
+            "  color: " + THEME_TEXT_PRIMARY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + ".ie-glass-panel-header,",
+            "." + THEME_SCOPE_CLASS + " .ie-glass-panel-header {",
+            "  background: linear-gradient(135deg, " + THEME_GRADIENT_START + " 0%, " + THEME_GRADIENT_END + " 100%);",
+            "  border-bottom: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  color: " + THEME_TEXT_PRIMARY + ";",
+            "  cursor: move; user-select: none;",
+            "}",
+            "." + THEME_SCOPE_CLASS + ".ie-glass-panel-header-danger,",
+            "." + THEME_SCOPE_CLASS + " .ie-glass-panel-header-danger {",
+            "  background: linear-gradient(135deg, " + THEME_DANGER + " 0%, " + THEME_DANGER_DARK + " 100%);",
+            "  border-bottom: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  color: " + THEME_TEXT_PRIMARY + ";",
+            "  cursor: move; user-select: none;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-primary {",
+            "  background: linear-gradient(135deg, " + THEME_GRADIENT_START + " 0%, " + THEME_GRADIENT_END + " 100%);",
+            "  color: " + THEME_TEXT_PRIMARY + "; border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 600;",
+            "  font-size: 14px; transition: opacity 0.2s, box-shadow 0.2s;",
+            "  box-shadow: " + THEME_SHADOW + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-primary:hover {",
+            "  opacity: 0.9; box-shadow: 0 0 0 2px " + THEME_ACCENT_HOVER + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-primary:focus-visible {",
+            "  box-shadow: " + THEME_OUTLINE_FOCUS + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-primary:disabled {",
+            "  opacity: " + THEME_DISABLED_OPACITY + "; cursor: default;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-secondary {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  color: " + THEME_TEXT_PRIMARY + "; border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 500;",
+            "  font-size: 13px; transition: background-color 0.2s, box-shadow 0.2s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-secondary:hover {",
+            "  background-color: " + THEME_SURFACE_BG_HEAVY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-secondary:disabled {",
+            "  opacity: " + THEME_DISABLED_OPACITY + "; cursor: default;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-secondary:focus-visible {",
+            "  box-shadow: " + THEME_OUTLINE_FOCUS + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-danger {",
+            "  background: linear-gradient(135deg, " + THEME_DANGER + " 0%, " + THEME_DANGER_DARK + " 100%);",
+            "  color: " + THEME_TEXT_PRIMARY + "; border: 1px solid rgba(239,68,68,0.4);",
+            "  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 600;",
+            "  font-size: 14px; transition: opacity 0.2s, box-shadow 0.2s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-danger:hover {",
+            "  opacity: 0.9;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-danger:focus-visible {",
+            "  box-shadow: " + THEME_OUTLINE_FOCUS + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-success {",
+            "  background: linear-gradient(135deg, " + THEME_SUCCESS + " 0%, " + THEME_SUCCESS_DARK + " 100%);",
+            "  color: " + THEME_TEXT_PRIMARY + "; border: 1px solid rgba(16,185,129,0.4);",
+            "  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 600;",
+            "  font-size: 14px; transition: opacity 0.2s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-success:hover { opacity: 0.9; }",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-success:disabled {",
+            "  opacity: " + THEME_DISABLED_OPACITY + "; cursor: default;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-warning {",
+            "  background: linear-gradient(135deg, " + THEME_WARNING + " 0%, " + THEME_WARNING_DARK + " 100%);",
+            "  color: " + THEME_TEXT_INVERSE + "; border: 1px solid rgba(245,158,11,0.4);",
+            "  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 600;",
+            "  font-size: 14px; transition: opacity 0.2s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-warning:hover { opacity: 0.9; }",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-warning:disabled {",
+            "  opacity: " + THEME_DISABLED_OPACITY + "; cursor: default;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-input {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; padding: 10px 12px; color: " + THEME_TEXT_PRIMARY + ";",
+            "  font-size: 14px; outline: none; transition: border-color 0.2s, box-shadow 0.2s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-input:focus {",
+            "  border-color: " + THEME_ACCENT + "; box-shadow: " + THEME_OUTLINE_FOCUS + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-input::placeholder { color: " + THEME_TEXT_MUTED + "; }",
+            "." + THEME_SCOPE_CLASS + " .ie-select {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; padding: 8px 12px; color: " + THEME_TEXT_PRIMARY + ";",
+            "  font-size: 14px; cursor: pointer; outline: none;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-select:focus {",
+            "  border-color: " + THEME_ACCENT + "; box-shadow: " + THEME_OUTLINE_FOCUS + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-select option {",
+            "  background: " + THEME_SELECT_OPTION_BG + "; color: " + THEME_TEXT_PRIMARY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-checkbox-row {",
+            "  display: flex; align-items: center; gap: 10px;",
+            "  padding: 8px 12px; background-color: " + THEME_SURFACE_BG + ";",
+            "  border-radius: 8px; cursor: pointer; transition: background-color 0.15s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-checkbox-row:hover {",
+            "  background-color: " + THEME_SURFACE_BG_HEAVY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " input[type='checkbox'] {",
+            "  accent-color: " + THEME_ACCENT + "; cursor: pointer;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " input[type='range'] {",
+            "  accent-color: " + THEME_ACCENT + "; cursor: pointer;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-pill-success {",
+            "  background: rgba(16,185,129,0.25); color: " + THEME_SUCCESS + ";",
+            "  padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-pill-danger {",
+            "  background: rgba(239,68,68,0.25); color: " + THEME_DANGER + ";",
+            "  padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-pill-warning {",
+            "  background: rgba(245,158,11,0.25); color: " + THEME_WARNING + ";",
+            "  padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-pill-muted {",
+            "  background: " + THEME_SURFACE_BG + "; color: " + THEME_TEXT_MUTED + ";",
+            "  padding: 2px 10px; border-radius: 10px; font-size: 11px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-pill-accent {",
+            "  background: rgba(167,139,250,0.25); color: " + THEME_ACCENT + ";",
+            "  padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-pill-info {",
+            "  background: rgba(102,126,234,0.25); color: " + THEME_GRADIENT_START + ";",
+            "  padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-progress-track {",
+            "  width: 100%; height: 8px; background: " + THEME_SURFACE_BG + ";",
+            "  border-radius: 4px; overflow: hidden;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-progress-fill {",
+            "  height: 100%; transition: width 0.3s;",
+            "  background: linear-gradient(135deg, " + THEME_GRADIENT_START + " 0%, " + THEME_GRADIENT_END + " 100%);",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-spinner {",
+            "  width: 40px; height: 40px;",
+            "  border: 4px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-top: 4px solid " + THEME_ACCENT + ";",
+            "  border-radius: 50%; margin: 0 auto 16px;",
+            "  animation: ieThemeSpin 1s linear infinite;",
+            "}",
+            "@keyframes ieThemeSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }",
+            "@media (prefers-reduced-motion: reduce) {",
+            "  ." + THEME_SCOPE_CLASS + " .ie-spinner { animation: none; }",
+            "  ." + THEME_SCOPE_CLASS + " * { transition-duration: 0s !important; animation-duration: 0s !important; }",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-list-item {",
+            "  display: flex; align-items: center; gap: 10px;",
+            "  padding: 10px; margin-bottom: 6px;",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; background-color: " + THEME_SURFACE_BG + ";",
+            "  cursor: pointer; transition: background-color 0.2s, border-color 0.2s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-list-item:hover {",
+            "  background-color: " + THEME_SURFACE_BG_HEAVY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-list-item.ie-selected {",
+            "  background-color: rgba(167,139,250,0.2); border-color: " + THEME_ACCENT + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-list-item.ie-selected-success {",
+            "  background-color: rgba(16,185,129,0.15); border-color: " + THEME_SUCCESS + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-list-item.ie-selected-danger {",
+            "  background-color: rgba(239,68,68,0.15); border-color: " + THEME_DANGER + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-section-header {",
+            "  font-weight: 600; font-size: 14px; color: " + THEME_ACCENT + ";",
+            "  padding: 8px; background-color: " + THEME_SURFACE_BG + ";",
+            "  border-radius: " + THEME_RADIUS + "px " + THEME_RADIUS + "px 0 0;",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + "; border-bottom: none;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-section-body {",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 0 0 " + THEME_RADIUS + "px " + THEME_RADIUS + "px;",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-count-badge {",
+            "  font-size: 11px; color: " + THEME_TEXT_MUTED + ";",
+            "  background: " + THEME_SURFACE_BG + "; padding: 2px 8px;",
+            "  border-radius: 10px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-radio-indicator {",
+            "  width: 18px; height: 18px; border: 2px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 50%; flex-shrink: 0; display: flex;",
+            "  align-items: center; justify-content: center;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-sub-surface {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-status-area {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; padding: 6px; font-size: 13px;",
+            "  white-space: pre-wrap; color: " + THEME_TEXT_PRIMARY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-log-box {",
+            "  background-color: rgba(0,0,0,0.25);",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; padding: 6px; font-size: 12px;",
+            "  color: " + THEME_TEXT_MUTED + "; white-space: pre-wrap;",
+            "  word-break: break-word; overflow-wrap: anywhere;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-resize-handle {",
+            "  position: absolute; width: 12px; height: 12px;",
+            "  right: 6px; bottom: 6px; cursor: se-resize;",
+            "  background: " + THEME_SURFACE_BORDER + "; border-radius: 2px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-error-text {",
+            "  color: " + THEME_DANGER + "; text-align: center; font-size: 14px; min-height: 20px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-muted-text {",
+            "  color: " + THEME_TEXT_MUTED + "; font-size: 13px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-selection-info {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  border-radius: 8px; padding: 10px; font-size: 13px;",
+            "  color: " + THEME_TEXT_MUTED + "; text-align: center;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-summary-box {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  border-radius: 8px; padding: 12px; text-align: center;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " ::-webkit-scrollbar { width: 8px; height: 8px; }",
+            "." + THEME_SCOPE_CLASS + " ::-webkit-scrollbar-track {",
+            "  background: " + THEME_SCROLLBAR_TRACK + "; border-radius: 4px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " ::-webkit-scrollbar-thumb {",
+            "  background: " + THEME_SCROLLBAR_THUMB + "; border-radius: 4px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " ::-webkit-scrollbar-thumb:hover {",
+            "  background: rgba(255,255,255,0.5);",
+            "}",
+            ""
+        ].join("\n");
+        document.head.appendChild(style);
+    }
+
+    function removeThemeStyles() {
+        var existing = document.getElementById(THEME_STYLE_TAG_ID);
+        if (existing) existing.remove();
+    }
+
+    function applyThemeToUiRoots() {
+        if (!isGlassTheme()) return;
+        var panel = document.getElementById(PANEL_ID);
+        if (panel && !panel.classList.contains(THEME_SCOPE_CLASS)) {
+            panel.classList.add(THEME_SCOPE_CLASS);
+        }
+        var popups = document.querySelectorAll("[id^='clinsparkPopup_']");
+        for (var i = 0; i < popups.length; i++) {
+            if (!popups[i].classList.contains(THEME_SCOPE_CLASS)) {
+                popups[i].classList.add(THEME_SCOPE_CLASS);
+            }
+        }
+    }
+
+    //==========================
+    // COPY FORMS TO STUDY EVENTS FEATURE
+    //==========================
+    // This feature allows copying forms from one study event to multiple other study events.
+    // Users select source forms and target study events; the forms are created in each target event.
+    //==========================
+    var STORAGE_COPY_FORMS_CANCELLED = "activityPlanState.copyFormsToEvents.cancelled";
+    var COPY_FORMS_CANCELLED = false;
+    var COPY_FORMS_POPUP_REF = null;
+    var COPY_FORMS_PROGRESS_REF = null;
+    var COPY_FORMS_EXISTING_MAP = {};
+
+    // Check if on correct page for Copy Forms
+    function isOnCopyFormsPage() {
+        return location.href.indexOf("https://cenexeltest.clinspark.com/secure/crfdesign/activityplans/show/") === 0;
+    }
+
+    // Rebuild scheduled activity with target study event
+    // e.g., "Day 1 Pre > REV_Review Questions" + "Day -1" => "Day -1 REV_Review Questions"
+    function rebuildScheduledActivityForTarget(sourceScheduledActivity, targetStudyEvent) {
+        if (!sourceScheduledActivity || !targetStudyEvent) return sourceScheduledActivity;
+        var parts = sourceScheduledActivity.split(">");
+        if (parts.length < 2) return sourceScheduledActivity;
+        var activityName = parts[parts.length - 1].trim();
+        return normalizeSAText(targetStudyEvent) + " " + activityName;
+    }
+
+    // Build hierarchical structure from rows: Segment -> StudyEvent -> Forms
+    function buildHierarchicalFormMap(rows) {
+        var hierarchy = {};
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var segKey = row.segmentText;
+            var evKey = row.eventText;
+            var formKey = row.formText;
+
+            if (!hierarchy[segKey]) {
+                hierarchy[segKey] = {
+                    segmentText: row.segmentText,
+                    segmentValue: row.segmentValue,
+                    studyEvents: {}
+                };
+            }
+
+            if (!hierarchy[segKey].studyEvents[evKey]) {
+                hierarchy[segKey].studyEvents[evKey] = {
+                    eventText: row.eventText,
+                    eventValue: row.eventValue,
+                    forms: []
+                };
+            }
+
+            hierarchy[segKey].studyEvents[evKey].forms.push({
+                formText: row.formText,
+                formValue: row.formValue,
+                formKey: row.formKey,
+                rowKey: row.rowKey,
+                segmentText: row.segmentText,
+                segmentValue: row.segmentValue,
+                eventText: row.eventText,
+                eventValue: row.eventValue,
+                isArchived: row.isArchived
+            });
+        }
+        return hierarchy;
+    }
+
+    // Build existing forms map for duplicate detection
+    function buildExistingFormsMap(rows) {
+        var map = {};
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var key = normalizeSAText(row.segmentText) + "|" + normalizeSAText(row.eventText) + "|" + normalizeSAText(row.formText);
+            map[key] = true;
+        }
+        return map;
+    }
+
+    // Check if form already exists
+    function formExistsInMap(segmentText, eventText, formText, existingMap) {
+        var key = normalizeSAText(segmentText) + "|" + normalizeSAText(eventText) + "|" + normalizeSAText(formText);
+        return !!existingMap[key];
+    }
+
+    // Create the Copy Forms to Study Events GUI
+    function createCopyFormsGUI(hierarchy, studyEventsArray) {
+        var selectedForms = {};
+        var selectedStudyEvents = {};
+        var currentSelectedStudyEvent = null;
+
+        var container = document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;height:100%;min-height:550px;gap:12px;";
+
+        // Header row with labels
+        var headerRow = document.createElement("div");
+        headerRow.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:16px;";
+
+        var leftHeader = document.createElement("div");
+        leftHeader.style.cssText = "display:flex;flex-direction:column;gap:8px;";
+        var leftLabel = document.createElement("div");
+        leftLabel.textContent = "Source Forms (select forms to copy)";
+        leftLabel.style.cssText = "font-weight:600;font-size:14px;color:#17a2b8;";
+        var leftSearch = document.createElement("input");
+        leftSearch.type = "text";
+        leftSearch.placeholder = "Search forms...";
+        leftSearch.style.cssText = "padding:10px;border-radius:6px;border:1px solid #444;background:#222;color:#fff;font-size:14px;";
+        leftHeader.appendChild(leftLabel);
+        leftHeader.appendChild(leftSearch);
+
+        var rightHeader = document.createElement("div");
+        rightHeader.style.cssText = "display:flex;flex-direction:column;gap:8px;";
+        var rightLabel = document.createElement("div");
+        rightLabel.textContent = "Target Study Events (select destinations)";
+        rightLabel.style.cssText = "font-weight:600;font-size:14px;color:#51cf66;";
+        var rightSearch = document.createElement("input");
+        rightSearch.type = "text";
+        rightSearch.placeholder = "Search study events...";
+        rightSearch.style.cssText = "padding:10px;border-radius:6px;border:1px solid #444;background:#222;color:#fff;font-size:14px;";
+        rightHeader.appendChild(rightLabel);
+        rightHeader.appendChild(rightSearch);
+
+        headerRow.appendChild(leftHeader);
+        headerRow.appendChild(rightHeader);
+        container.appendChild(headerRow);
+
+        // Panels row
+        var panelsRow = document.createElement("div");
+        panelsRow.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:16px;flex:1;overflow:hidden;";
+
+        var leftPanel = document.createElement("div");
+        leftPanel.style.cssText = "border:2px solid #17a2b8;border-radius:8px;background:#1a1a1a;overflow-y:auto;padding:8px;";
+        leftPanel.id = "copyFormsLeftPanel";
+
+        var rightPanel = document.createElement("div");
+        rightPanel.style.cssText = "border:2px solid #51cf66;border-radius:8px;background:#1a1a1a;overflow-y:auto;padding:8px;";
+        rightPanel.id = "copyFormsRightPanel";
+
+        panelsRow.appendChild(leftPanel);
+        panelsRow.appendChild(rightPanel);
+        container.appendChild(panelsRow);
+
+        // Selection info area
+        var selectionInfo = document.createElement("div");
+        selectionInfo.id = "copyFormsSelectionInfo";
+        selectionInfo.style.cssText = "background:#222;border-radius:6px;padding:10px;font-size:13px;color:#888;text-align:center;";
+        selectionInfo.textContent = "Select forms on the left and study events on the right to continue";
+        container.appendChild(selectionInfo);
+
+        // Button row with Clear All buttons
+        var clearRow = document.createElement("div");
+        clearRow.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:16px;";
+
+        var leftClearBtn = document.createElement("button");
+        leftClearBtn.textContent = "Clear Left Selection";
+        leftClearBtn.style.cssText = "padding:8px 16px;border-radius:6px;border:none;background:#6c757d;color:#fff;font-size:13px;cursor:pointer;";
+        leftClearBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
+        leftClearBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
+
+        var rightClearBtn = document.createElement("button");
+        rightClearBtn.textContent = "Clear Right Selection";
+        rightClearBtn.style.cssText = "padding:8px 16px;border-radius:6px;border:none;background:#6c757d;color:#fff;font-size:13px;cursor:pointer;";
+        rightClearBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
+        rightClearBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
+
+        clearRow.appendChild(leftClearBtn);
+        clearRow.appendChild(rightClearBtn);
+        container.appendChild(clearRow);
+
+        // Error message area
+        var errorDiv = document.createElement("div");
+        errorDiv.style.cssText = "color:#ff6b6b;text-align:center;font-size:14px;min-height:20px;";
+        errorDiv.id = "copyFormsError";
+        container.appendChild(errorDiv);
+
+        // Main button row
+        var buttonRow = document.createElement("div");
+        buttonRow.style.cssText = "display:flex;justify-content:center;gap:16px;padding-top:8px;";
+
+        var continueBtn = document.createElement("button");
+        continueBtn.textContent = "Continue";
+        continueBtn.disabled = true;
+        continueBtn.style.cssText = "padding:12px 32px;border-radius:6px;border:none;background:#28a745;color:#fff;font-size:14px;font-weight:600;cursor:pointer;opacity:0.5;";
+
+        var cancelBtn = document.createElement("button");
+        cancelBtn.textContent = "Cancel";
+        cancelBtn.style.cssText = "padding:12px 32px;border-radius:6px;border:none;background:#dc3545;color:#fff;font-size:14px;font-weight:600;cursor:pointer;";
+        cancelBtn.onmouseenter = function() { this.style.background = "#c82333"; };
+        cancelBtn.onmouseleave = function() { this.style.background = "#dc3545"; };
+
+        buttonRow.appendChild(continueBtn);
+        buttonRow.appendChild(cancelBtn);
+        container.appendChild(buttonRow);
+
+        // Render left panel (hierarchical forms)
+        function renderLeftPanel(searchVal) {
+            leftPanel.innerHTML = "";
+            var filter = (searchVal || "").toLowerCase();
+
+            for (var segKey in hierarchy) {
+                if (!hierarchy.hasOwnProperty(segKey)) continue;
+                var segment = hierarchy[segKey];
+
+                var segmentDiv = document.createElement("div");
+                segmentDiv.style.cssText = "margin-bottom:12px;";
+
+                var segmentHeader = document.createElement("div");
+                segmentHeader.style.cssText = "font-weight:600;font-size:14px;color:#ffc107;padding:8px;background:#2a2a2a;border-radius:6px 6px 0 0;border:1px solid #444;border-bottom:none;";
+                segmentHeader.textContent = "📁 " + segment.segmentText;
+                segmentDiv.appendChild(segmentHeader);
+
+                var eventsContainer = document.createElement("div");
+                eventsContainer.style.cssText = "border:1px solid #444;border-radius:0 0 6px 6px;background:#1e1e1e;";
+
+                var hasVisibleContent = false;
+
+                for (var evKey in segment.studyEvents) {
+                    if (!segment.studyEvents.hasOwnProperty(evKey)) continue;
+                    var studyEvent = segment.studyEvents[evKey];
+
+                    var eventDiv = document.createElement("div");
+                    eventDiv.style.cssText = "padding:8px;border-bottom:1px solid #333;";
+
+                    var eventHeader = document.createElement("div");
+                    eventHeader.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px;background:#252525;border-radius:4px;margin-bottom:6px;";
+
+                    var eventCheckbox = document.createElement("input");
+                    eventCheckbox.type = "checkbox";
+                    eventCheckbox.style.cssText = "width:16px;height:16px;cursor:pointer;accent-color:#17a2b8;";
+                    eventCheckbox.dataset.segment = segment.segmentText;
+                    eventCheckbox.dataset.event = studyEvent.eventText;
+
+                    var eventLabel = document.createElement("span");
+                    eventLabel.style.cssText = "font-weight:500;color:#17a2b8;font-size:13px;flex:1;";
+                    eventLabel.textContent = "📅 " + studyEvent.eventText;
+
+                    var eventCount = document.createElement("span");
+                    eventCount.style.cssText = "font-size:11px;color:#888;background:#333;padding:2px 6px;border-radius:10px;";
+                    eventCount.textContent = studyEvent.forms.length + " forms";
+
+                    eventHeader.appendChild(eventCheckbox);
+                    eventHeader.appendChild(eventLabel);
+                    eventHeader.appendChild(eventCount);
+                    eventDiv.appendChild(eventHeader);
+
+                    var formsContainer = document.createElement("div");
+                    formsContainer.style.cssText = "padding-left:24px;";
+
+                    var visibleForms = 0;
+                    for (var f = 0; f < studyEvent.forms.length; f++) {
+                        var form = studyEvent.forms[f];
+                        if (filter && form.formText.toLowerCase().indexOf(filter) === -1) continue;
+                        visibleForms++;
+
+                        var formItem = document.createElement("div");
+                        formItem.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 8px;margin:4px 0;border:1px solid #333;border-radius:4px;background:#252525;cursor:pointer;transition:all 0.2s;";
+                        formItem.dataset.formKey = form.rowKey;
+                        formItem.dataset.segment = form.segmentText;
+                        formItem.dataset.event = form.eventText;
+                        formItem.dataset.form = form.formText;
+
+                        var formCheckbox = document.createElement("input");
+                        formCheckbox.type = "checkbox";
+                        formCheckbox.style.cssText = "width:14px;height:14px;cursor:pointer;accent-color:#17a2b8;";
+                        formCheckbox.checked = !!selectedForms[form.rowKey];
+
+                        var formLabel = document.createElement("div");
+                        formLabel.style.cssText = "flex:1;";
+
+                        var formName = document.createElement("div");
+                        formName.style.cssText = "font-size:13px;color:#fff;";
+                        formName.textContent = "📄 " + form.formText;
+
+                        var formPath = document.createElement("div");
+                        formPath.style.cssText = "font-size:10px;color:#666;margin-top:2px;";
+                        formPath.textContent = form.segmentText + " → " + form.eventText + " → " + form.formText;
+
+                        formLabel.appendChild(formName);
+                        formLabel.appendChild(formPath);
+                        formItem.appendChild(formCheckbox);
+                        formItem.appendChild(formLabel);
+
+                        if (selectedForms[form.rowKey]) {
+                            formItem.style.background = "#1a3d3d";
+                            formItem.style.border = "1px solid #17a2b8";
+                        }
+
+                        (function(formData, checkbox, item) {
+                            var toggleForm = function() {
+                                if (selectedForms[formData.rowKey]) {
+                                    delete selectedForms[formData.rowKey];
+                                    checkbox.checked = false;
+                                    item.style.background = "#252525";
+                                    item.style.border = "1px solid #333";
+                                } else {
+                                    // Check if selecting from a different study event
+                                    if (currentSelectedStudyEvent && currentSelectedStudyEvent !== formData.eventText) {
+                                        errorDiv.textContent = "Cannot select forms from different study events. Clear selection first.";
+                                        return;
+                                    }
+                                    currentSelectedStudyEvent = formData.eventText;
+                                    selectedForms[formData.rowKey] = formData;
+                                    checkbox.checked = true;
+                                    item.style.background = "#1a3d3d";
+                                    item.style.border = "1px solid #17a2b8";
+                                    errorDiv.textContent = "";
+                                }
+                                updateSelectionInfo();
+                                validateSelection();
+                            };
+
+                            checkbox.addEventListener("change", function(e) {
+                                e.stopPropagation();
+                                toggleForm();
+                            });
+                            item.addEventListener("click", function(e) {
+                                if (e.target !== checkbox) {
+                                    toggleForm();
+                                }
+                            });
+                        })(form, formCheckbox, formItem);
+
+                        formsContainer.appendChild(formItem);
+                    }
+
+                    if (visibleForms > 0) {
+                        hasVisibleContent = true;
+                        eventDiv.appendChild(formsContainer);
+                        eventsContainer.appendChild(eventDiv);
+
+                        // Event checkbox handler (select all forms in event)
+                        (function(ev, checkbox, segment) {
+                            checkbox.addEventListener("change", function() {
+                                if (checkbox.checked) {
+                                    // Check if selecting from a different study event
+                                    if (currentSelectedStudyEvent && currentSelectedStudyEvent !== ev.eventText) {
+                                        errorDiv.textContent = "Cannot select forms from different study events. Clear selection first.";
+                                        checkbox.checked = false;
+                                        return;
+                                    }
+                                    currentSelectedStudyEvent = ev.eventText;
+                                    for (var i = 0; i < ev.forms.length; i++) {
+                                        selectedForms[ev.forms[i].rowKey] = ev.forms[i];
+                                    }
+                                    errorDiv.textContent = "";
+                                } else {
+                                    for (var j = 0; j < ev.forms.length; j++) {
+                                        delete selectedForms[ev.forms[j].rowKey];
+                                    }
+                                    if (Object.keys(selectedForms).length === 0) {
+                                        currentSelectedStudyEvent = null;
+                                    }
+                                }
+                                renderLeftPanel(leftSearch.value);
+                                updateSelectionInfo();
+                                validateSelection();
+                            });
+                        })(studyEvent, eventCheckbox, segment);
+                    }
+                }
+
+                if (hasVisibleContent) {
+                    segmentDiv.appendChild(eventsContainer);
+                    leftPanel.appendChild(segmentDiv);
+                }
+            }
+        }
+
+        // Render right panel (study events)
+        function renderRightPanel(searchVal) {
+            rightPanel.innerHTML = "";
+            var filter = (searchVal || "").toLowerCase();
+
+            for (var i = 0; i < studyEventsArray.length; i++) {
+                var ev = studyEventsArray[i];
+                if (filter && ev.text.toLowerCase().indexOf(filter) === -1) continue;
+
+                var item = document.createElement("div");
+                item.style.cssText = "display:flex;align-items:center;gap:10px;padding:10px;margin-bottom:6px;border:1px solid #333;border-radius:6px;background:#252525;cursor:pointer;transition:all 0.2s;";
+                item.dataset.eventValue = ev.value;
+                item.dataset.eventText = ev.text;
+
+                var checkbox = document.createElement("input");
+                checkbox.type = "checkbox";
+                checkbox.style.cssText = "width:16px;height:16px;cursor:pointer;accent-color:#51cf66;";
+                checkbox.checked = !!selectedStudyEvents[ev.value];
+
+                var label = document.createElement("div");
+                label.style.cssText = "flex:1;font-size:13px;";
+                label.textContent = ev.text;
+
+                item.appendChild(checkbox);
+                item.appendChild(label);
+
+                if (selectedStudyEvents[ev.value]) {
+                    item.style.background = "#1a3d1a";
+                    item.style.border = "1px solid #51cf66";
+                }
+
+                (function(evData, cb, itemEl) {
+                    var toggle = function() {
+                        if (selectedStudyEvents[evData.value]) {
+                            delete selectedStudyEvents[evData.value];
+                            cb.checked = false;
+                            itemEl.style.background = "#252525";
+                            itemEl.style.border = "1px solid #333";
+                        } else {
+                            selectedStudyEvents[evData.value] = evData;
+                            cb.checked = true;
+                            itemEl.style.background = "#1a3d1a";
+                            itemEl.style.border = "1px solid #51cf66";
+                        }
+                        updateSelectionInfo();
+                        validateSelection();
+                    };
+                    cb.addEventListener("change", function(e) {
+                        e.stopPropagation();
+                        toggle();
+                    });
+                    itemEl.addEventListener("click", function(e) {
+                        if (e.target !== cb) toggle();
+                    });
+                })(ev, checkbox, item);
+
+                rightPanel.appendChild(item);
+            }
+        }
+
+        function updateSelectionInfo() {
+            var formCount = Object.keys(selectedForms).length;
+            var eventCount = Object.keys(selectedStudyEvents).length;
+            var totalItems = formCount * eventCount;
+
+            if (formCount === 0 && eventCount === 0) {
+                selectionInfo.textContent = "Select forms on the left and study events on the right to continue";
+                selectionInfo.style.color = "#888";
+            } else if (formCount === 0) {
+                selectionInfo.textContent = eventCount + " study event(s) selected. Now select forms to copy.";
+                selectionInfo.style.color = "#ffc107";
+            } else if (eventCount === 0) {
+                selectionInfo.textContent = formCount + " form(s) selected from " + (currentSelectedStudyEvent || "?") + ". Now select target study events.";
+                selectionInfo.style.color = "#ffc107";
+            } else {
+                selectionInfo.innerHTML = "<span style='color:#51cf66;font-weight:600;'>" + formCount + " form(s)</span> will be copied to <span style='color:#17a2b8;font-weight:600;'>" + eventCount + " study event(s)</span> = <span style='color:#ffc107;font-weight:600;'>" + totalItems + " new item(s)</span>";
+            }
+        }
+
+        function validateSelection() {
+            var formCount = Object.keys(selectedForms).length;
+            var eventCount = Object.keys(selectedStudyEvents).length;
+            var valid = formCount > 0 && eventCount > 0;
+
+            continueBtn.disabled = !valid;
+            continueBtn.style.opacity = valid ? "1" : "0.5";
+            if (valid) {
+                continueBtn.onmouseenter = function() { this.style.background = "#218838"; };
+                continueBtn.onmouseleave = function() { this.style.background = "#28a745"; };
+            } else {
+                continueBtn.onmouseenter = null;
+                continueBtn.onmouseleave = null;
+            }
+        }
+
+        // Search handlers
+        var leftTimeout = null;
+        var rightTimeout = null;
+        leftSearch.addEventListener("input", function() {
+            clearTimeout(leftTimeout);
+            leftTimeout = setTimeout(function() {
+                renderLeftPanel(leftSearch.value);
+            }, 200);
+        });
+        rightSearch.addEventListener("input", function() {
+            clearTimeout(rightTimeout);
+            rightTimeout = setTimeout(function() {
+                renderRightPanel(rightSearch.value);
+            }, 200);
+        });
+
+        // Clear buttons
+        leftClearBtn.addEventListener("click", function() {
+            selectedForms = {};
+            currentSelectedStudyEvent = null;
+            errorDiv.textContent = "";
+            renderLeftPanel(leftSearch.value);
+            updateSelectionInfo();
+            validateSelection();
+        });
+        rightClearBtn.addEventListener("click", function() {
+            selectedStudyEvents = {};
+            renderRightPanel(rightSearch.value);
+            updateSelectionInfo();
+            validateSelection();
+        });
+
+        cancelBtn.addEventListener("click", function() {
+            if (COPY_FORMS_POPUP_REF) {
+                COPY_FORMS_POPUP_REF.close();
+                COPY_FORMS_POPUP_REF = null;
+            }
+        });
+
+        // Initial render
+        renderLeftPanel("");
+        renderRightPanel("");
+
+        // Return container with getters
+        container.getSelection = function() {
+            return {
+                forms: selectedForms,
+                studyEvents: selectedStudyEvents
+            };
+        };
+        container.continueBtn = continueBtn;
+
+        return container;
+    }
+
+    // Create progress popup for Copy Forms
+    function createCopyFormsProgressPopup(items) {
+        var container = document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;height:100%;min-height:450px;";
+
+        // Status header
+        var statusDiv = document.createElement("div");
+        statusDiv.id = "copyFormsStatus";
+        statusDiv.style.cssText = "text-align:center;font-size:16px;font-weight:600;padding:12px;background:#222;border-radius:6px;margin-bottom:12px;";
+        statusDiv.textContent = "Preparing... 0 of " + items.length;
+        container.appendChild(statusDiv);
+
+        // Progress bar
+        var progressBarOuter = document.createElement("div");
+        progressBarOuter.style.cssText = "width:100%;height:8px;background:#333;border-radius:4px;margin-bottom:16px;overflow:hidden;";
+        var progressBarInner = document.createElement("div");
+        progressBarInner.id = "copyFormsProgressBar";
+        progressBarInner.style.cssText = "width:0%;height:100%;background:#28a745;transition:width 0.3s;";
+        progressBarOuter.appendChild(progressBarInner);
+        container.appendChild(progressBarOuter);
+
+        // Items list
+        var listContainer = document.createElement("div");
+        listContainer.style.cssText = "flex:1;overflow-y:auto;border:1px solid #333;border-radius:6px;background:#1a1a1a;padding:8px;";
+        listContainer.id = "copyFormsItemsList";
+
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            var itemDiv = document.createElement("div");
+            itemDiv.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin-bottom:4px;border:1px solid #333;border-radius:4px;background:#252525;font-size:12px;";
+            itemDiv.id = "copyFormsItem_" + i;
+
+            var itemLabel = document.createElement("div");
+            itemLabel.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+            itemLabel.textContent = item.segmentText + " → " + item.targetEventText + " → " + item.formText;
+
+            var itemStatus = document.createElement("div");
+            itemStatus.style.cssText = "padding:2px 8px;border-radius:10px;font-size:11px;background:#444;color:#888;margin-left:8px;flex-shrink:0;";
+            itemStatus.textContent = "Incomplete";
+            itemStatus.className = "item-status";
+
+            itemDiv.appendChild(itemLabel);
+            itemDiv.appendChild(itemStatus);
+            listContainer.appendChild(itemDiv);
+        }
+        container.appendChild(listContainer);
+
+        // Summary area
+        var summaryDiv = document.createElement("div");
+        summaryDiv.id = "copyFormsSummary";
+        summaryDiv.style.cssText = "display:none;margin-top:12px;padding:12px;background:#222;border-radius:6px;text-align:center;";
+        container.appendChild(summaryDiv);
+
+        // Stop button
+        var stopRow = document.createElement("div");
+        stopRow.style.cssText = "display:flex;justify-content:center;padding-top:12px;";
+        var stopBtn = document.createElement("button");
+        stopBtn.textContent = "Stop and Close";
+        stopBtn.id = "copyFormsStopBtn";
+        stopBtn.style.cssText = "padding:10px 24px;border-radius:6px;border:none;background:#dc3545;color:#fff;font-size:14px;font-weight:500;cursor:pointer;";
+        stopBtn.onmouseenter = function() { this.style.background = "#c82333"; };
+        stopBtn.onmouseleave = function() { this.style.background = "#dc3545"; };
+        stopBtn.addEventListener("click", function() {
+            COPY_FORMS_CANCELLED = true;
+            stopBtn.disabled = true;
+            stopBtn.textContent = "Stopping...";
+            stopBtn.style.opacity = "0.5";
+            log("Copy Forms: stop requested by user");
+        });
+        stopRow.appendChild(stopBtn);
+        container.appendChild(stopRow);
+
+        // Helper methods
+        container.updateStatus = function(text) {
+            var el = document.getElementById("copyFormsStatus");
+            if (el) el.textContent = text;
+        };
+
+        container.updateProgress = function(current, total) {
+            var pct = total > 0 ? Math.round((current / total) * 100) : 0;
+            var bar = document.getElementById("copyFormsProgressBar");
+            if (bar) bar.style.width = pct + "%";
+            this.updateStatus("Processing " + current + " of " + total);
+        };
+
+        container.setItemStatus = function(index, status, color) {
+            var item = document.getElementById("copyFormsItem_" + index);
+            if (item) {
+                var statusEl = item.querySelector(".item-status");
+                if (statusEl) {
+                    statusEl.textContent = status;
+                    statusEl.style.background = color || "#444";
+                    statusEl.style.color = "#fff";
+                }
+            }
+        };
+
+        container.showSummary = function(total, success, duplicates, errors) {
+            var summaryEl = document.getElementById("copyFormsSummary");
+            if (summaryEl) {
+                summaryEl.style.display = "block";
+                summaryEl.innerHTML = '<div style="font-size:16px;font-weight:600;margin-bottom:8px;color:#51cf66;">✓ Completed</div>' +
+                    '<div>Total: ' + total + ' | Success: <span style="color:#51cf66;">' + success + '</span> | Duplicates: <span style="color:#ffc107;">' + duplicates + '</span> | Errors: <span style="color:#ff6b6b;">' + errors + '</span></div>';
+            }
+            var stopBtn = document.getElementById("copyFormsStopBtn");
+            if (stopBtn) {
+                stopBtn.textContent = "Close";
+                stopBtn.style.background = "#6c757d";
+                stopBtn.disabled = false;
+                stopBtn.style.opacity = "1";
+                stopBtn.onclick = function() {
+                    if (COPY_FORMS_PROGRESS_REF) {
+                        COPY_FORMS_PROGRESS_REF.close();
+                        COPY_FORMS_PROGRESS_REF = null;
+                    }
+                };
+            }
+        };
+
+        return container;
+    }
+
+    // Main entry point for Copy Forms to Study Events
+    async function runCopyFormsToStudyEvents() {
+        // Check if on correct page
+        if (!isOnCopyFormsPage()) {
+            createPopup({
+                title: "Copy Forms - Error",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">⚠️ Wrong Page</p><p>Navigate to the Activity Plans Show page first.</p><p style="margin-top:12px;font-size:12px;color:#ffffffff;">Required URL: https://cenexeltest.clinspark.com/secure/crfdesign/activityplans/show/{id}</p></div>',
+                width: "450px",
+                height: "auto"
+            });
+            log("Copy Forms: wrong page - " + location.href);
+            return;
+        }
+
+        // Show loading popup
+        var loadingPopup = createPopup({
+            title: "Copy Forms to Study Events",
+            content: '<div style="text-align:center;padding:30px;"><div class="copy-forms-spinner" style="width:40px;height:40px;border:4px solid #333;border-top:4px solid #17a2b8;border-radius:50%;margin:0 auto 16px;animation:copyFormsSpin 1s linear infinite;"></div><div style="font-size:16px;margin-bottom:8px;">Collecting data...</div><div id="copyFormsLoadingMsg" style="font-size:13px;color:#888;">Scanning table...</div></div><style>@keyframes copyFormsSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>',
+            width: "350px",
+            height: "auto"
+        });
+
+        function updateLoadingMsg(msg) {
+            var el = document.getElementById("copyFormsLoadingMsg");
+            if (el) el.textContent = msg;
+        }
+
+        // Step 1: Scan table and build maps
+        log("Copy Forms: scanning saTableBody...");
+        updateLoadingMsg("Scanning table...");
+        await sleep(500);
+
+        var rows = scanSATableForArchiveUpdate();
+        if (rows.length === 0) {
+            loadingPopup.close();
+            createPopup({
+                title: "Copy Forms - Error",
+                content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">No rows found in the Scheduled Activities table.</div>',
+                width: "400px",
+                height: "auto"
+            });
+            return;
+        }
+
+        log("Copy Forms: found " + rows.length + " rows, building hierarchy...");
+        var hierarchy = buildHierarchicalFormMap(rows);
+        COPY_FORMS_EXISTING_MAP = buildExistingFormsMap(rows);
+        log("Copy Forms: hierarchy built with " + Object.keys(hierarchy).length + " segments");
+
+        // Step 2: Open modal and collect study events
+        updateLoadingMsg("Opening modal to collect study events...");
+        await sleep(500);
+
+        log("Copy Forms: clicking Add button...");
+        if (!clickAddSaButton()) {
+            loadingPopup.close();
+            return;
+        }
+
+        // Wait for modal with retries
+        var modal = null;
+        for (var retry = 0; retry < 3; retry++) {
+            modal = await waitForSAModal(10000);
+            if (modal) break;
+            log("Copy Forms: modal not found, retry " + (retry + 1));
+            await sleep(1000);
+        }
+
+        if (!modal) {
+            loadingPopup.close();
+            createPopup({
+                title: "Copy Forms - Error",
+                content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">Modal did not appear within timeout.</div>',
+                width: "400px",
+                height: "auto"
+            });
+            return;
+        }
+
+        // Collect study events
+        updateLoadingMsg("Collecting study events...");
+        await openSelect2Dropdown("s2id_studyEvent");
+        await sleep(300);
+        await closeSelect2Dropdown();
+        var studyEvents = collectSelectOptions("studyEvent");
+        log("Copy Forms: collected " + studyEvents.length + " study events");
+
+        // Close modal
+        var closeBtn = modal.querySelector(".close, [data-dismiss='modal']");
+        if (closeBtn) {
+            closeBtn.click();
+        } else {
+            document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        }
+        await sleep(500);
+
+        loadingPopup.close();
+
+        if (studyEvents.length === 0) {
+            createPopup({
+                title: "Copy Forms - Error",
+                content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">No study events found in the modal dropdown.</div>',
+                width: "400px",
+                height: "auto"
+            });
+            return;
+        }
+
+        // Step 3: Show selection GUI
+        log("Copy Forms: displaying selection GUI...");
+        var guiContent = createCopyFormsGUI(hierarchy, studyEvents);
+
+        COPY_FORMS_POPUP_REF = createPopup({
+            title: "Copy Forms to Study Events",
+            content: guiContent,
+            width: "1000px",
+            maxWidth: "95%",
+            height: "80%",
+            maxHeight: "750px",
+            onClose: function() {
+                COPY_FORMS_POPUP_REF = null;
+            }
+        });
+
+        // Handle Continue button
+        guiContent.continueBtn.addEventListener("click", async function() {
+            var selection = guiContent.getSelection();
+            var formKeys = Object.keys(selection.forms);
+            var eventKeys = Object.keys(selection.studyEvents);
+
+            if (formKeys.length === 0 || eventKeys.length === 0) {
+                return;
+            }
+
+            log("Copy Forms: continuing with " + formKeys.length + " forms and " + eventKeys.length + " study events");
+
+            // Close selection popup
+            if (COPY_FORMS_POPUP_REF) {
+                var popupEl = COPY_FORMS_POPUP_REF.element;
+                if (popupEl) popupEl.remove();
+                COPY_FORMS_POPUP_REF = null;
+            }
+
+            // Execute the copy
+            await executeCopyForms(selection.forms, selection.studyEvents);
+        });
+    }
+
+    // Execute the copy forms operation
+    async function executeCopyForms(selectedForms, selectedStudyEvents) {
+        COPY_FORMS_CANCELLED = false;
+
+        // Build items list
+        var items = [];
+        var formKeys = Object.keys(selectedForms);
+        var eventKeys = Object.keys(selectedStudyEvents);
+
+        for (var e = 0; e < eventKeys.length; e++) {
+            var targetEvent = selectedStudyEvents[eventKeys[e]];
+            for (var f = 0; f < formKeys.length; f++) {
+                var sourceForm = selectedForms[formKeys[f]];
+                items.push({
+                    segmentText: sourceForm.segmentText,
+                    segmentValue: sourceForm.segmentValue,
+                    sourceEventText: sourceForm.eventText,
+                    sourceEventValue: sourceForm.eventValue,
+                    targetEventText: targetEvent.text,
+                    targetEventValue: targetEvent.value,
+                    formText: sourceForm.formText,
+                    formValue: sourceForm.formValue,
+                    formKey: sourceForm.formKey,
+                    rowKey: sourceForm.rowKey
+                });
+            }
+        }
+
+        log("Copy Forms: processing " + items.length + " items");
+        log("Copy Forms: items to add: " + JSON.stringify(items.map(function(it) {
+            return it.segmentText + " -> " + it.targetEventText + " -> " + it.formText;
+        })));
+
+        // Create progress popup
+        var progressContent = createCopyFormsProgressPopup(items);
+        COPY_FORMS_PROGRESS_REF = createPopup({
+            title: "Copy Forms - Processing",
+            content: progressContent,
+            width: "650px",
+            height: "75%",
+            maxHeight: "650px",
+            onClose: function() {
+                COPY_FORMS_CANCELLED = true;
+                COPY_FORMS_PROGRESS_REF = null;
+            }
+        });
+
+        var successCount = 0;
+        var duplicateCount = 0;
+        var errorCount = 0;
+
+        for (var i = 0; i < items.length; i++) {
+            if (COPY_FORMS_CANCELLED) {
+                log("Copy Forms: cancelled by user at item " + i);
+                break;
+            }
+
+            var item = items[i];
+            progressContent.updateProgress(i + 1, items.length);
+            progressContent.setItemStatus(i, "Processing...", "#17a2b8");
+
+            log("Copy Forms: processing item " + (i + 1) + "/" + items.length + ": " + item.segmentText + " -> " + item.targetEventText + " -> " + item.formText);
+
+            // Check for duplicates
+            if (formExistsInMap(item.segmentText, item.targetEventText, item.formText, COPY_FORMS_EXISTING_MAP)) {
+                log("Copy Forms: duplicate detected - " + item.segmentText + " -> " + item.targetEventText + " -> " + item.formText);
+                progressContent.setItemStatus(i, "Duplicate (Skipped)", "#ffc107");
+                duplicateCount++;
+                continue;
+            }
+
+            try {
+                // Step 1: Collect source properties
+                var sourceRow = findRowInDOM(item.segmentText, item.sourceEventText, item.formText);
+                var editProps = null;
+                var visibilityProps = null;
+
+                if (sourceRow) {
+                    var editLink = sourceRow.querySelector('a[href*="/update/scheduledactivity/"]');
+                    if (!editLink) editLink = sourceRow.querySelector('a[href*="editscheduledactivity"]');
+
+                    if (editLink) {
+                        log("Copy Forms: opening edit modal for source form...");
+                        editLink.click();
+                        var editModal = await waitForSAModal(10000);
+                        if (editModal) {
+                            editProps = await collectEditModalProperties();
+                            log("Copy Forms: collected properties - hidden=" + editProps.hidden);
+
+                            var cancelBtn = editModal.querySelector("button[data-dismiss='modal'], .btn-default, .close");
+                            if (cancelBtn) {
+                                cancelBtn.click();
+                            } else {
+                                document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+                            }
+                            await waitForSAModalClose(5000);
+                        }
+                    }
+
+                    // Collect visibility if hidden
+                    if (editProps && editProps.hidden) {
+                        await sleep(500);
+                        sourceRow = findRowInDOM(item.segmentText, item.sourceEventText, item.formText);
+                        if (sourceRow) {
+                            var visLink = sourceRow.querySelector('a[href*="visiblecondition"]');
+                            if (!visLink) visLink = sourceRow.querySelector('a[href*="visibility"]');
+
+                            if (visLink) {
+                                log("Copy Forms: collecting visibility properties...");
+                                visLink.click();
+                                var visModal = await waitForSAModal(10000);
+                                if (visModal) {
+                                    visibilityProps = await collectVisibilityModalProperties();
+                                    log("Copy Forms: collected visibility - " + JSON.stringify(visibilityProps));
+
+                                    var visCancelBtn = visModal.querySelector("button[data-dismiss='modal'], .btn-default, .close");
+                                    if (visCancelBtn) {
+                                        visCancelBtn.click();
+                                    } else {
+                                        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+                                    }
+                                    await waitForSAModalClose(5000);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (COPY_FORMS_CANCELLED) break;
+
+                // Step 2: Add new form
+                await sleep(500);
+                log("Copy Forms: clicking Add button...");
+                if (!clickAddSaButton()) {
+                    log("Copy Forms: could not click Add button");
+                    progressContent.setItemStatus(i, "Error (add)", "#dc3545");
+                    errorCount++;
+                    continue;
+                }
+
+                var addModal = await waitForSAModal(10000);
+                if (!addModal) {
+                    log("Copy Forms: add modal did not open");
+                    progressContent.setItemStatus(i, "Error (modal)", "#dc3545");
+                    errorCount++;
+                    continue;
+                }
+
+                // Select segment
+                log("Copy Forms: selecting segment - " + item.segmentText);
+                await setSelect2ValueByText("segment", item.segmentText);
+                await sleep(500);
+
+                // Select target study event
+                log("Copy Forms: selecting study event - " + item.targetEventText);
+                await setSelect2ValueByText("studyEvent", item.targetEventText);
+                await sleep(500);
+
+                // Select form
+                log("Copy Forms: selecting form - " + item.formText);
+                await setSelect2ValueByText("form", item.formText);
+                await sleep(500);
+
+                // Apply properties
+                if (editProps) {
+                    log("Copy Forms: applying properties...");
+                    await applyPropertiesToAddModal(editProps);
+                }
+
+                // Save
+                var saveBtn = document.getElementById("actionButton");
+                if (saveBtn) {
+                    log("Copy Forms: clicking Save...");
+                    saveBtn.click();
+                    var closed = await waitForSAModalClose(10000);
+                    if (!closed) {
+                        log("Copy Forms: modal did not close after save");
+                        progressContent.setItemStatus(i, "Error (save)", "#dc3545");
+                        errorCount++;
+                        continue;
+                    }
+                }
+
+                await sleep(1000);
+
+                if (COPY_FORMS_CANCELLED) break;
+
+                // Step 3: Set visibility if needed
+                if (editProps && editProps.hidden && visibilityProps) {
+                    log("Copy Forms: setting visibility on new row...");
+                    var newRow = findRowInDOM(item.segmentText, item.targetEventText, item.formText);
+                    if (newRow) {
+                        var newVisLink = newRow.querySelector('a[href*="visiblecondition"]');
+                        if (!newVisLink) newVisLink = newRow.querySelector('a[href*="visibility"]');
+
+                        if (newVisLink) {
+                            newVisLink.click();
+                            var newVisModal = await waitForSAModal(10000);
+                            if (newVisModal) {
+                                await sleep(500);
+
+                                // Set visibility fields
+                                if (visibilityProps.activityPlan) {
+                                    await setSelect2ValueByText("visibleActivityPlan", visibilityProps.activityPlan);
+                                    await sleep(500);
+                                    await waitForSelect2OptionsChange("visibleScheduledActivity", 3000);
+                                    await sleep(500);
+                                }
+                                if (visibilityProps.scheduledActivity) {
+                                    var targetSA = rebuildScheduledActivityForTarget(visibilityProps.scheduledActivity, item.targetEventText);
+                                    log("Copy Forms: rebuilt scheduledActivity for target: " + targetSA);
+                                    for (var retry = 0; retry < 3; retry++) {
+                                        if (await setSelect2ValueByText("visibleScheduledActivity", targetSA)) break;
+                                        await sleep(1000);
+                                    }
+                                    await sleep(500);
+                                    await waitForSelect2OptionsChange("visibleItemRef", 3000);
+                                    await sleep(500);
+                                }
+                                if (visibilityProps.item) {
+                                    for (var retry2 = 0; retry2 < 3; retry2++) {
+                                        if (await setSelect2ValueByText("visibleItemRef", visibilityProps.item)) break;
+                                        await sleep(1000);
+                                    }
+                                    await sleep(500);
+                                    await waitForSelect2OptionsChange("visibleCodeListItem", 3000);
+                                    await sleep(500);
+                                }
+                                if (visibilityProps.itemValue) {
+                                    for (var retry3 = 0; retry3 < 3; retry3++) {
+                                        if (await setSelect2ValueByText("visibleCodeListItem", visibilityProps.itemValue)) break;
+                                        await sleep(1000);
+                                    }
+                                    await sleep(500);
+                                }
+
+                                var visReasonEl = document.getElementById("reasonForChange");
+                                if (visReasonEl) {
+                                    visReasonEl.value = "Copied visibility from source";
+                                    visReasonEl.dispatchEvent(new Event("change", { bubbles: true }));
+                                }
+
+                                var visSaveBtn = document.getElementById("actionButton");
+                                if (visSaveBtn) {
+                                    visSaveBtn.click();
+                                    await waitForSAModalClose(10000);
+                                }
+                                await sleep(500);
+                            }
+                        }
+                    }
+                }
+
+                // Update existing map
+                var newKey = normalizeSAText(item.segmentText) + "|" + normalizeSAText(item.targetEventText) + "|" + normalizeSAText(item.formText);
+                COPY_FORMS_EXISTING_MAP[newKey] = true;
+
+                progressContent.setItemStatus(i, "Complete", "#28a745");
+                successCount++;
+                log("Copy Forms: item " + (i + 1) + " completed successfully");
+
+            } catch (err) {
+                log("Copy Forms: error processing item " + i + " - " + String(err));
+                progressContent.setItemStatus(i, "Error", "#dc3545");
+                errorCount++;
+            }
+
+            await sleep(500);
+        }
+
+        // Show summary
+        progressContent.updateStatus("Completed");
+        progressContent.showSummary(items.length, successCount, duplicateCount, errorCount);
+        log("Copy Forms: finished - success=" + successCount + " duplicates=" + duplicateCount + " errors=" + errorCount);
+    }
+
+    //==========================
+    // ARCHIVE/UPDATE FORMS FEATURE
+    //==========================
+    // This feature allows batch replacement of forms across all occurrences in the SA table.
+    // Users select a source form and a target form; the source is archived everywhere
+    // and the target is added in its place, preserving properties and visibility.
+    //==========================
+    // Archive/Update Forms Feature
+    var STORAGE_ARCHIVE_UPDATE_FORMS_CANCELLED = "activityPlanState.archiveUpdateForms.cancelled";
+    var ARCHIVE_UPDATE_FORMS_CANCELLED = false;
+    var ARCHIVE_UPDATE_FORMS_POPUP_REF = null;
+    var ARCHIVE_UPDATE_FORMS_PROGRESS_REF = null;
+
+    function ArchiveUpdateFormsFunctions() {}
+
+    // Normalize text specifically for visibility condition matching
+    function normalizeVisibilityText(t) {
+        if (typeof t !== "string") {
+            return "";
+        }
+        var s = t.toLowerCase();
+
+        // Remove time offsets like -00:05:00, +01:30:00, etc.
+        s = s.replace(/[\+\-]\d{2}:\d{2}:\d{2}/g, "");
+
+        // Remove trailing occurrence numbers like (1), (2), etc.
+        s = s.replace(/\s*\(\d+\)\s*$/g, "");
+
+        // Remove > symbol (used in collected data but not in options)
+        s = s.replace(/>/g, "");
+
+        // Normalize spaces around = sign
+        s = s.replace(/\s*=\s*/g, "=");
+
+        // Collapse multiple spaces
+        s = s.replace(/\s+/g, " ");
+
+        // Remove all spaces for final comparison
+        s = s.replace(/\s/g, "");
+
+        // Remove common punctuation
+        s = s.replace(/[\-\_\(\)\[\]]/g, "");
+
+        return s.trim();
+    }
+
+    // Check if on correct Activity Plan Show page
+    function isOnArchiveUpdateFormsPage() {
+        var pattern = /^https:\/\/cenexeltest\.clinspark\.com\/secure\/crfdesign\/activityplans\/show\/\d+$/;
+        return pattern.test(location.href.split("?")[0].split("#")[0]);
+    }
+
+    // Scan SA table and collect all rows with full details
+    function scanSATableForArchiveUpdate() {
+        var rows = [];
+        var tbody = document.getElementById("saTableBody");
+        if (!tbody) {
+            log("Archive/Update Forms: saTableBody not found");
+            return rows;
+        }
+        var trs = tbody.querySelectorAll("tr");
+        log("Archive/Update Forms: found " + trs.length + " rows");
+        for (var i = 0; i < trs.length; i++) {
+            var tr = trs[i];
+            var cells = tr.querySelectorAll("td");
+            if (cells.length < 4) continue;
+
+            // Extract segment
+            var segmentCell = cells[1];
+            var segmentText = normalizeSAText(segmentCell.textContent);
+            var segmentValue = "";
+            var segmentSelect = segmentCell.querySelector("select");
+            if (segmentSelect) {
+                segmentValue = segmentSelect.value || "";
+            }
+            // Try to get value from data attributes or links
+            if (!segmentValue) {
+                var segLink = segmentCell.querySelector("a[href]");
+                if (segLink) {
+                    var segHref = segLink.getAttribute("href") || "";
+                    var segMatch = segHref.match(/\/(\d+)$/);
+                    if (segMatch) segmentValue = segMatch[1];
+                }
+            }
+
+            // Extract study event
+            var eventCell = cells[2];
+            var eventText = normalizeSAText(eventCell.textContent);
+            var eventValue = "";
+            var eventSelect = eventCell.querySelector("select");
+            if (eventSelect) {
+                eventValue = eventSelect.value || "";
+            }
+            if (!eventValue) {
+                var evLink = eventCell.querySelector("a[href]");
+                if (evLink) {
+                    var evHref = evLink.getAttribute("href") || "";
+                    var evMatch = evHref.match(/\/(\d+)$/);
+                    if (evMatch) eventValue = evMatch[1];
+                }
+            }
+
+            // Extract form
+            var formCell = cells[3];
+            var formText = normalizeSAText(formCell.textContent);
+            var formValue = "";
+            var formSelect = formCell.querySelector("select");
+            if (formSelect) {
+                formValue = formSelect.value || "";
+            }
+            if (!formValue) {
+                var formLink = formCell.querySelector("a[href]");
+                if (formLink) {
+                    var formHref = formLink.getAttribute("href") || "";
+                    var formMatch = formHref.match(/\/show\/form\/(\d+)/);
+                    if (formMatch) formValue = formMatch[1];
+                }
+            }
+
+            // Get the row's action cell for archive/edit links
+            var actionCell = cells[cells.length - 1] || cells[0];
+            var archiveLink = tr.querySelector('a[href*="archivescheduledactivity"]');
+            var editLink = tr.querySelector('a[href*="editscheduledactivity"]');
+            var visibilityLink = tr.querySelector('a[href*="visibility"]');
+
+            // Check if already archived (Un-Archive link present)
+            var isArchived = false;
+            if (archiveLink) {
+                var archiveLinkText = (archiveLink.textContent || "").toLowerCase();
+                if (archiveLinkText.indexOf("un-archive") !== -1) {
+                    isArchived = true;
+                }
+            }
+
+            var formKey = formValue || normalizeText(formText);
+            var rowKey = (segmentValue || normalizeText(segmentText)) + "|" +
+                (eventValue || normalizeText(eventText)) + "|" + formKey;
+
+            rows.push({
+                rowElement: tr,
+                segmentText: segmentText,
+                segmentValue: segmentValue,
+                eventText: eventText,
+                eventValue: eventValue,
+                formText: formText,
+                formValue: formValue,
+                formKey: formKey,
+                rowKey: rowKey,
+                archiveLink: archiveLink,
+                editLink: editLink,
+                visibilityLink: visibilityLink,
+                isArchived: isArchived
+            });
+        }
+        return rows;
+    }
+
+    // Normalize (lowercase, remove punctuation/spaces) a text string used for label matching.
+    function normalizeText(t) {
+        if (typeof t !== "string") {
+            return "";
+        }
+        var s = t.toLowerCase();
+        s = s.replace(/\s+/g, "");
+        s = s.replace(/[\-\_\(\)\[\]]/g, "");
+        return s;
+    }
+
+
+    // Build unique forms map from rows
+    function buildUniqueFormsMap(rows) {
+        var formsMap = {};
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var key = row.formKey;
+            if (!formsMap[key]) {
+                formsMap[key] = {
+                    formKey: key,
+                    formText: row.formText,
+                    formValue: row.formValue,
+                    occurrences: []
+                };
+            }
+            formsMap[key].occurrences.push(row);
+        }
+        return formsMap;
+    }
+
+    // Create the Archive/Update Forms selection GUI
+    // sourceFormsMap: forms from table with occurrences (for source panel)
+    // targetFormsArray: forms from Add modal dropdown [{ value, text }, ...]
+    function createArchiveUpdateFormsGUI(sourceFormsMap, targetFormsArray) {
+        // Build source forms array from map
+        var sourceFormsArray = [];
+        for (var key in sourceFormsMap) {
+            if (sourceFormsMap.hasOwnProperty(key)) {
+                sourceFormsArray.push(sourceFormsMap[key]);
+            }
+        }
+        sourceFormsArray.sort(function(a, b) {
+            return a.formText.localeCompare(b.formText);
+        });
+
+        // Sort target forms array
+        var targetFormsSorted = targetFormsArray.slice().sort(function(a, b) {
+            return a.text.localeCompare(b.text);
+        });
+
+        var selectedSource = null;
+        var selectedTarget = null;
+
+        var container = document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;height:100%;min-height:500px;gap:16px;";
+
+        // Header row with search bars
+        var headerRow = document.createElement("div");
+        headerRow.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:16px;";
+
+        var sourceSearchContainer = document.createElement("div");
+        sourceSearchContainer.style.cssText = "display:flex;flex-direction:column;gap:8px;";
+        var sourceLabel = document.createElement("div");
+        sourceLabel.textContent = "Source Forms (to be replaced)";
+        sourceLabel.style.cssText = "font-weight:600;font-size:14px;color:#ff6b6b;";
+        var sourceSearch = document.createElement("input");
+        sourceSearch.type = "text";
+        sourceSearch.placeholder = "Search source forms...";
+        sourceSearch.style.cssText = "padding:10px;border-radius:6px;border:1px solid #444;background:#222;color:#fff;font-size:14px;";
+        sourceSearchContainer.appendChild(sourceLabel);
+        sourceSearchContainer.appendChild(sourceSearch);
+
+        var targetSearchContainer = document.createElement("div");
+        targetSearchContainer.style.cssText = "display:flex;flex-direction:column;gap:8px;";
+        var targetLabel = document.createElement("div");
+        targetLabel.textContent = "Target Forms (replacements)";
+        targetLabel.style.cssText = "font-weight:600;font-size:14px;color:#51cf66;";
+        var targetSearch = document.createElement("input");
+        targetSearch.type = "text";
+        targetSearch.placeholder = "Search target forms...";
+        targetSearch.style.cssText = "padding:10px;border-radius:6px;border:1px solid #444;background:#222;color:#fff;font-size:14px;";
+        targetSearchContainer.appendChild(targetLabel);
+        targetSearchContainer.appendChild(targetSearch);
+
+        headerRow.appendChild(sourceSearchContainer);
+        headerRow.appendChild(targetSearchContainer);
+        container.appendChild(headerRow);
+
+        // Panels row
+        var panelsRow = document.createElement("div");
+        panelsRow.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:16px;flex:1;overflow:hidden;";
+
+        var sourcePanel = document.createElement("div");
+        sourcePanel.style.cssText = "border:2px solid #ff6b6b;border-radius:8px;background:#1a1a1a;overflow-y:auto;padding:8px;";
+        sourcePanel.id = "archiveUpdateSourcePanel";
+
+        var targetPanel = document.createElement("div");
+        targetPanel.style.cssText = "border:2px solid #51cf66;border-radius:8px;background:#1a1a1a;overflow-y:auto;padding:8px;";
+        targetPanel.id = "archiveUpdateTargetPanel";
+
+        panelsRow.appendChild(sourcePanel);
+        panelsRow.appendChild(targetPanel);
+        container.appendChild(panelsRow);
+
+        // Error message area
+        var errorDiv = document.createElement("div");
+        errorDiv.style.cssText = "color:#ff6b6b;text-align:center;font-size:14px;min-height:20px;";
+        errorDiv.id = "archiveUpdateError";
+        container.appendChild(errorDiv);
+
+        // Reason inputs section
+        var reasonsContainer = document.createElement("div");
+        reasonsContainer.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:12px 0;";
+
+        // Archive Reason
+        var archiveReasonContainer = document.createElement("div");
+        archiveReasonContainer.style.cssText = "display:flex;flex-direction:column;gap:6px;";
+        var archiveReasonLabel = document.createElement("label");
+        archiveReasonLabel.textContent = "Archive Reason";
+        archiveReasonLabel.style.cssText = "font-size:13px;font-weight:600;color:#ccc;";
+        var archiveReasonInput = document.createElement("input");
+        archiveReasonInput.type = "text";
+        archiveReasonInput.value = "Old version";
+        archiveReasonInput.id = "archiveUpdateArchiveReason";
+        archiveReasonInput.style.cssText = "padding:10px;border-radius:6px;border:1px solid #444;background:#222;color:#fff;font-size:13px;";
+        archiveReasonContainer.appendChild(archiveReasonLabel);
+        archiveReasonContainer.appendChild(archiveReasonInput);
+
+        // Visibility Reason
+        var visibilityReasonContainer = document.createElement("div");
+        visibilityReasonContainer.style.cssText = "display:flex;flex-direction:column;gap:6px;";
+        var visibilityReasonLabel = document.createElement("label");
+        visibilityReasonLabel.textContent = "Visibility Reason";
+        visibilityReasonLabel.style.cssText = "font-size:13px;font-weight:600;color:#ccc;";
+        var visibilityReasonInput = document.createElement("input");
+        visibilityReasonInput.type = "text";
+        visibilityReasonInput.value = "Add visibility condition";
+        visibilityReasonInput.id = "archiveUpdateVisibilityReason";
+        visibilityReasonInput.style.cssText = "padding:10px;border-radius:6px;border:1px solid #444;background:#222;color:#fff;font-size:13px;";
+        visibilityReasonContainer.appendChild(visibilityReasonLabel);
+        visibilityReasonContainer.appendChild(visibilityReasonInput);
+
+        reasonsContainer.appendChild(archiveReasonContainer);
+        reasonsContainer.appendChild(visibilityReasonContainer);
+        container.appendChild(reasonsContainer);
+
+        // Button row
+        var buttonRow = document.createElement("div");
+        buttonRow.style.cssText = "display:flex;justify-content:center;gap:16px;padding-top:8px;";
+
+        var clearAllBtn = document.createElement("button");
+        clearAllBtn.textContent = "Clear All";
+        clearAllBtn.style.cssText = "padding:12px 24px;border-radius:6px;border:none;background:#6c757d;color:#fff;font-size:14px;font-weight:500;cursor:pointer;transition:background 0.2s;";
+        clearAllBtn.onmouseenter = function() { this.style.background = "#5a6268"; };
+        clearAllBtn.onmouseleave = function() { this.style.background = "#6c757d"; };
+
+        var confirmBtn = document.createElement("button");
+        confirmBtn.textContent = "Confirm";
+        confirmBtn.disabled = true;
+        confirmBtn.style.cssText = "padding:12px 24px;border-radius:6px;border:none;background:#28a745;color:#fff;font-size:14px;font-weight:500;cursor:pointer;transition:background 0.2s;opacity:0.5;";
+
+        var cancelBtn = document.createElement("button");
+        cancelBtn.textContent = "Cancel";
+        cancelBtn.style.cssText = "padding:12px 24px;border-radius:6px;border:none;background:#dc3545;color:#fff;font-size:14px;font-weight:500;cursor:pointer;transition:background 0.2s;";
+        cancelBtn.onmouseenter = function() { this.style.background = "#c82333"; };
+        cancelBtn.onmouseleave = function() { this.style.background = "#dc3545"; };
+
+        buttonRow.appendChild(clearAllBtn);
+        buttonRow.appendChild(confirmBtn);
+        buttonRow.appendChild(cancelBtn);
+        container.appendChild(buttonRow);
+
+        // Render forms in panels
+        function renderSourcePanel(panel, searchValue) {
+            panel.innerHTML = "";
+            var filter = (searchValue || "").toLowerCase();
+            for (var i = 0; i < sourceFormsArray.length; i++) {
+                var form = sourceFormsArray[i];
+                if (filter && form.formText.toLowerCase().indexOf(filter) === -1) continue;
+
+                var item = document.createElement("div");
+                item.style.cssText = "display:flex;align-items:center;gap:10px;padding:10px;margin-bottom:6px;border:1px solid #333;border-radius:6px;background:#252525;cursor:pointer;transition:all 0.2s;";
+                item.dataset.formKey = form.formKey;
+
+                var radio = document.createElement("div");
+                radio.style.cssText = "width:18px;height:18px;border:2px solid #666;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;";
+                radio.className = "radio-indicator";
+
+                var label = document.createElement("div");
+                label.style.cssText = "flex:1;font-size:13px;";
+                label.textContent = form.formText;
+
+                var count = document.createElement("div");
+                count.style.cssText = "font-size:11px;color:#888;background:#333;padding:2px 8px;border-radius:10px;";
+                count.textContent = form.occurrences.length + " occurrence" + (form.occurrences.length !== 1 ? "s" : "");
+
+                item.appendChild(radio);
+                item.appendChild(label);
+                item.appendChild(count);
+
+                if (selectedSource === form.formKey) {
+                    item.style.background = "#3d2020";
+                    item.style.border = "1px solid #ff6b6b";
+                    radio.innerHTML = '<div style="width:10px;height:10px;background:#ff6b6b;border-radius:50%;"></div>';
+                }
+
+                item.addEventListener("mouseenter", function() {
+                    if (this.dataset.formKey !== selectedSource) {
+                        this.style.background = "#333";
+                    }
+                });
+                item.addEventListener("mouseleave", function() {
+                    if (this.dataset.formKey !== selectedSource) {
+                        this.style.background = "#252525";
+                        this.style.border = "1px solid #333";
+                    }
+                });
+
+                (function(formKey, itemEl) {
+                    itemEl.addEventListener("click", function() {
+                        selectedSource = formKey;
+                        renderSourcePanel(sourcePanel, sourceSearch.value);
+                        renderTargetPanel(targetPanel, targetSearch.value);
+                        validateSelection();
+                    });
+                })(form.formKey, item);
+
+                panel.appendChild(item);
+            }
+        }
+
+        // Render target forms panel (forms from modal dropdown)
+        function renderTargetPanel(panel, searchValue) {
+            panel.innerHTML = "";
+            var filter = (searchValue || "").toLowerCase();
+            for (var i = 0; i < targetFormsSorted.length; i++) {
+                var form = targetFormsSorted[i];
+                if (filter && form.text.toLowerCase().indexOf(filter) === -1) continue;
+
+                var item = document.createElement("div");
+                item.style.cssText = "display:flex;align-items:center;gap:10px;padding:10px;margin-bottom:6px;border:1px solid #333;border-radius:6px;background:#252525;cursor:pointer;transition:all 0.2s;";
+                item.dataset.formKey = form.value;
+
+                var radio = document.createElement("div");
+                radio.style.cssText = "width:18px;height:18px;border:2px solid #666;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;";
+                radio.className = "radio-indicator";
+
+                var label = document.createElement("div");
+                label.style.cssText = "flex:1;font-size:13px;";
+                label.textContent = form.text;
+
+                item.appendChild(radio);
+                item.appendChild(label);
+
+                if (selectedTarget === form.value) {
+                    item.style.background = "#1a3d1a";
+                    item.style.border = "1px solid #51cf66";
+                    radio.innerHTML = '<div style="width:10px;height:10px;background:#51cf66;border-radius:50%;"></div>';
+                }
+
+                item.addEventListener("mouseenter", function() {
+                    if (this.dataset.formKey !== selectedTarget) {
+                        this.style.background = "#333";
+                    }
+                });
+                item.addEventListener("mouseleave", function() {
+                    if (this.dataset.formKey !== selectedTarget) {
+                        this.style.background = "#252525";
+                        this.style.border = "1px solid #333";
+                    }
+                });
+
+                (function(formValue, itemEl) {
+                    itemEl.addEventListener("click", function() {
+                        selectedTarget = formValue;
+                        renderSourcePanel(sourcePanel, sourceSearch.value);
+                        renderTargetPanel(targetPanel, targetSearch.value);
+                        validateSelection();
+                    });
+                })(form.value, item);
+
+                panel.appendChild(item);
+            }
+        }
+
+        function validateSelection() {
+            errorDiv.textContent = "";
+            var valid = false;
+            if (selectedSource && selectedTarget) {
+                if (selectedSource === selectedTarget) {
+                    errorDiv.textContent = "Source and Target cannot be the same form.";
+                } else {
+                    valid = true;
+                }
+            }
+            confirmBtn.disabled = !valid;
+            confirmBtn.style.opacity = valid ? "1" : "0.5";
+            if (valid) {
+                confirmBtn.onmouseenter = function() { this.style.background = "#218838"; };
+                confirmBtn.onmouseleave = function() { this.style.background = "#28a745"; };
+            } else {
+                confirmBtn.onmouseenter = null;
+                confirmBtn.onmouseleave = null;
+            }
+        }
+
+        // Debounce for search
+        var sourceTimeout = null;
+        var targetTimeout = null;
+
+        sourceSearch.addEventListener("input", function() {
+            clearTimeout(sourceTimeout);
+            sourceTimeout = setTimeout(function() {
+                renderSourcePanel(sourcePanel, sourceSearch.value);
+            }, 200);
+        });
+
+        targetSearch.addEventListener("input", function() {
+            clearTimeout(targetTimeout);
+            targetTimeout = setTimeout(function() {
+                renderTargetPanel(targetPanel, targetSearch.value);
+            }, 200);
+        });
+
+        clearAllBtn.addEventListener("click", function() {
+            selectedSource = null;
+            selectedTarget = null;
+            sourceSearch.value = "";
+            targetSearch.value = "";
+            renderSourcePanel(sourcePanel, "");
+            renderTargetPanel(targetPanel, "");
+            validateSelection();
+        });
+        cancelBtn.addEventListener("click", function() {
+            if (ARCHIVE_UPDATE_FORMS_POPUP_REF) {
+                ARCHIVE_UPDATE_FORMS_POPUP_REF.close();
+                ARCHIVE_UPDATE_FORMS_POPUP_REF = null;
+            }
+        });
+
+        // Initial render
+        renderSourcePanel(sourcePanel, "");
+        renderTargetPanel(targetPanel, "");
+
+        // Return container with confirm handler
+        container.getSelection = function() {
+            return {
+                source: selectedSource,
+                target: selectedTarget,
+                archiveReason: archiveReasonInput.value,
+                visibilityReason: visibilityReasonInput.value
+            };
+        };
+        container.confirmBtn = confirmBtn;
+        container.sourceFormsMap = sourceFormsMap;
+        container.targetFormsArray = targetFormsArray;
+
+        return container;
+    }
+
+    // Create progress popup for Archive/Update Forms
+    function createArchiveUpdateProgressPopup(occurrences, targetFormText) {
+        var container = document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;height:100%;min-height:400px;";
+
+        // Status header
+        var statusDiv = document.createElement("div");
+        statusDiv.id = "archiveUpdateStatus";
+        statusDiv.style.cssText = "text-align:center;font-size:16px;font-weight:600;padding:12px;background:#222;border-radius:6px;margin-bottom:12px;";
+        statusDiv.textContent = "Preparing... 0 of " + occurrences.length;
+        container.appendChild(statusDiv);
+
+        // Progress bar
+        var progressBarOuter = document.createElement("div");
+        progressBarOuter.style.cssText = "width:100%;height:8px;background:#333;border-radius:4px;margin-bottom:16px;overflow:hidden;";
+        var progressBarInner = document.createElement("div");
+        progressBarInner.id = "archiveUpdateProgressBar";
+        progressBarInner.style.cssText = "width:0%;height:100%;background:#28a745;transition:width 0.3s;";
+        progressBarOuter.appendChild(progressBarInner);
+        container.appendChild(progressBarOuter);
+
+        // Items list
+        var listContainer = document.createElement("div");
+        listContainer.style.cssText = "flex:1;overflow-y:auto;border:1px solid #333;border-radius:6px;background:#1a1a1a;padding:8px;";
+        listContainer.id = "archiveUpdateItemsList";
+
+        for (var i = 0; i < occurrences.length; i++) {
+            var occ = occurrences[i];
+            var item = document.createElement("div");
+            item.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin-bottom:4px;border:1px solid #333;border-radius:4px;background:#252525;font-size:12px;";
+            item.id = "archiveUpdateItem_" + i;
+
+            var itemLabel = document.createElement("div");
+            itemLabel.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+            itemLabel.textContent = occ.segmentText + " → " + occ.eventText + " → " + occ.formText;
+
+            var itemStatus = document.createElement("div");
+            itemStatus.style.cssText = "padding:2px 8px;border-radius:10px;font-size:11px;background:#444;color:#888;margin-left:8px;flex-shrink:0;";
+            itemStatus.textContent = "Pending";
+            itemStatus.className = "item-status";
+
+            item.appendChild(itemLabel);
+            item.appendChild(itemStatus);
+            listContainer.appendChild(item);
+        }
+        container.appendChild(listContainer);
+
+        // Summary area
+        var summaryDiv = document.createElement("div");
+        summaryDiv.id = "archiveUpdateSummary";
+        summaryDiv.style.cssText = "display:none;margin-top:12px;padding:12px;background:#222;border-radius:6px;text-align:center;";
+        container.appendChild(summaryDiv);
+
+        // Cancel button
+        var cancelRow = document.createElement("div");
+        cancelRow.style.cssText = "display:flex;justify-content:center;padding-top:12px;";
+        var cancelBtn = document.createElement("button");
+        cancelBtn.textContent = "Cancel";
+        cancelBtn.id = "archiveUpdateCancelBtn";
+        cancelBtn.style.cssText = "padding:10px 24px;border-radius:6px;border:none;background:#dc3545;color:#fff;font-size:14px;font-weight:500;cursor:pointer;";
+        cancelBtn.onmouseenter = function() { this.style.background = "#c82333"; };
+        cancelBtn.onmouseleave = function() { this.style.background = "#dc3545"; };
+        cancelBtn.addEventListener("click", function() {
+            ARCHIVE_UPDATE_FORMS_CANCELLED = true;
+            cancelBtn.disabled = true;
+            cancelBtn.textContent = "Cancelling...";
+            cancelBtn.style.opacity = "0.5";
+            log("Archive/Update Forms: cancellation requested by user");
+        });
+        cancelRow.appendChild(cancelBtn);
+        container.appendChild(cancelRow);
+
+        // Helper methods
+        container.updateStatus = function(text) {
+            var el = document.getElementById("archiveUpdateStatus");
+            if (el) el.textContent = text;
+        };
+
+        container.updateProgress = function(current, total) {
+            var pct = total > 0 ? Math.round((current / total) * 100) : 0;
+            var bar = document.getElementById("archiveUpdateProgressBar");
+            if (bar) bar.style.width = pct + "%";
+            this.updateStatus("Processing " + current + " of " + total);
+        };
+
+        container.setItemStatus = function(index, status, color) {
+            var item = document.getElementById("archiveUpdateItem_" + index);
+            if (item) {
+                var statusEl = item.querySelector(".item-status");
+                if (statusEl) {
+                    statusEl.textContent = status;
+                    statusEl.style.background = color || "#444";
+                    statusEl.style.color = "#fff";
+                }
+            }
+        };
+
+        container.showSummary = function(total, success, skipped, errors) {
+            var summaryEl = document.getElementById("archiveUpdateSummary");
+            if (summaryEl) {
+                summaryEl.style.display = "block";
+                summaryEl.innerHTML = '<div style="font-size:16px;font-weight:600;margin-bottom:8px;">Complete</div>' +
+                    '<div>Total: ' + total + ' | Success: <span style="color:#51cf66;">' + success + '</span> | Skipped: <span style="color:#ffc107;">' + skipped + '</span> | Errors: <span style="color:#ff6b6b;">' + errors + '</span></div>';
+            }
+            var cancelBtn = document.getElementById("archiveUpdateCancelBtn");
+            if (cancelBtn) {
+                cancelBtn.textContent = "Close";
+                cancelBtn.style.background = "#6c757d";
+                cancelBtn.onclick = function() {
+                    if (ARCHIVE_UPDATE_FORMS_PROGRESS_REF) {
+                        ARCHIVE_UPDATE_FORMS_PROGRESS_REF.close();
+                        ARCHIVE_UPDATE_FORMS_PROGRESS_REF = null;
+                    }
+                };
+            }
+        };
+
+        return container;
+    }
+
+    // Collect Edit modal properties
+    async function collectEditModalProperties() {
+        var props = {
+            mandatory: false,
+            hidden: false,
+            preWindow: "",
+            postWindow: "",
+            referenceActivity: false,
+            offsetPreReference: "",
+            offsetDays: "",
+            offsetHours: "",
+            offsetMinutes: "",
+            offsetSeconds: "",
+            enforceDataCollectionOrder: false,
+            disableCollectionTime: false,
+            formOffsetSeconds: "",
+            collectionRoleRestriction: ""
+        };
+
+        await sleep(500);
+
+        // Mandatory
+        var mandatoryEl = document.getElementById("mandatory");
+        if (mandatoryEl) {
+            props.mandatory = mandatoryEl.checked;
+        }
+
+        // Hidden - check both checked property and attribute (for disabled checkboxes)
+        var hiddenEl = document.getElementById("hidden");
+        if (hiddenEl) {
+            props.hidden = hiddenEl.checked || hiddenEl.hasAttribute("checked");
+        }
+
+        // Pre-Window
+        var preWindowEl = document.getElementById("preWindow");
+        if (preWindowEl) {
+            props.preWindow = preWindowEl.value || "";
+        }
+
+        // Post-Window
+        var postWindowEl = document.getElementById("postWindow");
+        if (postWindowEl) {
+            props.postWindow = postWindowEl.value || "";
+        }
+
+        // Reference Activity
+        var refActivityEl = document.getElementById("referenceActivity");
+        if (refActivityEl) {
+            props.referenceActivity = refActivityEl.checked;
+        }
+
+        // Offset fields (only if referenceActivity is unchecked)
+        if (!props.referenceActivity) {
+            var preRefEl = document.querySelector("#offset\\.preReference, [id='offset.preReference']");
+            if (preRefEl) {
+                props.offsetPreReference = preRefEl.checked ? "checked" : "";
+            }
+
+            var daysEl = document.querySelector("input[name='offset.days']");
+            if (daysEl) props.offsetDays = daysEl.value || "";
+
+            var hoursEl = document.querySelector("input[name='offset.hours']");
+            if (hoursEl) props.offsetHours = hoursEl.value || "";
+
+            var minutesEl = document.querySelector("input[name='offset.minutes']");
+            if (minutesEl) props.offsetMinutes = minutesEl.value || "";
+
+            var secondsEl = document.querySelector("input[name='offset.seconds']");
+            if (secondsEl) props.offsetSeconds = secondsEl.value || "";
+        }
+
+        // Enforce Data Collection Order - check the parent span's class for "checked" status
+        var enforceSpan = document.querySelector("#uniform-enforceDataCollectionOrder span");
+        if (enforceSpan) {
+            props.enforceDataCollectionOrder = enforceSpan.className.indexOf("checked") !== -1;
+            log("Archive/Update Forms: collected enforceDataCollectionOrder=" + props.enforceDataCollectionOrder + " (span class='" + enforceSpan.className + "')");
+        } else {
+            // Fallback: try direct checkbox
+            var enforceEl = document.getElementById("enforceDataCollectionOrder");
+            if (enforceEl) {
+                props.enforceDataCollectionOrder = enforceEl.checked;
+                log("Archive/Update Forms: collected enforceDataCollectionOrder=" + props.enforceDataCollectionOrder + " (direct checkbox)");
+            }
+        }
+
+        // Disable Collection Time - check the parent span's class for "checked" status
+        var disableCollectionSpan = document.querySelector("#uniform-disableCollectionTime span");
+        if (disableCollectionSpan) {
+            props.disableCollectionTime = disableCollectionSpan.className.indexOf("checked") !== -1;
+            log("Archive/Update Forms: collected disableCollectionTime=" + props.disableCollectionTime + " (span class='" + disableCollectionSpan.className + "')");
+        } else {
+            // Fallback: try direct checkbox
+            var disableCollectionEl = document.getElementById("disableCollectionTime");
+            if (disableCollectionEl) {
+                props.disableCollectionTime = disableCollectionEl.checked;
+                log("Archive/Update Forms: collected disableCollectionTime=" + props.disableCollectionTime + " (direct checkbox)");
+            }
+        }
+
+        // Timepoint Offset (Form Offset Seconds)
+        var formOffsetEl = document.getElementById("formOffsetSeconds");
+        if (formOffsetEl) {
+            props.formOffsetSeconds = formOffsetEl.value || "";
+            log("Archive/Update Forms: collected formOffsetSeconds='" + props.formOffsetSeconds + "'");
+        }
+
+        // Collection Role Restriction
+        var collectionRoleSpan = document.querySelector("#s2id_dataCollectionApplicationUserRole .select2-chosen");
+        if (collectionRoleSpan) {
+            props.collectionRoleRestriction = normalizeSAText(collectionRoleSpan.textContent);
+            log("Archive/Update Forms: collected collectionRoleRestriction='" + props.collectionRoleRestriction + "'");
+        }
+
+        return props;
+    }
+
+    // Collect Visibility modal properties
+    async function collectVisibilityModalProperties() {
+        var visibility = {
+            activityPlan: "",
+            scheduledActivity: "",
+            item: "",
+            itemValue: ""
+        };
+
+        await sleep(500);
+
+        // Look for static text in p.form-control-static elements
+        var statics = document.querySelectorAll("p.form-control-static");
+        var labels = document.querySelectorAll(".control-label, label");
+
+        // Try to map by nearby labels
+        for (var i = 0; i < statics.length; i++) {
+            var staticEl = statics[i];
+            var text = normalizeSAText(staticEl.textContent);
+            var parent = staticEl.closest(".form-group, .control-group");
+            if (parent) {
+                var label = parent.querySelector(".control-label, label");
+                if (label) {
+                    var labelText = normalizeText(label.textContent);
+                    if (labelText.indexOf("activityplan") !== -1) {
+                        visibility.activityPlan = text;
+                    } else if (labelText.indexOf("scheduledactivity") !== -1) {
+                        visibility.scheduledActivity = text;
+                    } else if (labelText.indexOf("itemvalue") !== -1) {
+                        visibility.itemValue = text;
+                    } else if (labelText.indexOf("item") !== -1) {
+                        visibility.item = text;
+                    }
+                }
+            }
+        }
+
+        return visibility;
+    }
+
+    // Apply properties to Add modal
+    async function applyPropertiesToAddModal(props) {
+        log("Archive/Update Forms: applyPropertiesToAddModal called with props=" + JSON.stringify(props));
+        await sleep(700);
+        // Hidden - use same approach as SA Builder
+        var hiddenCheckboxEl = document.querySelector("#uniform-hidden span input#hidden.checkbox");
+        if (!hiddenCheckboxEl) {
+            hiddenCheckboxEl = document.getElementById("hidden");
+        }
+        log("Archive/Update Forms: Hidden checkbox - props.hidden=" + props.hidden + ", element exists=" + !!hiddenCheckboxEl);
+        if (hiddenCheckboxEl) {
+            log("Archive/Update Forms: Hidden checkbox - disabled=" + hiddenCheckboxEl.disabled + ", checked=" + hiddenCheckboxEl.checked);
+        }
+        if (hiddenCheckboxEl && !hiddenCheckboxEl.disabled) {
+            if (props.hidden && !hiddenCheckboxEl.checked) {
+                hiddenCheckboxEl.click();
+                log("Archive/Update Forms: Hidden checkbox checked");
+                await sleep(200);
+                log("Archive/Update Forms: Hidden checkbox - after click, checked=" + hiddenCheckboxEl.checked);
+            } else if (!props.hidden && hiddenCheckboxEl.checked) {
+                hiddenCheckboxEl.click();
+                log("Archive/Update Forms: Hidden checkbox unchecked");
+                await sleep(200);
+                log("Archive/Update Forms: Hidden checkbox - after click, checked=" + hiddenCheckboxEl.checked);
+            } else {
+                log("Archive/Update Forms: Hidden checkbox - already in correct state");
+            }
+        }
+
+        // Mandatory - use same approach as SA Builder
+        var mandatoryEl = document.querySelector("#uniform-mandatory span input#mandatory.checkbox");
+        if (!mandatoryEl) {
+            mandatoryEl = document.getElementById("mandatory");
+        }
+        if (mandatoryEl && !mandatoryEl.disabled) {
+            if (props.mandatory && !mandatoryEl.checked) {
+                mandatoryEl.click();
+                log("Archive/Update Forms: Mandatory checkbox checked");
+                await sleep(200);
+            } else if (!props.mandatory && mandatoryEl.checked) {
+                mandatoryEl.click();
+                log("Archive/Update Forms: Mandatory checkbox unchecked");
+                await sleep(200);
+            }
+        }
+
+        // Pre-Window
+        var preWindowEl = document.getElementById("preWindow");
+        if (preWindowEl && !preWindowEl.disabled) {
+            preWindowEl.value = props.preWindow || "";
+            preWindowEl.dispatchEvent(new Event("input", { bubbles: true }));
+            log("Archive/Update Forms: Pre-Window set to '" + (props.preWindow || "") + "'");
+        }
+
+        // Post-Window
+        var postWindowEl = document.getElementById("postWindow");
+        if (postWindowEl && !postWindowEl.disabled) {
+            postWindowEl.value = props.postWindow || "";
+            postWindowEl.dispatchEvent(new Event("input", { bubbles: true }));
+            log("Archive/Update Forms: Post-Window set to '" + (props.postWindow || "") + "'");
+        }
+
+        // Reference Activity
+        var refActivityEl = document.getElementById("referenceActivity");
+        if (refActivityEl && !refActivityEl.disabled) {
+            if (props.referenceActivity && !refActivityEl.checked) {
+                refActivityEl.click();
+                log("Archive/Update Forms: Reference Activity checkbox checked");
+                await sleep(200);
+            } else if (!props.referenceActivity && refActivityEl.checked) {
+                refActivityEl.click();
+                log("Archive/Update Forms: Reference Activity checkbox unchecked");
+                await sleep(200);
+            }
+        }
+
+        // Offset fields (only if referenceActivity is unchecked)
+        if (!props.referenceActivity) {
+            await sleep(200);
+
+            // Pre-Reference checkbox - use same approach as SA Builder
+            var preRefEl = document.querySelector("#uniform-offset\\.preReference span input#offset\\.preReference.checkbox");
+            if (!preRefEl) {
+                preRefEl = document.getElementById("offset.preReference");
+            }
+            if (preRefEl && !preRefEl.disabled) {
+                if (props.offsetPreReference === "checked" && !preRefEl.checked) {
+                    preRefEl.click();
+                    log("Archive/Update Forms: Pre-Reference checkbox checked");
+                    await sleep(200);
+                } else if (props.offsetPreReference !== "checked" && preRefEl.checked) {
+                    preRefEl.click();
+                    log("Archive/Update Forms: Pre-Reference checkbox unchecked");
+                    await sleep(200);
+                }
+            }
+
+            // Time offset values
+            var daysEl = document.querySelector("input[name='offset.days']");
+            if (daysEl && !daysEl.disabled) {
+                daysEl.value = String(props.offsetDays || "0");
+                daysEl.dispatchEvent(new Event("input", { bubbles: true }));
+            }
+
+            var hoursEl = document.querySelector("input[name='offset.hours']");
+            if (hoursEl && !hoursEl.disabled) {
+                hoursEl.value = String(props.offsetHours || "0");
+                hoursEl.dispatchEvent(new Event("input", { bubbles: true }));
+            }
+
+            var minutesEl = document.querySelector("input[name='offset.minutes']");
+            if (minutesEl && !minutesEl.disabled) {
+                minutesEl.value = String(props.offsetMinutes || "0");
+                minutesEl.dispatchEvent(new Event("input", { bubbles: true }));
+            }
+
+            var secondsEl = document.querySelector("input[name='offset.seconds']");
+            if (secondsEl && !secondsEl.disabled) {
+                secondsEl.value = String(props.offsetSeconds || "0");
+                secondsEl.dispatchEvent(new Event("input", { bubbles: true }));
+            }
+            log("Archive/Update Forms: Time offset set to " + props.offsetDays + "d " + props.offsetHours + "h " + props.offsetMinutes + "m " + props.offsetSeconds + "s");
+        } else {
+            log("Archive/Update Forms: Skipping time offset values (Reference Activity checked)");
+        }
+        // Enforce Data Collection Order
+        if (props.enforceDataCollectionOrder) {
+            var enforceEl = document.querySelector("#uniform-enforceDataCollectionOrder span input#enforceDataCollectionOrder.checkbox");
+            if (!enforceEl) {
+                enforceEl = document.getElementById("enforceDataCollectionOrder");
+            }
+            if (enforceEl && !enforceEl.checked) {
+                enforceEl.click();
+                log("Archive/Update Forms: Enforce Data Collection Order checkbox checked");
+                await sleep(200);
+            }
+        }
+
+        // Disable Collection Time
+        var disableCollectionEl = document.querySelector("#uniform-disableCollectionTime span input#disableCollectionTime.checkbox");
+        if (!disableCollectionEl) {
+            disableCollectionEl = document.getElementById("disableCollectionTime");
+        }
+        if (disableCollectionEl && !disableCollectionEl.disabled) {
+            if (props.disableCollectionTime && !disableCollectionEl.checked) {
+                disableCollectionEl.click();
+                log("Archive/Update Forms: Disable Collection Time checkbox checked");
+                await sleep(200);
+            } else if (!props.disableCollectionTime && disableCollectionEl.checked) {
+                disableCollectionEl.click();
+                log("Archive/Update Forms: Disable Collection Time checkbox unchecked");
+                await sleep(200);
+            }
+        }
+
+        // Timepoint Offset (Form Offset Seconds)
+        var formOffsetEl = document.getElementById("formOffsetSeconds");
+        if (formOffsetEl && !formOffsetEl.disabled) {
+            formOffsetEl.value = props.formOffsetSeconds || "0";
+            formOffsetEl.dispatchEvent(new Event("input", { bubbles: true }));
+            log("Archive/Update Forms: Timepoint Offset set to '" + (props.formOffsetSeconds || "0") + "' seconds");
+        }
+
+        // Collection Role Restriction
+        if (props.collectionRoleRestriction) {
+            var roleSet = await setSelect2ValueByText("dataCollectionApplicationUserRole", props.collectionRoleRestriction);
+            if (roleSet) {
+                log("Archive/Update Forms: Collection Role Restriction set to '" + props.collectionRoleRestriction + "'");
+            } else {
+                log("Archive/Update Forms: Failed to set Collection Role Restriction to '" + props.collectionRoleRestriction + "'");
+            }
+            await sleep(300);
+        }
+    }
+
+    // Wait for Select2 options to change/load
+    async function waitForSelect2OptionsChange(selectId, timeoutMs) {
+        var start = Date.now();
+        var maxTime = timeoutMs || 5000;
+        var initialCount = 0;
+        var sel = document.getElementById(selectId);
+        if (sel) {
+            initialCount = sel.querySelectorAll("option").length;
+        }
+        while (Date.now() - start < maxTime) {
+            sel = document.getElementById(selectId);
+            if (sel) {
+                var currentCount = sel.querySelectorAll("option").length;
+                if (currentCount > initialCount || currentCount > 1) {
+                    await sleep(200);
+                    return true;
+                }
+            }
+            await sleep(150);
+        }
+        return false;
+    }
+
+    async function setSelect2ValueByText(selectId, targetText) {
+        var sel = document.getElementById(selectId);
+        if (!sel) {
+            log("Archive/Update Forms: select " + selectId + " not found");
+            return false;
+        }
+
+        // Use specialized normalization for visibility fields only
+        var isVisibilityField = selectId.indexOf("visible") === 0;
+
+        // For non-visibility fields, use normalizeSAText which preserves minus signs
+        // For visibility fields, continue using normalizeVisibilityText
+        var normalizedTarget = isVisibilityField
+        ? normalizeVisibilityText(targetText)
+        : normalizeSAText(targetText).toLowerCase();
+
+        var opts = sel.querySelectorAll("option");
+        var matchValue = null;
+
+        // First pass: exact match (strict comparison)
+        for (var i = 0; i < opts.length; i++) {
+            var opt = opts[i];
+            var optText = normalizeSAText(opt.textContent);
+            var optNorm = isVisibilityField
+            ? normalizeVisibilityText(optText)
+            : optText.toLowerCase();
+
+            // Strict comparison - both normalized texts must match exactly
+            if (optNorm === normalizedTarget) {
+                matchValue = opt.value;
+                log("Archive/Update Forms: exact match found for " + targetText + " -> " + optText);
+                break;
+            }
+        }
+
+        // Second pass: fuzzy match if exact not found (only for visibility fields)
+        // For segment/studyEvent/form fields, do NOT use fuzzy matching to avoid Day 1 vs Day -1 issues
+        if (!matchValue && isVisibilityField) {
+            for (var j = 0; j < opts.length; j++) {
+                var opt2 = opts[j];
+                var optText2 = normalizeVisibilityText(opt2.textContent);
+
+                if (optText2.indexOf(normalizedTarget) !== -1 || normalizedTarget.indexOf(optText2) !== -1) {
+                    matchValue = opt2.value;
+                    log("Archive/Update Forms: fuzzy match found for " + targetText + " -> " + opt2.textContent);
+                    break;
+                }
+            }
+        }
+
+        if (matchValue) {
+            sel.value = matchValue;
+            sel.dispatchEvent(new Event("change", { bubbles: true }));
+            try {
+                if (window.jQuery && window.jQuery.fn.select2) {
+                    window.jQuery("#" + selectId).trigger("change");
+                }
+            } catch (e) {}
+            await sleep(300);
+            return true;
+        }
+
+        log("Archive/Update Forms: could not find option for " + targetText + " in " + selectId);
+        return false;
+    }
+
+    // Check if target form already exists for segment/event
+    function checkTargetFormExists(rows, segmentKey, eventKey, targetFormValue) {
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var rowSegKey = row.segmentValue || normalizeText(row.segmentText);
+            var rowEvKey = row.eventValue || normalizeText(row.eventText);
+            if (rowSegKey === segmentKey && rowEvKey === eventKey && row.formKey === targetFormValue) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Find row in DOM by matching criteria
+    function findRowInDOM(segmentText, eventText, formText) {
+        var tbody = document.getElementById("saTableBody");
+        if (!tbody) return null;
+        var trs = tbody.querySelectorAll("tr");
+        for (var i = 0; i < trs.length; i++) {
+            var tr = trs[i];
+            var cells = tr.querySelectorAll("td");
+            if (cells.length < 4) continue;
+            var seg = normalizeSAText(cells[1].textContent);
+            var ev = normalizeSAText(cells[2].textContent);
+            var form = normalizeSAText(cells[3].textContent);
+            if (seg === segmentText && ev === eventText && form === formText) {
+                return tr;
+            }
+        }
+        return null;
+    }
+
+    // Click Action dropdown for a row
+    async function clickRowActionDropdown(row) {
+        var actionBtn = row.querySelector("button.dropdown-toggle, a.dropdown-toggle");
+        if (actionBtn) {
+            actionBtn.click();
+            await sleep(300);
+            return true;
+        }
+        // Try td with Actions text
+        var cells = row.querySelectorAll("td");
+        for (var i = 0; i < cells.length; i++) {
+            var btn = cells[i].querySelector("button, a.dropdown-toggle");
+            if (btn) {
+                btn.click();
+                await sleep(300);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Main Archive/Update Forms execution
+    async function executeArchiveUpdateForms(sourceFormKey, targetFormValue, sourceFormsMap, targetFormsArray, archiveReason, visibilityReason) {
+        var sourceForm = sourceFormsMap[sourceFormKey];
+
+        // Find target form from array by value
+        var targetForm = null;
+        for (var t = 0; t < targetFormsArray.length; t++) {
+            if (targetFormsArray[t].value === targetFormValue) {
+                targetForm = targetFormsArray[t];
+                break;
+            }
+        }
+
+        if (!sourceForm) {
+            log("Archive/Update Forms: invalid source form");
+            return;
+        }
+
+        if (!targetForm) {
+            log("Archive/Update Forms: invalid target form");
+            return;
+        }
+
+        var occurrences = sourceForm.occurrences.slice(); // Copy array
+        var total = occurrences.length;
+
+        if (total === 0) {
+            createPopup({
+                title: "Archive/Update Forms - Error",
+                content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">No occurrences found for selected Source form.</div>',
+                width: "400px",
+                height: "auto"
+            });
+            return;
+        }
+
+        log("Archive/Update Forms: processing " + total + " occurrences");
+
+        // Create progress popup
+        var progressContent = createArchiveUpdateProgressPopup(occurrences, targetForm.text);
+        ARCHIVE_UPDATE_FORMS_PROGRESS_REF = createPopup({
+            title: "Archive/Update Forms - Processing",
+            content: progressContent,
+            width: "600px",
+            height: "70%",
+            maxHeight: "600px",
+            onClose: function() {
+                ARCHIVE_UPDATE_FORMS_CANCELLED = true;
+                ARCHIVE_UPDATE_FORMS_PROGRESS_REF = null;
+            }
+        });
+
+        var successCount = 0;
+        var skipCount = 0;
+        var errorCount = 0;
+
+        for (var i = 0; i < occurrences.length; i++) {
+            if (ARCHIVE_UPDATE_FORMS_CANCELLED) {
+                log("Archive/Update Forms: cancelled by user");
+                break;
+            }
+
+            var occ = occurrences[i];
+            progressContent.updateProgress(i + 1, total);
+            progressContent.setItemStatus(i, "Processing...", "#17a2b8");
+
+            try {
+                // Re-scan to get fresh row reference
+                var freshRows = scanSATableForArchiveUpdate();
+                var segKey = occ.segmentValue || normalizeText(occ.segmentText);
+                var evKey = occ.eventValue || normalizeText(occ.eventText);
+
+                // Check if target already exists for this segment/event
+                if (checkTargetFormExists(freshRows, segKey, evKey, targetFormValue)) {
+                    log("Archive/Update Forms: target form already exists for " + occ.segmentText + " → " + occ.eventText + "; skipping");
+                    progressContent.setItemStatus(i, "Skipped (exists)", "#ffc107");
+                    skipCount++;
+                    continue;
+                }
+
+                // Find the occurrence row
+                var row = findRowInDOM(occ.segmentText, occ.eventText, occ.formText);
+                if (!row) {
+                    log("Archive/Update Forms: could not find row for " + occ.rowKey);
+                    progressContent.setItemStatus(i, "Error (not found)", "#dc3545");
+                    errorCount++;
+                    continue;
+                }
+
+                // Step 1: Open Edit modal and collect properties
+                var editProps = null;
+                // Find edit link directly in the row (8th column)
+                var editLink = row.querySelector('a[href*="/update/scheduledactivity/"]');
+                if (!editLink) {
+                    // Fallback: try other selectors
+                    editLink = row.querySelector('a[href*="editscheduledactivity"]');
+                }
+                if (!editLink) {
+                    // Fallback: look for Edit text
+                    var links = row.querySelectorAll('a[data-toggle="modal"]');
+                    for (var li = 0; li < links.length; li++) {
+                        if (links[li].textContent.indexOf("Edit") !== -1) {
+                            editLink = links[li];
+                            break;
+                        }
+                    }
+                }
+                log("Archive/Update Forms: editLink found=" + !!editLink);
+                if (editLink) {
+                    editLink.click();
+                    var editModal = await waitForSAModal(10000);
+                    if (editModal) {
+                        editProps = await collectEditModalProperties();
+                        log("Archive/Update Forms: collected editProps.hidden=" + editProps.hidden + ", preWindow='" + editProps.preWindow + "', postWindow='" + editProps.postWindow + "'");
+                        // Cancel the edit modal
+                        var cancelBtn = editModal.querySelector("button[data-dismiss='modal'], .btn-default, .close");
+                        if (cancelBtn) {
+                            cancelBtn.click();
+                        } else {
+                            document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+                        }
+                        await waitForSAModalClose(5000);
+                    } else {
+                        log("Archive/Update Forms: edit modal did not open for " + occ.rowKey);
+                    }
+                } else {
+                    log("Archive/Update Forms: edit link not found for " + occ.rowKey);
+                }
+
+                if (ARCHIVE_UPDATE_FORMS_CANCELLED) break;
+
+                // Step 2: Collect visibility if hidden
+                var visibilityProps = null;
+                if (editProps && editProps.hidden) {
+                    log("Archive/Update Forms: Step 2 - attempting to collect visibility properties");
+                    await sleep(500);
+                    row = findRowInDOM(occ.segmentText, occ.eventText, occ.formText);
+                    if (row) {
+                        // Find visibility link directly in the row
+                        var visLink = row.querySelector('a[href*="visiblecondition"]');
+                        if (!visLink) {
+                            visLink = row.querySelector('a[href*="visibility"]');
+                        }
+                        log("Archive/Update Forms: Step 2 - visibility link found=" + !!visLink);
+                        if (visLink) {
+                            visLink.click();
+                            var visModal = await waitForSAModal(10000);
+                            log("Archive/Update Forms: Step 2 - visibility modal opened=" + !!visModal);
+                            if (visModal) {
+                                visibilityProps = await collectVisibilityModalProperties();
+                                log("Archive/Update Forms: Step 2 - collected visibilityProps=" + JSON.stringify(visibilityProps));
+                                var visCancelBtn = visModal.querySelector("button[data-dismiss='modal'], .btn-default, .close");
+                                if (visCancelBtn) {
+                                    visCancelBtn.click();
+                                } else {
+                                    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+                                }
+                                await waitForSAModalClose(5000);
+                            } else {
+                                log("Archive/Update Forms: Step 2 - visibility modal did not open");
+                            }
+                        } else {
+                            log("Archive/Update Forms: Step 2 - visibility link not found in row");
+                        }
+                    } else {
+                        log("Archive/Update Forms: Step 2 - could not re-find row");
+                    }
+                }
+
+                if (ARCHIVE_UPDATE_FORMS_CANCELLED) break;
+
+                // Step 3: Archive the source occurrence
+                await sleep(500);
+                row = findRowInDOM(occ.segmentText, occ.eventText, occ.formText);
+                if (row) {
+                    await clickRowActionDropdown(row);
+                    var archiveLink = row.querySelector('a[href*="archivescheduledactivity"]');
+                    if (archiveLink) {
+                        // Check if it's Un-Archive (already archived)
+                        var archiveLinkText = (archiveLink.textContent || "").toLowerCase();
+                        if (archiveLinkText.indexOf("un-archive") !== -1) {
+                            log("Archive/Update Forms: row already archived for " + occ.rowKey + "; skipping archive step");
+                        } else {
+                            archiveLink.click();
+                            var archiveModal = await waitForSAModal(10000);
+                            if (archiveModal) {
+                                // Set reason for change
+                                var reasonEl = document.getElementById("reasonForChange");
+                                if (reasonEl) {
+                                    reasonEl.value = archiveReason || "Old version";
+                                    reasonEl.dispatchEvent(new Event("change", { bubbles: true }));
+                                }
+                                // Click Save
+                                var saveBtn = document.getElementById("actionButton");
+                                if (saveBtn) {
+                                    saveBtn.click();
+                                    var closed = await waitForSAModalClose(10000);
+                                    if (!closed) {
+                                        log("Archive/Update Forms: archive modal did not close for " + occ.rowKey);
+                                        progressContent.setItemStatus(i, "Error (archive)", "#dc3545");
+                                        errorCount++;
+                                        continue;
+                                    }
+                                }
+                                await sleep(1000);
+                            }
+                        }
+                    } else {
+                        log("Archive/Update Forms: archive link not found for " + occ.rowKey);
+                    }
+                }
+
+                if (ARCHIVE_UPDATE_FORMS_CANCELLED) break;
+
+                // Step 4: Add target form
+                await sleep(500);
+                if (!clickAddSaButton()) {
+                    log("Archive/Update Forms: could not click Add button");
+                    progressContent.setItemStatus(i, "Error (add)", "#dc3545");
+                    errorCount++;
+                    continue;
+                }
+
+                var addModal = await waitForSAModal(10000);
+                if (!addModal) {
+                    log("Archive/Update Forms: add modal did not open");
+                    progressContent.setItemStatus(i, "Error (add modal)", "#dc3545");
+                    errorCount++;
+                    continue;
+                }
+
+                // Select segment by text (more reliable than value)
+                await setSelect2ValueByText("segment", occ.segmentText);
+                await sleep(500);
+
+                // Select study event by text (more reliable than value)
+                await setSelect2ValueByText("studyEvent", occ.eventText);
+                await sleep(500);
+
+                // Select target form by text (more reliable than value)
+                await setSelect2ValueByText("form", targetForm.text);
+                await sleep(500);
+
+                // Apply copied properties
+                if (editProps) {
+                    await applyPropertiesToAddModal(editProps);
+                }
+
+                // Save the new scheduled activity
+                var addSaveBtn = document.getElementById("actionButton");
+                if (addSaveBtn) {
+                    addSaveBtn.click();
+                    var addClosed = await waitForSAModalClose(10000);
+                    if (!addClosed) {
+                        log("Archive/Update Forms: add modal did not close");
+                        progressContent.setItemStatus(i, "Error (save)", "#dc3545");
+                        errorCount++;
+                        continue;
+                    }
+                }
+
+                await sleep(1000);
+
+                if (ARCHIVE_UPDATE_FORMS_CANCELLED) break;
+
+                // Step 5: Set visibility if source was hidden
+                log("Archive/Update Forms: Step 5 check - editProps.hidden=" + (editProps && editProps.hidden) + ", visibilityProps=" + !!visibilityProps);
+                if (editProps && editProps.hidden && visibilityProps) {
+                    log("Archive/Update Forms: Step 5 - attempting to set visibility on new row");
+                    // Find the newly added row
+                    var newRow = findRowInDOM(occ.segmentText, occ.eventText, targetForm.text);
+                    if (newRow) {
+                        log("Archive/Update Forms: Step 5 - new row found");
+                        // Find visibility link directly in the row
+                        var newVisLink = newRow.querySelector('a[href*="visiblecondition"]');
+                        if (!newVisLink) {
+                            newVisLink = newRow.querySelector('a[href*="visibility"]');
+                        }
+                        log("Archive/Update Forms: Step 5 - visibility link found=" + !!newVisLink);
+                        if (newVisLink) {
+                            newVisLink.click();
+                            var newVisModal = await waitForSAModal(10000);
+                            log("Archive/Update Forms: Step 5 - visibility modal opened=" + !!newVisModal);
+                            if (newVisModal) {
+                                await sleep(500);
+
+                                // Set visibility fields one at a time with delays
+                                var visSuccess = true;
+
+                                // 1. Activity Plan
+                                if (visibilityProps.activityPlan) {
+                                    log("Archive/Update Forms: Step 5 - setting Activity Plan: " + visibilityProps.activityPlan);
+                                    var apSet = await setSelect2ValueByText("visibleActivityPlan", visibilityProps.activityPlan);
+                                    if (!apSet) {
+                                        log("Archive/Update Forms: Step 5 - failed to set Activity Plan");
+                                        visSuccess = false;
+                                    } else {
+                                        await sleep(500);
+                                        await waitForSelect2OptionsChange("visibleScheduledActivity", 3000);
+                                        await sleep(500);
+                                    }
+                                }
+
+                                // 2. Scheduled Activity
+                                if (visSuccess && visibilityProps.scheduledActivity) {
+                                    var targetSA = rebuildScheduledActivityForTarget(visibilityProps.scheduledActivity, occ.eventText);
+                                    log("Archive/Update Forms: Step 5 - setting Scheduled Activity: " + targetSA + " (rebuilt from: " + visibilityProps.scheduledActivity + ")");
+                                    var saSet = false;
+                                    for (var retry = 0; retry < 3; retry++) {
+                                        saSet = await setSelect2ValueByText("visibleScheduledActivity", targetSA);
+                                        if (saSet) break;
+                                        log("Archive/Update Forms: Step 5 - retry " + (retry + 1) + " for Scheduled Activity");
+                                        await sleep(1000);
+                                    }
+                                    if (!saSet) {
+                                        log("Archive/Update Forms: Step 5 - failed to set Scheduled Activity after retries");
+                                        visSuccess = false;
+                                    } else {
+                                        await sleep(500);
+                                        await waitForSelect2OptionsChange("visibleItemRef", 3000);
+                                        await sleep(500);
+                                    }
+                                }
+
+                                // 3. Item
+                                if (visSuccess && visibilityProps.item) {
+                                    log("Archive/Update Forms: Step 5 - setting Item: " + visibilityProps.item);
+                                    var itemSet = false;
+                                    for (var retry = 0; retry < 3; retry++) {
+                                        itemSet = await setSelect2ValueByText("visibleItemRef", visibilityProps.item);
+                                        if (itemSet) break;
+                                        log("Archive/Update Forms: Step 5 - retry " + (retry + 1) + " for Item");
+                                        await sleep(1000);
+                                    }
+                                    if (!itemSet) {
+                                        log("Archive/Update Forms: Step 5 - failed to set Item after retries");
+                                        visSuccess = false;
+                                    } else {
+                                        await sleep(500);
+                                        await waitForSelect2OptionsChange("visibleCodeListItem", 3000);
+                                        await sleep(500);
+                                    }
+                                }
+
+                                // 4. Item Value
+                                if (visSuccess && visibilityProps.itemValue) {
+                                    log("Archive/Update Forms: Step 5 - setting Item Value: " + visibilityProps.itemValue);
+                                    var ivSet = false;
+                                    for (var retry = 0; retry < 3; retry++) {
+                                        ivSet = await setSelect2ValueByText("visibleCodeListItem", visibilityProps.itemValue);
+                                        if (ivSet) break;
+                                        log("Archive/Update Forms: Step 5 - retry " + (retry + 1) + " for Item Value");
+                                        await sleep(1000);
+                                    }
+                                    if (!ivSet) {
+                                        log("Archive/Update Forms: Step 5 - failed to set Item Value after retries");
+                                        visSuccess = false;
+                                    } else {
+                                        await sleep(500);
+                                    }
+                                }
+
+                                // Set reason for change
+                                var visReasonEl = document.getElementById("reasonForChange");
+                                if (visReasonEl) {
+                                    visReasonEl.value = visibilityReason || "Add visibility condition";
+                                    visReasonEl.dispatchEvent(new Event("change", { bubbles: true }));
+                                }
+
+                                // Save visibility
+                                var visSaveBtn = document.getElementById("actionButton");
+                                if (visSaveBtn) {
+                                    log("Archive/Update Forms: Step 5 - clicking Save button");
+                                    visSaveBtn.click();
+                                    await waitForSAModalClose(10000);
+                                }
+                                await sleep(500);
+                                log("Archive/Update Forms: Step 5 - visibility set successfully");
+                            } else {
+                                log("Archive/Update Forms: Step 5 - visibility modal did not open");
+                            }
+                        } else {
+                            log("Archive/Update Forms: Step 5 - visibility link not found in new row");
+                        }
+                    } else {
+                        log("Archive/Update Forms: Step 5 - could not find newly added row to set visibility");
+                    }
+                }
+
+                progressContent.setItemStatus(i, "Success", "#28a745");
+                successCount++;
+                log("Archive/Update Forms: processed " + occ.rowKey + " successfully");
+
+            } catch (err) {
+                log("Archive/Update Forms: error processing " + occ.rowKey + " - " + String(err));
+                progressContent.setItemStatus(i, "Error", "#dc3545");
+                errorCount++;
+            }
+
+            await sleep(500);
+        }
+
+        // Show summary
+        progressContent.updateStatus("Complete");
+        progressContent.showSummary(total, successCount, skipCount, errorCount);
+        log("Archive/Update Forms: completed. Total=" + total + " Success=" + successCount + " Skipped=" + skipCount + " Errors=" + errorCount);
+    }
+
+    // Main entry point
+    async function runArchiveUpdateForms() {
+        // Check if on correct page
+        if (!isOnArchiveUpdateFormsPage()) {
+            createPopup({
+                title: "Archive/Update Forms - Error",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">⚠️ Wrong Page</p><p>Navigate to the Activity Plans Show page first.</p><p style="margin-top:12px;font-size:12px;color:#ffffffff;">Required URL: https://cenexeltest.clinspark.com/secure/crfdesign/activityplans/show/{id}</p></div>',
+                width: "450px",
+                height: "auto"
+            });
+            log("Archive/Update Forms: wrong page - " + location.href);
+            return;
+        }
+
+        // Verify Add button is available
+        if (isAddSaButtonDisabled()) {
+            createPopup({
+                title: "Archive/Update Forms - Error",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">⚠️ Add Button Disabled</p><p>The Add button is currently disabled. This activity plan may no longer be in design mode.</p></div>',
+                width: "400px",
+                height: "auto"
+            });
+            log("Archive/Update Forms: Add button is disabled");
+            return;
+        }
+
+        // Scan table and build forms map
+        log("Archive/Update Forms: scanning table...");
+        var rows = scanSATableForArchiveUpdate();
+        if (rows.length === 0) {
+            createPopup({
+                title: "Archive/Update Forms - Error",
+                content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">No rows found in the Scheduled Activities table.</div>',
+                width: "400px",
+                height: "auto"
+            });
+            return;
+        }
+
+        var sourceFormsMap = buildUniqueFormsMap(rows);
+        var sourceFormCount = Object.keys(sourceFormsMap).length;
+        log("Archive/Update Forms: found " + sourceFormCount + " unique source forms from " + rows.length + " rows");
+
+        if (sourceFormCount === 0) {
+            createPopup({
+                title: "Archive/Update Forms - Error",
+                content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">No forms found in the Scheduled Activities table.</div>',
+                width: "400px",
+                height: "auto"
+            });
+            return;
+        }
+
+        // Show loading popup while collecting target forms from Add modal
+        var loadingPopup = createPopup({
+            title: "Archive/Update Forms",
+            content: '<div style="text-align:center;padding:30px;"><div style="font-size:16px;margin-bottom:12px;">Collecting available forms...</div><div id="archiveUpdateLoadingDots" style="font-size:24px;">.</div></div>',
+            width: "350px",
+            height: "auto"
+        });
+        var loadingInterval = setInterval(function() {
+            var dots = document.getElementById("archiveUpdateLoadingDots");
+            if (dots) {
+                var d = dots.textContent;
+                dots.textContent = d.length >= 3 ? "." : d + ".";
+            }
+        }, 400);
+
+        // Click Add button to open modal
+        log("Archive/Update Forms: clicking Add button to collect forms...");
+        if (!clickAddSaButton()) {
+            clearInterval(loadingInterval);
+            loadingPopup.close();
+            createPopup({
+                title: "Archive/Update Forms - Error",
+                content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">Could not click the Add button.</div>',
+                width: "400px",
+                height: "auto"
+            });
+            return;
+        }
+
+        // Wait for modal to appear
+        var modal = await waitForSAModal(10000);
+        if (!modal) {
+            clearInterval(loadingInterval);
+            loadingPopup.close();
+            createPopup({
+                title: "Archive/Update Forms - Error",
+                content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">Modal did not appear within timeout.</div>',
+                width: "400px",
+                height: "auto"
+            });
+            return;
+        }
+
+        // Collect form options from the modal dropdown
+        await openSelect2Dropdown("s2id_form");
+        await sleep(300);
+        await closeSelect2Dropdown();
+        var targetFormsArray = collectSelectOptions("form");
+        log("Archive/Update Forms: collected " + targetFormsArray.length + " target forms from modal");
+
+        // Close the modal
+        var closeBtn = modal.querySelector(".close, [data-dismiss='modal']");
+        if (closeBtn) {
+            closeBtn.click();
+        } else {
+            var escEvent = new KeyboardEvent("keydown", { key: "Escape", bubbles: true });
+            document.dispatchEvent(escEvent);
+        }
+        await sleep(500);
+
+        clearInterval(loadingInterval);
+        loadingPopup.close();
+
+        if (targetFormsArray.length === 0) {
+            createPopup({
+                title: "Archive/Update Forms - Error",
+                content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">No forms found in the Add modal dropdown.</div>',
+                width: "400px",
+                height: "auto"
+            });
+            return;
+        }
+
+        // Show selection GUI with separate source and target form lists
+        var guiContent = createArchiveUpdateFormsGUI(sourceFormsMap, targetFormsArray);
+
+        ARCHIVE_UPDATE_FORMS_POPUP_REF = createPopup({
+            title: "Archive/Update Forms - Select Forms",
+            content: guiContent,
+            width: "900px",
+            maxWidth: "95%",
+            height: "70%",
+            maxHeight: "700px",
+            onClose: function() {
+                ARCHIVE_UPDATE_FORMS_POPUP_REF = null;
+            }
+        });
+
+        // Attach confirm handler
+        guiContent.confirmBtn.addEventListener("click", async function() {
+            var selection = guiContent.getSelection();
+            if (!selection.source || !selection.target || selection.source === selection.target) {
+                return;
+            }
+
+            log("Archive/Update Forms: confirmed - source=" + selection.source + " target=" + selection.target + " archiveReason='" + selection.archiveReason + "' visibilityReason='" + selection.visibilityReason + "'");
+
+            // Close selection popup (but don't cancel)
+            if (ARCHIVE_UPDATE_FORMS_POPUP_REF) {
+                // Remove the onClose handler to prevent it from running
+                var popupEl = ARCHIVE_UPDATE_FORMS_POPUP_REF.element;
+                if (popupEl) popupEl.remove();
+                ARCHIVE_UPDATE_FORMS_POPUP_REF = null;
+            }
+
+            // Execute the replacement
+            await executeArchiveUpdateForms(selection.source, selection.target, guiContent.sourceFormsMap, guiContent.targetFormsArray, selection.archiveReason, selection.visibilityReason);
+        });
+
+        log("Archive/Update Forms: selection GUI displayed");
+    }
 
     //==================================================
     // Pull Lab Barcode Feature
@@ -2517,10 +5615,13 @@
     }
 
     function openSettingsPopup() {
+        var glass = isGlassTheme();
         var buttonLabels = [
             "Pull Barcode",
             "Pull Lab Barcode",
             "Scheduled Activities Builder",
+            "Archive/Update Forms",
+            "Copy Activity Forms",
             "Search Methods",
             "Parse Deviation",
             "Import I/E",
@@ -2547,7 +5648,7 @@
         var description = document.createElement("div");
         description.textContent = "Select which buttons to display in the panel:";
         description.style.fontSize = "13px";
-        description.style.color = "#aaa";
+        description.style.color = glass ? THEME_TEXT_MUTED : "#aaa";
         description.style.marginBottom = "12px";
         container.appendChild(description);
 
@@ -2570,12 +5671,12 @@
             row.style.alignItems = "center";
             row.style.gap = "10px";
             row.style.padding = "8px 12px";
-            row.style.background = "#1a1a1a";
+            row.style.background = glass ? THEME_SURFACE_BG : "#1a1a1a";
             row.style.borderRadius = "6px";
             row.style.cursor = "pointer";
             row.style.transition = "background 0.15s";
-            row.onmouseenter = function() { this.style.background = "#252525"; };
-            row.onmouseleave = function() { this.style.background = "#1a1a1a"; };
+            row.onmouseenter = (function(r) { return function() { r.style.background = glass ? THEME_SURFACE_BG_HEAVY : "#252525"; }; })(row);
+            row.onmouseleave = (function(r) { return function() { r.style.background = glass ? THEME_SURFACE_BG : "#1a1a1a"; }; })(row);
 
             var checkbox = document.createElement("input");
             checkbox.type = "checkbox";
@@ -2583,13 +5684,13 @@
             checkbox.style.width = "18px";
             checkbox.style.height = "18px";
             checkbox.style.cursor = "pointer";
-            checkbox.style.accentColor = "#5b43c7";
+            checkbox.style.accentColor = glass ? THEME_ACCENT : "#5b43c7";
             checkbox.dataset.label = label;
 
             var labelText = document.createElement("span");
             labelText.textContent = label;
             labelText.style.fontSize = "14px";
-            labelText.style.color = "#fff";
+            labelText.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
 
             row.appendChild(checkbox);
             row.appendChild(labelText);
@@ -2599,16 +5700,90 @@
 
         container.appendChild(checkboxContainer);
 
+        // Theme Toggle Section
+        var themeSection = document.createElement("div");
+        themeSection.style.marginTop = "20px";
+        themeSection.style.paddingTop = "20px";
+        themeSection.style.borderTop = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #333";
+
+        var themeLabel = document.createElement("div");
+        themeLabel.textContent = "UI Theme:";
+        themeLabel.style.fontSize = "13px";
+        themeLabel.style.color = glass ? THEME_TEXT_MUTED : "#aaa";
+        themeLabel.style.marginBottom = "8px";
+        themeSection.appendChild(themeLabel);
+
+        var themeRow = document.createElement("div");
+        themeRow.style.display = "flex";
+        themeRow.style.gap = "10px";
+
+        var themes = [
+            { value: THEME_MODE_BLACK, label: "Black" },
+            { value: THEME_MODE_GLASS, label: "Glassmorphism" }
+        ];
+        for (var ti = 0; ti < themes.length; ti++) {
+            var themeOpt = themes[ti];
+            var themeBtn = document.createElement("button");
+            themeBtn.textContent = themeOpt.label;
+            themeBtn.dataset.themeValue = themeOpt.value;
+            var isActive = (glass && themeOpt.value === THEME_MODE_GLASS) || (!glass && themeOpt.value === THEME_MODE_BLACK);
+            if (isActive) {
+                themeBtn.style.background = glass ? THEME_ACCENT : "#5b43c7";
+                themeBtn.style.color = glass ? THEME_TEXT_INVERSE : "#fff";
+                themeBtn.style.fontWeight = "600";
+            } else {
+                themeBtn.style.background = glass ? THEME_SURFACE_BG : "#333";
+                themeBtn.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
+                themeBtn.style.fontWeight = "400";
+            }
+            themeBtn.style.border = "none";
+            themeBtn.style.borderRadius = "6px";
+            themeBtn.style.padding = "8px 16px";
+            themeBtn.style.cursor = "pointer";
+            themeBtn.style.fontSize = "13px";
+            themeBtn.style.flex = "1";
+            themeBtn.addEventListener("click", (function(val, allBtns) {
+                return function() {
+                    try { localStorage.setItem(STORAGE_THEME_MODE, val); } catch(e) {}
+                    // Update button appearances
+                    var siblings = themeRow.querySelectorAll("button");
+                    for (var si = 0; si < siblings.length; si++) {
+                        if (siblings[si].dataset.themeValue === val) {
+                            siblings[si].style.background = val === THEME_MODE_GLASS ? THEME_ACCENT : "#5b43c7";
+                            siblings[si].style.color = val === THEME_MODE_GLASS ? THEME_TEXT_INVERSE : "#fff";
+                            siblings[si].style.fontWeight = "600";
+                        } else {
+                            siblings[si].style.background = val === THEME_MODE_GLASS ? THEME_SURFACE_BG : "#333";
+                            siblings[si].style.color = val === THEME_MODE_GLASS ? THEME_TEXT_PRIMARY : "#fff";
+                            siblings[si].style.fontWeight = "400";
+                        }
+                    }
+                };
+            })(themeOpt.value));
+            themeRow.appendChild(themeBtn);
+        }
+        themeSection.appendChild(themeRow);
+
+        var themeHint = document.createElement("div");
+        themeHint.textContent = "Theme change will apply after Save & Refresh";
+        themeHint.style.fontSize = "11px";
+        themeHint.style.color = glass ? THEME_TEXT_MUTED : "#666";
+        themeHint.style.marginTop = "6px";
+        themeHint.style.fontStyle = "italic";
+        themeSection.appendChild(themeHint);
+
+        container.appendChild(themeSection);
+
         // Hotkey Configuration Section
         var hotkeySection = document.createElement("div");
         hotkeySection.style.marginTop = "20px";
         hotkeySection.style.paddingTop = "20px";
-        hotkeySection.style.borderTop = "1px solid #333";
+        hotkeySection.style.borderTop = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #333";
 
         var hotkeyLabel = document.createElement("div");
         hotkeyLabel.textContent = "Panel Toggle Hotkey:";
         hotkeyLabel.style.fontSize = "13px";
-        hotkeyLabel.style.color = "#aaa";
+        hotkeyLabel.style.color = glass ? THEME_TEXT_MUTED : "#aaa";
         hotkeyLabel.style.marginBottom = "8px";
         hotkeySection.appendChild(hotkeyLabel);
 
@@ -2623,21 +5798,21 @@
         hotkeyInput.placeholder = "Press a key...";
         hotkeyInput.style.flex = "1";
         hotkeyInput.style.padding = "10px 12px";
-        hotkeyInput.style.background = "#2a2a2a";
-        hotkeyInput.style.border = "1px solid #444";
+        hotkeyInput.style.background = glass ? THEME_SURFACE_BG : "#2a2a2a";
+        hotkeyInput.style.border = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #444";
         hotkeyInput.style.borderRadius = "6px";
-        hotkeyInput.style.color = "#fff";
+        hotkeyInput.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
         hotkeyInput.style.fontSize = "14px";
         hotkeyInput.style.outline = "none";
         hotkeyInput.style.fontFamily = "monospace";
         hotkeyInput.style.cursor = "pointer";
 
         hotkeyInput.addEventListener("focus", function() {
-            this.style.borderColor = "#5b43c7";
+            this.style.borderColor = glass ? THEME_ACCENT : "#5b43c7";
         });
 
         hotkeyInput.addEventListener("blur", function() {
-            this.style.borderColor = "#333";
+            this.style.borderColor = glass ? THEME_SURFACE_BORDER : "#333";
         });
 
         hotkeyInput.addEventListener("keydown", function(e) {
@@ -2683,15 +5858,16 @@
 
         var hotkeyResetBtn = document.createElement("button");
         hotkeyResetBtn.textContent = "Reset";
-        hotkeyResetBtn.style.background = "#333";
-        hotkeyResetBtn.style.color = "#fff";
+        hotkeyResetBtn.style.background = glass ? THEME_SURFACE_BG : "#333";
+        hotkeyResetBtn.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
         hotkeyResetBtn.style.border = "none";
         hotkeyResetBtn.style.borderRadius = "6px";
         hotkeyResetBtn.style.padding = "10px 16px";
         hotkeyResetBtn.style.cursor = "pointer";
         hotkeyResetBtn.style.fontSize = "13px";
-        hotkeyResetBtn.onmouseenter = function() { this.style.background = "#444"; };
-        hotkeyResetBtn.onmouseleave = function() { this.style.background = "#333"; };
+        if (glass) hotkeyResetBtn.className = "ie-btn-secondary";
+        hotkeyResetBtn.onmouseenter = function() { this.style.background = glass ? THEME_SURFACE_BG_HEAVY : "#444"; };
+        hotkeyResetBtn.onmouseleave = function() { this.style.background = glass ? THEME_SURFACE_BG : "#333"; };
         hotkeyResetBtn.addEventListener("click", function() {
             hotkeyInput.value = "F2";
         });
@@ -2703,7 +5879,7 @@
         var hotkeyHint = document.createElement("div");
         hotkeyHint.textContent = "Click the input field and press any key to set a new hotkey";
         hotkeyHint.style.fontSize = "11px";
-        hotkeyHint.style.color = "#666";
+        hotkeyHint.style.color = glass ? THEME_TEXT_MUTED : "#666";
         hotkeyHint.style.marginTop = "6px";
         hotkeyHint.style.fontStyle = "italic";
         hotkeySection.appendChild(hotkeyHint);
@@ -2711,6 +5887,7 @@
         container.appendChild(hotkeySection);
 
         var buttonRow = document.createElement("div");
+
         buttonRow.style.display = "flex";
         buttonRow.style.gap = "10px";
         buttonRow.style.marginTop = "16px";
@@ -2718,15 +5895,16 @@
 
         var selectAllBtn = document.createElement("button");
         selectAllBtn.textContent = "Select All";
-        selectAllBtn.style.background = "#333";
-        selectAllBtn.style.color = "#fff";
+        selectAllBtn.style.background = glass ? THEME_SURFACE_BG : "#333";
+        selectAllBtn.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
         selectAllBtn.style.border = "none";
         selectAllBtn.style.borderRadius = "6px";
         selectAllBtn.style.padding = "8px 16px";
         selectAllBtn.style.cursor = "pointer";
         selectAllBtn.style.fontSize = "13px";
-        selectAllBtn.onmouseenter = function() { this.style.background = "#444"; };
-        selectAllBtn.onmouseleave = function() { this.style.background = "#333"; };
+        if (glass) selectAllBtn.className = "ie-btn-secondary";
+        selectAllBtn.onmouseenter = function() { this.style.background = glass ? THEME_SURFACE_BG_HEAVY : "#444"; };
+        selectAllBtn.onmouseleave = function() { this.style.background = glass ? THEME_SURFACE_BG : "#333"; };
         selectAllBtn.addEventListener("click", function() {
             for (var j = 0; j < checkboxes.length; j++) {
                 checkboxes[j].checked = true;
@@ -2735,15 +5913,16 @@
 
         var deselectAllBtn = document.createElement("button");
         deselectAllBtn.textContent = "Deselect All";
-        deselectAllBtn.style.background = "#333";
-        deselectAllBtn.style.color = "#fff";
+        deselectAllBtn.style.background = glass ? THEME_SURFACE_BG : "#333";
+        deselectAllBtn.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
         deselectAllBtn.style.border = "none";
         deselectAllBtn.style.borderRadius = "6px";
         deselectAllBtn.style.padding = "8px 16px";
         deselectAllBtn.style.cursor = "pointer";
         deselectAllBtn.style.fontSize = "13px";
-        deselectAllBtn.onmouseenter = function() { this.style.background = "#444"; };
-        deselectAllBtn.onmouseleave = function() { this.style.background = "#333"; };
+        if (glass) deselectAllBtn.className = "ie-btn-secondary";
+        deselectAllBtn.onmouseenter = function() { this.style.background = glass ? THEME_SURFACE_BG_HEAVY : "#444"; };
+        deselectAllBtn.onmouseleave = function() { this.style.background = glass ? THEME_SURFACE_BG : "#333"; };
         deselectAllBtn.addEventListener("click", function() {
             for (var j = 0; j < checkboxes.length; j++) {
                 checkboxes[j].checked = false;
@@ -2752,16 +5931,19 @@
 
         var saveBtn = document.createElement("button");
         saveBtn.textContent = "Save & Refresh";
-        saveBtn.style.background = "#5b43c7";
-        saveBtn.style.color = "#fff";
+        if (glass) saveBtn.className = "ie-btn-primary";
+        saveBtn.style.background = glass ? "" : "#5b43c7";
+        saveBtn.style.color = glass ? "" : "#fff";
         saveBtn.style.border = "none";
         saveBtn.style.borderRadius = "6px";
         saveBtn.style.padding = "10px 20px";
         saveBtn.style.cursor = "pointer";
         saveBtn.style.fontSize = "14px";
         saveBtn.style.fontWeight = "600";
-        saveBtn.onmouseenter = function() { this.style.background = "#4a35a6"; };
-        saveBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
+        if (!glass) {
+            saveBtn.onmouseenter = function() { this.style.background = "#4a35a6"; };
+            saveBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
+        }
 
         buttonRow.appendChild(selectAllBtn);
         buttonRow.appendChild(deselectAllBtn);
@@ -3667,6 +6849,8 @@
     }
 
     function openMethodsLibraryModal() {
+        var glass = isGlassTheme();
+        if (glass) injectThemeStylesIfNeeded();
         var bootstrapBackdrops = document.querySelectorAll('.modal-backdrop');
         for (var i = 0; i < bootstrapBackdrops.length; i++) {
             bootstrapBackdrops[i].style.display = 'none';
@@ -3701,8 +6885,8 @@
         overlay.style.left = "0";
         overlay.style.width = "100%";
         overlay.style.height = "100%";
-        overlay.style.background = "rgba(0,0,0,0.6)";
-        overlay.style.zIndex = "999997";
+        overlay.style.background = glass ? "rgba(0,0,0,0.4)" : "rgba(0,0,0,0.6)";
+        overlay.style.zIndex = glass ? String(THEME_Z_OVERLAY - 1) : "999997";
 
         var modal = document.createElement("div");
         modal.setAttribute("role", "dialog");
@@ -3717,17 +6901,23 @@
         modal.style.maxWidth = "95vw";
         modal.style.height = "600px";
         modal.style.maxHeight = "90vh";
-        modal.style.background = "#1a1a1a";
-        modal.style.color = "#fff";
-        modal.style.border = "1px solid #444";
+        if (glass) {
+            modal.classList.add(THEME_SCOPE_CLASS);
+            modal.classList.add("ie-glass-panel");
+        } else {
+            modal.style.background = "#1a1a1a";
+            modal.style.color = "#fff";
+            modal.style.border = "1px solid #444";
+            modal.style.boxShadow = "0 8px 32px rgba(0,0,0,0.5)";
+        }
         modal.style.borderRadius = "10px";
-        modal.style.boxShadow = "0 8px 32px rgba(0,0,0,0.5)";
         modal.style.display = "flex";
         modal.style.flexDirection = "column";
         modal.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
         modal.style.fontSize = "14px";
-        modal.style.zIndex = "999998";
+        modal.style.zIndex = glass ? String(THEME_Z_OVERLAY) : "999998";
         modal.style.outline = "none";
+
         METHODS_LIBRARY_MODAL_REF = modal;
 
         var header = document.createElement("div");
@@ -3735,7 +6925,12 @@
         header.style.alignItems = "center";
         header.style.justifyContent = "space-between";
         header.style.padding = "12px 16px";
-        header.style.borderBottom = "1px solid #333";
+        if (glass) {
+            header.classList.add("ie-glass-panel-header");
+            header.style.borderRadius = THEME_RADIUS + "px " + THEME_RADIUS + "px 0 0";
+        } else {
+            header.style.borderBottom = "1px solid #333";
+        }
         header.style.cursor = "move";
         header.style.userSelect = "none";
 
@@ -3743,19 +6938,20 @@
         titleEl.textContent = "ClinSpark Methods Library";
         titleEl.style.fontWeight = "600";
         titleEl.style.fontSize = "16px";
+        if (glass) titleEl.style.color = THEME_TEXT_PRIMARY;
         header.appendChild(titleEl);
 
         var closeBtn = document.createElement("button");
         closeBtn.textContent = "✕";
         closeBtn.setAttribute("aria-label", "Close");
         closeBtn.style.background = "transparent";
-        closeBtn.style.color = "#fff";
+        closeBtn.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
         closeBtn.style.border = "none";
         closeBtn.style.fontSize = "18px";
         closeBtn.style.cursor = "pointer";
         closeBtn.style.padding = "4px 8px";
         closeBtn.style.borderRadius = "4px";
-        closeBtn.onmouseenter = function() { closeBtn.style.background = "#333"; };
+        closeBtn.onmouseenter = function() { closeBtn.style.background = glass ? THEME_SURFACE_BG_HEAVY : "#333"; };
         closeBtn.onmouseleave = function() { closeBtn.style.background = "transparent"; };
         header.appendChild(closeBtn);
         modal.appendChild(header);
@@ -3765,46 +6961,49 @@
         toolbar.style.alignItems = "center";
         toolbar.style.gap = "10px";
         toolbar.style.padding = "10px 16px";
-        toolbar.style.borderBottom = "1px solid #333";
+        toolbar.style.borderBottom = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #333";
         toolbar.style.flexWrap = "wrap";
 
         var searchInput = document.createElement("input");
         searchInput.type = "text";
         searchInput.placeholder = "Search methods...";
         searchInput.setAttribute("aria-label", "Search methods");
+        if (glass) searchInput.className = "ie-input";
         searchInput.style.flex = "1";
         searchInput.style.minWidth = "150px";
         searchInput.style.padding = "8px 12px";
-        searchInput.style.background = "#2a2a2a";
-        searchInput.style.border = "1px solid #444";
+        searchInput.style.background = glass ? THEME_SURFACE_BG : "#2a2a2a";
+        searchInput.style.border = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #444";
         searchInput.style.borderRadius = "6px";
-        searchInput.style.color = "#fff";
+        searchInput.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
         searchInput.style.fontSize = "14px";
         searchInput.style.outline = "none";
-        searchInput.onfocus = function() { searchInput.style.borderColor = "#5b43c7"; };
-        searchInput.onblur = function() { searchInput.style.borderColor = "#444"; };
+        searchInput.onfocus = function() { searchInput.style.borderColor = glass ? THEME_ACCENT : "#5b43c7"; };
+        searchInput.onblur = function() { searchInput.style.borderColor = glass ? THEME_SURFACE_BORDER : "#444"; };
         toolbar.appendChild(searchInput);
 
         var tagSelect = document.createElement("select");
         tagSelect.setAttribute("aria-label", "Filter by tag");
         tagSelect.style.padding = "8px 12px";
-        tagSelect.style.background = "#2a2a2a";
-        tagSelect.style.border = "1px solid #444";
+        tagSelect.style.background = glass ? THEME_SURFACE_BG : "#2a2a2a";
+        tagSelect.style.border = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #444";
         tagSelect.style.borderRadius = "6px";
-        tagSelect.style.color = "#fff";
+        tagSelect.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
         tagSelect.style.fontSize = "14px";
         tagSelect.style.cursor = "pointer";
+        if (glass) tagSelect.className = "ie-select";
         toolbar.appendChild(tagSelect);
 
         var sortSelect = document.createElement("select");
         sortSelect.setAttribute("aria-label", "Sort order");
         sortSelect.style.padding = "8px 12px";
-        sortSelect.style.background = "#2a2a2a";
-        sortSelect.style.border = "1px solid #444";
+        sortSelect.style.background = glass ? THEME_SURFACE_BG : "#2a2a2a";
+        sortSelect.style.border = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #444";
         sortSelect.style.borderRadius = "6px";
-        sortSelect.style.color = "#fff";
+        sortSelect.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
         sortSelect.style.fontSize = "14px";
         sortSelect.style.cursor = "pointer";
+        if (glass) sortSelect.className = "ie-select";
 
         var sortOpts = [
             { value: "relevance", text: "Sort: Relevance" },
@@ -3825,7 +7024,7 @@
         searchBodyLabel.style.gap = "6px";
         searchBodyLabel.style.cursor = "pointer";
         searchBodyLabel.style.fontSize = "13px";
-        searchBodyLabel.style.color = "#aaa";
+        searchBodyLabel.style.color = glass ? THEME_TEXT_MUTED : "#aaa";
         var searchBodyCheckbox = document.createElement("input");
         searchBodyCheckbox.type = "checkbox";
         searchBodyCheckbox.setAttribute("aria-label", "Search in body content");
@@ -3839,7 +7038,7 @@
         favoritesLabel.style.gap = "6px";
         favoritesLabel.style.cursor = "pointer";
         favoritesLabel.style.fontSize = "13px";
-        favoritesLabel.style.color = "#aaa";
+        favoritesLabel.style.color = glass ? THEME_TEXT_MUTED : "#aaa";
         var favoritesCheckbox = document.createElement("input");
         favoritesCheckbox.type = "checkbox";
         favoritesCheckbox.setAttribute("aria-label", "Show only favorites");
@@ -3855,17 +7054,21 @@
             var btn = document.createElement("button");
             btn.textContent = text;
             btn.setAttribute("aria-label", ariaLabel);
+            if (glass) {
+                btn.className = "ie-btn-secondary";
+            } else {
+                btn.style.background = "#333";
+                btn.style.color = "#fff";
+                btn.style.border = "1px solid #444";
+                btn.onmouseenter = function() { btn.style.background = "#444"; };
+                btn.onmouseleave = function() { btn.style.background = "#333"; };
+            }
             btn.style.padding = "8px 14px";
-            btn.style.background = "#333";
-            btn.style.color = "#fff";
-            btn.style.border = "1px solid #444";
             btn.style.borderRadius = "6px";
             btn.style.cursor = "pointer";
             btn.style.fontSize = "13px";
             btn.style.fontWeight = "500";
             btn.style.transition = "background 0.15s";
-            btn.onmouseenter = function() { btn.style.background = "#444"; };
-            btn.onmouseleave = function() { btn.style.background = "#333"; };
             return btn;
         }
 
@@ -3885,9 +7088,9 @@
         var listPane = document.createElement("div");
         listPane.style.width = "280px";
         listPane.style.minWidth = "200px";
-        listPane.style.borderRight = "1px solid #333";
+        listPane.style.borderRight = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #333";
         listPane.style.overflowY = "auto";
-        listPane.style.background = "#1a1a1a";
+        listPane.style.background = glass ? THEME_SURFACE_BG : "#1a1a1a";
         listPane.setAttribute("role", "listbox");
         listPane.setAttribute("aria-label", "Methods list");
 
@@ -3896,12 +7099,12 @@
         previewPane.style.display = "flex";
         previewPane.style.flexDirection = "column";
         previewPane.style.overflow = "hidden";
-        previewPane.style.background = "#111";
+        previewPane.style.background = glass ? "transparent" : "#111";
 
         var previewHeader = document.createElement("div");
         previewHeader.style.padding = "12px 16px";
-        previewHeader.style.borderBottom = "1px solid #333";
-        previewHeader.style.background = "#1a1a1a";
+        previewHeader.style.borderBottom = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #333";
+        previewHeader.style.background = glass ? THEME_SURFACE_BG : "#1a1a1a";
 
         var previewTitle = document.createElement("div");
         previewTitle.style.fontWeight = "600";
@@ -3912,7 +7115,7 @@
 
         var previewMeta = document.createElement("div");
         previewMeta.style.fontSize = "12px";
-        previewMeta.style.color = "#888";
+        previewMeta.style.color = glass ? THEME_TEXT_MUTED : "#888";
         previewHeader.appendChild(previewMeta);
 
         var previewBody = document.createElement("pre");
@@ -3920,12 +7123,12 @@
         previewBody.style.margin = "0";
         previewBody.style.padding = "16px";
         previewBody.style.overflowY = "auto";
-        previewBody.style.background = "#0d0d0d";
+        previewBody.style.background = glass ? THEME_SURFACE_BG : "#0d0d0d";
         previewBody.style.fontSize = "13px";
         previewBody.style.fontFamily = "Consolas, Monaco, 'Courier New', monospace";
         previewBody.style.whiteSpace = "pre-wrap";
         previewBody.style.wordBreak = "break-word";
-        previewBody.style.color = "#e0e0e0";
+        previewBody.style.color = glass ? THEME_TEXT_PRIMARY : "#e0e0e0";
         previewBody.style.lineHeight = "1.5";
 
         previewPane.appendChild(previewHeader);
@@ -3936,16 +7139,16 @@
 
         var statusBar = document.createElement("div");
         statusBar.style.padding = "8px 16px";
-        statusBar.style.borderTop = "1px solid #333";
+        statusBar.style.borderTop = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #333";
         statusBar.style.fontSize = "12px";
-        statusBar.style.color = "#888";
-        statusBar.style.background = "#1a1a1a";
+        statusBar.style.color = glass ? THEME_TEXT_MUTED : "#888";
+        statusBar.style.background = glass ? THEME_SURFACE_BG : "#1a1a1a";
         statusBar.textContent = "Loading...";
         modal.appendChild(statusBar);
 
         function updateStatus(msg, isError) {
             statusBar.textContent = msg;
-            statusBar.style.color = isError ? "#e74c3c" : "#888";
+            statusBar.style.color = isError ? "#e74c3c" : (glass ? THEME_TEXT_MUTED : "#888");
         }
 
         function populateTagSelect() {
@@ -3967,7 +7170,7 @@
             if (methods.length === 0) {
                 var empty = document.createElement("div");
                 empty.style.padding = "20px";
-                empty.style.color = "#666";
+                empty.style.color = glass ? THEME_TEXT_MUTED : "#666";
                 empty.style.textAlign = "center";
                 empty.textContent = "No methods found";
                 listPane.appendChild(empty);
@@ -3986,14 +7189,14 @@
                     item.setAttribute("data-method-id", m.id);
                     item.tabIndex = 0;
                     item.style.padding = "10px 14px";
-                    item.style.borderBottom = "1px solid #2a2a2a";
+                    item.style.borderBottom = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #2a2a2a";
                     item.style.cursor = "pointer";
                     item.style.transition = "background 0.1s";
                     item.style.position = "relative";
 
                     var itemId = document.createElement("div");
                     itemId.style.fontSize = "11px";
-                    itemId.style.color = "#5b43c7";
+                    itemId.style.color = glass ? THEME_ACCENT : "#5b43c7";
                     itemId.style.marginBottom = "2px";
                     itemId.textContent = m.id || "";
                     item.appendChild(itemId);
@@ -4007,7 +7210,7 @@
                     if (m.tags && m.tags.length > 0) {
                         var itemTags = document.createElement("div");
                         itemTags.style.fontSize = "11px";
-                        itemTags.style.color = "#666";
+                        itemTags.style.color = glass ? THEME_TEXT_MUTED : "#666";
                         itemTags.style.marginTop = "4px";
                         itemTags.textContent = m.tags.join(", ");
                         item.appendChild(itemTags);
@@ -4092,9 +7295,7 @@
                     item.appendChild(actions);
 
                     item.onmouseenter = function() {
-                        if (selectedMethod !== m) {
-                            item.style.background = "#252525";
-                        }
+                        if (selectedMethod !== m) item.style.background = glass ? THEME_SURFACE_BG_HEAVY : "#252525";
                         actions.style.display = "flex";
                     };
                     item.onmouseleave = function() {
@@ -4131,7 +7332,7 @@
 
             if (itemEl) {
                 itemEl.setAttribute("aria-selected", "true");
-                itemEl.style.background = "#2a2a2a";
+                itemEl.style.background = glass ? THEME_SURFACE_BG_HEAVY : "#2a2a2a";
                 itemEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
             }
 
@@ -9126,6 +12327,7 @@
     }
 
 
+
     //==========================
     // RUN SUBJECT ELIGIBILITY FEATURE
     //==========================
@@ -9383,11 +12585,12 @@
 
     async function waitForItemRefReload(prevSig, timeoutMs) {
         var start = Date.now();
-        var step = 500;
+        var step = 80;
         var max = typeof timeoutMs === "number" ? timeoutMs : 900;
         while (Date.now() - start < max) {
             var curSig = getItemRefOptionsSignature();
             if (curSig && curSig !== prevSig) {
+                log("ImportElig: itemRef reloaded in " + String(Date.now() - start) + "ms");
                 return true;
             }
             await sleep(step);
@@ -11005,6 +14208,18 @@
         return true;
     }
 
+
+
+    function formatElapsedTime(ms) {
+        var totalSec = Math.floor(ms / 1000);
+        var min = Math.floor(totalSec / 60);
+        var sec = totalSec % 60;
+        if (min > 0) {
+            return String(min) + "m " + String(sec) + "s";
+        }
+        return String(sec) + "s";
+    }
+
     function importIERandomDelay() {
         var range = IMPORT_IE_SHORT_DELAY_MAX - IMPORT_IE_SHORT_DELAY_MIN;
         var val = IMPORT_IE_SHORT_DELAY_MIN + Math.floor(Math.random() * range);
@@ -11746,10 +14961,17 @@
         return pool;
     }
 
-    async function collectMappingsFromModal(existingCodeSet) {
+    async function collectMappingsFromModal(existingCodeSet, progressCallback) {
         log("ImportIE: collectMappingsFromModal start");
         var mappings = [];
         var seenKeys = {};
+        var totalSAProcessed = 0;
+        var totalSACount = 0;
+        function reportProgress(msg) {
+            if (typeof progressCallback === "function") {
+                try { progressCallback(msg); } catch (e) {}
+            }
+        }
         var planSel = document.querySelector("select#activityPlan");
         if (!planSel) {
             planSel = await waitForElement("select#activityPlan", 8000);
@@ -11764,6 +14986,10 @@
         log("ImportIE: collectMappingsFromModal plan option count=" + String(planOpts.length));
         var pi = 0;
         while (pi < planOpts.length) {
+            if (IMPORT_IE_COLLECTION_STOPPED) {
+                log("ImportIE: collectMappingsFromModal stopped early by user at plan " + String(pi));
+                break;
+            }
             var pVal = (planOpts[pi].value + "").trim();
             var pTxt = (planOpts[pi].textContent + "").trim().replace(/\s+/g, " ");
             if (pVal.length === 0) {
@@ -11771,52 +14997,56 @@
                 continue;
             }
             log("ImportIE: collectMappingsFromModal selecting plan='" + String(pTxt) + "' value='" + String(pVal) + "'");
+            reportProgress("Plan " + String(pi) + "/" + String(planOpts.length) + ": " + pTxt);
             planSel.value = pVal;
             select2TriggerChange(planSel);
-            var planDelay = 200 + Math.floor(Math.random() * 250);
-            await sleep(planDelay);
+            await sleep(50);
             var schedSel = document.querySelector("select#scheduledActivity");
             if (!schedSel) {
-                schedSel = await waitForElement("select#scheduledActivity", 8000);
+                schedSel = await waitForElement("select#scheduledActivity", 5000);
             }
             if (!schedSel) {
                 log("ImportIE: collectMappingsFromModal schedSel not found for plan='" + String(pTxt) + "'");
                 pi = pi + 1;
                 continue;
             }
-            var hasSchedOpts = await waitForSelectOptions(schedSel, 1, 8000);
+            var hasSchedOpts = await waitForSelectOptions(schedSel, 1, 5000);
             if (!hasSchedOpts) {
                 log("ImportIE: collectMappingsFromModal no SA options for plan='" + String(pTxt) + "', retrying parent selection");
                 planSel.value = pVal;
                 select2TriggerChange(planSel);
-                await sleep(400 + Math.floor(Math.random() * 200));
-                hasSchedOpts = await waitForSelectOptions(schedSel, 1, 6000);
+                await sleep(200);
+                hasSchedOpts = await waitForSelectOptions(schedSel, 1, 5000);
                 if (!hasSchedOpts) {
                     log("ImportIE: collectMappingsFromModal SA still empty after retry for plan='" + String(pTxt) + "', skipping");
                     pi = pi + 1;
                     continue;
                 }
             }
-            await loadAllSelect2Options(schedSel, 10, 5000);
             var schedOpts = schedSel.querySelectorAll("option");
             log("ImportIE: collectMappingsFromModal SA option count=" + String(schedOpts.length) + " for plan='" + String(pTxt) + "'");
             var si = 0;
             while (si < schedOpts.length) {
+                if (IMPORT_IE_COLLECTION_STOPPED) {
+                    log("ImportIE: collectMappingsFromModal stopped early by user at SA " + String(si) + " of plan='" + String(pTxt) + "'");
+                    break;
+                }
                 var sVal = (schedOpts[si].value + "").trim();
                 var sTxt = (schedOpts[si].textContent + "").trim().replace(/\s+/g, " ");
                 if (sVal.length === 0) {
                     si = si + 1;
                     continue;
                 }
+                totalSAProcessed = totalSAProcessed + 1;
+                reportProgress("SA " + String(totalSAProcessed) + ": " + sTxt + " (" + String(mappings.length) + " found)");
                 log("ImportIE: collectMappingsFromModal selecting SA='" + String(sTxt) + "' value='" + String(sVal) + "'");
                 var prevItemSig = getItemRefOptionsSignature();
                 schedSel.value = sVal;
                 select2TriggerChange(schedSel);
-                var saDelay = 200 + Math.floor(Math.random() * 250);
-                await sleep(saDelay);
+                await sleep(50);
                 var itemRefSel = document.querySelector("select#itemRef");
                 if (!itemRefSel) {
-                    itemRefSel = await waitForElement("select#itemRef", 6000);
+                    itemRefSel = await waitForElement("select#itemRef", 3000);
                 }
                 if (!itemRefSel) {
                     log("ImportIE: collectMappingsFromModal itemRefSel not found for SA='" + String(sTxt) + "'");
@@ -11827,17 +15057,16 @@
                 if (!reloaded) {
                     log("ImportIE: collectMappingsFromModal itemRef did not reload for SA='" + String(sTxt) + "', checking current options");
                 }
-                await sleep(200);
                 var stabilizeAttempt = 0;
                 var stableCount1 = -1;
                 var stableCount2 = -2;
-                while (stabilizeAttempt < 5) {
+                while (stabilizeAttempt < 3) {
                     itemRefSel = document.querySelector("select#itemRef");
                     if (!itemRefSel) {
                         break;
                     }
                     stableCount1 = itemRefSel.querySelectorAll("option").length;
-                    await sleep(300);
+                    await sleep(100);
                     stableCount2 = itemRefSel.querySelectorAll("option").length;
                     if (stableCount1 === stableCount2 && stableCount1 > 0) {
                         log("ImportIE: collectMappingsFromModal itemRef stabilized at " + String(stableCount1) + " options after attempt " + String(stabilizeAttempt));
@@ -11855,9 +15084,9 @@
                     log("ImportIE: collectMappingsFromModal itemRef has no items for SA='" + String(sTxt) + "', retrying parent");
                     schedSel.value = sVal;
                     select2TriggerChange(schedSel);
-                    await sleep(500);
+                    await sleep(200);
                     await waitForItemRefReload(getItemRefOptionsSignature(), 4000);
-                    await sleep(300);
+                    await sleep(100);
                     itemRefSel = document.querySelector("select#itemRef");
                     if (!itemRefSel) {
                         log("ImportIE: collectMappingsFromModal itemRefSel still missing after retry");
@@ -11865,10 +15094,9 @@
                         continue;
                     }
                 }
-                await loadAllSelect2Options(itemRefSel, 15, 6000);
                 itemRefSel = document.querySelector("select#itemRef");
                 if (!itemRefSel) {
-                    log("ImportIE: collectMappingsFromModal itemRefSel gone after loadAll");
+                    log("ImportIE: collectMappingsFromModal itemRefSel gone after stabilize");
                     si = si + 1;
                     continue;
                 }
@@ -11911,7 +15139,7 @@
             }
             pi = pi + 1;
         }
-        log("ImportIE: collectMappingsFromModal done total=" + String(mappings.length));
+        log("ImportIE: collectMappingsFromModal done total=" + String(mappings.length) + " processed " + String(totalSAProcessed) + " SAs");
         return mappings;
     }
 
@@ -11967,8 +15195,8 @@
         return plans;
     }
 
-    function buildImportIEReviewPanel(existingCodeSet, mappings, eligibilityItemPool, onConfirm) {
-        log("ImportIE: buildImportIEReviewPanel start existingCodes=" + String(existingCodeSet.size) + " mappings=" + String(mappings.length) + " pool=" + String(eligibilityItemPool.length));
+    function buildImportIEReviewPanel(existingCodeSet, mappings, eligibilityItemPool, collectionDurationMs, onConfirm) {
+        log("ImportIE: buildImportIEReviewPanel start existingCodes=" + String(existingCodeSet.size) + " mappings=" + String(mappings.length) + " pool=" + String(eligibilityItemPool.length) + " collectionTime=" + formatElapsedTime(collectionDurationMs));
         var hierarchy = buildHierarchy(mappings);
         var existingArr = Array.from(existingCodeSet);
         existingArr.sort();
@@ -12102,10 +15330,38 @@
         headerBar.style.flexShrink = "0";
         headerBar.style.background = "linear-gradient(180deg, #1a1a1a, #111)";
 
+        var headerLeft = document.createElement("div");
+        headerLeft.style.display = "flex";
+        headerLeft.style.alignItems = "center";
+        headerLeft.style.gap = "12px";
+
         var headerTitle = document.createElement("div");
         headerTitle.textContent = "Import I/E - Review Mappings";
         headerTitle.style.fontWeight = "600";
         headerTitle.style.fontSize = "16px";
+        headerLeft.appendChild(headerTitle);
+
+        var collectionTimeBadge = document.createElement("span");
+        collectionTimeBadge.textContent = "Collection: " + formatElapsedTime(collectionDurationMs);
+        collectionTimeBadge.style.fontSize = "11px";
+        collectionTimeBadge.style.color = "#5bc0de";
+        collectionTimeBadge.style.background = "#1a2a3a";
+        collectionTimeBadge.style.padding = "3px 8px";
+        collectionTimeBadge.style.borderRadius = "3px";
+        collectionTimeBadge.style.fontWeight = "500";
+        headerLeft.appendChild(collectionTimeBadge);
+
+        if (IMPORT_IE_COLLECTION_STOPPED) {
+            var stoppedBadge = document.createElement("span");
+            stoppedBadge.textContent = "Stopped Early";
+            stoppedBadge.style.fontSize = "11px";
+            stoppedBadge.style.color = "#e67e22";
+            stoppedBadge.style.background = "#3a2a1a";
+            stoppedBadge.style.padding = "3px 8px";
+            stoppedBadge.style.borderRadius = "3px";
+            stoppedBadge.style.fontWeight = "500";
+            headerLeft.appendChild(stoppedBadge);
+        }
 
         var headerCloseBtn = document.createElement("button");
         headerCloseBtn.textContent = "\u2715";
@@ -12128,7 +15384,7 @@
             overlay.remove();
         });
 
-        headerBar.appendChild(headerTitle);
+        headerBar.appendChild(headerLeft);
         headerBar.appendChild(headerCloseBtn);
         container.appendChild(headerBar);
 
@@ -13946,6 +17202,19 @@
         summaryRow.appendChild(statusEl);
         container.appendChild(summaryRow);
 
+        var timerRow = document.createElement("div");
+        timerRow.style.textAlign = "center";
+        timerRow.style.fontSize = "12px";
+        timerRow.style.color = "#888";
+        timerRow.style.padding = "2px 0";
+        timerRow.textContent = "Execution Time: 0s";
+        container.appendChild(timerRow);
+
+        var execStartTime = Date.now();
+        var execTimerInterval = setInterval(function () {
+            timerRow.textContent = "Execution Time: " + formatElapsedTime(Date.now() - execStartTime);
+        }, 500);
+
         var listEl = document.createElement("div");
         listEl.style.maxHeight = "400px";
         listEl.style.overflowY = "auto";
@@ -14023,8 +17292,20 @@
                 failEl.textContent = "Failed: " + String(failures);
             },
             setCompleted: function () {
+                clearInterval(execTimerInterval);
+                var finalTime = formatElapsedTime(Date.now() - execStartTime);
+                timerRow.textContent = "Execution Time: " + finalTime;
+                timerRow.style.color = "#5cb85c";
                 statusEl.textContent = "Completed";
                 statusEl.style.color = "#5cb85c";
+            },
+            stopTimer: function () {
+                clearInterval(execTimerInterval);
+                var finalTime = formatElapsedTime(Date.now() - execStartTime);
+                timerRow.textContent = "Execution Time: " + finalTime;
+            },
+            getExecutionTime: function () {
+                return Date.now() - execStartTime;
             }
         };
     }
@@ -14081,6 +17362,7 @@
                 }
                 if (IMPORT_IE_CANCELED) {
                     log("ImportIE: Operation cancelled by user");
+                    progress.stopTimer();
                     progress.statusEl.textContent = "Cancelled";
                     progress.statusEl.style.color = "#d9534f";
                     return;
@@ -14182,6 +17464,7 @@
 
             if (IMPORT_IE_CANCELED) {
                 log("ImportIE: Operation cancelled by user after sleep");
+                progress.stopTimer();
                 progress.statusEl.textContent = "Cancelled";
                 progress.statusEl.style.color = "#d9534f";
                 return;
@@ -14258,6 +17541,7 @@
             await sleep(importIERandomDelay() + 300);
             if (IMPORT_IE_CANCELED) {
                 log("ImportIE: Operation cancelled by user after sleep");
+                progress.stopTimer();
                 progress.statusEl.textContent = "Cancelled";
                 progress.statusEl.style.color = "#d9534f";
                 return;
@@ -14325,6 +17609,7 @@
             }
             if (IMPORT_IE_CANCELED) {
                 log("ImportIE: Operation cancelled by user after sleep");
+                progress.stopTimer();
                 progress.statusEl.textContent = "Cancelled";
                 progress.statusEl.style.color = "#d9534f";
                 return;
@@ -14403,7 +17688,7 @@
         if (!isValidEligibilityPage()) {
             createPopup({
                 title: "Import I/E - Error",
-                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">⚠️ Wrong Page</p><p>You must navigate to the Eligibility list page before using Import I/E.</p><p style="margin-top:12px;font-size:12px;color:#888;word-wrap:break-word;word-break:break-all;">Required URL: ' + getBaseUrl() + ELIGIBILITY_LIST_PATH + '</p></div>',
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">⚠️ Wrong Page</p><p>You must navigate to the Eligibility list page before using Import I/E.</p><p style="margin-top:12px;font-size:12px;color:#ffffffff;word-wrap:break-word;word-break:break-all;">Required URL: ' + getBaseUrl() + ELIGIBILITY_LIST_PATH + '</p></div>',
                 width: "450px",
                 height: "auto"
             });
@@ -14412,45 +17697,100 @@
         }
 
         log("ImportIE: page validated, starting collection flow");
+        IMPORT_IE_COLLECTION_STOPPED = false;
 
-        var loadingEl = document.createElement("div");
-        loadingEl.style.textAlign = "center";
-        loadingEl.style.fontSize = "15px";
-        loadingEl.style.color = "#fff";
-        loadingEl.style.padding = "20px";
-        loadingEl.textContent = "Collecting existing table codes and mappings...";
+        var loadingContainer = document.createElement("div");
+        loadingContainer.style.display = "flex";
+        loadingContainer.style.flexDirection = "column";
+        loadingContainer.style.gap = "10px";
+        loadingContainer.style.padding = "16px 20px";
+        loadingContainer.style.color = "#fff";
+        loadingContainer.style.fontSize = "13px";
+
+        var dotsRow = document.createElement("div");
+        dotsRow.style.textAlign = "center";
+        dotsRow.style.fontSize = "15px";
+        dotsRow.style.fontWeight = "600";
+        dotsRow.style.color = "#5bc0de";
+        dotsRow.textContent = "Please wait. Collecting Data...";
+        loadingContainer.appendChild(dotsRow);
+
+        var stepRow = document.createElement("div");
+        stepRow.style.textAlign = "center";
+        stepRow.style.fontSize = "13px";
+        stepRow.style.color = "#ccc";
+        stepRow.style.minHeight = "18px";
+        stepRow.textContent = "Initializing...";
+        loadingContainer.appendChild(stepRow);
+
+        var timerRow = document.createElement("div");
+        timerRow.style.textAlign = "center";
+        timerRow.style.fontSize = "12px";
+        timerRow.style.color = "#888";
+        timerRow.textContent = "Elapsed: 0s";
+        loadingContainer.appendChild(timerRow);
+
+        var stopBtnRow = document.createElement("div");
+        stopBtnRow.style.textAlign = "center";
+        stopBtnRow.style.marginTop = "4px";
+
+        var stopBtn = document.createElement("button");
+        stopBtn.textContent = "Stop and Continue";
+        stopBtn.style.padding = "6px 18px";
+        stopBtn.style.fontSize = "12px";
+        stopBtn.style.fontWeight = "600";
+        stopBtn.style.background = "#e67e22";
+        stopBtn.style.color = "#fff";
+        stopBtn.style.border = "none";
+        stopBtn.style.borderRadius = "4px";
+        stopBtn.style.cursor = "pointer";
+        stopBtn.style.transition = "background 0.15s";
+        stopBtn.addEventListener("mouseenter", function () { stopBtn.style.background = "#d35400"; });
+        stopBtn.addEventListener("mouseleave", function () { stopBtn.style.background = "#e67e22"; });
+        stopBtn.addEventListener("click", function () {
+            log("ImportIE: Stop and Continue clicked by user");
+            IMPORT_IE_COLLECTION_STOPPED = true;
+            stopBtn.disabled = true;
+            stopBtn.textContent = "Stopping...";
+            stopBtn.style.background = "#555";
+            stopBtn.style.cursor = "default";
+        });
+        stopBtnRow.appendChild(stopBtn);
+        loadingContainer.appendChild(stopBtnRow);
 
         var loadingPopup = createPopup({
             title: "Import I/E - Scanning",
-            content: loadingEl,
-            width: "500px",
+            content: loadingContainer,
+            width: "520px",
             height: "auto"
         });
 
         var dots = 1;
+        var collectionStartTime = Date.now();
         var loadingInterval = setInterval(function () {
             dots = dots + 1;
             if (dots > 3) {
                 dots = 1;
             }
-            var t = " Please wait. Collecting Data";
+            var t = "Please wait. Collecting Data";
             var di = 0;
             while (di < dots) {
                 t = t + ".";
                 di = di + 1;
             }
-            loadingEl.textContent = t;
+            dotsRow.textContent = t;
+            timerRow.textContent = "Elapsed: " + formatElapsedTime(Date.now() - collectionStartTime);
         }, 400);
 
         setTimeout(async function () {
             try {
                 log("ImportIE: step 1 - collecting existing codes from table");
-                loadingEl.textContent = "Step 1: Collecting existing table codes...";
+                stepRow.textContent = "Step 1: Collecting existing table codes...";
                 var existingCodeSet = await collectAllTableCodes();
                 log("ImportIE: existing codes collected count=" + String(existingCodeSet.size));
 
                 log("ImportIE: step 2 - checking Add button");
-                loadingEl.textContent = "Step 2: Checking Add button...";
+                stepRow.textContent = "Step 2: Checking Add button...";
                 var addBtn = document.querySelector("a#addEligButton");
                 if (!addBtn) {
                     addBtn = document.querySelector("#addEligButton");
@@ -14471,7 +17811,7 @@
                 }
 
                 log("ImportIE: step 3 - clicking Add to open modal");
-                loadingEl.textContent = "Step 3: Opening modal...";
+                stepRow.textContent = "Step 3: Opening modal...";
                 addBtn.click();
                 var modalOpened = await waitForModalOpen(IMPORT_IE_MODAL_TIMEOUT);
                 if (!modalOpened) {
@@ -14489,14 +17829,22 @@
                 await sleep(800);
 
                 log("ImportIE: step 3b - collecting eligibility item pool from modal");
-                loadingEl.textContent = "Step 3b: Collecting Eligibility Items...";
+                stepRow.textContent = "Step 3b: Collecting Eligibility Items...";
                 var eligibilityItemPool = await collectEligibilityItemPool();
                 log("ImportIE: eligibility item pool collected count=" + String(eligibilityItemPool.length));
 
                 log("ImportIE: step 4 - collecting mappings from modal");
-                loadingEl.textContent = "Step 4: Scanning all Activity Plans, Scheduled Activities, and Check Items...";
-                var rawMappings = await collectMappingsFromModal(existingCodeSet);
-                log("ImportIE: raw mappings collected count=" + String(rawMappings.length));
+                stepRow.textContent = "Step 4: Scanning Activity Plans, Scheduled Activities, and Check Items...";
+                var rawMappings = await collectMappingsFromModal(existingCodeSet, function(progressMsg) {
+                    stepRow.textContent = "Step 4: " + progressMsg;
+                });
+                var collectionEndTime = Date.now();
+                var collectionDurationMs = collectionEndTime - collectionStartTime;
+                log("ImportIE: raw mappings collected count=" + String(rawMappings.length) + " collectionTime=" + formatElapsedTime(collectionDurationMs));
+
+                if (IMPORT_IE_COLLECTION_STOPPED) {
+                    log("ImportIE: collection was stopped early by user");
+                }
 
                 var mappings = deduplicateMappings(rawMappings);
                 log("ImportIE: deduplicated mappings count=" + String(mappings.length));
@@ -14512,13 +17860,13 @@
                 loadingPopup.close();
 
                 if (mappings.length === 0) {
-                    showWarningPopup("Import I/E - No Mappings", "No INC/EXC check items were found across any Activity Plans and Scheduled Activities.");
+                    showWarningPopup("Import I/E - No Mappings", "No INC/EXC check items were found across any Activity Plans and Scheduled Activities." + (IMPORT_IE_COLLECTION_STOPPED ? " (Collection was stopped early)" : ""));
                     log("ImportIE: no mappings found, stopping");
                     return;
                 }
 
                 log("ImportIE: step 5 - showing review panel");
-                buildImportIEReviewPanel(existingCodeSet, mappings, eligibilityItemPool, function (selectedMappings) {
+                buildImportIEReviewPanel(existingCodeSet, mappings, eligibilityItemPool, collectionDurationMs, function (selectedMappings) {
                     log("ImportIE: user confirmed " + String(selectedMappings.length) + " mappings");
                     if (selectedMappings.length === 0) {
                         log("ImportIE: no items selected, stopping");
@@ -14537,6 +17885,8 @@
             }
         }, 300);
     }
+
+
     // ======================
     // ======================
     function setPanelHidden(flag) {
@@ -15840,6 +19190,8 @@
 
 
     function createPopup(options) {
+        var glass = isGlassTheme();
+        if (glass) injectThemeStylesIfNeeded();
         options = options || {};
         var title = options.title || "Popup";
         var description = options.description || "";
@@ -15849,23 +19201,35 @@
         var maxWidth = options.maxWidth || "90%";
         var maxHeight = options.maxHeight || "90%";
         var onClose = options.onClose || null;
+
         var popupId = "clinsparkPopup_" + Date.now();
         var existing = document.getElementById(popupId);
         if (existing) {
             existing.remove();
         }
+
         var popup = document.createElement("div");
         popup.id = popupId;
+        if (glass) {
+            popup.classList.add(THEME_SCOPE_CLASS);
+            popup.classList.add("ie-glass-panel");
+        }
         popup.style.position = "fixed";
         popup.style.top = "50%";
         popup.style.left = "50%";
         popup.style.transform = "translate(-50%, -50%)";
-        popup.style.zIndex = "999998";
-        popup.style.background = "#111";
-        popup.style.color = "#fff";
-        popup.style.border = "1px solid #444";
-        popup.style.borderRadius = "8";
-        popup.style.padding = "10px";
+        popup.style.zIndex = glass ? String(THEME_Z_OVERLAY) : "999998";
+        if (!glass) {
+            popup.style.background = "#111";
+            popup.style.color = "#fff";
+            popup.style.border = "1px solid #444";
+            popup.style.borderRadius = "8";
+            popup.style.padding = "10px";
+            popup.style.boxShadow = "0 4px 20px rgba(0, 0, 0, 0.5)";
+        } else {
+            popup.style.padding = "0";
+            popup.style.overflow = "hidden";
+        }
         popup.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
         popup.style.fontSize = "14px";
         popup.style.width = width;
@@ -15875,9 +19239,11 @@
         popup.style.boxSizing = "border-box";
         popup.style.display = "flex";
         popup.style.flexDirection = "column";
-        popup.style.boxShadow = "0 4px 20px rgba(0, 0, 0, 0.5)";
 
         var headerBar = document.createElement("div");
+        if (glass) {
+            headerBar.classList.add("ie-glass-panel-header");
+        }
         headerBar.style.position = "relative";
         headerBar.style.display = "grid";
         headerBar.style.gridTemplateColumns = "1fr auto";
@@ -15886,7 +19252,11 @@
         headerBar.style.height = String(PANEL_HEADER_HEIGHT_PX) + "px";
         headerBar.style.boxSizing = "border-box";
         headerBar.style.padding = "0 12px";
-        headerBar.style.borderBottom = "1px solid #444";
+        if (!glass) {
+            headerBar.style.borderBottom = "1px solid #444";
+        } else {
+            headerBar.style.borderRadius = THEME_RADIUS + "px " + THEME_RADIUS + "px 0 0";
+        }
         headerBar.style.cursor = "move";
         headerBar.style.userSelect = "none";
 
@@ -15899,13 +19269,14 @@
         titleEl.textContent = title;
         titleEl.style.fontWeight = "600";
         titleEl.style.textAlign = "left";
+        if (glass) titleEl.style.color = THEME_TEXT_PRIMARY;
         titleContainer.appendChild(titleEl);
 
         if (description) {
             var descEl = document.createElement("div");
             descEl.textContent = description;
             descEl.style.fontSize = "12px";
-            descEl.style.color = "#aaa";
+            descEl.style.color = glass ? THEME_TEXT_MUTED : "#aaa";
             descEl.style.textAlign = "left";
             descEl.style.marginTop = "2px";
             titleContainer.appendChild(descEl);
@@ -15916,7 +19287,7 @@
         var closeBtn = document.createElement("button");
         closeBtn.textContent = "✕";
         closeBtn.style.background = "transparent";
-        closeBtn.style.color = "#fff";
+        closeBtn.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
         closeBtn.style.border = "none";
         closeBtn.style.cursor = "pointer";
         closeBtn.style.fontSize = "18px";
@@ -15928,10 +19299,10 @@
         closeBtn.style.display = "flex";
         closeBtn.style.alignItems = "center";
         closeBtn.style.justifyContent = "center";
-        closeBtn.addEventListener("mouseenter", function () {
-            closeBtn.style.background = "#333";
+        closeBtn.addEventListener("mouseenter", function() {
+            closeBtn.style.background = glass ? THEME_SURFACE_BG_HEAVY : "#333";
         });
-        closeBtn.addEventListener("mouseleave", function () {
+        closeBtn.addEventListener("mouseleave", function() {
             closeBtn.style.background = "transparent";
         });
         closeBtn.addEventListener("click", function () {
@@ -16177,22 +19548,30 @@
 
 
     function makePanel() {
+        var glass = isGlassTheme();
+        if (glass) injectThemeStylesIfNeeded();
         var prior = document.getElementById(PANEL_ID);
         if (prior) {
             return prior;
         }
         var panel = document.createElement("div");
         panel.id = PANEL_ID;
-        panel.style.position = "fixed";
+        if (glass) {
+            panel.classList.add(THEME_SCOPE_CLASS);
+            panel.classList.add("ie-glass-panel");
+        }
         var savedTop = getStoredPos("activityPlanState.panel.top", "20px");
         var savedRight = getStoredPos("activityPlanState.panel.right", "20px");
         var savedSize = getStoredPanelSize();
         panel.style.top = savedTop;
+        panel.style.position = "fixed";
         panel.style.right = savedRight;
-        panel.style.zIndex = "999999";
-        panel.style.background = "#111";
-        panel.style.color = "#fff";
-        panel.style.border = "1px solid #444";
+        panel.style.zIndex = glass ? String(THEME_Z_BASE) : "999999";
+        if (!glass) {
+            panel.style.background = "#111";
+            panel.style.color = "#fff";
+            panel.style.border = "1px solid #444";
+        }
         panel.style.borderRadius = scale(PANEL_BORDER_RADIUS_PX);
         panel.style.padding = scale(PANEL_PADDING_PX);
         panel.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
@@ -16205,7 +19584,13 @@
             panel.style.height = PANEL_DEFAULT_HEIGHT;
         }
         panel.style.boxSizing = "border-box";
+        panel.style.overflow = "hidden";
+
         var headerBar = document.createElement("div");
+        if (glass) {
+            headerBar.classList.add("ie-glass-panel-header");
+            headerBar.style.borderRadius = THEME_RADIUS + "px " + THEME_RADIUS + "px 0 0";
+        }
         headerBar.style.position = "relative";
         headerBar.style.display = "grid";
         headerBar.style.gridTemplateColumns = "auto 1fr auto";
@@ -16224,6 +19609,7 @@
         title.style.justifySelf = "center";
         title.style.transform = "translateX(" + scale(HEADER_TITLE_OFFSET_PX) + ")";
         title.style.paddingBottom = scale(8);
+        if (glass) title.style.color = THEME_TEXT_PRIMARY;
         headerBar.appendChild(title);
         headerBar.appendChild(leftSpacer);
         var rightControls = document.createElement("div");
@@ -16233,7 +19619,7 @@
         var collapseBtn = document.createElement("button");
         collapseBtn.textContent = getPanelCollapsed() ? "Expand" : "Collapse";
         collapseBtn.style.background = "transparent";
-        collapseBtn.style.color = "#fff";
+        collapseBtn.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
         collapseBtn.style.border = "none";
         collapseBtn.style.cursor = "pointer";
         collapseBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
@@ -16241,7 +19627,7 @@
         closeBtn.textContent = CLOSE_BTN_TEXT;
         closeBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         closeBtn.style.background = "transparent";
-        closeBtn.style.color = "#fff";
+        closeBtn.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
         closeBtn.style.border = "none";
         closeBtn.style.cursor = "pointer";
 
@@ -16249,7 +19635,7 @@
         settingsBtn.textContent = "⚙";
         settingsBtn.title = "Settings";
         settingsBtn.style.background = "transparent";
-        settingsBtn.style.color = "#fff";
+        settingsBtn.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
         settingsBtn.style.border = "none";
         settingsBtn.style.cursor = "pointer";
         settingsBtn.style.fontSize = scale(16);
@@ -16306,6 +19692,8 @@
         runBarcodeBtn.style.padding = scale(BUTTON_PADDING_PX);
         runBarcodeBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         runBarcodeBtn.style.cursor = "pointer";
+        runBarcodeBtn.style.fontWeight = "500";
+        runBarcodeBtn.style.transition = "background 0.2s";
         runBarcodeBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
         runBarcodeBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
         var findAeBtn = document.createElement("button");
@@ -16461,6 +19849,39 @@
             APS_ParseDeviation();
         });
 
+            var archiveUpdateFormsBtn = document.createElement("button");
+        archiveUpdateFormsBtn.textContent = "Archive/Update Forms";
+        archiveUpdateFormsBtn.style.background = "#5b43c7";
+        archiveUpdateFormsBtn.style.color = "#fff";
+        archiveUpdateFormsBtn.style.border = "none";
+        archiveUpdateFormsBtn.style.borderRadius = "6px";
+        archiveUpdateFormsBtn.style.padding = "8px";
+        archiveUpdateFormsBtn.style.cursor = "pointer";
+        archiveUpdateFormsBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
+        archiveUpdateFormsBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
+        archiveUpdateFormsBtn.addEventListener("click", async function () {
+            ARCHIVE_UPDATE_FORMS_CANCELLED = false;
+            log("Archive/Update Forms: button clicked");
+            await runArchiveUpdateForms();
+        });
+
+        var copyFormsBtn = document.createElement("button");
+        copyFormsBtn.textContent = "Copy Activity Forms";
+        copyFormsBtn.style.background = "#5b43c7";
+        copyFormsBtn.style.color = "#fff";
+        copyFormsBtn.style.border = "none";
+        copyFormsBtn.style.borderRadius = "6px";
+        copyFormsBtn.style.padding = "8px";
+        copyFormsBtn.style.cursor = "pointer";
+        copyFormsBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
+        copyFormsBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
+        copyFormsBtn.addEventListener("click", async function () {
+            COPY_FORMS_CANCELLED = false;
+            log("Copy Forms: button clicked");
+            await runCopyFormsToStudyEvents();
+        });
+
+
         var pullLabBarcodeBtn = document.createElement("button");
         pullLabBarcodeBtn.textContent = BARCODE_LABELS.featureButton;
         pullLabBarcodeBtn.style.background = "#5b43c7";
@@ -16470,8 +19891,6 @@
         pullLabBarcodeBtn.style.padding = scale(BUTTON_PADDING_PX);
         pullLabBarcodeBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         pullLabBarcodeBtn.style.cursor = "pointer";
-        pullLabBarcodeBtn.style.fontWeight = "500";
-        pullLabBarcodeBtn.style.transition = "background 0.2s";
         pullLabBarcodeBtn.setAttribute("aria-label", BARCODE_LABELS.featureButton);
         pullLabBarcodeBtn.onmouseenter = function () {
             this.style.background = "#4a37a0";
@@ -16499,10 +19918,31 @@
         clearLogsBtn.onmouseenter = () => { clearLogsBtn.style.background = "#5a6268"; };
         clearLogsBtn.onmouseleave = () => { clearLogsBtn.style.background = "#6c757d"; };
 
+        // Apply glassmorphism theme to all panel buttons if glass theme is active
+        if (glass) {
+            var allPanelBtns = [runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, importEligBtn, findAeBtn, findFormBtn, findStudyEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, pauseBtn, clearLogsBtn, toggleLogsBtn];
+            for (var gi = 0; gi < allPanelBtns.length; gi++) {
+                var gb = allPanelBtns[gi];
+                gb.className = "ie-btn-primary";
+                gb.style.background = "";
+                gb.style.color = "";
+                gb.style.border = "";
+                gb.style.borderRadius = "";
+                gb.style.fontWeight = "";
+                gb.style.transition = "";
+                gb.onmouseenter = null;
+                gb.onmouseleave = null;
+                gb.style.padding = scale(BUTTON_PADDING_PX);
+                gb.style.fontSize = scale(PANEL_FONT_SIZE_PX);
+            }
+        }
+
         var panelButtons = [
             { el: runBarcodeBtn, label: "Pull Barcode" },
             { el: pullLabBarcodeBtn, label: "Pull Lab Barcode" },
             { el: saBuilderBtn, label: "Scheduled Activities Builder" },
+            { el: archiveUpdateFormsBtn, label: "Archive/Update Forms" },
+            { el: copyFormsBtn, label: "Copy Activity Forms"},
             { el: searchMethodsBtn, label: "Search Methods" },
             { el: parseDeviationBtn, label: "Parse Deviation" },
             { el: importEligBtn, label: "Import I/E" },
@@ -16528,8 +19968,8 @@
         bodyContainer.appendChild(btnRow);
         var status = document.createElement("div");
         status.style.marginTop = scale(STATUS_MARGIN_TOP_PX);
-        status.style.background = "#1a1a1a";
-        status.style.border = "1px solid #333";
+        status.style.background = glass ? THEME_SURFACE_BG : "#1a1a1a";
+        status.style.border = glass ? ("1px solid " + THEME_SURFACE_INNER_BORDER) : "1px solid #333";
         status.style.borderRadius = scale(STATUS_BORDER_RADIUS_PX);
         status.style.padding = scale(STATUS_PADDING_PX);
         status.style.fontSize = scale(STATUS_FONT_SIZE_PX);
@@ -16540,7 +19980,7 @@
         // UI Scale Control
         var scaleControl = document.createElement("div");
         scaleControl.style.marginTop = scale(STATUS_MARGIN_TOP_PX);
-        scaleControl.style.background = "#1a1a1a";
+        scaleControl.style.background = glass ? THEME_SURFACE_BG : "#1a1a1a";
         scaleControl.style.border = "1px solid #333";
         scaleControl.style.borderRadius = scale(STATUS_BORDER_RADIUS_PX);
         scaleControl.style.padding = scale(STATUS_PADDING_PX);
@@ -16549,7 +19989,7 @@
         var scaleLabel = document.createElement("div");
         scaleLabel.textContent = "UI Scale: " + Math.round(UI_SCALE * 100) + "%";
         scaleLabel.style.marginBottom = "4px";
-        scaleLabel.style.color = "#fff";
+        scaleLabel.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
 
         var scaleSlider = document.createElement("input");
         scaleSlider.type = "range";
@@ -16580,12 +20020,12 @@
         logBox.style.marginTop = scale(LOG_MARGIN_TOP_PX);
         logBox.style.height = scale(LOG_HEIGHT_PX);
         logBox.style.overflowY = "auto";
-        logBox.style.background = "#141414";
+        logBox.style.background = glass ? THEME_SURFACE_BG : "#141414";
         logBox.style.border = "1px solid #333";
         logBox.style.borderRadius = scale(LOG_BORDER_RADIUS_PX);
         logBox.style.padding = scale(LOG_PADDING_PX);
         logBox.style.fontSize = scale(LOG_FONT_SIZE_PX);
-        logBox.style.color = "#00000";
+        logBox.style.color = glass ? THEME_TEXT_MUTED : "#00000";
         logBox.style.whiteSpace = "pre-wrap";
         logBox.style.wordBreak = "break-word";
         logBox.style.overflowWrap = "anywhere";
