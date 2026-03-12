@@ -1,3 +1,6 @@
+/* jshint strict: false */ 
+logger(JSON.stringify(itemJson, null, 2));
+
 function containsValue(input, keyword) {
     if (input == null) {
         return false;
