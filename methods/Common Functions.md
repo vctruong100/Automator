@@ -147,6 +147,17 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     return clean;
 }
 
+function normalizeNameStrict(s) {
+    if (s === undefined || s === null) {
+        return "";
+    }
+    var t = String(s);
+    t = t.normalize ? t.normalize('NFKC') : t;
+    t = t.replace(/[\u200B-\u200D\uFEFF\u00A0]/g, ' ');
+    t = t.replace(/\s+/g, ' ');
+    t = t.trim().toLowerCase();
+    return t;
+}
 
 // set the name of the item which contains the desired value
 var relatedItemDataContext = JSON.parse(getRelatedItemDataContext('BE_Date of sample 2'))

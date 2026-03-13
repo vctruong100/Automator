@@ -4505,6 +4505,7 @@
 
     function APS_ParseDeviation() {
         log("[ParseDeviation] Starting...");
+        PARSE_DEVIATION_CANCELED = false;
 
         var popupContainer = document.createElement("div");
         popupContainer.style.display = "flex";
@@ -5541,11 +5542,17 @@
         popupContainer.appendChild(statusText);
         popupContainer.appendChild(progressText);
 
+        PARSE_DEVIATION_CANCELED = false;
+
         var popup = createPopup({
             title: "Parse Deviation",
             content: popupContainer,
             width: "450px",
-            height: "auto"
+            height: "auto",
+            onClose: function() {
+                log("[ParseDeviation] Cancelled by user (close button)");
+                PARSE_DEVIATION_CANCELED = true;
+            }
         });
 
         PARSE_DEVIATION_POPUP_REF = popup;

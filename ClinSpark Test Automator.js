@@ -1,8 +1,8 @@
 
 // ==UserScript==
-// @name ClinSpark Test Automator 3
+// @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.6.0
+// @version 3.6.1
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -219,6 +219,17 @@
     var FORM_NO_MATCH_MESSAGE = "No form is found.";
 
     var BARCODE_BG_TAB = null;
+    var BARCODE_ADMIN_PATH = "/secure/administration/studies/show";
+    var SUBJECT_SHOW_PATH_PREFIX = "/secure/study/subjects/show/";
+    var MODAL_ID = "dataCollectionModal";
+    var BARCODE_ICON_ID = "icfBarcodeIcon";
+    var BARCODE_VALIDATE_REGEX = /^[A-Za-z0-9]{3,}$/;
+    var OPEN_MODAL_TIMEOUT_MS = 12000;
+    var FETCH_BARCODE_TIMEOUT_MS = 12000;
+    var CLICK_RETRY_MAX = 2;
+    var RETRY_DELAY_MS_MIN = 150;
+    var RETRY_DELAY_MS_MAX = 400;
+    var ICF_ALLOWED_HOSTNAMES = ["cenexeltest.clinspark.com", "cenexel.clinspark.com"];
     const RUNMODE_CLEAR_MAPPING = "clearMapping";
 
     // Run Parse Method
@@ -20746,6 +20757,810 @@
     // consent tab navigation, and barcode entry into consent forms.
     //==========================
     function InformedConsentFunctions() {}
+
+    function isOnSupportedSubjectShowPage(winLocation) {
+        log("ICF: isOnSupportedSubjectShowPage hostname=" + String(winLocation.hostname) + " pathname=" + String(winLocation.pathname));
+        var hostnameValid = false;
+        var i = 0;
+        while (i < ICF_ALLOWED_HOSTNAMES.length) {
+            if (winLocation.hostname === ICF_ALLOWED_HOSTNAMES[i]) {
+                hostnameValid = true;
+                break;
+            }
+            i = i + 1;
+        }
+        if (!hostnameValid) {
+            log("ICF: hostname not in allowed list");
+            return false;
+        }
+        var pathValid = winLocation.pathname.indexOf(SUBJECT_SHOW_PATH_PREFIX) === 0;
+        if (!pathValid) {
+            log("ICF: pathname does not start with " + String(SUBJECT_SHOW_PATH_PREFIX));
+            return false;
+        }
+        var trailing = winLocation.pathname.substring(SUBJECT_SHOW_PATH_PREFIX.length);
+        var segments = trailing.split("/");
+        var idSegment = segments[0];
+        var isNumeric = /^\d+$/.test(idSegment);
+        if (!isNumeric) {
+            log("ICF: trailing segment is not numeric: " + String(idSegment));
+            return false;
+        }
+        log("ICF: page validated as supported subject show page subjectId=" + String(idSegment));
+        return true;
+    }
+
+    function getDataCollectionModalElement() {
+        var el = document.getElementById(MODAL_ID);
+        log("ICF: getDataCollectionModalElement found=" + String(!!el));
+        return el;
+    }
+
+    function isModalOpen(modalEl) {
+        if (!modalEl) {
+            return false;
+        }
+        var hasInClass = modalEl.classList.contains("in");
+        var ariaHidden = modalEl.getAttribute("aria-hidden");
+        var computedDisplay = window.getComputedStyle(modalEl).display;
+        var isOpen = hasInClass || ariaHidden === "false" || computedDisplay !== "none";
+        log("ICF: isModalOpen hasIn=" + String(hasInClass) + " ariaHidden=" + String(ariaHidden) + " computedDisplay=" + String(computedDisplay) + " result=" + String(isOpen));
+        return isOpen;
+    }
+
+    function findEligibleCollectButton() {
+        log("ICF: findEligibleCollectButton searching");
+        var candidates = [];
+        var consentTab = document.querySelector("#consentTab");
+        if (consentTab) {
+            var btns = consentTab.querySelectorAll('button[id^="consentCollectButton_"]');
+            var idx = 0;
+            while (idx < btns.length) {
+                var btn = btns[idx];
+                if (!btn.disabled && btn.offsetParent !== null) {
+                    candidates.push(btn);
+                }
+                idx = idx + 1;
+            }
+            log("ICF: findEligibleCollectButton consentTab candidates=" + String(candidates.length));
+        }
+        if (candidates.length === 0) {
+            var allBtns = document.querySelectorAll('button[id^="consentCollectButton_"]');
+            var idx2 = 0;
+            while (idx2 < allBtns.length) {
+                var btn2 = allBtns[idx2];
+                if (!btn2.disabled && btn2.offsetParent !== null) {
+                    candidates.push(btn2);
+                }
+                idx2 = idx2 + 1;
+            }
+            log("ICF: findEligibleCollectButton document candidates=" + String(candidates.length));
+        }
+        if (candidates.length === 0) {
+            log("ICF: findEligibleCollectButton no eligible button found");
+            return null;
+        }
+        log("ICF: findEligibleCollectButton returning id=" + String(candidates[0].id));
+        return candidates[0];
+    }
+
+    async function clickWithRetry(el) {
+        var attempt = 0;
+        while (attempt <= CLICK_RETRY_MAX) {
+            try {
+                el.click();
+                log("ICF: clickWithRetry success attempt=" + String(attempt));
+                return true;
+            } catch (e) {
+                log("ICF: clickWithRetry attempt=" + String(attempt) + " error=" + String(e));
+            }
+            await randomDelay(RETRY_DELAY_MS_MIN, RETRY_DELAY_MS_MAX);
+            attempt = attempt + 1;
+        }
+        log("ICF: clickWithRetry failed after all retries");
+        return false;
+    }
+
+    async function waitForModalOpen(timeoutMs) {
+        log("ICF: waitForModalOpen timeout=" + String(timeoutMs));
+        var start = Date.now();
+        while (Date.now() - start < timeoutMs) {
+            var modalEl = getDataCollectionModalElement();
+            if (modalEl && isModalOpen(modalEl)) {
+                log("ICF: waitForModalOpen open after " + String(Date.now() - start) + "ms");
+                return true;
+            }
+            await sleep(200);
+        }
+        log("ICF: waitForModalOpen timed out");
+        return false;
+    }
+
+    async function waitForModalClose(timeoutMs) {
+        log("ICF: waitForModalClose timeout=" + String(timeoutMs));
+        var start = Date.now();
+        while (Date.now() - start < timeoutMs) {
+            var modalEl = getDataCollectionModalElement();
+            if (!modalEl || !isModalOpen(modalEl)) {
+                log("ICF: waitForModalClose closed after " + String(Date.now() - start) + "ms");
+                return true;
+            }
+            await sleep(200);
+        }
+        log("ICF: waitForModalClose timed out");
+        return false;
+    }
+
+    function randomDelay(minMs, maxMs) {
+        var delay = Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs;
+        log("ICF: randomDelay ms=" + String(delay));
+        return sleep(delay);
+    }
+
+    function backgroundFetchViaIframe(url) {
+        log("ICF: backgroundFetchViaIframe url=" + String(url));
+        return new Promise(function(resolve) {
+            var iframe = document.createElement("iframe");
+            iframe.style.display = "none";
+            iframe.style.width = "0";
+            iframe.style.height = "0";
+            iframe.style.border = "none";
+            iframe.style.position = "absolute";
+            iframe.style.left = "-9999px";
+            document.body.appendChild(iframe);
+            var timeoutId = setTimeout(function() {
+                log("ICF: backgroundFetchViaIframe timed out");
+                try {
+                    document.body.removeChild(iframe);
+                } catch (e) {}
+                resolve("");
+            }, FETCH_BARCODE_TIMEOUT_MS);
+            iframe.onload = function() {
+                clearTimeout(timeoutId);
+                try {
+                    var doc = iframe.contentDocument || iframe.contentWindow.document;
+                    var html = doc.documentElement.outerHTML;
+                    log("ICF: backgroundFetchViaIframe loaded htmlLength=" + String(html.length));
+                    resolve(html);
+                } catch (e) {
+                    log("ICF: backgroundFetchViaIframe access error=" + String(e));
+                    resolve("");
+                } finally {
+                    try {
+                        document.body.removeChild(iframe);
+                    } catch (e2) {}
+                }
+            };
+            iframe.onerror = function() {
+                clearTimeout(timeoutId);
+                log("ICF: backgroundFetchViaIframe load error");
+                try {
+                    document.body.removeChild(iframe);
+                } catch (e) {}
+                resolve("");
+            };
+            iframe.src = url;
+        });
+    }
+
+    function parseIcBarcodeFromHtml(html) {
+        log("ICF: parseIcBarcodeFromHtml htmlLength=" + String(html.length));
+        var tmp = document.createElement("div");
+        tmp.innerHTML = html;
+        var panel = tmp.querySelector("div#informedConsent");
+        if (!panel) {
+            log("ICF: parseIcBarcodeFromHtml informedConsent panel not found; using full document");
+            panel = tmp;
+        }
+        var tbody = panel.querySelector("tbody#informedConsentTbody");
+        if (!tbody) {
+            tbody = panel.querySelector("tbody");
+            if (tbody) {
+                log("ICF: parseIcBarcodeFromHtml using fallback tbody");
+            }
+        }
+        if (!tbody) {
+            log("ICF: parseIcBarcodeFromHtml no tbody found");
+            return "";
+        }
+        var rows = tbody.querySelectorAll("tr");
+        log("ICF: parseIcBarcodeFromHtml rows=" + String(rows.length));
+        var bestBarcode = "";
+        var i = 0;
+        while (i < rows.length) {
+            var row = rows[i];
+            var tds = row.querySelectorAll("td");
+            var barcode = "";
+            var isPrimary = false;
+            var j = 0;
+            while (j < tds.length) {
+                var td = tds[j];
+                var spans = td.querySelectorAll("span.tooltips");
+                var k = 0;
+                while (k < spans.length) {
+                    var sp = spans[k];
+                    var title = (sp.getAttribute("data-original-title") || "") + "";
+                    var val = (sp.textContent || "").trim();
+                    if (title === "Barcode") {
+                        barcode = val;
+                    }
+                    if (title === "Type") {
+                        if (val.toLowerCase() === "primary") {
+                            isPrimary = true;
+                        }
+                    }
+                    k = k + 1;
+                }
+                j = j + 1;
+            }
+            if (isPrimary && barcode.length > 0) {
+                log("ICF: parseIcBarcodeFromHtml found primary barcode=" + String(barcode));
+                return barcode;
+            }
+            if (barcode.length > 0 && bestBarcode.length === 0) {
+                bestBarcode = barcode;
+            }
+            i = i + 1;
+        }
+        if (bestBarcode.length > 0) {
+            log("ICF: parseIcBarcodeFromHtml no primary; using first barcode=" + String(bestBarcode));
+        }
+        return bestBarcode;
+    }
+
+    function backgroundFetchIcfBarcodeViaIframe(url) {
+        log("ICF: backgroundFetchIcfBarcodeViaIframe url=" + String(url));
+        return new Promise(function(resolve) {
+            var iframe = document.createElement("iframe");
+            iframe.style.display = "none";
+            iframe.style.width = "0";
+            iframe.style.height = "0";
+            iframe.style.border = "none";
+            iframe.style.position = "absolute";
+            iframe.style.left = "-9999px";
+            document.body.appendChild(iframe);
+            var resolved = false;
+            function finish(val) {
+                if (resolved) {
+                    return;
+                }
+                resolved = true;
+                try {
+                    document.body.removeChild(iframe);
+                } catch (e) {}
+                resolve(val);
+            }
+            var timeoutId = setTimeout(function() {
+                log("ICF: backgroundFetchIcfBarcodeViaIframe timed out");
+                finish("");
+            }, FETCH_BARCODE_TIMEOUT_MS);
+            iframe.onerror = function() {
+                clearTimeout(timeoutId);
+                log("ICF: backgroundFetchIcfBarcodeViaIframe load error");
+                finish("");
+            };
+            iframe.onload = function() {
+                try {
+                    var iDoc = iframe.contentDocument || iframe.contentWindow.document;
+                    var toggle = iDoc.querySelector('a[href="#informedConsent"]');
+                    if (toggle) {
+                        log("ICF: backgroundFetchIcfBarcodeViaIframe clicking IC panel toggle");
+                        toggle.click();
+                    } else {
+                        log("ICF: backgroundFetchIcfBarcodeViaIframe no IC panel toggle found");
+                    }
+                    var pollStart = Date.now();
+                    var pollInterval = setInterval(function() {
+                        if (resolved) {
+                            clearInterval(pollInterval);
+                            return;
+                        }
+                        try {
+                            var iDoc2 = iframe.contentDocument || iframe.contentWindow.document;
+                            var tbody = iDoc2.querySelector("tbody#informedConsentTbody");
+                            var rowCount = 0;
+                            if (tbody) {
+                                rowCount = tbody.querySelectorAll("tr").length;
+                            }
+                            if (rowCount > 0) {
+                                clearInterval(pollInterval);
+                                clearTimeout(timeoutId);
+                                var rows = tbody.querySelectorAll("tr");
+                                log("ICF: backgroundFetchIcfBarcodeViaIframe found " + String(rows.length) + " rows");
+                                var bestBarcode = "";
+                                var ri = 0;
+                                while (ri < rows.length) {
+                                    var row = rows[ri];
+                                    var tds = row.querySelectorAll("td");
+                                    var barcode = "";
+                                    var isPrimary = false;
+                                    var ci = 0;
+                                    while (ci < tds.length) {
+                                        var td = tds[ci];
+                                        var spans = td.querySelectorAll("span.tooltips");
+                                        var si = 0;
+                                        while (si < spans.length) {
+                                            var sp = spans[si];
+                                            var title = (sp.getAttribute("data-original-title") || "") + "";
+                                            var val = (sp.textContent || "").trim();
+                                            if (title === "Barcode") {
+                                                barcode = val;
+                                            }
+                                            if (title === "Type") {
+                                                if (val.toLowerCase() === "primary") {
+                                                    isPrimary = true;
+                                                }
+                                            }
+                                            si = si + 1;
+                                        }
+                                        ci = ci + 1;
+                                    }
+                                    if (isPrimary && barcode.length > 0) {
+                                        log("ICF: backgroundFetchIcfBarcodeViaIframe found primary barcode=" + String(barcode));
+                                        finish(barcode);
+                                        return;
+                                    }
+                                    if (barcode.length > 0 && bestBarcode.length === 0) {
+                                        bestBarcode = barcode;
+                                    }
+                                    ri = ri + 1;
+                                }
+                                if (bestBarcode.length > 0) {
+                                    log("ICF: backgroundFetchIcfBarcodeViaIframe no primary; using first=" + String(bestBarcode));
+                                }
+                                finish(bestBarcode);
+                                return;
+                            }
+                            if (Date.now() - pollStart > 8000) {
+                                clearInterval(pollInterval);
+                                clearTimeout(timeoutId);
+                                log("ICF: backgroundFetchIcfBarcodeViaIframe poll timeout rows=0");
+                                finish("");
+                                return;
+                            }
+                        } catch (pollErr) {
+                            clearInterval(pollInterval);
+                            clearTimeout(timeoutId);
+                            log("ICF: backgroundFetchIcfBarcodeViaIframe poll error=" + String(pollErr));
+                            finish("");
+                        }
+                    }, 300);
+                } catch (e) {
+                    clearTimeout(timeoutId);
+                    log("ICF: backgroundFetchIcfBarcodeViaIframe access error=" + String(e));
+                    finish("");
+                }
+            };
+            iframe.src = url;
+        });
+    }
+
+    async function backgroundFetchIcfBarcode(host) {
+        log("ICF: backgroundFetchIcfBarcode host=" + String(host));
+        var url = location.protocol + "//" + host + BARCODE_ADMIN_PATH;
+        log("ICF: backgroundFetchIcfBarcode url=" + String(url));
+        var html = "";
+        var fetchSuccess = false;
+        try {
+            var response = await fetch(url, { credentials: "same-origin" });
+            log("ICF: backgroundFetchIcfBarcode fetch status=" + String(response.status));
+            if (response.status === 401 || response.status === 403) {
+                log("ICF: backgroundFetchIcfBarcode permission denied status=" + String(response.status));
+                return { barcode: "", error: "Permission denied (HTTP " + String(response.status) + ")" };
+            }
+            if (response.ok) {
+                html = await response.text();
+                fetchSuccess = true;
+                log("ICF: backgroundFetchIcfBarcode fetch succeeded htmlLength=" + String(html.length));
+            }
+        } catch (fetchErr) {
+            log("ICF: backgroundFetchIcfBarcode fetch error=" + String(fetchErr));
+        }
+        if (!fetchSuccess) {
+            log("ICF: backgroundFetchIcfBarcode falling back to iframe");
+            try {
+                html = await backgroundFetchViaIframe(url);
+                if (html && html.length > 0) {
+                    fetchSuccess = true;
+                    log("ICF: backgroundFetchIcfBarcode iframe succeeded htmlLength=" + String(html.length));
+                }
+            } catch (iframeErr) {
+                log("ICF: backgroundFetchIcfBarcode iframe error=" + String(iframeErr));
+            }
+        }
+        if (!fetchSuccess || !html || html.length === 0) {
+            log("ICF: backgroundFetchIcfBarcode first attempt empty; retrying after delay");
+            await sleep(1000);
+            try {
+                var response2 = await fetch(url, { credentials: "same-origin" });
+                log("ICF: backgroundFetchIcfBarcode retry status=" + String(response2.status));
+                if (response2.ok) {
+                    html = await response2.text();
+                    log("ICF: backgroundFetchIcfBarcode retry htmlLength=" + String(html.length));
+                }
+            } catch (retryErr) {
+                log("ICF: backgroundFetchIcfBarcode retry error=" + String(retryErr));
+            }
+        }
+        if (!html || html.length === 0) {
+            log("ICF: backgroundFetchIcfBarcode no HTML retrieved");
+            return { barcode: "", error: "Failed to retrieve Administration Studies page" };
+        }
+        var barcode = parseIcBarcodeFromHtml(html);
+        log("ICF: backgroundFetchIcfBarcode parsed barcode=" + String(barcode));
+        if (!barcode || barcode.length === 0) {
+            log("ICF: backgroundFetchIcfBarcode barcode not found in static HTML; trying iframe approach");
+            barcode = await backgroundFetchIcfBarcodeViaIframe(url);
+            log("ICF: backgroundFetchIcfBarcode iframe barcode=" + String(barcode));
+        }
+        if (!barcode || barcode.length === 0) {
+            log("ICF: backgroundFetchIcfBarcode barcode not found after all attempts");
+            return { barcode: "", error: "ICF barcode not found on Administration Studies page" };
+        }
+        var normalized = barcode.replace(/\s+/g, "").trim();
+        var valid = BARCODE_VALIDATE_REGEX.test(normalized);
+        log("ICF: backgroundFetchIcfBarcode normalized=" + String(normalized) + " valid=" + String(valid));
+        if (!valid) {
+            log("ICF: backgroundFetchIcfBarcode barcode failed validation: " + String(normalized));
+            return { barcode: "", error: "Barcode failed validation: " + String(normalized) };
+        }
+        return { barcode: normalized, error: "" };
+    }
+
+    async function openBarcodeInput(modalEl) {
+        log("ICF: openBarcodeInput");
+        if (typeof inputBarcodeInModal === "function") {
+            log("ICF: openBarcodeInput calling inputBarcodeInModal()");
+            try {
+                inputBarcodeInModal();
+                await sleep(400);
+                return true;
+            } catch (e) {
+                log("ICF: openBarcodeInput inputBarcodeInModal error=" + String(e));
+            }
+        }
+        var icon = document.getElementById(BARCODE_ICON_ID);
+        if (icon) {
+            log("ICF: openBarcodeInput clicking barcode icon");
+            await clickWithRetry(icon);
+            await sleep(400);
+            return true;
+        }
+        if (modalEl) {
+            var altIcon = modalEl.querySelector("i.fa.fa-barcode");
+            if (altIcon) {
+                log("ICF: openBarcodeInput clicking alternate barcode icon");
+                await clickWithRetry(altIcon);
+                await sleep(400);
+                return true;
+            }
+        }
+        var barcodeInput = document.querySelector("input.bootbox-input.bootbox-input-text.form-control");
+        if (barcodeInput) {
+            log("ICF: openBarcodeInput focusing barcode input directly");
+            barcodeInput.focus();
+            return true;
+        }
+        log("ICF: openBarcodeInput no barcode trigger found");
+        return false;
+    }
+
+    async function setBarcodeValueInModal(modalEl, value) {
+        log("ICF: setBarcodeValueInModal value=" + String(value));
+        var inputBox = await waitForSelector("input.bootbox-input.bootbox-input-text.form-control", 8000);
+        if (!inputBox) {
+            log("ICF: setBarcodeValueInModal input not found");
+            return false;
+        }
+        var currentVal = inputBox.value || "";
+        if (currentVal === value) {
+            log("ICF: setBarcodeValueInModal value already set; short-circuiting");
+        } else {
+            inputBox.value = value;
+            var evt = new Event("input", { bubbles: true });
+            inputBox.dispatchEvent(evt);
+            log("ICF: setBarcodeValueInModal value set and event dispatched");
+        }
+        var confirmed = inputBox.value === value;
+        log("ICF: setBarcodeValueInModal confirmed=" + String(confirmed));
+        if (!confirmed) {
+            log("ICF: setBarcodeValueInModal value mismatch after set");
+            return false;
+        }
+        await randomDelay(RETRY_DELAY_MS_MIN, RETRY_DELAY_MS_MAX);
+        var okClicked = await clickBootboxOk(6000);
+        if (!okClicked) {
+            log("ICF: setBarcodeValueInModal bootbox OK not clicked");
+            return false;
+        }
+        log("ICF: setBarcodeValueInModal OK clicked");
+        await sleep(300);
+        var bootboxGone = true;
+        var bootboxModal = document.querySelector("div.bootbox.modal.in, div.bootbox.modal.show");
+        if (bootboxModal) {
+            var bootboxDisplay = window.getComputedStyle(bootboxModal).display;
+            if (bootboxDisplay !== "none") {
+                bootboxGone = false;
+                log("ICF: setBarcodeValueInModal bootbox popup still visible; waiting");
+                await sleep(500);
+            }
+        }
+        log("ICF: setBarcodeValueInModal bootbox closed=" + String(bootboxGone));
+        return true;
+    }
+
+    async function fillTextareaFieldsInModal(modalEl) {
+        log("ICF: fillTextareaFieldsInModal");
+        if (!modalEl) {
+            log("ICF: fillTextareaFieldsInModal modalEl is null");
+            return;
+        }
+        var textareas = modalEl.querySelectorAll("textarea.collectInput.text");
+        log("ICF: fillTextareaFieldsInModal found " + String(textareas.length) + " textarea(s)");
+        var filled = 0;
+        var i = 0;
+        while (i < textareas.length) {
+            var ta = textareas[i];
+            var currentVal = (ta.value || "").trim();
+            if (currentVal.length === 0) {
+                ta.value = "a";
+                var evt = new Event("input", { bubbles: true });
+                ta.dispatchEvent(evt);
+                filled = filled + 1;
+                log("ICF: fillTextareaFieldsInModal filled textarea id=" + String(ta.id));
+            } else {
+                log("ICF: fillTextareaFieldsInModal textarea already has value id=" + String(ta.id));
+            }
+            i = i + 1;
+        }
+        log("ICF: fillTextareaFieldsInModal filled " + String(filled) + " field(s)");
+    }
+
+    async function clickCurrentTimeButtonsInModal(modalEl) {
+        log("ICF: clickCurrentTimeButtonsInModal");
+        if (!modalEl) {
+            log("ICF: clickCurrentTimeButtonsInModal modalEl is null");
+            return;
+        }
+        var timeButtons = modalEl.querySelectorAll('button[id$="_currentTime"].btn.btn-xs.dark');
+        log("ICF: clickCurrentTimeButtonsInModal found " + String(timeButtons.length) + " button(s)");
+        var i = 0;
+        while (i < timeButtons.length) {
+            var btn = timeButtons[i];
+            if (!btn.disabled) {
+                log("ICF: clickCurrentTimeButtonsInModal clicking button id=" + String(btn.id));
+                btn.click();
+                await sleep(200);
+            } else {
+                log("ICF: clickCurrentTimeButtonsInModal button disabled id=" + String(btn.id));
+            }
+            i = i + 1;
+        }
+    }
+
+    async function saveAndCloseModal(modalEl) {
+        log("ICF: saveAndCloseModal");
+        var saveBtn = await waitForSelector("button#saveAndCloseSubmit.btn.green", 8000);
+        if (!saveBtn) {
+            log("ICF: saveAndCloseModal Save and Close button not found; trying Close button");
+            var closeBtn = null;
+            if (modalEl) {
+                closeBtn = modalEl.querySelector('span[data-dismiss="modal"]');
+            }
+            if (!closeBtn) {
+                closeBtn = document.querySelector('span[data-dismiss="modal"]');
+            }
+            if (closeBtn) {
+                log("ICF: saveAndCloseModal clicking Close button");
+                closeBtn.click();
+                await sleep(500);
+                var closed = await waitForModalClose(OPEN_MODAL_TIMEOUT_MS);
+                if (closed) {
+                    log("ICF: saveAndCloseModal modal closed via Close button");
+                    return { success: true, error: "" };
+                }
+                log("ICF: saveAndCloseModal modal did not close after Close click");
+            }
+            var errorEl = null;
+            if (modalEl) {
+                errorEl = modalEl.querySelector(".alert-danger, .help-block, .error-message");
+            }
+            if (errorEl) {
+                var errorText = (errorEl.textContent || "").trim();
+                log("ICF: saveAndCloseModal validation error=" + String(errorText));
+                return { success: false, error: errorText };
+            }
+            return { success: false, error: "Save and Close button not found and Close button failed" };
+        }
+        saveBtn.click();
+        log("ICF: saveAndCloseModal Save and Close clicked");
+        var closed = await waitForModalClose(3000);
+        if (!closed) {
+            log("ICF: saveAndCloseModal modal did not close after Save and Close; trying Close button");
+            var modalAfter = getDataCollectionModalElement();
+            var closeBtn2 = null;
+            if (modalAfter) {
+                closeBtn2 = modalAfter.querySelector('span[data-dismiss="modal"]');
+            }
+            if (!closeBtn2) {
+                closeBtn2 = document.querySelector('span[data-dismiss="modal"]');
+            }
+            if (closeBtn2) {
+                log("ICF: saveAndCloseModal clicking Close button as fallback");
+                closeBtn2.click();
+                await sleep(500);
+                var closed2 = await waitForModalClose(3000);
+                if (closed2) {
+                    log("ICF: saveAndCloseModal modal closed via Close button fallback");
+                    return { success: true, error: "" };
+                }
+                log("ICF: saveAndCloseModal modal still open after Close button fallback");
+            }
+            if (modalAfter) {
+                var errorEl2 = modalAfter.querySelector(".alert-danger, .help-block, .error-message");
+                if (errorEl2) {
+                    var errorText2 = (errorEl2.textContent || "").trim();
+                    log("ICF: saveAndCloseModal modal still open; error=" + String(errorText2));
+                    return { success: false, error: errorText2 };
+                }
+            }
+            log("ICF: saveAndCloseModal modal did not close after all attempts");
+            return { success: false, error: "Modal did not close after save" };
+        }
+        log("ICF: saveAndCloseModal modal closed successfully");
+        return { success: true, error: "" };
+    }
+
+    async function runIcfBarcodeInPlace() {
+        log("ICF: runIcfBarcodeInPlace start");
+
+        var onPage = isOnSupportedSubjectShowPage(location);
+        if (!onPage) {
+            log("ICF: not on supported subject show page; aborting");
+            showWarningPopup("Run ICF Barcode", "Please navigate to a Subject Show page before running this feature.\n\nExpected URL format:\nhttps://{host}" + SUBJECT_SHOW_PATH_PREFIX + "{id}");
+            return;
+        }
+
+        log("ICF: checking consent tab visibility");
+        var consentTabLink = document.querySelector('a#consentTabLink[href="#consentTab"]');
+        if (consentTabLink) {
+            log("ICF: clicking consent tab to ensure visibility");
+            consentTabLink.click();
+            await sleep(400);
+        }
+
+        log("ICF: checking data collection modal state");
+        var modalEl = getDataCollectionModalElement();
+        var modalAlreadyOpen = modalEl && isModalOpen(modalEl);
+        log("ICF: modal exists=" + String(!!modalEl) + " alreadyOpen=" + String(modalAlreadyOpen));
+
+        if (!modalAlreadyOpen) {
+            log("ICF: modal not open; finding eligible Collect button");
+            var collectBtn = findEligibleCollectButton();
+            if (!collectBtn) {
+                log("ICF: no eligible Collect button found");
+                showWarningPopup("Run ICF Barcode", "No eligible Collect button was found on this page. Ensure the Consent tab is visible and a Collect button is enabled.");
+                return;
+            }
+            if (collectBtn.disabled) {
+                log("ICF: Collect button is disabled");
+                showWarningPopup("Run ICF Barcode", "The Collect button is disabled. Please check permissions or consent state.");
+                return;
+            }
+            log("ICF: clicking Collect button id=" + String(collectBtn.id));
+            var clicked = await clickWithRetry(collectBtn);
+            if (!clicked) {
+                log("ICF: failed to click Collect button");
+                showWarningPopup("Run ICF Barcode", "Failed to click the Collect button after retries.");
+                return;
+            }
+            await randomDelay(RETRY_DELAY_MS_MIN, RETRY_DELAY_MS_MAX);
+
+            log("ICF: waiting for modal to open");
+            var opened = await waitForModalOpen(OPEN_MODAL_TIMEOUT_MS);
+            if (!opened) {
+                log("ICF: modal did not open in time");
+                showWarningPopup("Run ICF Barcode", "The data collection modal did not open. Please try again.");
+                return;
+            }
+            modalEl = getDataCollectionModalElement();
+        }
+
+        log("ICF: modal is open; checking for Add New button");
+        var barcodeIcon = document.getElementById(BARCODE_ICON_ID);
+        if (!barcodeIcon) {
+            var addNewBtn = null;
+            if (modalEl) {
+                addNewBtn = modalEl.querySelector('a.btn.btn-default.blue.pull-right[onclick*="maybeAddNew"]');
+            }
+            if (!addNewBtn) {
+                addNewBtn = document.querySelector('a.btn.btn-default.blue.pull-right[onclick*="maybeAddNew"]');
+            }
+            if (addNewBtn) {
+                log("ICF: clicking Add New button");
+                addNewBtn.click();
+                await sleep(300);
+                var okAdd = await clickBootboxOk(6000);
+                if (!okAdd) {
+                    await sleep(300);
+                }
+                barcodeIcon = await waitForSelector("i#" + BARCODE_ICON_ID + ".fa.fa-barcode", 8000);
+            }
+        }
+
+        log("ICF: ensuring modal content is loaded");
+        await sleep(300);
+        modalEl = getDataCollectionModalElement();
+        if (!modalEl || !isModalOpen(modalEl)) {
+            log("ICF: modal closed unexpectedly after Add New");
+            showWarningPopup("Run ICF Barcode", "The data collection modal closed unexpectedly.");
+            return;
+        }
+
+        log("ICF: beginning background barcode retrieval");
+        var fetchResult = await backgroundFetchIcfBarcode(location.hostname);
+        if (fetchResult.error && fetchResult.error.length > 0 && (!fetchResult.barcode || fetchResult.barcode.length === 0)) {
+            log("ICF: barcode retrieval failed: " + String(fetchResult.error));
+            showWarningPopup("Run ICF Barcode", "Failed to retrieve ICF barcode.\n\n" + String(fetchResult.error));
+            return;
+        }
+        var barcodeValue = fetchResult.barcode;
+        if (!barcodeValue || barcodeValue.length === 0) {
+            log("ICF: barcode is empty after retrieval");
+            showWarningPopup("Run ICF Barcode", "No valid ICF barcode was found on the Administration Studies page.");
+            return;
+        }
+        log("ICF: barcode retrieved=" + String(barcodeValue));
+        setIcBarcode(barcodeValue);
+
+        log("ICF: opening barcode input UI");
+        var inputOpened = await openBarcodeInput(modalEl);
+        if (!inputOpened) {
+            log("ICF: failed to open barcode input");
+            showWarningPopup("Run ICF Barcode", "Failed to open the barcode input UI. The barcode icon or input field was not found.");
+            return;
+        }
+
+        log("ICF: setting barcode value in modal");
+        var setOk = await setBarcodeValueInModal(modalEl, barcodeValue);
+        if (!setOk) {
+            log("ICF: failed to set barcode value");
+            showWarningPopup("Run ICF Barcode", "Failed to set barcode value or confirm the input popup.");
+            return;
+        }
+
+        log("ICF: filling textarea fields");
+        modalEl = getDataCollectionModalElement();
+        await fillTextareaFieldsInModal(modalEl);
+
+        log("ICF: clicking Current Time buttons");
+        modalEl = getDataCollectionModalElement();
+        await clickCurrentTimeButtonsInModal(modalEl);
+
+        log("ICF: saving and closing modal");
+        modalEl = getDataCollectionModalElement();
+        var saveResult = await saveAndCloseModal(modalEl);
+        if (!saveResult.success) {
+            log("ICF: save failed: " + String(saveResult.error));
+            showWarningPopup("Run ICF Barcode", "Save failed.\n\n" + String(saveResult.error));
+            return;
+        }
+
+        log("ICF: verifying modal is closed");
+        var finalModal = getDataCollectionModalElement();
+        if (finalModal && isModalOpen(finalModal)) {
+            log("ICF: modal still open after save; attempting to wait again");
+            var finalClose = await waitForModalClose(500);
+            if (!finalClose) {
+                log("ICF: modal still open after extended wait");
+                showWarningPopup("Run ICF Barcode", "The modal is still open after save. Please verify the barcode was saved.");
+                return;
+            }
+        }
+
+        log("ICF: runIcfBarcodeInPlace completed successfully barcode=" + String(barcodeValue));
+    }
+
     // Persist last volunteer id used for activation flows.
     function setLastVolunteerId(id) {
         try {
@@ -21050,7 +21865,6 @@
         }
         return false;
     }
-
 
     // Automate the consent collection flow on a subject show page.
     async function collectConsentOnSubjectShow() {
@@ -26229,12 +27043,127 @@
             log("Run Study Update clicked");
             location.href = STUDY_SHOW_URL + "?autoupdate=1";
         });
-        runConsentBtn.addEventListener("click", function () {
+        runConsentBtn.addEventListener("click", async function () {
+            log("Run ICF Barcode clicked");
+
+            var useInPlace = isOnSupportedSubjectShowPage(location);
+            log("ICF: useInPlace=" + String(useInPlace));
+
+            if (useInPlace) {
+                log("ICF: running in-place barcode flow on subject show page");
+                status.textContent = "Running ICF Barcode (in-place)…";
+
+                var popupContainer = document.createElement("div");
+                popupContainer.style.display = "flex";
+                popupContainer.style.flexDirection = "column";
+                popupContainer.style.gap = "16px";
+                popupContainer.style.padding = "8px";
+
+                var statusDiv = document.createElement("div");
+                statusDiv.id = "icfBarcodeStatus";
+                statusDiv.style.textAlign = "center";
+                statusDiv.style.fontSize = "18px";
+                statusDiv.style.color = "#fff";
+                statusDiv.style.fontWeight = "500";
+                statusDiv.textContent = "Running ICF Barcode";
+
+                var loadingAnimation = document.createElement("div");
+                loadingAnimation.id = "icfBarcodeLoading";
+                loadingAnimation.style.textAlign = "center";
+                loadingAnimation.style.fontSize = "14px";
+                loadingAnimation.style.color = "#9df";
+                loadingAnimation.textContent = "Running.";
+
+                popupContainer.appendChild(statusDiv);
+                popupContainer.appendChild(loadingAnimation);
+
+                ICF_BARCODE_POPUP_REF = createPopup({
+                    title: "Run ICF Barcode Progress",
+                    content: popupContainer,
+                    width: "400px",
+                    height: "auto",
+                    onClose: function() {
+                        log("ICF Barcode: cancelled by user (close button)");
+                        clearAllRunState();
+                        try {
+                            localStorage.removeItem(STORAGE_RUN_MODE);
+                            localStorage.removeItem(STORAGE_ICF_BARCODE_POPUP);
+                        } catch (e) {}
+                        ICF_BARCODE_POPUP_REF = null;
+                    }
+                });
+
+                try {
+                    localStorage.setItem(STORAGE_ICF_BARCODE_POPUP, "1");
+                } catch (e) {}
+
+                var dots = 1;
+                var loadingInterval = setInterval(function() {
+                    if (!ICF_BARCODE_POPUP_REF || !document.body.contains(ICF_BARCODE_POPUP_REF.element)) {
+                        clearInterval(loadingInterval);
+                        return;
+                    }
+                    dots = dots + 1;
+                    if (dots > 3) {
+                        dots = 1;
+                    }
+                    var text = "Running";
+                    var i = 0;
+                    while (i < dots) {
+                        text = text + ".";
+                        i = i + 1;
+                    }
+                    if (loadingAnimation) {
+                        loadingAnimation.textContent = text;
+                    }
+                }, 500);
+
+                try {
+                    await runIcfBarcodeInPlace();
+                    log("ICF: in-place flow finished");
+                    if (statusDiv) {
+                        statusDiv.textContent = "ICF Barcode Complete";
+                        statusDiv.style.color = "#51cf66";
+                    }
+                    if (loadingAnimation) {
+                        loadingAnimation.textContent = "";
+                    }
+                    status.textContent = "ICF Barcode done";
+                } catch (inPlaceErr) {
+                    log("ICF: in-place flow error=" + String(inPlaceErr));
+                    if (statusDiv) {
+                        statusDiv.textContent = "ICF Barcode Failed";
+                        statusDiv.style.color = "#ff6b6b";
+                    }
+                    if (loadingAnimation) {
+                        loadingAnimation.textContent = String(inPlaceErr);
+                    }
+                    status.textContent = "ICF Barcode error";
+                }
+
+                clearInterval(loadingInterval);
+                try {
+                    localStorage.removeItem(STORAGE_ICF_BARCODE_POPUP);
+                    localStorage.removeItem(STORAGE_RUN_MODE);
+                } catch (e) {}
+
+                setTimeout(function() {
+                    if (ICF_BARCODE_POPUP_REF) {
+                        try {
+                            ICF_BARCODE_POPUP_REF.close();
+                        } catch (e) {}
+                        ICF_BARCODE_POPUP_REF = null;
+                    }
+                }, 3000);
+
+                return;
+            }
+
             try {
                 localStorage.setItem(STORAGE_RUN_MODE, "consent");
             } catch (e) {}
             status.textContent = "Navigating to Study Show for Consent…";
-            log("Run Informed Consent clicked");
+            log("ICF: falling back to navigation-based consent flow");
 
             var popupContainer = document.createElement("div");
             popupContainer.style.display = "flex";
@@ -26280,7 +27209,6 @@
                 localStorage.setItem(STORAGE_ICF_BARCODE_POPUP, "1");
             } catch (e) {}
 
-            // Animate loading dots
             var dots = 1;
             var loadingInterval = setInterval(function() {
                 if (!ICF_BARCODE_POPUP_REF || !document.body.contains(ICF_BARCODE_POPUP_REF.element)) {
