@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.6.1
+// @version 3.6.2
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -13586,8 +13586,8 @@
         return true;
     }
 
-    async function waitForModalOpen(timeoutMs) {
-        log("ImportIE: waitForModalOpen timeout=" + String(timeoutMs));
+    async function waitForIEModalOpen(timeoutMs) {
+        log("ImportIE: waitForIEModalOpen timeout=" + String(timeoutMs));
         var start = Date.now();
         var maxMs = typeof timeoutMs === "number" ? timeoutMs : IMPORT_IE_MODAL_TIMEOUT;
         while (Date.now() - start < maxMs) {
@@ -13597,37 +13597,37 @@
                 if (header) {
                     var txt = (header.textContent + "").trim();
                     if (txt.indexOf("Eligibility Management") >= 0) {
-                        log("ImportIE: waitForModalOpen modal found in " + String(Date.now() - start) + "ms");
+                        log("ImportIE: waitForIEModalOpen modal found in " + String(Date.now() - start) + "ms");
                         return true;
                     }
                 }
-                log("ImportIE: waitForModalOpen modal content found in " + String(Date.now() - start) + "ms");
+                log("ImportIE: waitForIEModalOpen modal content found in " + String(Date.now() - start) + "ms");
                 return true;
             }
             await sleep(IMPORT_IE_POLL_INTERVAL);
         }
-        log("ImportIE: waitForModalOpen timeout");
+        log("ImportIE: waitForIEModalOpen timeout");
         return false;
     }
 
-    async function waitForModalClose(timeoutMs) {
-        log("ImportIE: waitForModalClose timeout=" + String(timeoutMs));
+    async function waitForIEModalClose(timeoutMs) {
+        log("ImportIE: waitForIEModalClose timeout=" + String(timeoutMs));
         var start = Date.now();
         var maxMs = typeof timeoutMs === "number" ? timeoutMs : IMPORT_IE_MODAL_TIMEOUT;
         while (Date.now() - start < maxMs) {
             var modal = document.querySelector("#ajaxModal .modal-content");
             if (!modal) {
-                log("ImportIE: waitForModalClose modal closed in " + String(Date.now() - start) + "ms");
+                log("ImportIE: waitForIEModalClose modal closed in " + String(Date.now() - start) + "ms");
                 return true;
             }
             var display = window.getComputedStyle(modal.closest("#ajaxModal") || modal).display;
             if (display === "none") {
-                log("ImportIE: waitForModalClose modal hidden in " + String(Date.now() - start) + "ms");
+                log("ImportIE: waitForIEModalClose modal hidden in " + String(Date.now() - start) + "ms");
                 return true;
             }
             await sleep(IMPORT_IE_POLL_INTERVAL);
         }
-        log("ImportIE: waitForModalClose timeout");
+        log("ImportIE: waitForIEModalClose timeout");
         return false;
     }
 
@@ -16564,11 +16564,11 @@
                     continue;
                 }
                 addBtn.click();
-                var opened = await waitForModalOpen(IMPORT_IE_MODAL_TIMEOUT);
+                var opened = await waitForIEModalOpen(IMPORT_IE_MODAL_TIMEOUT);
                 if (!opened) {
                     log("ImportIE: modal did not open on first try, retrying");
                     addBtn.click();
-                    opened = await waitForModalOpen(IMPORT_IE_MODAL_TIMEOUT);
+                    opened = await waitForIEModalOpen(IMPORT_IE_MODAL_TIMEOUT);
                 }
                 if (!opened) {
                     log("ImportIE: modal failed to open after retry");
@@ -16596,18 +16596,6 @@
             if (!eligSel) {
                 log("ImportIE: eligibilityItemRef not found");
                 progress.updateItem(mi, "Failed", "Eligibility select not found");
-                failures = failures + 1;
-                progress.updateSummary(successes, failures);
-                var cb1 = document.querySelector("#ajaxModal .modal-content button.close");
-                if (cb1) {
-                    cb1.click();
-                    await waitForModalClose(5000);
-                }
-                mi = mi + 1;
-                continue;
-            }
-
-            var eligMatched = false;
             var eligOpts = eligSel.querySelectorAll("option");
             var bestMatch = null;
             var bestMatchVal = "";
@@ -16668,7 +16656,7 @@
                 var cb2 = document.querySelector("#ajaxModal .modal-content button.close");
                 if (cb2) {
                     cb2.click();
-                    await waitForModalClose(5000);
+                    await waitForIEModalClose(5000);
                 }
                 mi = mi + 1;
                 continue;
@@ -16727,7 +16715,7 @@
                 var cb3 = document.querySelector("#ajaxModal .modal-content button.close");
                 if (cb3) {
                     cb3.click();
-                    await waitForModalClose(8000);
+                    await waitForIEModalClose(8000);
                 }
                 mi = mi + 1;
                 continue;
@@ -16751,7 +16739,7 @@
                 var cb4 = document.querySelector("#ajaxModal .modal-content button.close");
                 if (cb4) {
                     cb4.click();
-                    await waitForModalClose(8000);
+                    await waitForIEModalClose(8000);
                 }
                 mi = mi + 1;
                 continue;
@@ -16783,7 +16771,7 @@
                 var cb5 = document.querySelector("#ajaxModal .modal-content button.close");
                 if (cb5) {
                     cb5.click();
-                    await waitForModalClose(5000);
+                    await waitForIEModalClose(5000);
                 }
                 mi = mi + 1;
                 continue;
@@ -16804,7 +16792,7 @@
                 var cb6 = document.querySelector("#ajaxModal .modal-content button.close");
                 if (cb6) {
                     cb6.click();
-                    await waitForModalClose(5000);
+                    await waitForIEModalClose(5000);
                 }
                 mi = mi + 1;
                 continue;
@@ -16820,7 +16808,7 @@
                 var cb7 = document.querySelector("#ajaxModal .modal-content button.close");
                 if (cb7) {
                     cb7.click();
-                    await waitForModalClose(5000);
+                    await waitForIEModalClose(5000);
                 }
                 mi = mi + 1;
                 continue;
@@ -16847,7 +16835,7 @@
             }
             saveBtn.click();
             log("ImportIE: Save clicked, waiting for modal close");
-            var modalClosed = await waitForModalClose(15000);
+            var modalClosed = await waitForIEModalClose(15000);
             if (!modalClosed) {
                 log("ImportIE: modal did not close after save, checking for errors");
                 var errorEl = document.querySelector("#ajaxModal .modal-content .alert-danger, #ajaxModal .modal-content .error-message, #ajaxModal .modal-content .has-error");
@@ -16860,7 +16848,7 @@
                     var cb8 = document.querySelector("#ajaxModal .modal-content button.close");
                     if (cb8) {
                         cb8.click();
-                        await waitForModalClose(5000);
+                        await waitForIEModalClose(5000);
                     }
                     mi = mi + 1;
                     continue;
@@ -16869,7 +16857,7 @@
                 saveBtn = document.querySelector("button#actionButton");
                 if (saveBtn) {
                     saveBtn.click();
-                    modalClosed = await waitForModalClose(10000);
+                    modalClosed = await waitForIEModalClose(10000);
                 }
                 if (!modalClosed) {
                     log("ImportIE: save retry failed");
@@ -16879,7 +16867,7 @@
                     var cb9 = document.querySelector("#ajaxModal .modal-content button.close");
                     if (cb9) {
                         cb9.click();
-                        await waitForModalClose(5000);
+                        await waitForIEModalClose(5000);
                     }
                     mi = mi + 1;
                     continue;
@@ -16898,6 +16886,7 @@
 
         progress.setCompleted();
         log("ImportIE: executeSelectedMappings done successes=" + String(successes) + " failures=" + String(failures));
+    }
     }
 
     function startImportEligibilityMapping() {
@@ -17031,11 +17020,11 @@
                 log("ImportIE: step 3 - clicking Add to open modal");
                 stepRow.textContent = "Step 3: Opening modal...";
                 addBtn.click();
-                var modalOpened = await waitForModalOpen(IMPORT_IE_MODAL_TIMEOUT);
+                var modalOpened = await waitForIEModalOpen(IMPORT_IE_MODAL_TIMEOUT);
                 if (!modalOpened) {
                     log("ImportIE: modal did not open on first try, retrying");
                     addBtn.click();
-                    modalOpened = await waitForModalOpen(IMPORT_IE_MODAL_TIMEOUT);
+                    modalOpened = await waitForIEModalOpen(IMPORT_IE_MODAL_TIMEOUT);
                 }
                 if (!modalOpened) {
                     clearInterval(loadingInterval);
@@ -17071,7 +17060,7 @@
                 var closeModalBtn = document.querySelector("#ajaxModal .modal-content button.close");
                 if (closeModalBtn) {
                     closeModalBtn.click();
-                    await waitForModalClose(5000);
+                    await waitForIEModalClose(5000);
                 }
 
                 clearInterval(loadingInterval);
