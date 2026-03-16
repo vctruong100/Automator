@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.6.2
+// @version 3.6.3
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -16596,6 +16596,18 @@
             if (!eligSel) {
                 log("ImportIE: eligibilityItemRef not found");
                 progress.updateItem(mi, "Failed", "Eligibility select not found");
+                failures = failures + 1;
+                progress.updateSummary(successes, failures);
+                var cb1 = document.querySelector("#ajaxModal .modal-content button.close");
+                if (cb1) {
+                    cb1.click();
+                    await waitForIEModalClose(5000);
+                }
+                mi = mi + 1;
+                continue;
+            }
+
+            var eligMatched = false;
             var eligOpts = eligSel.querySelectorAll("option");
             var bestMatch = null;
             var bestMatchVal = "";
@@ -16886,7 +16898,6 @@
 
         progress.setCompleted();
         log("ImportIE: executeSelectedMappings done successes=" + String(successes) + " failures=" + String(failures));
-    }
     }
 
     function startImportEligibilityMapping() {
