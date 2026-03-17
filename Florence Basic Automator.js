@@ -8405,6 +8405,1973 @@ function showResponsibilitiesProgressPanel(rolesData) {
 
 
     //==========================
+    // ADD START DATE FUNCTIONS
+    //==========================
+    // This section contains functions to handle the Add Start Date feature.
+    // This includes a UI user input for staff names and a date, scanning the Document Log,
+    // and setting the start date for matched staff via the datepicker.
+    //==========================
+
+    const STARTDATE_SELECTORS = {
+        mainTableContainer: '.document-log-entries.document-log-entries__table',
+        mainGridTable: '.document-log-entries__grid-table[role="table"]',
+        mainGridRow: 'log-entry-row[role="row"], .document-log-entries__grid-table__row[role="row"]',
+        mainGridCell: '[role="cell"]',
+        nameCellIndex: 3,
+        namePrimary: '.u-text-overflow-ellipsis',
+        nameFallback: '.test-logEntrySignature span',
+        rowMenuToggle: 'a[dropdowntoggle], [dropdowntoggle]',
+        rowMenuToggleFallbackIcon: '.fa-ellipsis-v',
+        editMenuItemDirect: 'a.document-log-entries__log-entry-action--edit',
+        editMenuItemFallback: '.dropdown-menu li a, .dropdown-menu .dropdown-item, .dropdown-menu button',
+        startDateInputContainer: 'date-time-popup, .test-datetime-popup',
+        startDateInputTrigger: 'input, a[dropdowntoggle], [dropdowntoggle]',
+        datepickerContainer: 'date-time-popup .test-datetime-popup, date-time-popup .dropdown-menu, .test-datetime-popup.dropdown, datepicker, datepicker-inner',
+        datepickerTitleBtn: 'button[id*="datepicker"][id*="title"], daypicker thead button[style*="width: 100%"], daypicker thead th[colspan] button',
+        datepickerNavPrev: 'daypicker thead tr:first-child th:first-child button, .pull-left.float-left, button.pull-left',
+        datepickerNavNext: 'daypicker thead tr:first-child th:last-child button, .pull-right.float-right, button.pull-right',
+        datepickerDayCell: 'td[role="gridcell"] button',
+        datepickerDaySpan: 'span',
+        datepickerDayMutedClass: 'text-muted',
+        ariaLiveRegion: '.aria-live-region',
+        mainPanelButtonTarget: '.main-gui-panel'
+    };
+
+    const STARTDATE_TIMEOUTS = {
+        waitTableMs: 10000,
+        waitGridMs: 10000,
+        waitInputPanelMs: 10000,
+        waitProgressPanelMs: 10000,
+        waitMenuOpenMs: 3000,
+        waitEditFormMs: 5000,
+        waitDatepickerOpenMs: 3000,
+        waitAfterYearChangeMs: 500,
+        waitAfterMonthChangeMs: 500,
+        waitAfterDayClickMs: 500,
+        waitVerifyInputMs: 500,
+        settleMs: 250,
+        scanSettleMs: 250,
+        idleBetweenBatchesMs: 80,
+        maxScanDurationMs: 120000,
+        retryScanDelayMs: 150
+    };
+
+    const STARTDATE_LABELS = {
+        featureButton: 'Add Start Date',
+        inputTitle: 'Add Start Date',
+        warningTitle: 'Document Log Not Found',
+        warningMessage: 'The current page does not contain the Document Log Entries table. Please navigate to the Document Log before using this feature.',
+        statusPending: 'Pending',
+        statusSettingDate: 'Setting Date',
+        statusCompleted: 'Completed',
+        statusNotFound: 'Not Found',
+        statusFailed: 'Failed',
+        statusStopped: 'Stopped',
+        scanComplete: 'Scan Complete',
+        scanStopped: 'Scan Stopped',
+        scanError: 'Scan Error',
+        progressInProgress: 'In Progress',
+        progressComplete: 'Complete',
+        progressStopped: 'Stopped'
+    };
+
+    const STARTDATE_REGEX = {
+        whitespace: /\s+/g,
+        commaSplit: /[,]+/,
+        dateFormatDash: /^(\d{1,2})-(\d{1,2})-(\d{4})$/,
+        dateFormatSlash: /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,
+        dateFormatTextual: /^(\d{1,2})\s*([A-Za-z]+)\s*(\d{4})$/
+    };
+
+    const STARTDATE_MONTHS = [
+        { index: 0, name: 'January', abbrev: 'Jan', aliases: ['january', 'jan'] },
+        { index: 1, name: 'February', abbrev: 'Feb', aliases: ['february', 'feb'] },
+        { index: 2, name: 'March', abbrev: 'Mar', aliases: ['march', 'mar'] },
+        { index: 3, name: 'April', abbrev: 'Apr', aliases: ['april', 'apr'] },
+        { index: 4, name: 'May', abbrev: 'May', aliases: ['may'] },
+        { index: 5, name: 'June', abbrev: 'Jun', aliases: ['june', 'jun'] },
+        { index: 6, name: 'July', abbrev: 'Jul', aliases: ['july', 'jul'] },
+        { index: 7, name: 'August', abbrev: 'Aug', aliases: ['august', 'aug'] },
+        { index: 8, name: 'September', abbrev: 'Sep', aliases: ['september', 'sep', 'sept'] },
+        { index: 9, name: 'October', abbrev: 'Oct', aliases: ['october', 'oct'] },
+        { index: 10, name: 'November', abbrev: 'Nov', aliases: ['november', 'nov'] },
+        { index: 11, name: 'December', abbrev: 'Dec', aliases: ['december', 'dec'] }
+    ];
+
+    const STARTDATE_ATTRS = {
+        ariaBusyTarget: 'body',
+        ariaBusyAttr: 'aria-busy'
+    };
+
+    const STARTDATE_SCROLL = {
+        stepPx: 500,
+        maxNoProgressIterations: 8,
+        retryScanAttempts: 3
+    };
+
+    var startDateState = {
+        isRunning: false,
+        stopRequested: false,
+        observers: [],
+        timeouts: [],
+        intervals: [],
+        eventListeners: [],
+        idleCallbackIds: [],
+        focusReturnElement: null,
+        prevAriaBusy: null,
+        parsedNames: [],
+        parsedDate: null,
+        scannedNames: [],
+        seenNormalizedNames: new Set(),
+        scrollContainer: null,
+        prevScrollTop: 0,
+        userScrollHandler: null,
+        userScrollPaused: false,
+        lastAutoScrollTime: 0,
+        leftPanelRowIndex: 0
+    };
+
+    function resetStartDateState() {
+        addLogMessage('resetStartDateState: resetting state', 'log');
+        startDateState.isRunning = false;
+        startDateState.stopRequested = false;
+        startDateState.observers = [];
+        startDateState.timeouts = [];
+        startDateState.intervals = [];
+        startDateState.eventListeners = [];
+        startDateState.idleCallbackIds = [];
+        startDateState.prevAriaBusy = null;
+        startDateState.parsedNames = [];
+        startDateState.parsedDate = null;
+        startDateState.scannedNames = [];
+        startDateState.seenNormalizedNames = new Set();
+        startDateState.scrollContainer = null;
+        startDateState.prevScrollTop = 0;
+        startDateState.userScrollHandler = null;
+        startDateState.userScrollPaused = false;
+        startDateState.lastAutoScrollTime = 0;
+        startDateState.leftPanelRowIndex = 0;
+    }
+
+    function startDateWaitForElement(selector, timeout) {
+        addLogMessage('startDateWaitForElement: waiting for ' + selector, 'log');
+        return new Promise(function(resolve, reject) {
+            var element = document.querySelector(selector);
+            if (element) {
+                addLogMessage('startDateWaitForElement: found immediately', 'log');
+                resolve(element);
+                return;
+            }
+            var observer = new MutationObserver(function(mutations, obs) {
+                var el = document.querySelector(selector);
+                if (el) {
+                    obs.disconnect();
+                    var idx = startDateState.observers.indexOf(obs);
+                    if (idx > -1) {
+                        startDateState.observers.splice(idx, 1);
+                    }
+                    resolve(el);
+                }
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+            startDateState.observers.push(observer);
+            var timeoutId = setTimeout(function() {
+                observer.disconnect();
+                var idx = startDateState.observers.indexOf(observer);
+                if (idx > -1) {
+                    startDateState.observers.splice(idx, 1);
+                }
+                addLogMessage('startDateWaitForElement: timeout for ' + selector, 'warn');
+                reject(new Error('Timeout waiting for ' + selector));
+            }, timeout);
+            startDateState.timeouts.push(timeoutId);
+        });
+    }
+
+    function startDateDelay(ms) {
+        return new Promise(function(resolve) {
+            var tid = setTimeout(resolve, ms);
+            startDateState.timeouts.push(tid);
+        });
+    }
+
+    function startDateSetAriaBusyOn() {
+        var target = document.querySelector(STARTDATE_ATTRS.ariaBusyTarget);
+        if (target) {
+            startDateState.prevAriaBusy = target.getAttribute(STARTDATE_ATTRS.ariaBusyAttr);
+            target.setAttribute(STARTDATE_ATTRS.ariaBusyAttr, 'true');
+            addLogMessage('startDateSetAriaBusyOn: set aria-busy=true', 'log');
+        }
+    }
+
+    function startDateSetAriaBusyOff() {
+        var target = document.querySelector(STARTDATE_ATTRS.ariaBusyTarget);
+        if (target) {
+            if (startDateState.prevAriaBusy !== null) {
+                target.setAttribute(STARTDATE_ATTRS.ariaBusyAttr, startDateState.prevAriaBusy);
+            } else {
+                target.removeAttribute(STARTDATE_ATTRS.ariaBusyAttr);
+            }
+            startDateState.prevAriaBusy = null;
+            addLogMessage('startDateSetAriaBusyOff: restored aria-busy', 'log');
+        }
+    }
+
+    function updateStartDateAriaLive(message) {
+        addLogMessage('updateStartDateAriaLive: ' + message, 'log');
+        var lr = document.getElementById('startdate-aria-live');
+        if (lr) {
+            lr.textContent = message;
+        }
+    }
+
+    function parseNamesInputForStartDate(text) {
+        addLogMessage('parseNamesInputForStartDate: parsing input', 'log');
+        if (!text || !text.trim()) {
+            addLogMessage('parseNamesInputForStartDate: empty input', 'warn');
+            return [];
+        }
+        var results = [];
+        var seenKeys = new Set();
+        var lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+        for (var li = 0; li < lines.length; li++) {
+            var parts = lines[li].split(STARTDATE_REGEX.commaSplit);
+            for (var pi = 0; pi < parts.length; pi++) {
+                var name = parts[pi].trim();
+                if (!name) {
+                    continue;
+                }
+                name = name.replace(STARTDATE_REGEX.whitespace, ' ').trim();
+                if (!name) {
+                    continue;
+                }
+                var pairKey = normalizeFirstLastPair(name);
+                if (!pairKey) {
+                    addLogMessage('parseNamesInputForStartDate: could not normalize "' + name + '", skip', 'warn');
+                    continue;
+                }
+                if (seenKeys.has(pairKey)) {
+                    addLogMessage('parseNamesInputForStartDate: duplicate pairKey "' + pairKey + '" for "' + name + '", skip', 'log');
+                    continue;
+                }
+                seenKeys.add(pairKey);
+                results.push({
+                    display: name,
+                    pairKey: pairKey,
+                    status: STARTDATE_LABELS.statusPending
+                });
+            }
+        }
+        addLogMessage('parseNamesInputForStartDate: parsed ' + results.length + ' unique names', 'log');
+        return results;
+    }
+
+    function parseStartDateValue(text) {
+        addLogMessage('parseStartDateValue: parsing date "' + text + '"', 'log');
+        if (!text || !text.trim()) {
+            addLogMessage('parseStartDateValue: empty input', 'warn');
+            return null;
+        }
+        var trimmed = text.trim();
+        var month = -1;
+        var day = -1;
+        var year = -1;
+        var dashMatch = trimmed.match(STARTDATE_REGEX.dateFormatDash);
+        if (dashMatch) {
+            month = parseInt(dashMatch[1], 10);
+            day = parseInt(dashMatch[2], 10);
+            year = parseInt(dashMatch[3], 10);
+        }
+        if (month === -1) {
+            var slashMatch = trimmed.match(STARTDATE_REGEX.dateFormatSlash);
+            if (slashMatch) {
+                month = parseInt(slashMatch[1], 10);
+                day = parseInt(slashMatch[2], 10);
+                year = parseInt(slashMatch[3], 10);
+            }
+        }
+        if (month !== -1 && day !== -1 && year !== -1) {
+            if (month < 1 || month > 12) {
+                addLogMessage('parseStartDateValue: invalid month ' + month, 'warn');
+                return null;
+            }
+            var monthIndex0 = month - 1;
+            var testDate = new Date(year, monthIndex0, day);
+            if (testDate.getFullYear() !== year || testDate.getMonth() !== monthIndex0 || testDate.getDate() !== day) {
+                addLogMessage('parseStartDateValue: invalid calendar date ' + month + '/' + day + '/' + year, 'warn');
+                return null;
+            }
+            var monthInfo = STARTDATE_MONTHS[monthIndex0];
+            addLogMessage('parseStartDateValue: parsed US format month=' + monthInfo.name + ' day=' + day + ' year=' + year, 'log');
+            return {
+                year: year,
+                monthIndex0: monthIndex0,
+                day: day,
+                displayMonthName: monthInfo.name,
+                displayMonthAbbrev: monthInfo.abbrev,
+                original: trimmed
+            };
+        }
+        var textMatch = trimmed.match(STARTDATE_REGEX.dateFormatTextual);
+        if (textMatch) {
+            var tDay = parseInt(textMatch[1], 10);
+            var tMonthStr = textMatch[2].toLowerCase();
+            var tYear = parseInt(textMatch[3], 10);
+            var foundMonth = null;
+            for (var mi = 0; mi < STARTDATE_MONTHS.length; mi++) {
+                var monthEntry = STARTDATE_MONTHS[mi];
+                for (var ai = 0; ai < monthEntry.aliases.length; ai++) {
+                    if (tMonthStr === monthEntry.aliases[ai]) {
+                        foundMonth = monthEntry;
+                        break;
+                    }
+                }
+                if (foundMonth) {
+                    break;
+                }
+            }
+            if (!foundMonth) {
+                addLogMessage('parseStartDateValue: unrecognized month name "' + textMatch[2] + '"', 'warn');
+                return null;
+            }
+            var testDate2 = new Date(tYear, foundMonth.index, tDay);
+            if (testDate2.getFullYear() !== tYear || testDate2.getMonth() !== foundMonth.index || testDate2.getDate() !== tDay) {
+                addLogMessage('parseStartDateValue: invalid calendar date ' + tDay + ' ' + foundMonth.name + ' ' + tYear, 'warn');
+                return null;
+            }
+            addLogMessage('parseStartDateValue: parsed textual format month=' + foundMonth.name + ' day=' + tDay + ' year=' + tYear, 'log');
+            return {
+                year: tYear,
+                monthIndex0: foundMonth.index,
+                day: tDay,
+                displayMonthName: foundMonth.name,
+                displayMonthAbbrev: foundMonth.abbrev,
+                original: trimmed
+            };
+        }
+        addLogMessage('parseStartDateValue: no format matched for "' + trimmed + '"', 'warn');
+        return null;
+    }
+
+    function showStartDateWarning() {
+        addLogMessage('showStartDateWarning: creating warning popup', 'log');
+        var modal = document.createElement('div');
+        modal.id = 'startdate-warning-modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 30000; display: flex; align-items: center; justify-content: center;';
+        var container = document.createElement('div');
+        container.style.cssText = 'background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); border-radius: 12px; padding: 24px; width: 450px; max-width: 90%; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); position: relative;';
+        container.setAttribute('role', 'alertdialog');
+        container.setAttribute('aria-modal', 'true');
+        container.setAttribute('aria-labelledby', 'startdate-warning-title');
+        container.setAttribute('aria-describedby', 'startdate-warning-message');
+        var header = document.createElement('div');
+        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;';
+        var title = document.createElement('h3');
+        title.id = 'startdate-warning-title';
+        title.textContent = STARTDATE_LABELS.warningTitle;
+        title.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600;';
+        var closeButton = document.createElement('button');
+        closeButton.innerHTML = '\u2715';
+        closeButton.setAttribute('aria-label', 'Close warning');
+        closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
+        closeButton.onmouseover = function() {
+            closeButton.style.background = 'rgba(255, 255, 255, 0.3)';
+        };
+        closeButton.onmouseout = function() {
+            closeButton.style.background = 'rgba(255, 255, 255, 0.2)';
+        };
+        var closeWarning = function() {
+            addLogMessage('showStartDateWarning: closing warning', 'log');
+            if (modal.parentNode) {
+                document.body.removeChild(modal);
+            }
+            if (startDateState.focusReturnElement) {
+                startDateState.focusReturnElement.focus();
+            }
+        };
+        closeButton.onclick = closeWarning;
+        header.appendChild(title);
+        header.appendChild(closeButton);
+        var messageDiv = document.createElement('p');
+        messageDiv.id = 'startdate-warning-message';
+        messageDiv.textContent = STARTDATE_LABELS.warningMessage;
+        messageDiv.style.cssText = 'color: rgba(255, 255, 255, 0.9); margin: 0; font-size: 14px; line-height: 1.5;';
+        var okButton = document.createElement('button');
+        okButton.textContent = 'OK';
+        okButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: 2px solid rgba(255, 255, 255, 0.3); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.3s ease; margin-top: 20px; width: 100%;';
+        okButton.onmouseover = function() {
+            okButton.style.background = 'rgba(255, 255, 255, 0.3)';
+        };
+        okButton.onmouseout = function() {
+            okButton.style.background = 'rgba(255, 255, 255, 0.2)';
+        };
+        okButton.onclick = closeWarning;
+        var keyHandler = function(e) {
+            if (e.key === 'Escape') {
+                closeWarning();
+            }
+        };
+        document.addEventListener('keydown', keyHandler);
+        startDateState.eventListeners.push({ element: document, type: 'keydown', handler: keyHandler });
+        container.appendChild(header);
+        container.appendChild(messageDiv);
+        container.appendChild(okButton);
+        modal.appendChild(container);
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        modal.style.pointerEvents = 'none';
+        container.style.pointerEvents = 'auto';
+        makeDraggable(container, header);
+        document.body.appendChild(modal);
+        okButton.focus();
+        addLogMessage('showStartDateWarning: warning displayed', 'log');
+    }
+
+    function showStartDateInputPanel() {
+        addLogMessage('showStartDateInputPanel: creating input panel', 'log');
+        var modal = document.createElement('div');
+        modal.id = 'startdate-input-modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 20000; display: flex; align-items: center; justify-content: center;';
+        var container = document.createElement('div');
+        container.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; width: 550px; max-width: 90%; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); position: relative;';
+        container.setAttribute('role', 'dialog');
+        container.setAttribute('aria-modal', 'true');
+        container.setAttribute('aria-labelledby', 'startdate-input-title');
+        var header = document.createElement('div');
+        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;';
+        var titleEl = document.createElement('h3');
+        titleEl.id = 'startdate-input-title';
+        titleEl.textContent = STARTDATE_LABELS.inputTitle;
+        titleEl.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600; letter-spacing: 0.2px;';
+        var closeButton = document.createElement('button');
+        closeButton.innerHTML = '\u2715';
+        closeButton.setAttribute('aria-label', 'Close panel');
+        closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
+        closeButton.onmouseover = function() {
+            closeButton.style.background = 'rgba(255, 67, 54, 0.8)';
+        };
+        closeButton.onmouseout = function() {
+            closeButton.style.background = 'rgba(255, 255, 255, 0.2)';
+        };
+        closeButton.onclick = function() {
+            addLogMessage('showStartDateInputPanel: closed by user', 'warn');
+            if (modal.parentNode) {
+                document.body.removeChild(modal);
+            }
+            stopStartDate();
+        };
+        header.appendChild(titleEl);
+        header.appendChild(closeButton);
+        var description = document.createElement('p');
+        description.style.cssText = 'color: rgba(255, 255, 255, 0.9); margin: 0 0 12px 0; font-size: 14px; line-height: 1.4;';
+        description.append('Rules:');
+        description.appendChild(document.createElement('br'));
+        var lines = [
+            'Enter staff names below, separated by commas or new lines.',
+            'Enter the start date in one of these formats: MM-DD-YYYY, M/D/YYYY, or DDMonthYYYY (e.g. 15Jan2025).',
+            'After clicking Continue, do not click anywhere else on the page.'
+        ];
+        for (var i = 0; i < lines.length; i++) {
+            description.appendChild(document.createTextNode('\u2022 ' + lines[i]));
+            if (i < lines.length - 1) {
+                description.appendChild(document.createElement('br'));
+            }
+        }
+        var namesLabel = document.createElement('label');
+        namesLabel.setAttribute('for', 'startdate-names-input');
+        namesLabel.textContent = 'Staff Names';
+        namesLabel.style.cssText = 'display: block; color: rgba(255, 255, 255, 0.85); font-size: 13px; font-weight: 600; margin-bottom: 6px; margin-top: 12px;';
+        var textarea = document.createElement('textarea');
+        textarea.id = 'startdate-names-input';
+        textarea.placeholder = 'John Smith, Jane Doe\nor\nJohn Smith\nJane Doe';
+        textarea.setAttribute('aria-label', 'Staff names input');
+        textarea.style.cssText = 'width: 100%; height: 140px; padding: 12px 14px; border: 2px solid rgba(255, 255, 255, 0.35); border-radius: 10px; background: rgba(255, 255, 255, 0.95); color: #1e293b; font-size: 14px; font-family: Segoe UI, Tahoma, Geneva, Verdana, sans-serif; resize: vertical; outline: none; transition: all 0.25s ease; box-shadow: 0 2px 0 rgba(0,0,0,0.04) inset; box-sizing: border-box;';
+        textarea.onfocus = function() {
+            textarea.style.borderColor = '#8ea0ff';
+            textarea.style.boxShadow = '0 0 0 4px rgba(102, 126, 234, 0.25)';
+        };
+        textarea.onblur = function() {
+            textarea.style.borderColor = 'rgba(255, 255, 255, 0.35)';
+            textarea.style.boxShadow = '0 2px 0 rgba(0,0,0,0.04) inset';
+        };
+        var dateLabel = document.createElement('label');
+        dateLabel.setAttribute('for', 'startdate-date-input');
+        dateLabel.textContent = 'Start Date';
+        dateLabel.style.cssText = 'display: block; color: rgba(255, 255, 255, 0.85); font-size: 13px; font-weight: 600; margin-bottom: 6px; margin-top: 12px;';
+        var dateInput = document.createElement('input');
+        dateInput.type = 'text';
+        dateInput.id = 'startdate-date-input';
+        dateInput.placeholder = 'MM-DD-YYYY or 15Jan2025';
+        dateInput.setAttribute('aria-label', 'Start date input');
+        dateInput.style.cssText = 'width: 100%; padding: 10px 14px; border: 2px solid rgba(255, 255, 255, 0.35); border-radius: 10px; background: rgba(255, 255, 255, 0.95); color: #1e293b; font-size: 14px; font-family: Segoe UI, Tahoma, Geneva, Verdana, sans-serif; outline: none; transition: all 0.25s ease; box-shadow: 0 2px 0 rgba(0,0,0,0.04) inset; box-sizing: border-box;';
+        dateInput.onfocus = function() {
+            dateInput.style.borderColor = '#8ea0ff';
+            dateInput.style.boxShadow = '0 0 0 4px rgba(102, 126, 234, 0.25)';
+        };
+        dateInput.onblur = function() {
+            dateInput.style.borderColor = 'rgba(255, 255, 255, 0.35)';
+            dateInput.style.boxShadow = '0 2px 0 rgba(0,0,0,0.04) inset';
+        };
+        var continueButton = document.createElement('button');
+        continueButton.textContent = 'Continue';
+        continueButton.disabled = true;
+        continueButton.setAttribute('aria-label', 'Continue with start date assignment');
+        continueButton.style.cssText = 'background: linear-gradient(135deg, #28a745 0%, #20c997 100%); border: 2px solid rgba(255, 255, 255, 0.35); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; letter-spacing: 0.2px; transition: all 0.25s ease; opacity: 0.5;';
+        var dateStatusDiv = document.createElement('div');
+        dateStatusDiv.id = 'startdate-date-status';
+        dateStatusDiv.setAttribute('aria-live', 'polite');
+        dateStatusDiv.style.cssText = 'color: rgba(255, 255, 255, 0.8); font-size: 12px; margin-top: 4px; min-height: 18px;';
+        var updateContinueState = function() {
+            var parsedNames = parseNamesInputForStartDate(textarea.value);
+            var parsedDate = parseStartDateValue(dateInput.value);
+            var hasValidNames = parsedNames.length > 0;
+            var hasValidDate = parsedDate !== null;
+            if (hasValidDate) {
+                dateStatusDiv.textContent = 'Parsed: ' + parsedDate.displayMonthName + ' ' + parsedDate.day + ', ' + parsedDate.year;
+                dateStatusDiv.style.color = '#6bcf7f';
+            } else if (dateInput.value.trim().length > 0) {
+                dateStatusDiv.textContent = 'Invalid date format';
+                dateStatusDiv.style.color = '#ffd93d';
+            } else {
+                dateStatusDiv.textContent = '';
+            }
+            if (hasValidNames && hasValidDate) {
+                continueButton.disabled = false;
+                continueButton.style.opacity = '1';
+                continueButton.style.cursor = 'pointer';
+            } else {
+                continueButton.disabled = true;
+                continueButton.style.opacity = '0.5';
+                continueButton.style.cursor = 'not-allowed';
+            }
+        };
+        textarea.addEventListener('input', updateContinueState);
+        startDateState.eventListeners.push({ element: textarea, type: 'input', handler: updateContinueState });
+        dateInput.addEventListener('input', updateContinueState);
+        startDateState.eventListeners.push({ element: dateInput, type: 'input', handler: updateContinueState });
+        continueButton.onmouseover = function() {
+            if (!continueButton.disabled) {
+                continueButton.style.background = 'linear-gradient(135deg, #218838 0%, #1ea085 100%)';
+            }
+        };
+        continueButton.onmouseout = function() {
+            continueButton.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
+        };
+        continueButton.onclick = function() {
+            if (continueButton.disabled) {
+                return;
+            }
+            addLogMessage('showStartDateInputPanel: Continue clicked', 'log');
+            var parsedNames = parseNamesInputForStartDate(textarea.value);
+            var parsedDate = parseStartDateValue(dateInput.value);
+            if (parsedNames.length === 0 || !parsedDate) {
+                addLogMessage('showStartDateInputPanel: validation failed on click', 'warn');
+                return;
+            }
+            startDateState.parsedNames = parsedNames;
+            startDateState.parsedDate = parsedDate;
+            addLogMessage('showStartDateInputPanel: parsedNames=' + parsedNames.length + ' date=' + parsedDate.displayMonthName + ' ' + parsedDate.day + ', ' + parsedDate.year, 'log');
+            if (modal.parentNode) {
+                document.body.removeChild(modal);
+            }
+            startDateState.isRunning = true;
+            showCollectingDataPanel('startdate', STARTDATE_LABELS.featureButton);
+            startStartDateScan();
+        };
+        var clearButton = document.createElement('button');
+        clearButton.textContent = 'Clear All';
+        clearButton.setAttribute('aria-label', 'Clear all inputs');
+        clearButton.style.cssText = 'background: rgba(255, 255, 255, 0.18); border: 2px solid rgba(255, 255, 255, 0.35); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.25s ease; backdrop-filter: blur(2px);';
+        clearButton.onmouseover = function() {
+            clearButton.style.background = 'rgba(255, 255, 255, 0.28)';
+        };
+        clearButton.onmouseout = function() {
+            clearButton.style.background = 'rgba(255, 255, 255, 0.18)';
+        };
+        clearButton.onclick = function() {
+            addLogMessage('showStartDateInputPanel: Clear All clicked', 'log');
+            textarea.value = '';
+            dateInput.value = '';
+            dateStatusDiv.textContent = '';
+            continueButton.disabled = true;
+            continueButton.style.opacity = '0.5';
+            continueButton.style.cursor = 'not-allowed';
+            textarea.focus();
+        };
+        var keyHandler = function(e) {
+            if (e.key === 'Escape') {
+                addLogMessage('showStartDateInputPanel: Escape pressed', 'log');
+                if (modal.parentNode) {
+                    document.body.removeChild(modal);
+                }
+                stopStartDate();
+            }
+        };
+        document.addEventListener('keydown', keyHandler);
+        startDateState.eventListeners.push({ element: document, type: 'keydown', handler: keyHandler });
+        var buttonContainer = document.createElement('div');
+        buttonContainer.style.cssText = 'display: flex; gap: 12px; margin-top: 20px; justify-content: flex-end;';
+        buttonContainer.appendChild(clearButton);
+        buttonContainer.appendChild(continueButton);
+        container.appendChild(header);
+        container.appendChild(description);
+        container.appendChild(namesLabel);
+        container.appendChild(textarea);
+        container.appendChild(dateLabel);
+        container.appendChild(dateInput);
+        container.appendChild(dateStatusDiv);
+        container.appendChild(buttonContainer);
+        modal.appendChild(container);
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        modal.style.pointerEvents = 'none';
+        container.style.pointerEvents = 'auto';
+        makeDraggable(container, header);
+        document.body.appendChild(modal);
+        textarea.focus();
+        addLogMessage('showStartDateInputPanel: panel displayed', 'log');
+    }
+
+    function startDateScanVisibleRowsOnce() {
+        var gridTable = document.querySelector(STARTDATE_SELECTORS.mainGridTable);
+        if (!gridTable) {
+            return 0;
+        }
+        var rows = gridTable.querySelectorAll(STARTDATE_SELECTORS.mainGridRow);
+        var newCount = 0;
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            if (row.getAttribute('role') === 'columnheader') {
+                continue;
+            }
+            var cells = row.querySelectorAll(STARTDATE_SELECTORS.mainGridCell);
+            if (cells.length <= STARTDATE_SELECTORS.nameCellIndex) {
+                continue;
+            }
+            var targetCell = cells[STARTDATE_SELECTORS.nameCellIndex];
+            var primaryElement = targetCell.querySelector(STARTDATE_SELECTORS.namePrimary);
+            var extractedName = null;
+            if (primaryElement) {
+                var brElement = primaryElement.querySelector('br');
+                if (brElement) {
+                    var nameText = '';
+                    for (var ni = 0; ni < primaryElement.childNodes.length; ni++) {
+                        var node = primaryElement.childNodes[ni];
+                        if (node.nodeName === 'BR') {
+                            break;
+                        }
+                        if (node.nodeType === Node.TEXT_NODE) {
+                            nameText += node.textContent;
+                        }
+                    }
+                    extractedName = nameText.trim().replace(/\s+/g, ' ');
+                } else {
+                    extractedName = primaryElement.textContent.trim().replace(/\s+/g, ' ');
+                }
+            }
+            if (!extractedName) {
+                var fallbackElement = targetCell.querySelector(STARTDATE_SELECTORS.nameFallback);
+                if (fallbackElement) {
+                    extractedName = fallbackElement.textContent.trim().replace(/\s+/g, ' ');
+                }
+            }
+            if (!extractedName) {
+                continue;
+            }
+            var normalized = elogNormalizeName(extractedName);
+            if (startDateState.seenNormalizedNames.has(normalized)) {
+                continue;
+            }
+            startDateState.seenNormalizedNames.add(normalized);
+            startDateState.scannedNames.push(extractedName);
+            newCount++;
+            startDateState.leftPanelRowIndex++;
+        }
+        if (newCount > 0) {
+            addLogMessage('startDateScanVisibleRowsOnce: batch of ' + newCount + ' new names', 'log');
+        }
+        return newCount;
+    }
+
+    function startDateGetRenderedLastRowKey() {
+        var gridTable = document.querySelector(STARTDATE_SELECTORS.mainGridTable);
+        if (!gridTable) {
+            return '';
+        }
+        var rows = gridTable.querySelectorAll(STARTDATE_SELECTORS.mainGridRow);
+        var lastDataRow = null;
+        for (var i = rows.length - 1; i >= 0; i--) {
+            if (rows[i].getAttribute('role') !== 'columnheader') {
+                lastDataRow = rows[i];
+                break;
+            }
+        }
+        if (!lastDataRow) {
+            return '';
+        }
+        var cells = lastDataRow.querySelectorAll(STARTDATE_SELECTORS.mainGridCell);
+        if (cells.length > 0) {
+            var firstCellText = cells[0].textContent.trim();
+            if (firstCellText) {
+                return firstCellText;
+            }
+        }
+        var hash = 0;
+        var content = lastDataRow.textContent || '';
+        for (var ci = 0; ci < content.length; ci++) {
+            hash = ((hash << 5) - hash) + content.charCodeAt(ci);
+            hash = hash & hash;
+        }
+        return 'hash_' + hash;
+    }
+
+    function startDateGetRenderedRowCount() {
+        var gridTable = document.querySelector(STARTDATE_SELECTORS.mainGridTable);
+        if (!gridTable) {
+            return 0;
+        }
+        var rows = gridTable.querySelectorAll(STARTDATE_SELECTORS.mainGridRow);
+        var count = 0;
+        for (var i = 0; i < rows.length; i++) {
+            if (rows[i].getAttribute('role') !== 'columnheader') {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    function startDateAwaitSettle(container) {
+        return new Promise(function(resolve) {
+            var gridTable = document.querySelector(STARTDATE_SELECTORS.mainGridTable);
+            var resolved = false;
+            var observer = null;
+            var debounceTimer = null;
+            function finish() {
+                if (resolved) {
+                    return;
+                }
+                resolved = true;
+                if (debounceTimer) {
+                    clearTimeout(debounceTimer);
+                }
+                if (observer) {
+                    observer.disconnect();
+                    var idx = startDateState.observers.indexOf(observer);
+                    if (idx > -1) {
+                        startDateState.observers.splice(idx, 1);
+                    }
+                }
+                resolve();
+            }
+            var maxTimeoutId = setTimeout(function() {
+                addLogMessage('startDateAwaitSettle: max timeout reached', 'log');
+                finish();
+            }, STARTDATE_TIMEOUTS.scanSettleMs * 5);
+            startDateState.timeouts.push(maxTimeoutId);
+            if (gridTable) {
+                observer = new MutationObserver(function() {
+                    if (resolved) {
+                        return;
+                    }
+                    if (debounceTimer) {
+                        clearTimeout(debounceTimer);
+                    }
+                    debounceTimer = setTimeout(function() {
+                        finish();
+                    }, STARTDATE_TIMEOUTS.scanSettleMs);
+                    startDateState.timeouts.push(debounceTimer);
+                });
+                observer.observe(gridTable, { childList: true, subtree: true });
+                startDateState.observers.push(observer);
+            }
+            debounceTimer = setTimeout(function() {
+                finish();
+            }, STARTDATE_TIMEOUTS.scanSettleMs);
+            startDateState.timeouts.push(debounceTimer);
+        });
+    }
+
+    function startDateObserveUserScrollPause(container) {
+        if (!container || startDateState.userScrollHandler) {
+            return;
+        }
+        startDateState.userScrollHandler = function() {
+            var timeSinceAuto = Date.now() - startDateState.lastAutoScrollTime;
+            if (timeSinceAuto > 50 && !startDateState.userScrollPaused) {
+                startDateState.userScrollPaused = true;
+                var resumeTimeout = setTimeout(function() {
+                    startDateState.userScrollPaused = false;
+                }, 800);
+                startDateState.timeouts.push(resumeTimeout);
+            }
+        };
+        container.addEventListener('scroll', startDateState.userScrollHandler);
+        startDateState.eventListeners.push({ element: container, type: 'scroll', handler: startDateState.userScrollHandler });
+    }
+
+    function startStartDateScan() {
+        addLogMessage('startStartDateScan: beginning scan with auto-scroll', 'log');
+        startDateState.scannedNames = [];
+        startDateState.seenNormalizedNames = new Set();
+        startDateState.leftPanelRowIndex = 0;
+        startDateWaitForElement(STARTDATE_SELECTORS.mainTableContainer, STARTDATE_TIMEOUTS.waitTableMs)
+            .then(function() {
+            addLogMessage('startStartDateScan: main table found', 'log');
+            return startDateWaitForElement(STARTDATE_SELECTORS.mainGridTable, STARTDATE_TIMEOUTS.waitGridMs);
+        })
+            .then(function(gridTable) {
+            addLogMessage('startStartDateScan: grid table found, starting auto-scroll scan', 'log');
+            startDateAutoScrollScan({
+                onDone: function(data) {
+                    addLogMessage('startStartDateScan: done - total=' + data.total + ' reason=' + data.reason, 'log');
+                    removeCollectingDataPanel('startdate');
+                    if (data.reason !== 'stopped' && startDateState.isRunning) {
+                        addLogMessage('startStartDateScan: scan complete, showing progress panel', 'log');
+                        showStartDateProgressPanel();
+                    }
+                },
+                onError: function(error) {
+                    addLogMessage('startStartDateScan: error - ' + error.message, 'error');
+                    removeCollectingDataPanel('startdate');
+                    showStartDateProgressPanel();
+                }
+            });
+        })
+            .catch(function(error) {
+            addLogMessage('startStartDateScan: error during scan: ' + error, 'error');
+            removeCollectingDataPanel('startdate');
+            showStartDateProgressPanel();
+        });
+    }
+
+    function startDateAutoScrollScan(options) {
+        addLogMessage('startDateAutoScrollScan: starting', 'log');
+        var onDone = options.onDone || function() {};
+        var onError = options.onError || function() {};
+        var gridTable = document.querySelector(STARTDATE_SELECTORS.mainGridTable);
+        if (!gridTable) {
+            addLogMessage('startDateAutoScrollScan: grid not found', 'error');
+            onError(new Error('Grid table not found'));
+            return;
+        }
+        var container = findScrollableContainer(gridTable);
+        if (!container) {
+            addLogMessage('startDateAutoScrollScan: container not found', 'error');
+            onError(new Error('Container not found'));
+            return;
+        }
+        startDateState.scrollContainer = container;
+        startDateState.prevScrollTop = container.scrollTop;
+        startDateSetAriaBusyOn();
+        startDateObserveUserScrollPause(container);
+        addLogMessage('startDateAutoScrollScan: scrolling to top before scan', 'log');
+        container.scrollTo({ top: 0, behavior: 'auto' });
+        var startTime = Date.now();
+        var noProgress = 0;
+        var prevScrollHeight = container.scrollHeight;
+        function initialScan() {
+            startDateScanVisibleRowsOnce();
+            prevScrollHeight = container.scrollHeight;
+            var initScrollTimeout = setTimeout(scrollLoop, STARTDATE_TIMEOUTS.idleBetweenBatchesMs);
+            startDateState.timeouts.push(initScrollTimeout);
+        }
+        function scrollLoop() {
+            if (!startDateState.isRunning || startDateState.stopRequested) {
+                finishScan('stopped');
+                return;
+            }
+            if (Date.now() - startTime > STARTDATE_TIMEOUTS.maxScanDurationMs) {
+                finishScan('timeout');
+                return;
+            }
+            if (startDateState.userScrollPaused) {
+                var pt = setTimeout(scrollLoop, 100);
+                startDateState.timeouts.push(pt);
+                return;
+            }
+            var currentScrollHeight = container.scrollHeight;
+            if (currentScrollHeight > prevScrollHeight) {
+                noProgress = 0;
+                prevScrollHeight = currentScrollHeight;
+            }
+            var priorKey = startDateGetRenderedLastRowKey();
+            var priorCount = startDateGetRenderedRowCount();
+            var currTop = container.scrollTop;
+            var maxScroll = container.scrollHeight - container.clientHeight;
+            var newTop = Math.min(currTop + STARTDATE_SCROLL.stepPx, maxScroll);
+            startDateState.lastAutoScrollTime = Date.now();
+            container.scrollTo({ top: newTop, behavior: 'auto' });
+            startDateAwaitSettle(container).then(function() {
+                var attempts = 0;
+                function attemptScan() {
+                    var rc = startDateGetRenderedRowCount();
+                    if (rc === 0 && attempts < STARTDATE_SCROLL.retryScanAttempts) {
+                        attempts++;
+                        var rt = setTimeout(attemptScan, STARTDATE_TIMEOUTS.retryScanDelayMs);
+                        startDateState.timeouts.push(rt);
+                        return;
+                    }
+                    startDateScanVisibleRowsOnce();
+                    var currKey = startDateGetRenderedLastRowKey();
+                    var currCount = startDateGetRenderedRowCount();
+                    var postScrollHeight = container.scrollHeight;
+                    if (postScrollHeight > prevScrollHeight) {
+                        noProgress = 0;
+                        prevScrollHeight = postScrollHeight;
+                    } else if (currKey === priorKey && currCount === priorCount) {
+                        noProgress++;
+                    } else {
+                        noProgress = 0;
+                    }
+                    if (computeEndReached(container, noProgress)) {
+                        finishScan('endReached');
+                        return;
+                    }
+                    if (noProgress >= STARTDATE_SCROLL.maxNoProgressIterations) {
+                        finishScan('noProgress');
+                        return;
+                    }
+                    if (typeof requestIdleCallback === 'function') {
+                        var icbId = requestIdleCallback(function() {
+                            var idx = startDateState.idleCallbackIds.indexOf(icbId);
+                            if (idx > -1) {
+                                startDateState.idleCallbackIds.splice(idx, 1);
+                            }
+                            scrollLoop();
+                        }, { timeout: STARTDATE_TIMEOUTS.idleBetweenBatchesMs * 2 });
+                        startDateState.idleCallbackIds.push(icbId);
+                    } else {
+                        var it = setTimeout(scrollLoop, STARTDATE_TIMEOUTS.idleBetweenBatchesMs);
+                        startDateState.timeouts.push(it);
+                    }
+                }
+                attemptScan();
+            });
+        }
+        function finishScan(reason) {
+            addLogMessage('startDateAutoScrollScan: done reason=' + reason + ' total=' + startDateState.scannedNames.length, 'log');
+            startDateSetAriaBusyOff();
+            onDone({ total: startDateState.scannedNames.length, reason: reason });
+        }
+        function waitForStableScrollHeight(callback) {
+            var checks = 0;
+            var maxChecks = 5;
+            var lastHeight = container.scrollHeight;
+            var stableCount = 0;
+            function checkHeight() {
+                if (!startDateState.isRunning) {
+                    return;
+                }
+                var currentHeight = container.scrollHeight;
+                if (currentHeight === lastHeight) {
+                    stableCount++;
+                } else {
+                    stableCount = 0;
+                    lastHeight = currentHeight;
+                }
+                checks++;
+                if (stableCount >= 2 || checks >= maxChecks) {
+                    callback();
+                    return;
+                }
+                var tid = setTimeout(checkHeight, 500);
+                startDateState.timeouts.push(tid);
+            }
+            var tid = setTimeout(checkHeight, 500);
+            startDateState.timeouts.push(tid);
+        }
+        startDateAwaitSettle(container).then(function() {
+            waitForStableScrollHeight(function() {
+                initialScan();
+            });
+        });
+    }
+
+    function showStartDateProgressPanel() {
+        addLogMessage('showStartDateProgressPanel: creating progress panel', 'log');
+        startDateState.isRunning = true;
+        var modal = document.createElement('div');
+        modal.id = 'startdate-progress-modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 20000; display: flex; align-items: center; justify-content: center;';
+        var container = document.createElement('div');
+        container.id = 'startdate-progress-container';
+        container.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; width: 900px; max-width: 95%; max-height: 80vh; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); position: relative; display: flex; flex-direction: column;';
+        container.setAttribute('role', 'dialog');
+        container.setAttribute('aria-modal', 'true');
+        container.setAttribute('aria-labelledby', 'startdate-progress-title');
+        var header = document.createElement('div');
+        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-shrink: 0;';
+        var titleContainer = document.createElement('div');
+        titleContainer.style.cssText = 'display: flex; align-items: center; gap: 12px;';
+        var titleEl = document.createElement('h3');
+        titleEl.id = 'startdate-progress-title';
+        titleEl.textContent = STARTDATE_LABELS.featureButton + ' - Processing';
+        titleEl.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600;';
+        var statusBadge = document.createElement('span');
+        statusBadge.id = 'startdate-status-badge';
+        statusBadge.textContent = STARTDATE_LABELS.progressInProgress;
+        statusBadge.style.cssText = 'background: rgba(255, 255, 255, 0.3); color: #ffd93d; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 12px;';
+        titleContainer.appendChild(titleEl);
+        titleContainer.appendChild(statusBadge);
+        var closeButton = document.createElement('button');
+        closeButton.innerHTML = '\u2715';
+        closeButton.setAttribute('aria-label', 'Close and stop');
+        closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
+        closeButton.onmouseover = function() {
+            closeButton.style.background = 'rgba(255, 67, 54, 0.8)';
+        };
+        closeButton.onmouseout = function() {
+            closeButton.style.background = 'rgba(255, 255, 255, 0.2)';
+        };
+        closeButton.onclick = function() {
+            addLogMessage('showStartDateProgressPanel: closed by user', 'warn');
+            stopStartDate();
+        };
+        header.appendChild(titleContainer);
+        header.appendChild(closeButton);
+        var dateInfoBar = document.createElement('div');
+        dateInfoBar.style.cssText = 'margin-bottom: 12px; padding: 8px 12px; background: rgba(0, 0, 0, 0.15); border-radius: 8px; flex-shrink: 0;';
+        var dateInfoText = document.createElement('span');
+        dateInfoText.style.cssText = 'color: rgba(255, 255, 255, 0.9); font-size: 13px;';
+        dateInfoText.textContent = 'Setting Start Date: ' + startDateState.parsedDate.displayMonthName + ' ' + startDateState.parsedDate.day + ', ' + startDateState.parsedDate.year;
+        dateInfoBar.appendChild(dateInfoText);
+        var panelsContainer = document.createElement('div');
+        panelsContainer.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 16px; flex: 1; min-height: 0; overflow: hidden;';
+        var leftPanel = createSubpanel('Scanned Log Entries', 'startdate-left-panel', 'startdate-left-search');
+        var rightPanel = createSubpanel('Start Date Status', 'startdate-right-panel', 'startdate-right-search');
+        panelsContainer.appendChild(leftPanel);
+        panelsContainer.appendChild(rightPanel);
+        var summaryFooter = document.createElement('div');
+        summaryFooter.id = 'startdate-summary-footer';
+        summaryFooter.setAttribute('aria-label', 'Processing summary');
+        summaryFooter.style.cssText = 'display: flex; justify-content: space-around; align-items: center; padding: 10px 16px; background: rgba(0, 0, 0, 0.2); border-radius: 8px; margin-top: 12px; flex-shrink: 0;';
+        var summaryItems = [
+            { id: 'startdate-summary-total', label: 'Total', value: String(startDateState.parsedNames.length) },
+            { id: 'startdate-summary-completed', label: 'Completed', value: '0' },
+            { id: 'startdate-summary-notfound', label: 'Not Found', value: '0' },
+            { id: 'startdate-summary-failed', label: 'Failed', value: '0' },
+            { id: 'startdate-summary-pending', label: 'Pending', value: String(startDateState.parsedNames.length) }
+        ];
+        for (var si = 0; si < summaryItems.length; si++) {
+            var sItem = document.createElement('div');
+            sItem.style.cssText = 'text-align: center;';
+            var vSpan = document.createElement('span');
+            vSpan.id = summaryItems[si].id;
+            vSpan.textContent = summaryItems[si].value;
+            vSpan.style.cssText = 'display: block; color: white; font-size: 16px; font-weight: 700;';
+            var lSpan = document.createElement('span');
+            lSpan.textContent = summaryItems[si].label;
+            lSpan.style.cssText = 'display: block; color: rgba(255, 255, 255, 0.6); font-size: 11px; font-weight: 500; margin-top: 2px;';
+            sItem.appendChild(vSpan);
+            sItem.appendChild(lSpan);
+            summaryFooter.appendChild(sItem);
+        }
+        var ariaLiveRegion = document.createElement('div');
+        ariaLiveRegion.id = 'startdate-aria-live';
+        ariaLiveRegion.setAttribute('aria-live', 'polite');
+        ariaLiveRegion.setAttribute('aria-atomic', 'true');
+        ariaLiveRegion.style.cssText = 'position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;';
+        container.appendChild(header);
+        container.appendChild(dateInfoBar);
+        container.appendChild(panelsContainer);
+        container.appendChild(summaryFooter);
+        container.appendChild(ariaLiveRegion);
+        modal.appendChild(container);
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        modal.style.pointerEvents = 'none';
+        container.style.pointerEvents = 'auto';
+        makeDraggable(container, header);
+        document.body.appendChild(modal);
+        populateStartDateLeftPanel();
+        initializeStartDateRightPanel();
+        closeButton.focus();
+        addLogMessage('showStartDateProgressPanel: displayed', 'log');
+        beginSetStartDateForFirstCandidate();
+    }
+
+    function populateStartDateLeftPanel() {
+        addLogMessage('populateStartDateLeftPanel: populating with ' + startDateState.scannedNames.length + ' names', 'log');
+        var leftPanel = document.getElementById('startdate-left-panel');
+        if (!leftPanel) {
+            addLogMessage('populateStartDateLeftPanel: left panel not found', 'error');
+            return;
+        }
+        leftPanel.innerHTML = '';
+        for (var i = 0; i < startDateState.scannedNames.length; i++) {
+            var item = createListItem(startDateState.scannedNames[i], null, null, i + 1);
+            leftPanel.appendChild(item);
+        }
+        addLogMessage('populateStartDateLeftPanel: populated ' + startDateState.scannedNames.length + ' items', 'log');
+    }
+
+    function initializeStartDateRightPanel() {
+        addLogMessage('initializeStartDateRightPanel: initializing with parsed names', 'log');
+        var rightPanel = document.getElementById('startdate-right-panel');
+        if (!rightPanel) {
+            addLogMessage('initializeStartDateRightPanel: right panel not found', 'error');
+            return;
+        }
+        rightPanel.innerHTML = '';
+        for (var i = 0; i < startDateState.parsedNames.length; i++) {
+            var candidate = startDateState.parsedNames[i];
+            var item = createListItem(candidate.display, STARTDATE_LABELS.statusPending, 'pending', i + 1);
+            item.setAttribute('data-pairkey', candidate.pairKey);
+            rightPanel.appendChild(item);
+        }
+        addLogMessage('initializeStartDateRightPanel: added ' + startDateState.parsedNames.length + ' items', 'log');
+    }
+
+    function updateStartDateRightPanelStatus(pairKey, newStatus) {
+        addLogMessage('updateStartDateRightPanelStatus: pairKey=' + pairKey + ' status=' + newStatus, 'log');
+        var rightPanel = document.getElementById('startdate-right-panel');
+        if (!rightPanel) {
+            addLogMessage('updateStartDateRightPanelStatus: right panel not found', 'error');
+            return;
+        }
+        var items = rightPanel.querySelectorAll('.' + ELOG_CSS_CLASSNAMES.listItem);
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            if (item.getAttribute('data-pairkey') === pairKey) {
+                var badge = item.querySelector('.elog-status-badge');
+                if (badge) {
+                    badge.textContent = newStatus;
+                    var badgeColor = 'rgba(255, 255, 255, 0.7)';
+                    var badgeBg = 'rgba(255, 255, 255, 0.1)';
+                    if (newStatus === STARTDATE_LABELS.statusCompleted) {
+                        badgeColor = '#6bcf7f';
+                        badgeBg = 'rgba(107, 207, 127, 0.2)';
+                    } else if (newStatus === STARTDATE_LABELS.statusNotFound) {
+                        badgeColor = '#ffa500';
+                        badgeBg = 'rgba(255, 165, 0, 0.2)';
+                    } else if (newStatus === STARTDATE_LABELS.statusFailed) {
+                        badgeColor = '#ff6b6b';
+                        badgeBg = 'rgba(255, 107, 107, 0.2)';
+                    } else if (newStatus === STARTDATE_LABELS.statusStopped) {
+                        badgeColor = '#aaa';
+                        badgeBg = 'rgba(170, 170, 170, 0.2)';
+                    } else if (newStatus === STARTDATE_LABELS.statusSettingDate) {
+                        badgeColor = '#64b5f6';
+                        badgeBg = 'rgba(100, 181, 246, 0.2)';
+                    } else if (newStatus === STARTDATE_LABELS.statusPending) {
+                        badgeColor = '#ffd93d';
+                        badgeBg = 'rgba(255, 217, 61, 0.2)';
+                    }
+                    badge.style.color = badgeColor;
+                    badge.style.background = badgeBg;
+                }
+                break;
+            }
+        }
+        updateStartDateAriaLive(pairKey + ' ' + newStatus);
+    }
+
+    function updateStartDateSummary() {
+        var completed = 0;
+        var notFound = 0;
+        var failed = 0;
+        var pending = 0;
+        for (var i = 0; i < startDateState.parsedNames.length; i++) {
+            var s = startDateState.parsedNames[i].status;
+            if (s === STARTDATE_LABELS.statusCompleted) {
+                completed++;
+            } else if (s === STARTDATE_LABELS.statusNotFound) {
+                notFound++;
+            } else if (s === STARTDATE_LABELS.statusFailed) {
+                failed++;
+            } else if (s === STARTDATE_LABELS.statusPending || s === STARTDATE_LABELS.statusSettingDate) {
+                pending++;
+            } else if (s === STARTDATE_LABELS.statusStopped) {
+                failed++;
+            }
+        }
+        var el1 = document.getElementById('startdate-summary-total');
+        var el2 = document.getElementById('startdate-summary-completed');
+        var el3 = document.getElementById('startdate-summary-notfound');
+        var el4 = document.getElementById('startdate-summary-failed');
+        var el5 = document.getElementById('startdate-summary-pending');
+        if (el1) {
+            el1.textContent = String(startDateState.parsedNames.length);
+        }
+        if (el2) {
+            el2.textContent = String(completed);
+        }
+        if (el3) {
+            el3.textContent = String(notFound);
+        }
+        if (el4) {
+            el4.textContent = String(failed);
+        }
+        if (el5) {
+            el5.textContent = String(pending);
+        }
+        addLogMessage('updateStartDateSummary: completed=' + completed + ' notFound=' + notFound + ' failed=' + failed + ' pending=' + pending, 'log');
+    }
+
+    function findRowByNamePairKey(targetPairKey) {
+        addLogMessage('findRowByNamePairKey: searching for pairKey=' + targetPairKey, 'log');
+        var gridTable = document.querySelector(STARTDATE_SELECTORS.mainGridTable);
+        if (!gridTable) {
+            addLogMessage('findRowByNamePairKey: grid table not found', 'error');
+            return null;
+        }
+        var rows = gridTable.querySelectorAll(STARTDATE_SELECTORS.mainGridRow);
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            if (row.getAttribute('role') === 'columnheader') {
+                continue;
+            }
+            var cells = row.querySelectorAll(STARTDATE_SELECTORS.mainGridCell);
+            if (cells.length <= STARTDATE_SELECTORS.nameCellIndex) {
+                continue;
+            }
+            var targetCell = cells[STARTDATE_SELECTORS.nameCellIndex];
+            var primaryEl = targetCell.querySelector(STARTDATE_SELECTORS.namePrimary);
+            var extractedName = null;
+            if (primaryEl) {
+                var brEl = primaryEl.querySelector('br');
+                if (brEl) {
+                    var nameText = '';
+                    for (var ni = 0; ni < primaryEl.childNodes.length; ni++) {
+                        var node = primaryEl.childNodes[ni];
+                        if (node.nodeName === 'BR') {
+                            break;
+                        }
+                        if (node.nodeType === Node.TEXT_NODE) {
+                            nameText += node.textContent;
+                        }
+                    }
+                    extractedName = nameText.trim().replace(/\s+/g, ' ');
+                } else {
+                    extractedName = primaryEl.textContent.trim().replace(/\s+/g, ' ');
+                }
+            }
+            if (!extractedName) {
+                var fallbackEl = targetCell.querySelector(STARTDATE_SELECTORS.nameFallback);
+                if (fallbackEl) {
+                    extractedName = fallbackEl.textContent.trim().replace(/\s+/g, ' ');
+                }
+            }
+            if (!extractedName) {
+                continue;
+            }
+            var rowPairKey = normalizeFirstLastPair(extractedName);
+            if (rowPairKey === targetPairKey) {
+                addLogMessage('findRowByNamePairKey: found match at row ' + i + ' name=' + extractedName, 'log');
+                return row;
+            }
+        }
+        addLogMessage('findRowByNamePairKey: no match found for ' + targetPairKey, 'warn');
+        return null;
+    }
+
+    function openRowMenuAndClickEdit(rowEl) {
+        addLogMessage('openRowMenuAndClickEdit: opening row menu', 'log');
+        return new Promise(function(resolve, reject) {
+            try {
+                var editLink = rowEl.querySelector(STARTDATE_SELECTORS.editMenuItemDirect);
+                if (editLink) {
+                    addLogMessage('openRowMenuAndClickEdit: found Edit link directly, clicking', 'log');
+                    editLink.click();
+                    var editFormTid = setTimeout(function() {
+                        addLogMessage('openRowMenuAndClickEdit: edit form settle complete', 'log');
+                        resolve(true);
+                    }, STARTDATE_TIMEOUTS.waitEditFormMs);
+                    startDateState.timeouts.push(editFormTid);
+                    return;
+                }
+                var menuToggle = rowEl.querySelector(STARTDATE_SELECTORS.rowMenuToggle);
+                if (!menuToggle) {
+                    var iconEl = rowEl.querySelector(STARTDATE_SELECTORS.rowMenuToggleFallbackIcon);
+                    if (iconEl) {
+                        menuToggle = iconEl.closest('a') || iconEl.parentElement;
+                    }
+                }
+                if (!menuToggle) {
+                    addLogMessage('openRowMenuAndClickEdit: menu toggle not found in row', 'error');
+                    reject(new Error('Menu toggle not found'));
+                    return;
+                }
+                addLogMessage('openRowMenuAndClickEdit: clicking menu toggle', 'log');
+                menuToggle.click();
+                var waitTid = setTimeout(function() {
+                    var editBtn = rowEl.querySelector(STARTDATE_SELECTORS.editMenuItemDirect);
+                    if (!editBtn) {
+                        var fallbackItems = rowEl.querySelectorAll(STARTDATE_SELECTORS.editMenuItemFallback);
+                        addLogMessage('openRowMenuAndClickEdit: searching ' + fallbackItems.length + ' fallback menu items', 'log');
+                        for (var ei = 0; ei < fallbackItems.length; ei++) {
+                            var itemText = fallbackItems[ei].textContent.trim().toLowerCase();
+                            if (itemText === 'edit') {
+                                editBtn = fallbackItems[ei];
+                                break;
+                            }
+                        }
+                    }
+                    if (!editBtn) {
+                        var globalEdit = document.querySelector(STARTDATE_SELECTORS.editMenuItemDirect);
+                        if (globalEdit) {
+                            editBtn = globalEdit;
+                        }
+                    }
+                    if (editBtn) {
+                        addLogMessage('openRowMenuAndClickEdit: clicking Edit menu item', 'log');
+                        editBtn.click();
+                        var editFormTid = setTimeout(function() {
+                            addLogMessage('openRowMenuAndClickEdit: edit form settle complete', 'log');
+                            resolve(true);
+                        }, STARTDATE_TIMEOUTS.waitEditFormMs);
+                        startDateState.timeouts.push(editFormTid);
+                    } else {
+                        addLogMessage('openRowMenuAndClickEdit: Edit menu item not found after toggle', 'error');
+                        reject(new Error('Edit menu item not found'));
+                    }
+                }, STARTDATE_TIMEOUTS.waitMenuOpenMs);
+                startDateState.timeouts.push(waitTid);
+            } catch (error) {
+                addLogMessage('openRowMenuAndClickEdit: error: ' + error.message, 'error');
+                reject(error);
+            }
+        });
+    }
+
+    function findStartLabeledDatePopup() {
+        var allPopups = document.querySelectorAll('date-time-popup');
+        addLogMessage('findStartLabeledDatePopup: found ' + allPopups.length + ' date-time-popup elements', 'log');
+        for (var pi = 0; pi < allPopups.length; pi++) {
+            var popup = allPopups[pi];
+            var parent = popup.parentElement;
+            if (!parent) {
+                continue;
+            }
+            var siblingInput = parent.querySelector('input[placeholder]');
+            if (siblingInput) {
+                var placeholder = siblingInput.getAttribute('placeholder').toLowerCase();
+                addLogMessage('findStartLabeledDatePopup: popup ' + pi + ' sibling input placeholder="' + placeholder + '"', 'log');
+                if (placeholder.indexOf('start') !== -1) {
+                    addLogMessage('findStartLabeledDatePopup: matched "Start" placeholder at popup ' + pi, 'log');
+                    return popup;
+                }
+            }
+            var labelEl = parent.querySelector('label');
+            if (labelEl) {
+                var labelText = labelEl.textContent.trim().toLowerCase();
+                addLogMessage('findStartLabeledDatePopup: popup ' + pi + ' label text="' + labelText + '"', 'log');
+                if (labelText.indexOf('start') !== -1) {
+                    addLogMessage('findStartLabeledDatePopup: matched "Start" label at popup ' + pi, 'log');
+                    return popup;
+                }
+            }
+            var grandParent = parent.parentElement;
+            if (grandParent) {
+                var gpInput = grandParent.querySelector('input[placeholder]');
+                if (gpInput) {
+                    var gpPlaceholder = gpInput.getAttribute('placeholder').toLowerCase();
+                    addLogMessage('findStartLabeledDatePopup: popup ' + pi + ' grandparent input placeholder="' + gpPlaceholder + '"', 'log');
+                    if (gpPlaceholder.indexOf('start') !== -1) {
+                        addLogMessage('findStartLabeledDatePopup: matched "Start" via grandparent at popup ' + pi, 'log');
+                        return popup;
+                    }
+                }
+            }
+        }
+        addLogMessage('findStartLabeledDatePopup: no popup with "Start" label found', 'warn');
+        return null;
+    }
+
+    function openStartDatePicker() {
+        addLogMessage('openStartDatePicker: looking for start date input', 'log');
+        return new Promise(function(resolve, reject) {
+            try {
+                var startPopup = findStartLabeledDatePopup();
+                if (!startPopup) {
+                    addLogMessage('openStartDatePicker: no Start-labeled date-time-popup found', 'error');
+                    reject(new Error('Start date popup not found'));
+                    return;
+                }
+                var parent = startPopup.parentElement;
+                var triggerInput = parent ? parent.querySelector('input[placeholder]') : null;
+                if (!triggerInput) {
+                    triggerInput = startPopup.previousElementSibling;
+                }
+                if (!triggerInput || triggerInput.tagName !== 'INPUT') {
+                    addLogMessage('openStartDatePicker: no sibling input found to trigger datepicker', 'error');
+                    reject(new Error('Date trigger input not found'));
+                    return;
+                }
+                addLogMessage('openStartDatePicker: clicking input "' + (triggerInput.getAttribute('placeholder') || '') + '" to open datepicker', 'log');
+                triggerInput.click();
+                triggerInput.focus();
+                var checkInterval = null;
+                var elapsed = 0;
+                var intervalStep = 200;
+                checkInterval = setInterval(function() {
+                    elapsed += intervalStep;
+                    var picker = startPopup.querySelector('datepicker, datepicker-inner, .test-date-picker');
+                    if (!picker) {
+                        picker = startPopup.querySelector('.test-datetime-popup datepicker');
+                    }
+                    if (!picker) {
+                        picker = document.querySelector('datepicker');
+                    }
+                    if (picker) {
+                        clearInterval(checkInterval);
+                        var idx = startDateState.intervals.indexOf(checkInterval);
+                        if (idx > -1) { startDateState.intervals.splice(idx, 1); }
+                        addLogMessage('openStartDatePicker: datepicker opened after ' + elapsed + 'ms', 'log');
+                        resolve(picker);
+                        return;
+                    }
+                    if (elapsed >= STARTDATE_TIMEOUTS.waitDatepickerOpenMs) {
+                        clearInterval(checkInterval);
+                        var idx2 = startDateState.intervals.indexOf(checkInterval);
+                        if (idx2 > -1) { startDateState.intervals.splice(idx2, 1); }
+                        addLogMessage('openStartDatePicker: timeout waiting for datepicker', 'error');
+                        reject(new Error('Timeout waiting for datepicker'));
+                    }
+                }, intervalStep);
+                startDateState.intervals.push(checkInterval);
+            } catch (error) {
+                addLogMessage('openStartDatePicker: error: ' + error.message, 'error');
+                reject(error);
+            }
+        });
+    }
+
+    function readDatepickerHeader(pickerEl) {
+        addLogMessage('readDatepickerHeader: reading header', 'log');
+        var result = { month: -1, year: -1 };
+        try {
+            var titleBtn = pickerEl.querySelector(STARTDATE_SELECTORS.datepickerTitleBtn);
+            if (!titleBtn) {
+                titleBtn = pickerEl.querySelector('thead button[id*="datepicker"]');
+            }
+            if (!titleBtn) {
+                titleBtn = pickerEl.querySelector('thead th[colspan] button');
+            }
+            var headerText = '';
+            if (titleBtn) {
+                headerText = titleBtn.textContent.trim();
+            }
+            if (!headerText) {
+                var strongEl = pickerEl.querySelector('thead strong');
+                if (strongEl) {
+                    headerText = strongEl.textContent.trim();
+                }
+            }
+            addLogMessage('readDatepickerHeader: header text="' + headerText + '"', 'log');
+            if (headerText) {
+                for (var mi = 0; mi < STARTDATE_MONTHS.length; mi++) {
+                    if (headerText.toLowerCase().indexOf(STARTDATE_MONTHS[mi].name.toLowerCase()) !== -1) {
+                        result.month = STARTDATE_MONTHS[mi].index;
+                        break;
+                    }
+                }
+                var yearMatch = headerText.match(/(\d{4})/);
+                if (yearMatch) {
+                    result.year = parseInt(yearMatch[1], 10);
+                }
+            }
+        } catch (error) {
+            addLogMessage('readDatepickerHeader: error: ' + error.message, 'error');
+        }
+        addLogMessage('readDatepickerHeader: month=' + result.month + ' year=' + result.year, 'log');
+        return result;
+    }
+
+    function adjustYearIfNeeded(pickerEl, targetYear) {
+        addLogMessage('adjustYearIfNeeded: targetYear=' + targetYear, 'log');
+        return new Promise(function(resolve) {
+            var header = readDatepickerHeader(pickerEl);
+            if (header.year === targetYear) {
+                addLogMessage('adjustYearIfNeeded: year already correct', 'log');
+                resolve(true);
+                return;
+            }
+            navigateYearWithArrows(pickerEl, targetYear, resolve);
+        });
+    }
+
+    function getFreshPicker() {
+        var picker = document.querySelector('datepicker');
+        if (!picker) {
+            picker = document.querySelector('datepicker-inner');
+        }
+        if (!picker) {
+            picker = document.querySelector('.test-date-picker');
+        }
+        return picker;
+    }
+
+    function navigateYearWithArrows(pickerEl, targetYear, resolve) {
+        var maxAttempts = 30;
+        var attempt = 0;
+        function step() {
+            if (startDateState.stopRequested) {
+                resolve(false);
+                return;
+            }
+            if (attempt >= maxAttempts) {
+                addLogMessage('navigateYearWithArrows: max attempts reached', 'warn');
+                resolve(false);
+                return;
+            }
+            var freshPicker = getFreshPicker();
+            if (!freshPicker) {
+                addLogMessage('navigateYearWithArrows: picker disappeared', 'warn');
+                resolve(false);
+                return;
+            }
+            var header = readDatepickerHeader(freshPicker);
+            if (header.year === targetYear) {
+                addLogMessage('navigateYearWithArrows: target year reached', 'log');
+                resolve(true);
+                return;
+            }
+            attempt++;
+            var navBtn = null;
+            if (header.year < targetYear) {
+                navBtn = freshPicker.querySelector(STARTDATE_SELECTORS.datepickerNavNext);
+            } else {
+                navBtn = freshPicker.querySelector(STARTDATE_SELECTORS.datepickerNavPrev);
+            }
+            if (navBtn) {
+                navBtn.click();
+                var tid = setTimeout(step, STARTDATE_TIMEOUTS.waitAfterMonthChangeMs);
+                startDateState.timeouts.push(tid);
+            } else {
+                addLogMessage('navigateYearWithArrows: nav button not found', 'warn');
+                resolve(false);
+            }
+        }
+        step();
+    }
+
+    function selectMonth(pickerEl, targetMonthIndex0) {
+        addLogMessage('selectMonth: targetMonth=' + targetMonthIndex0, 'log');
+        return new Promise(function(resolve) {
+            var header = readDatepickerHeader(pickerEl);
+            if (header.month === targetMonthIndex0) {
+                addLogMessage('selectMonth: month already correct', 'log');
+                resolve(true);
+                return;
+            }
+            navigateMonthWithArrows(pickerEl, targetMonthIndex0, resolve);
+        });
+    }
+
+    function navigateMonthWithArrows(pickerEl, targetMonthIndex0, resolve) {
+        var maxAttempts = 24;
+        var attempt = 0;
+        function step() {
+            if (startDateState.stopRequested) {
+                resolve(false);
+                return;
+            }
+            if (attempt >= maxAttempts) {
+                addLogMessage('navigateMonthWithArrows: max attempts reached', 'warn');
+                resolve(false);
+                return;
+            }
+            var freshPicker = getFreshPicker();
+            if (!freshPicker) {
+                addLogMessage('navigateMonthWithArrows: picker disappeared', 'warn');
+                resolve(false);
+                return;
+            }
+            var header = readDatepickerHeader(freshPicker);
+            if (header.month === targetMonthIndex0) {
+                addLogMessage('navigateMonthWithArrows: target month reached', 'log');
+                resolve(true);
+                return;
+            }
+            attempt++;
+            var diff = targetMonthIndex0 - header.month;
+            var navBtn = null;
+            if (diff > 0) {
+                navBtn = freshPicker.querySelector(STARTDATE_SELECTORS.datepickerNavNext);
+            } else {
+                navBtn = freshPicker.querySelector(STARTDATE_SELECTORS.datepickerNavPrev);
+            }
+            if (navBtn) {
+                navBtn.click();
+                var tid = setTimeout(step, STARTDATE_TIMEOUTS.waitAfterMonthChangeMs);
+                startDateState.timeouts.push(tid);
+            } else {
+                addLogMessage('navigateMonthWithArrows: nav button not found', 'warn');
+                resolve(false);
+            }
+        }
+        step();
+    }
+
+    function selectDay(pickerEl, targetDay) {
+        addLogMessage('selectDay: targetDay=' + targetDay, 'log');
+        return new Promise(function(resolve) {
+            try {
+                var freshPicker = getFreshPicker();
+                if (!freshPicker) {
+                    addLogMessage('selectDay: picker not found', 'warn');
+                    resolve(false);
+                    return;
+                }
+                var dayButtons = freshPicker.querySelectorAll(STARTDATE_SELECTORS.datepickerDayCell);
+                addLogMessage('selectDay: found ' + dayButtons.length + ' day cell buttons', 'log');
+                var clicked = false;
+                for (var di = 0; di < dayButtons.length; di++) {
+                    var span = dayButtons[di].querySelector(STARTDATE_SELECTORS.datepickerDaySpan);
+                    if (!span) {
+                        continue;
+                    }
+                    if (span.classList.contains(STARTDATE_SELECTORS.datepickerDayMutedClass)) {
+                        continue;
+                    }
+                    var dayText = span.textContent.trim();
+                    var dayNum = parseInt(dayText, 10);
+                    if (dayNum === targetDay) {
+                        addLogMessage('selectDay: clicking day ' + dayNum, 'log');
+                        dayButtons[di].click();
+                        clicked = true;
+                        break;
+                    }
+                }
+                if (!clicked) {
+                    addLogMessage('selectDay: non-muted match not found, fallback scanning all buttons', 'log');
+                    for (var ai = 0; ai < dayButtons.length; ai++) {
+                        var allDayText = dayButtons[ai].textContent.trim();
+                        var allDayNum = parseInt(allDayText, 10);
+                        if (allDayNum === targetDay) {
+                            addLogMessage('selectDay: fallback clicking day ' + allDayNum, 'log');
+                            dayButtons[ai].click();
+                            clicked = true;
+                            break;
+                        }
+                    }
+                }
+                if (!clicked) {
+                    addLogMessage('selectDay: day ' + targetDay + ' not found in picker', 'warn');
+                    resolve(false);
+                    return;
+                }
+                var verifyTid = setTimeout(function() {
+                    addLogMessage('selectDay: click settle complete', 'log');
+                    resolve(true);
+                }, STARTDATE_TIMEOUTS.waitAfterDayClickMs);
+                startDateState.timeouts.push(verifyTid);
+            } catch (error) {
+                addLogMessage('selectDay: error: ' + error.message, 'error');
+                resolve(false);
+            }
+        });
+    }
+
+    function beginSetStartDateForFirstCandidate() {
+        addLogMessage('beginSetStartDateForFirstCandidate: starting', 'log');
+        var scannedPairKeys = new Set();
+        for (var si = 0; si < startDateState.scannedNames.length; si++) {
+            var pk = normalizeFirstLastPair(startDateState.scannedNames[si]);
+            if (pk) {
+                scannedPairKeys.add(pk);
+            }
+        }
+        addLogMessage('beginSetStartDateForFirstCandidate: scannedPairKeys count=' + scannedPairKeys.size, 'log');
+        for (var ni = 0; ni < startDateState.parsedNames.length; ni++) {
+            if (!scannedPairKeys.has(startDateState.parsedNames[ni].pairKey)) {
+                startDateState.parsedNames[ni].status = STARTDATE_LABELS.statusNotFound;
+                updateStartDateRightPanelStatus(startDateState.parsedNames[ni].pairKey, STARTDATE_LABELS.statusNotFound);
+            }
+        }
+        updateStartDateSummary();
+        var firstCandidate = null;
+        for (var fi = 0; fi < startDateState.parsedNames.length; fi++) {
+            if (startDateState.parsedNames[fi].status === STARTDATE_LABELS.statusPending) {
+                firstCandidate = startDateState.parsedNames[fi];
+                break;
+            }
+        }
+        if (!firstCandidate) {
+            addLogMessage('beginSetStartDateForFirstCandidate: no valid candidates found', 'warn');
+            updateStartDateProgressStatus(STARTDATE_LABELS.progressComplete, 'complete');
+            return;
+        }
+        addLogMessage('beginSetStartDateForFirstCandidate: processing ' + firstCandidate.display, 'log');
+        firstCandidate.status = STARTDATE_LABELS.statusSettingDate;
+        updateStartDateRightPanelStatus(firstCandidate.pairKey, STARTDATE_LABELS.statusSettingDate);
+        updateStartDateSummary();
+        if (startDateState.scrollContainer && startDateState.prevScrollTop !== undefined) {
+            addLogMessage('beginSetStartDateForFirstCandidate: restoring scroll position', 'log');
+            startDateState.scrollContainer.scrollTo({ top: startDateState.prevScrollTop, behavior: 'auto' });
+        }
+        var rowEl = findRowByNamePairKey(firstCandidate.pairKey);
+        if (!rowEl) {
+            addLogMessage('beginSetStartDateForFirstCandidate: row not visible for ' + firstCandidate.display + ', scrolling to find', 'warn');
+            scrollToFindRow(firstCandidate, function(foundRow) {
+                if (!foundRow) {
+                    addLogMessage('beginSetStartDateForFirstCandidate: could not find row after scroll', 'error');
+                    firstCandidate.status = STARTDATE_LABELS.statusFailed;
+                    updateStartDateRightPanelStatus(firstCandidate.pairKey, STARTDATE_LABELS.statusFailed);
+                    updateStartDateSummary();
+                    markRemainingAsStopped();
+                    updateStartDateProgressStatus(STARTDATE_LABELS.progressComplete, 'complete');
+                    return;
+                }
+                processRowForStartDate(firstCandidate, foundRow);
+            });
+            return;
+        }
+        processRowForStartDate(firstCandidate, rowEl);
+    }
+
+    function scrollToFindRow(candidate, callback) {
+        addLogMessage('scrollToFindRow: searching for ' + candidate.display, 'log');
+        if (!startDateState.scrollContainer) {
+            addLogMessage('scrollToFindRow: no scroll container', 'warn');
+            callback(null);
+            return;
+        }
+        startDateState.scrollContainer.scrollTo({ top: 0, behavior: 'auto' });
+        var attempts = 0;
+        var maxAttempts = 50;
+        function scanAndScroll() {
+            if (startDateState.stopRequested) {
+                callback(null);
+                return;
+            }
+            if (attempts >= maxAttempts) {
+                addLogMessage('scrollToFindRow: max attempts reached', 'warn');
+                callback(null);
+                return;
+            }
+            attempts++;
+            var row = findRowByNamePairKey(candidate.pairKey);
+            if (row) {
+                addLogMessage('scrollToFindRow: found after ' + attempts + ' attempts', 'log');
+                callback(row);
+                return;
+            }
+            var currTop = startDateState.scrollContainer.scrollTop;
+            var maxScroll = startDateState.scrollContainer.scrollHeight - startDateState.scrollContainer.clientHeight;
+            var newTop = Math.min(currTop + STARTDATE_SCROLL.stepPx, maxScroll);
+            if (newTop <= currTop) {
+                addLogMessage('scrollToFindRow: reached bottom, not found', 'warn');
+                callback(null);
+                return;
+            }
+            startDateState.scrollContainer.scrollTo({ top: newTop, behavior: 'auto' });
+            var tid = setTimeout(scanAndScroll, STARTDATE_TIMEOUTS.scanSettleMs);
+            startDateState.timeouts.push(tid);
+        }
+        var initTid = setTimeout(scanAndScroll, STARTDATE_TIMEOUTS.scanSettleMs);
+        startDateState.timeouts.push(initTid);
+    }
+
+    function processRowForStartDate(candidate, rowEl) {
+        addLogMessage('processRowForStartDate: processing ' + candidate.display, 'log');
+        if (startDateState.stopRequested) {
+            candidate.status = STARTDATE_LABELS.statusStopped;
+            updateStartDateRightPanelStatus(candidate.pairKey, STARTDATE_LABELS.statusStopped);
+            updateStartDateSummary();
+            return;
+        }
+        openRowMenuAndClickEdit(rowEl)
+            .then(function() {
+            if (startDateState.stopRequested) {
+                throw new Error('Stopped');
+            }
+            addLogMessage('processRowForStartDate: edit form opened, opening datepicker', 'log');
+            return openStartDatePicker();
+        })
+            .then(function(pickerEl) {
+            if (startDateState.stopRequested) {
+                throw new Error('Stopped');
+            }
+            addLogMessage('processRowForStartDate: datepicker opened, settling before navigation', 'log');
+            return startDateDelay(STARTDATE_TIMEOUTS.settleMs).then(function() {
+                return adjustYearIfNeeded(pickerEl, startDateState.parsedDate.year);
+            }).then(function(yearOk) {
+                if (!yearOk) {
+                    addLogMessage('processRowForStartDate: year adjustment failed', 'warn');
+                    throw new Error('Year adjustment failed');
+                }
+                var freshPicker = getFreshPicker();
+                if (!freshPicker) {
+                    throw new Error('Picker disappeared after year adjust');
+                }
+                return selectMonth(freshPicker, startDateState.parsedDate.monthIndex0);
+            }).then(function(monthOk) {
+                if (!monthOk) {
+                    addLogMessage('processRowForStartDate: month selection failed', 'warn');
+                    throw new Error('Month selection failed');
+                }
+                return startDateDelay(STARTDATE_TIMEOUTS.settleMs).then(function() {
+                    var freshPicker = getFreshPicker();
+                    if (!freshPicker) {
+                        throw new Error('Picker disappeared after month select');
+                    }
+                    return selectDay(freshPicker, startDateState.parsedDate.day);
+                });
+            }).then(function(dayOk) {
+                if (!dayOk) {
+                    addLogMessage('processRowForStartDate: day selection failed', 'warn');
+                    throw new Error('Day selection failed');
+                }
+                addLogMessage('processRowForStartDate: date selection complete for ' + candidate.display, 'log');
+                return startDateDelay(STARTDATE_TIMEOUTS.waitVerifyInputMs);
+            });
+        })
+            .then(function() {
+            addLogMessage('processRowForStartDate: completed for ' + candidate.display, 'log');
+            candidate.status = STARTDATE_LABELS.statusCompleted;
+            updateStartDateRightPanelStatus(candidate.pairKey, STARTDATE_LABELS.statusCompleted);
+            updateStartDateSummary();
+            markRemainingAsStopped();
+            updateStartDateProgressStatus(STARTDATE_LABELS.progressComplete, 'complete');
+            updateStartDateAriaLive('Start date set for ' + candidate.display);
+        })
+            .catch(function(err) {
+            addLogMessage('processRowForStartDate: error for ' + candidate.display + ': ' + err.message, 'error');
+            if (startDateState.stopRequested) {
+                candidate.status = STARTDATE_LABELS.statusStopped;
+                updateStartDateRightPanelStatus(candidate.pairKey, STARTDATE_LABELS.statusStopped);
+            } else {
+                candidate.status = STARTDATE_LABELS.statusFailed;
+                updateStartDateRightPanelStatus(candidate.pairKey, STARTDATE_LABELS.statusFailed);
+            }
+            updateStartDateSummary();
+            markRemainingAsStopped();
+            updateStartDateProgressStatus(startDateState.stopRequested ? STARTDATE_LABELS.progressStopped : STARTDATE_LABELS.progressComplete, startDateState.stopRequested ? 'stopped' : 'complete');
+        });
+    }
+
+    function markRemainingAsStopped() {
+        for (var i = 0; i < startDateState.parsedNames.length; i++) {
+            if (startDateState.parsedNames[i].status === STARTDATE_LABELS.statusPending) {
+                startDateState.parsedNames[i].status = STARTDATE_LABELS.statusStopped;
+                updateStartDateRightPanelStatus(startDateState.parsedNames[i].pairKey, STARTDATE_LABELS.statusStopped);
+            }
+        }
+        updateStartDateSummary();
+    }
+
+    function updateStartDateProgressStatus(statusText, statusType) {
+        addLogMessage('updateStartDateProgressStatus: ' + statusText + ' type=' + statusType, 'log');
+        var badge = document.getElementById('startdate-status-badge');
+        var titleEl = document.getElementById('startdate-progress-title');
+        if (badge) {
+            badge.textContent = statusText;
+            if (statusType === 'complete') {
+                badge.style.background = 'rgba(107, 207, 127, 0.3)';
+                badge.style.color = '#6bcf7f';
+            } else if (statusType === 'stopped') {
+                badge.style.background = 'rgba(170, 170, 170, 0.3)';
+                badge.style.color = '#aaa';
+            } else {
+                badge.style.background = 'rgba(255, 217, 61, 0.3)';
+                badge.style.color = '#ffd93d';
+            }
+        }
+        if (titleEl) {
+            titleEl.textContent = STARTDATE_LABELS.featureButton + ' - ' + statusText;
+        }
+        startDateState.isRunning = false;
+    }
+
+    function addStartDateInit() {
+        addLogMessage('addStartDateInit: starting feature', 'log');
+        startDateState.focusReturnElement = document.getElementById('startdate-btn');
+        resetStartDateState();
+        var mainTable = document.querySelector(STARTDATE_SELECTORS.mainTableContainer);
+        addLogMessage('addStartDateInit: checking for main table', 'log');
+        if (!mainTable) {
+            addLogMessage('addStartDateInit: main table not found, showing warning', 'warn');
+            showStartDateWarning();
+            return;
+        }
+        addLogMessage('addStartDateInit: main table found, showing input panel', 'log');
+        showStartDateInputPanel();
+    }
+
+    function stopStartDate() {
+        addLogMessage('stopStartDate: stopping all Start Date processes', 'log');
+        startDateState.isRunning = false;
+        startDateState.stopRequested = true;
+        for (var i = 0; i < startDateState.idleCallbackIds.length; i++) {
+            try {
+                if (typeof cancelIdleCallback === 'function') {
+                    cancelIdleCallback(startDateState.idleCallbackIds[i]);
+                }
+            } catch (e) {
+                addLogMessage('stopStartDate: error canceling idle callback: ' + e, 'error');
+            }
+        }
+        startDateState.idleCallbackIds = [];
+        for (var i2 = 0; i2 < startDateState.observers.length; i2++) {
+            try {
+                startDateState.observers[i2].disconnect();
+            } catch (e2) {
+                addLogMessage('stopStartDate: error disconnecting observer: ' + e2, 'error');
+            }
+        }
+        startDateState.observers = [];
+        for (var i3 = 0; i3 < startDateState.timeouts.length; i3++) {
+            try {
+                clearTimeout(startDateState.timeouts[i3]);
+            } catch (e3) {
+                addLogMessage('stopStartDate: error clearing timeout: ' + e3, 'error');
+            }
+        }
+        startDateState.timeouts = [];
+        for (var i4 = 0; i4 < startDateState.intervals.length; i4++) {
+            try {
+                clearInterval(startDateState.intervals[i4]);
+            } catch (e4) {
+                addLogMessage('stopStartDate: error clearing interval: ' + e4, 'error');
+            }
+        }
+        startDateState.intervals = [];
+        for (var i5 = 0; i5 < startDateState.eventListeners.length; i5++) {
+            try {
+                var l = startDateState.eventListeners[i5];
+                l.element.removeEventListener(l.type, l.handler);
+            } catch (e5) {
+                addLogMessage('stopStartDate: error removing listener: ' + e5, 'error');
+            }
+        }
+        startDateState.eventListeners = [];
+        startDateSetAriaBusyOff();
+        if (startDateState.scrollContainer && startDateState.prevScrollTop !== undefined) {
+            addLogMessage('stopStartDate: restoring viewport', 'log');
+            restoreViewport(startDateState.scrollContainer, startDateState.prevScrollTop);
+        }
+        startDateState.scrollContainer = null;
+        startDateState.userScrollHandler = null;
+        startDateState.userScrollPaused = false;
+        var inputModal = document.getElementById('startdate-input-modal');
+        if (inputModal && inputModal.parentNode) {
+            inputModal.parentNode.removeChild(inputModal);
+        }
+        var progressModal = document.getElementById('startdate-progress-modal');
+        if (progressModal && progressModal.parentNode) {
+            progressModal.parentNode.removeChild(progressModal);
+        }
+        var warningModal = document.getElementById('startdate-warning-modal');
+        if (warningModal && warningModal.parentNode) {
+            warningModal.parentNode.removeChild(warningModal);
+        }
+        removeCollectingDataPanel('startdate');
+        if (startDateState.focusReturnElement) {
+            startDateState.focusReturnElement.focus();
+        }
+        resetStartDateState();
+        addLogMessage('stopStartDate: cleanup complete', 'log');
+    }
+
+    //==========================
     // SHARED GUI AND PANEL FUNCTIONS
     //==========================
     // This section contains functions used by multiple features for panel management,
@@ -8709,7 +10676,7 @@ function showResponsibilitiesProgressPanel(rolesData) {
         background: rgba(255, 255, 255, 0.05);
     `;
 
-        for (let i = 1; i <= 6; i++) {
+        for (let i = 1; i <= 7; i++) {
             const button = document.createElement('button');
             if (i === 1) {
                 button.textContent = 'Add Signatures';
@@ -8717,17 +10684,20 @@ function showResponsibilitiesProgressPanel(rolesData) {
                 button.textContent = 'Add Training Log Staff Entries';
                 button.id = 'elog-staff-entries-btn';
             } else if (i === 3) {
-                button.textContent = CLEAN_LABELS.featureButton;
+                button.textContent = "Clean Study Task List";
                 button.id = 'clean-resp-btn';
             } else if (i === 4) {
-                button.textContent = DOA_LABELS.featureButton;
+                button.textContent = "Add DoA Log Staff Entries";
                 button.id = 'doa-staff-entries-btn';
             } else if (i === 5) {
                 button.textContent = 'Set Role Responsibilities';
                 button.id = 'resp-set-btn';
             } else if (i === 6) {
-                button.textContent = CB_SELECT_LABELS.featureButton;
+                button.textContent = "Select Checkboxes";
                 button.id = 'cb-select-btn';
+            } else if (i === 7) {
+                button.textContent = 'Add Start Date';
+                button.id = 'startdate-btn';
             }
             button.style.cssText = `
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -8779,6 +10749,11 @@ function showResponsibilitiesProgressPanel(rolesData) {
                 button.onclick = () => {
                     console.log('Select Checkboxes button clicked');
                     selectCheckboxesInit();
+                };
+            } else if (i === 7) {
+                button.onclick = () => {
+                    console.log('Add Start Date button clicked');
+                    addStartDateInit();
                 };
             }
 
