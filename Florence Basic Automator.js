@@ -8404,6 +8404,1217 @@ function showResponsibilitiesProgressPanel(rolesData) {
     }
 
 
+    const SSIG_SELECTORS = {
+        featureButtonTarget: '.main-gui-panel',
+        presenceCheck: '.document-log-entries__grid-table[role="table"], .document-log-entries__grid-table.w-100',
+        mainTableContainer: '.document-log-entries.document-log-entries__table',
+        gridTable: '.document-log-entries__grid-table[role="table"], .document-log-entries__grid-table.w-100',
+        row: 'log-entry-row[role="row"], .document-log-entries__grid-table__row[role="row"]',
+        cell: '[role="cell"]',
+        headerRow: '[role="columnheader"]',
+        checkboxCellIndex: 1,
+        checkboxInCell: '[role="checkbox"], .checkbox-icon',
+        nameCellIndex: 3,
+        namePrimary: '.u-text-overflow-ellipsis',
+        nameFallback: '.test-logEntrySignature span',
+        staffSigColIndex: 7,
+        piSigColIndex: 8,
+        sigSignedBlock: '.test-logEntrySignature',
+        sigSignedName: '.test-logEntrySignature span, .u-text-overflow-ellipsis span, .u-text-overflow-ellipsis',
+        sigUnsignedBlock: '.entry-signature',
+        progressAriaLive: '.aria-live-region'
+    };
+
+    const SSIG_TIMEOUTS = {
+        waitProgressPanelMs: 10000,
+        waitTableMs: 10000,
+        waitGridMs: 10000,
+        settleScanMs: 250,
+        idleBetweenBatchesMs: 140,
+        clickSettleMs: 200,
+        verifySettleMs: 200,
+        maxScanDurationMs: 120000
+    };
+
+    const SSIG_RETRY = {
+        scanEmptyRetries: 2,
+        clickRetries: 2,
+        maxNoProgressIterations: 8
+    };
+
+    const SSIG_SCROLL = {
+        stepPx: 500,
+        overscanPx: 400
+    };
+
+    const SSIG_LABELS = {
+        featureButton: 'Select Signed Checkbox',
+        progressTitle: 'Select Signed Checkbox',
+        scanning: 'Scanning table',
+        selecting: 'Selecting eligible rows',
+        statusPending: 'Pending',
+        statusSelected: 'Selected',
+        statusAlready: 'Already Checked',
+        statusPISigned: 'Skipped (PI Signed)',
+        statusNotEligible: 'Skipped (Unsigned Staff/Blocked)',
+        statusFailed: 'Failed',
+        statusStrikethrough: 'Strikethrough',
+        statusStopped: 'Stopped',
+        done: 'Completed'
+    };
+
+    const SSIG_COUNTERS = {
+        total: 0,
+        selected: 0,
+        already: 0,
+        skippedPISigned: 0,
+        skippedNotEligible: 0,
+        strikethrough: 0,
+        failures: 0,
+        pending: 0
+    };
+
+    const SSIG_REGEX = {
+        unsignedKeywords: /\b(unrequested|pending other user|pending|not requested|awaiting|unsigned)\b/i,
+        hasNameToken: /[A-Za-z\u00C0-\u024F][A-Za-z\u00C0-\u024F'\-]+/
+    };
+
+    const SSIG_ATTRS = {
+        ariaBusyTarget: 'body',
+        ariaBusyAttr: 'aria-busy'
+    };
+
+    let ssigState = {
+        isRunning: false,
+        stopRequested: false,
+        observers: [],
+        timeouts: [],
+        intervals: [],
+        eventListeners: [],
+        idleCallbackIds: [],
+        rafIds: [],
+        seenKeys: new Set(),
+        rowStates: [],
+        counters: { total: 0, selected: 0, already: 0, skippedPISigned: 0, skippedNotEligible: 0, strikethrough: 0, failures: 0, pending: 0 },
+        focusReturnElement: null,
+        prevAriaBusy: null,
+        scrollContainer: null,
+        prevScrollTop: 0,
+        userScrollHandler: null,
+        userScrollPaused: false,
+        lastAutoScrollTime: 0,
+        leftPanelRowIndex: 0,
+        detectedStaffSigColIndex: null,
+        detectedPiSigColIndex: null
+    };
+
+    function resetSsigState() {
+        addLogMessage('resetSsigState: resetting state', 'log');
+        ssigState.isRunning = false;
+        ssigState.stopRequested = false;
+        ssigState.observers = [];
+        ssigState.timeouts = [];
+        ssigState.intervals = [];
+        ssigState.eventListeners = [];
+        ssigState.idleCallbackIds = [];
+        ssigState.rafIds = [];
+        ssigState.seenKeys = new Set();
+        ssigState.rowStates = [];
+        ssigState.counters = { total: 0, selected: 0, already: 0, skippedPISigned: 0, skippedNotEligible: 0, strikethrough: 0, failures: 0, pending: 0 };
+        ssigState.prevAriaBusy = null;
+        ssigState.scrollContainer = null;
+        ssigState.prevScrollTop = 0;
+        ssigState.userScrollHandler = null;
+        ssigState.userScrollPaused = false;
+        ssigState.lastAutoScrollTime = 0;
+        ssigState.leftPanelRowIndex = 0;
+        ssigState.detectedStaffSigColIndex = null;
+        ssigState.detectedPiSigColIndex = null;
+    }
+
+    function ssigWaitForElement(selector, timeout) {
+        addLogMessage('ssigWaitForElement: waiting for ' + selector, 'log');
+        return new Promise(function(resolve, reject) {
+            var element = document.querySelector(selector);
+            if (element) {
+                addLogMessage('ssigWaitForElement: found immediately', 'log');
+                resolve(element);
+                return;
+            }
+            var observer = new MutationObserver(function(mutations, obs) {
+                var el = document.querySelector(selector);
+                if (el) {
+                    obs.disconnect();
+                    var idx = ssigState.observers.indexOf(obs);
+                    if (idx > -1) {
+                        ssigState.observers.splice(idx, 1);
+                    }
+                    resolve(el);
+                }
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+            ssigState.observers.push(observer);
+            var timeoutId = setTimeout(function() {
+                observer.disconnect();
+                var idx = ssigState.observers.indexOf(observer);
+                if (idx > -1) {
+                    ssigState.observers.splice(idx, 1);
+                }
+                addLogMessage('ssigWaitForElement: timeout for ' + selector, 'warn');
+                reject(new Error('Timeout waiting for ' + selector));
+            }, timeout);
+            ssigState.timeouts.push(timeoutId);
+        });
+    }
+
+    function ssigSetAriaBusyOn() {
+        addLogMessage('ssigSetAriaBusyOn: setting aria-busy', 'log');
+        var target = document.querySelector(SSIG_ATTRS.ariaBusyTarget);
+        if (target) {
+            ssigState.prevAriaBusy = target.getAttribute(SSIG_ATTRS.ariaBusyAttr);
+            target.setAttribute(SSIG_ATTRS.ariaBusyAttr, 'true');
+        }
+    }
+
+    function ssigSetAriaBusyOff() {
+        addLogMessage('ssigSetAriaBusyOff: clearing aria-busy', 'log');
+        var target = document.querySelector(SSIG_ATTRS.ariaBusyTarget);
+        if (target) {
+            if (ssigState.prevAriaBusy !== null) {
+                target.setAttribute(SSIG_ATTRS.ariaBusyAttr, ssigState.prevAriaBusy);
+            } else {
+                target.removeAttribute(SSIG_ATTRS.ariaBusyAttr);
+            }
+            ssigState.prevAriaBusy = null;
+        }
+    }
+
+    function ssigUpdateAriaLive(message) {
+        var lr = document.getElementById('ssig-aria-live');
+        if (lr) {
+            lr.textContent = message;
+        }
+    }
+
+    function ssigDetectSignatureColumns() {
+        addLogMessage('ssigDetectSignatureColumns: attempting dynamic detection', 'log');
+        var gridTable = document.querySelector(SSIG_SELECTORS.gridTable);
+        if (!gridTable) {
+            addLogMessage('ssigDetectSignatureColumns: grid not found, using defaults', 'warn');
+            return;
+        }
+        var rows = gridTable.querySelectorAll(SSIG_SELECTORS.row);
+        var dataRow = null;
+        for (var ri = 0; ri < rows.length; ri++) {
+            if (rows[ri].getAttribute('role') !== 'columnheader') {
+                dataRow = rows[ri];
+                break;
+            }
+        }
+        if (!dataRow) {
+            addLogMessage('ssigDetectSignatureColumns: no data row found, using defaults', 'warn');
+            return;
+        }
+        var cells = dataRow.querySelectorAll(SSIG_SELECTORS.cell);
+        var foundStaff = -1;
+        var foundPi = -1;
+        var sigCount = 0;
+        for (var ci = 0; ci < cells.length; ci++) {
+            var cell = cells[ci];
+            var hasSigned = cell.querySelector(SSIG_SELECTORS.sigSignedBlock);
+            var hasUnsigned = cell.querySelector(SSIG_SELECTORS.sigUnsignedBlock);
+            if (hasSigned || hasUnsigned) {
+                sigCount++;
+                if (sigCount === 1) {
+                    foundStaff = ci;
+                } else if (sigCount === 2) {
+                    foundPi = ci;
+                    break;
+                }
+            }
+        }
+        if (foundStaff >= 0 && foundPi >= 0) {
+            addLogMessage('ssigDetectSignatureColumns: detected staffSigCol=' + foundStaff + ' piSigCol=' + foundPi, 'log');
+            ssigState.detectedStaffSigColIndex = foundStaff;
+            ssigState.detectedPiSigColIndex = foundPi;
+        } else {
+            addLogMessage('ssigDetectSignatureColumns: could not detect both columns, using defaults staffSig=' + SSIG_SELECTORS.staffSigColIndex + ' piSig=' + SSIG_SELECTORS.piSigColIndex, 'warn');
+        }
+    }
+
+    function ssigGetStaffSigColIndex() {
+        if (ssigState.detectedStaffSigColIndex !== null) {
+            return ssigState.detectedStaffSigColIndex;
+        }
+        return SSIG_SELECTORS.staffSigColIndex;
+    }
+
+    function ssigGetPiSigColIndex() {
+        if (ssigState.detectedPiSigColIndex !== null) {
+            return ssigState.detectedPiSigColIndex;
+        }
+        return SSIG_SELECTORS.piSigColIndex;
+    }
+
+    function ssigReadSignatureCell(cell) {
+        if (!cell) {
+            return { signed: false, text: '' };
+        }
+        var signedBlock = cell.querySelector(SSIG_SELECTORS.sigSignedBlock);
+        if (signedBlock) {
+            var nameEls = cell.querySelectorAll(SSIG_SELECTORS.sigSignedName);
+            for (var ni = 0; ni < nameEls.length; ni++) {
+                var nameText = nameEls[ni].textContent.trim().replace(/\s+/g, ' ');
+                if (nameText && SSIG_REGEX.hasNameToken.test(nameText)) {
+                    return { signed: true, text: nameText };
+                }
+            }
+        }
+        var unsignedBlock = cell.querySelector(SSIG_SELECTORS.sigUnsignedBlock);
+        if (unsignedBlock) {
+            var unsignedText = unsignedBlock.textContent.trim().replace(/\s+/g, ' ');
+            if (SSIG_REGEX.unsignedKeywords.test(unsignedText)) {
+                return { signed: false, text: unsignedText };
+            }
+        }
+        var cellText = cell.textContent.trim().replace(/\s+/g, ' ');
+        if (cellText && SSIG_REGEX.hasNameToken.test(cellText) && !SSIG_REGEX.unsignedKeywords.test(cellText)) {
+            var signedEl = cell.querySelector(SSIG_SELECTORS.sigSignedBlock);
+            if (signedEl) {
+                return { signed: true, text: cellText };
+            }
+        }
+        return { signed: false, text: cellText || '' };
+    }
+
+    function determineSignatureEligibility(staffSigText, piSigText, staffSigHasName, piSigHasName) {
+        addLogMessage('determineSignatureEligibility: staffHasName=' + staffSigHasName + ' piHasName=' + piSigHasName + ' staffText=' + staffSigText + ' piText=' + piSigText, 'log');
+        if (piSigHasName) {
+            return { eligible: false, reason: 'piSigned' };
+        }
+        if (staffSigHasName && !piSigHasName) {
+            return { eligible: true, reason: 'eligible' };
+        }
+        return { eligible: false, reason: 'notEligible' };
+    }
+
+    function extractRowState(rowEl) {
+        try {
+            var cells = rowEl.querySelectorAll(SSIG_SELECTORS.cell);
+            var staffColIdx = ssigGetStaffSigColIndex();
+            var piColIdx = ssigGetPiSigColIndex();
+            var nameDisplay = '';
+            if (cells.length > SSIG_SELECTORS.nameCellIndex) {
+                var nameCell = cells[SSIG_SELECTORS.nameCellIndex];
+                var primaryEl = nameCell.querySelector(SSIG_SELECTORS.namePrimary);
+                if (primaryEl) {
+                    nameDisplay = primaryEl.textContent.trim().replace(/\s+/g, ' ');
+                }
+                if (!nameDisplay) {
+                    var fallbackEl = nameCell.querySelector(SSIG_SELECTORS.nameFallback);
+                    if (fallbackEl) {
+                        nameDisplay = fallbackEl.textContent.trim().replace(/\s+/g, ' ');
+                    }
+                }
+            }
+            var pairKey = normalizeFirstLastPair(nameDisplay);
+            var checkboxEl = null;
+            var isChecked = false;
+            if (cells.length > SSIG_SELECTORS.checkboxCellIndex) {
+                var cbCell = cells[SSIG_SELECTORS.checkboxCellIndex];
+                checkboxEl = cbCell.querySelector(SSIG_SELECTORS.checkboxInCell);
+            }
+            if (checkboxEl) {
+                var ariaChecked = checkboxEl.getAttribute('aria-checked');
+                if (ariaChecked === 'true') {
+                    isChecked = true;
+                } else if (checkboxEl.classList && checkboxEl.classList.contains('checkbox-icon--selected')) {
+                    isChecked = true;
+                }
+            }
+            var staffSigCell = cells.length > staffColIdx ? cells[staffColIdx] : null;
+            var piSigCell = cells.length > piColIdx ? cells[piColIdx] : null;
+            var staffSig = ssigReadSignatureCell(staffSigCell);
+            var piSig = ssigReadSignatureCell(piSigCell);
+            var eligibility = determineSignatureEligibility(staffSig.text, piSig.text, staffSig.signed, piSig.signed);
+            return {
+                nameDisplay: nameDisplay,
+                pairKey: pairKey,
+                checkboxEl: checkboxEl,
+                isChecked: isChecked,
+                staffSig: staffSig,
+                piSig: piSig,
+                eligible: eligibility.eligible,
+                reason: eligibility.reason,
+                rowEl: rowEl
+            };
+        } catch (err) {
+            addLogMessage('extractRowState: error: ' + err, 'error');
+            return null;
+        }
+    }
+
+    function selectRowCheckbox(rowState) {
+        addLogMessage('selectRowCheckbox: name=' + rowState.nameDisplay + ' eligible=' + rowState.eligible + ' isChecked=' + rowState.isChecked, 'log');
+        return new Promise(function(resolve) {
+            if (!rowState.checkboxEl) {
+                addLogMessage('selectRowCheckbox: no checkbox element', 'warn');
+                resolve(false);
+                return;
+            }
+            if (rowState.checkboxEl.disabled || rowState.checkboxEl.getAttribute('aria-disabled') === 'true') {
+                addLogMessage('selectRowCheckbox: checkbox is disabled', 'warn');
+                resolve(false);
+                return;
+            }
+            if (rowState.isChecked) {
+                addLogMessage('selectRowCheckbox: already checked', 'log');
+                resolve('already');
+                return;
+            }
+            var attempt = 0;
+            function tryClick() {
+                if (ssigState.stopRequested || !ssigState.isRunning) {
+                    resolve(false);
+                    return;
+                }
+                try {
+                    rowState.checkboxEl.click();
+                } catch (err) {
+                    addLogMessage('selectRowCheckbox: click error attempt=' + attempt + ' err=' + err, 'error');
+                    attempt++;
+                    if (attempt < SSIG_RETRY.clickRetries) {
+                        var retryTid = setTimeout(tryClick, SSIG_TIMEOUTS.clickSettleMs);
+                        ssigState.timeouts.push(retryTid);
+                        return;
+                    }
+                    resolve(false);
+                    return;
+                }
+                var verifyTid = setTimeout(function() {
+                    var ac = rowState.checkboxEl.getAttribute('aria-checked');
+                    if (ac === 'true') {
+                        addLogMessage('selectRowCheckbox: verified checked via aria-checked', 'log');
+                        resolve(true);
+                        return;
+                    }
+                    if (rowState.checkboxEl.classList && rowState.checkboxEl.classList.contains('checkbox-icon--selected')) {
+                        addLogMessage('selectRowCheckbox: verified checked via class', 'log');
+                        resolve(true);
+                        return;
+                    }
+                    attempt++;
+                    if (attempt < SSIG_RETRY.clickRetries) {
+                        addLogMessage('selectRowCheckbox: verify failed, retrying attempt=' + attempt, 'warn');
+                        tryClick();
+                        return;
+                    }
+                    addLogMessage('selectRowCheckbox: exhausted retries', 'warn');
+                    resolve(false);
+                }, SSIG_TIMEOUTS.verifySettleMs);
+                ssigState.timeouts.push(verifyTid);
+            }
+            tryClick();
+        });
+    }
+
+    function updateRightPanelStatusSsig(rowKey, newStatus, detailsOptional) {
+        var rightPanel = document.getElementById('ssig-right-panel');
+        if (!rightPanel) {
+            return;
+        }
+        if (ssigState.stopRequested) {
+            return;
+        }
+        var items = rightPanel.querySelectorAll('.' + ELOG_CSS_CLASSNAMES.listItem);
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            var itemKey = item.getAttribute('data-rowkey');
+            if (itemKey === rowKey) {
+                var badge = item.querySelector('.elog-status-badge');
+                if (badge) {
+                    badge.textContent = newStatus;
+                    var badgeColor = 'rgba(255, 255, 255, 0.7)';
+                    var badgeBg = 'rgba(255, 255, 255, 0.1)';
+                    if (newStatus === SSIG_LABELS.statusPending) {
+                        badgeColor = '#ffd93d';
+                        badgeBg = 'rgba(255, 217, 61, 0.2)';
+                    } else if (newStatus === SSIG_LABELS.statusSelected) {
+                        badgeColor = '#6bcf7f';
+                        badgeBg = 'rgba(107, 207, 127, 0.2)';
+                    } else if (newStatus === SSIG_LABELS.statusAlready) {
+                        badgeColor = '#64b5f6';
+                        badgeBg = 'rgba(100, 181, 246, 0.2)';
+                    } else if (newStatus === SSIG_LABELS.statusPISigned) {
+                        badgeColor = '#ffa500';
+                        badgeBg = 'rgba(255, 165, 0, 0.2)';
+                    } else if (newStatus === SSIG_LABELS.statusNotEligible) {
+                        badgeColor = '#aaa';
+                        badgeBg = 'rgba(170, 170, 170, 0.2)';
+                    } else if (newStatus === SSIG_LABELS.statusStrikethrough) {
+                        badgeColor = '#ce93d8';
+                        badgeBg = 'rgba(206, 147, 216, 0.2)';
+                    } else if (newStatus === SSIG_LABELS.statusFailed) {
+                        badgeColor = '#ff6b6b';
+                        badgeBg = 'rgba(255, 107, 107, 0.2)';
+                    } else if (newStatus === SSIG_LABELS.statusStopped) {
+                        badgeColor = '#aaa';
+                        badgeBg = 'rgba(170, 170, 170, 0.2)';
+                    }
+                    badge.style.color = badgeColor;
+                    badge.style.background = badgeBg;
+                    if (detailsOptional) {
+                        badge.title = detailsOptional;
+                    }
+                }
+                break;
+            }
+        }
+        ssigUpdateAriaLive(newStatus + ': ' + rowKey);
+    }
+
+    function updateRightPanelSummarySsig(counters) {
+        addLogMessage('updateRightPanelSummarySsig: total=' + counters.total + ' selected=' + counters.selected + ' already=' + counters.already + ' piSigned=' + counters.skippedPISigned + ' notEligible=' + counters.skippedNotEligible + ' strikethrough=' + counters.strikethrough + ' failures=' + counters.failures + ' pending=' + counters.pending, 'log');
+        var el1 = document.getElementById('ssig-summary-total');
+        var el2 = document.getElementById('ssig-summary-selected');
+        var el3 = document.getElementById('ssig-summary-already');
+        var el4 = document.getElementById('ssig-summary-pisigned');
+        var el5 = document.getElementById('ssig-summary-noteligible');
+        var elStrike = document.getElementById('ssig-summary-strikethrough');
+        var el6 = document.getElementById('ssig-summary-failures');
+        var el7 = document.getElementById('ssig-summary-pending');
+        var el8 = document.getElementById('ssig-summary-percent');
+        if (el1) {
+            el1.textContent = String(counters.total);
+        }
+        if (el2) {
+            el2.textContent = String(counters.selected);
+        }
+        if (el3) {
+            el3.textContent = String(counters.already);
+        }
+        if (el4) {
+            el4.textContent = String(counters.skippedPISigned);
+        }
+        if (el5) {
+            el5.textContent = String(counters.skippedNotEligible);
+        }
+        if (elStrike) {
+            elStrike.textContent = String(counters.strikethrough);
+        }
+        if (el6) {
+            el6.textContent = String(counters.failures);
+        }
+        if (el7) {
+            el7.textContent = String(counters.pending);
+        }
+        if (el8) {
+            var processed = counters.total - counters.pending;
+            var pct = counters.total > 0 ? Math.round((processed / counters.total) * 100) : 0;
+            el8.textContent = pct + '%';
+        }
+    }
+
+    function showSelectSignedCheckboxProgressPanel() {
+        addLogMessage('showSelectSignedCheckboxProgressPanel: creating progress panel', 'log');
+        var modal = document.createElement('div');
+        modal.id = 'ssig-progress-modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 20000; display: flex; align-items: center; justify-content: center;';
+        var container = document.createElement('div');
+        container.id = 'ssig-progress-container';
+        container.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; width: 900px; max-width: 95%; max-height: 80vh; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); position: relative; display: flex; flex-direction: column;';
+        container.setAttribute('role', 'dialog');
+        container.setAttribute('aria-modal', 'true');
+        container.setAttribute('aria-labelledby', 'ssig-progress-title');
+        var header = document.createElement('div');
+        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-shrink: 0;';
+        var titleContainer = document.createElement('div');
+        titleContainer.style.cssText = 'display: flex; align-items: center; gap: 12px;';
+        var title = document.createElement('h3');
+        title.id = 'ssig-progress-title';
+        title.textContent = SSIG_LABELS.progressTitle;
+        title.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600;';
+        var statusBadge = document.createElement('span');
+        statusBadge.id = 'ssig-status-badge';
+        statusBadge.textContent = 'In Progress';
+        statusBadge.style.cssText = 'background: rgba(255, 255, 255, 0.3); color: #ffd93d; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 12px;';
+        titleContainer.appendChild(title);
+        titleContainer.appendChild(statusBadge);
+        var closeButton = document.createElement('button');
+        closeButton.innerHTML = '\u2715';
+        closeButton.id = 'ssig-close-btn';
+        closeButton.setAttribute('aria-label', 'Close and stop');
+        closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
+        closeButton.onmouseover = function() {
+            closeButton.style.background = 'rgba(255, 67, 54, 0.8)';
+        };
+        closeButton.onmouseout = function() {
+            closeButton.style.background = 'rgba(255, 255, 255, 0.2)';
+        };
+        closeButton.onclick = function() {
+            addLogMessage('showSelectSignedCheckboxProgressPanel: closed by user', 'warn');
+            stopSelectSignedCheckbox();
+        };
+        header.appendChild(titleContainer);
+        header.appendChild(closeButton);
+        var panelsContainer = document.createElement('div');
+        panelsContainer.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 16px; flex: 1; min-height: 0; overflow: hidden;';
+        var leftPanel = createSubpanel('Scanned Log Entries', 'ssig-left-panel', 'ssig-left-search');
+        var rightPanel = createSubpanel('Eligibility & Selection Status', 'ssig-right-panel', 'ssig-right-search');
+        panelsContainer.appendChild(leftPanel);
+        panelsContainer.appendChild(rightPanel);
+        var summaryFooter = document.createElement('div');
+        summaryFooter.id = 'ssig-summary-footer';
+        summaryFooter.setAttribute('aria-label', 'Selection summary');
+        summaryFooter.style.cssText = 'display: flex; justify-content: space-around; align-items: center; padding: 10px 16px; background: rgba(0, 0, 0, 0.2); border-radius: 8px; margin-top: 12px; flex-shrink: 0;';
+        var summaryItems = [
+            { id: 'ssig-summary-total', label: 'Total', value: '0' },
+            { id: 'ssig-summary-selected', label: 'Selected', value: '0' },
+            { id: 'ssig-summary-already', label: 'Already', value: '0' },
+            { id: 'ssig-summary-pisigned', label: 'PI Signed', value: '0' },
+            { id: 'ssig-summary-noteligible', label: 'Not Eligible', value: '0' },
+            { id: 'ssig-summary-strikethrough', label: 'Strikethrough', value: '0' },
+            { id: 'ssig-summary-failures', label: 'Failed', value: '0' },
+            { id: 'ssig-summary-pending', label: 'Pending', value: '0' },
+            { id: 'ssig-summary-percent', label: 'Progress', value: '0%' }
+        ];
+        for (var si = 0; si < summaryItems.length; si++) {
+            var sItem = document.createElement('div');
+            sItem.style.cssText = 'text-align: center;';
+            var vSpan = document.createElement('span');
+            vSpan.id = summaryItems[si].id;
+            vSpan.textContent = summaryItems[si].value;
+            vSpan.style.cssText = 'display: block; color: white; font-size: 16px; font-weight: 700;';
+            var lSpan = document.createElement('span');
+            lSpan.textContent = summaryItems[si].label;
+            lSpan.style.cssText = 'display: block; color: rgba(255, 255, 255, 0.6); font-size: 11px; font-weight: 500; margin-top: 2px;';
+            sItem.appendChild(vSpan);
+            sItem.appendChild(lSpan);
+            summaryFooter.appendChild(sItem);
+        }
+        var ariaLiveRegion = document.createElement('div');
+        ariaLiveRegion.id = 'ssig-aria-live';
+        ariaLiveRegion.setAttribute('aria-live', 'polite');
+        ariaLiveRegion.setAttribute('aria-atomic', 'true');
+        ariaLiveRegion.style.cssText = 'position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;';
+        container.appendChild(header);
+        container.appendChild(panelsContainer);
+        container.appendChild(summaryFooter);
+        container.appendChild(ariaLiveRegion);
+        modal.appendChild(container);
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        modal.style.pointerEvents = 'none';
+        container.style.pointerEvents = 'auto';
+        makeDraggable(container, header);
+        document.body.appendChild(modal);
+        closeButton.focus();
+        addLogMessage('showSelectSignedCheckboxProgressPanel: displayed', 'log');
+    }
+
+    function ssigAwaitSettle(gridTable) {
+        return new Promise(function(resolve) {
+            var resolved = false;
+            var observer = null;
+            var timeoutId = setTimeout(function() {
+                if (!resolved) {
+                    resolved = true;
+                    if (observer) {
+                        observer.disconnect();
+                        var idx = ssigState.observers.indexOf(observer);
+                        if (idx > -1) {
+                            ssigState.observers.splice(idx, 1);
+                        }
+                    }
+                    resolve();
+                }
+            }, SSIG_TIMEOUTS.settleScanMs);
+            ssigState.timeouts.push(timeoutId);
+            if (gridTable) {
+                observer = new MutationObserver(function() {
+                    if (!resolved) {
+                        resolved = true;
+                        clearTimeout(timeoutId);
+                        observer.disconnect();
+                        var idx = ssigState.observers.indexOf(observer);
+                        if (idx > -1) {
+                            ssigState.observers.splice(idx, 1);
+                        }
+                        resolve();
+                    }
+                });
+                observer.observe(gridTable, { childList: true, subtree: true });
+                ssigState.observers.push(observer);
+            }
+        });
+    }
+
+    function ssigObserveUserScrollPause(container) {
+        if (!container || ssigState.userScrollHandler) {
+            return;
+        }
+        ssigState.userScrollHandler = function() {
+            var timeSinceAuto = Date.now() - ssigState.lastAutoScrollTime;
+            if (timeSinceAuto > 50 && !ssigState.userScrollPaused) {
+                ssigState.userScrollPaused = true;
+                var resumeTimeout = setTimeout(function() {
+                    ssigState.userScrollPaused = false;
+                }, 800);
+                ssigState.timeouts.push(resumeTimeout);
+            }
+        };
+        container.addEventListener('scroll', ssigState.userScrollHandler);
+        ssigState.eventListeners.push({ element: container, type: 'scroll', handler: ssigState.userScrollHandler });
+    }
+
+    function ssigGetRenderedRowCount(gridTable) {
+        var rows = gridTable.querySelectorAll(SSIG_SELECTORS.row);
+        var count = 0;
+        for (var i = 0; i < rows.length; i++) {
+            if (rows[i].getAttribute('role') !== 'columnheader') {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    function ssigGetRenderedLastRowKey(gridTable) {
+        var rows = gridTable.querySelectorAll(SSIG_SELECTORS.row);
+        var lastDataRow = null;
+        for (var i = rows.length - 1; i >= 0; i--) {
+            if (rows[i].getAttribute('role') !== 'columnheader') {
+                lastDataRow = rows[i];
+                break;
+            }
+        }
+        if (!lastDataRow) {
+            return '';
+        }
+        var cells = lastDataRow.querySelectorAll(SSIG_SELECTORS.cell);
+        if (cells.length > 0) {
+            var txt = cells[0].textContent.trim();
+            if (txt) {
+                return txt;
+            }
+        }
+        var hash = 0;
+        var content = lastDataRow.textContent || '';
+        for (var ci = 0; ci < content.length; ci++) {
+            hash = ((hash << 5) - hash) + content.charCodeAt(ci);
+            hash = hash & hash;
+        }
+        return 'hash_' + hash;
+    }
+
+    function ssigScanVisibleRows(gridTable) {
+        var rows = gridTable.querySelectorAll(SSIG_SELECTORS.row);
+        var leftPanel = document.getElementById('ssig-left-panel');
+        var rightPanel = document.getElementById('ssig-right-panel');
+        var leftFragment = document.createDocumentFragment();
+        var rightFragment = document.createDocumentFragment();
+        var newCount = 0;
+        for (var ri = 0; ri < rows.length; ri++) {
+            var row = rows[ri];
+            if (row.getAttribute('role') === 'columnheader') {
+                continue;
+            }
+            var rs = extractRowState(row);
+            if (!rs) {
+                continue;
+            }
+            if (!rs.nameDisplay) {
+                continue;
+            }
+            var normKey = elogNormalizeName(rs.nameDisplay);
+            if (ssigState.seenKeys.has(normKey)) {
+                continue;
+            }
+            ssigState.seenKeys.add(normKey);
+            ssigState.leftPanelRowIndex++;
+            var rowKey = rs.pairKey + '_' + ssigState.leftPanelRowIndex;
+            rs._rowKey = rowKey;
+            ssigState.rowStates.push(rs);
+            newCount++;
+            if (leftPanel) {
+                var leftItem = createListItem(rs.nameDisplay, null, null, ssigState.leftPanelRowIndex);
+                leftFragment.appendChild(leftItem);
+            }
+            if (rightPanel) {
+                var eligHint = '';
+                if (rs.reason === 'piSigned') {
+                    eligHint = 'PI Signed';
+                } else if (rs.reason === 'eligible') {
+                    eligHint = 'Eligible';
+                } else {
+                    eligHint = 'Not Eligible';
+                }
+                var rightItem = createListItem(rs.nameDisplay, SSIG_LABELS.statusPending, 'pending', ssigState.leftPanelRowIndex);
+                rightItem.setAttribute('data-rowkey', rowKey);
+                rightItem.setAttribute('data-pairkey', rs.pairKey);
+                rightItem.setAttribute('data-eligibility', eligHint);
+                rightFragment.appendChild(rightItem);
+            }
+        }
+        if (leftPanel && leftFragment.childNodes.length > 0) {
+            requestAnimationFrame(function() {
+                if (ssigState.stopRequested) {
+                    return;
+                }
+                leftPanel.appendChild(leftFragment);
+            });
+        }
+        if (rightPanel && rightFragment.childNodes.length > 0) {
+            requestAnimationFrame(function() {
+                if (ssigState.stopRequested) {
+                    return;
+                }
+                rightPanel.appendChild(rightFragment);
+            });
+        }
+        return newCount;
+    }
+
+    function ssigAutoScrollScan(options) {
+        addLogMessage('ssigAutoScrollScan: starting', 'log');
+        var onRow = options.onRow || function() {};
+        var onProgress = options.onProgress || function() {};
+        var onDone = options.onDone || function() {};
+        var gridTable = document.querySelector(SSIG_SELECTORS.gridTable);
+        if (!gridTable) {
+            addLogMessage('ssigAutoScrollScan: grid not found', 'error');
+            onDone({ total: 0, reason: 'error' });
+            return;
+        }
+        var container = findScrollableContainer(gridTable);
+        if (!container) {
+            addLogMessage('ssigAutoScrollScan: container not found', 'error');
+            onDone({ total: 0, reason: 'error' });
+            return;
+        }
+        ssigState.scrollContainer = container;
+        ssigState.prevScrollTop = container.scrollTop;
+        ssigObserveUserScrollPause(container);
+        container.scrollTo({ top: 0, behavior: 'auto' });
+        var startTime = Date.now();
+        var noProgress = 0;
+        var prevScrollHeight = container.scrollHeight;
+        function initialScan() {
+            ssigScanVisibleRows(gridTable);
+            onProgress({ scanned: ssigState.rowStates.length });
+            prevScrollHeight = container.scrollHeight;
+            var initScrollTimeout = setTimeout(scrollLoop, SSIG_TIMEOUTS.idleBetweenBatchesMs);
+            ssigState.timeouts.push(initScrollTimeout);
+        }
+        function scrollLoop() {
+            if (ssigState.stopRequested || !ssigState.isRunning) {
+                finishScan('stopped');
+                return;
+            }
+            if (Date.now() - startTime > SSIG_TIMEOUTS.maxScanDurationMs) {
+                finishScan('timeout');
+                return;
+            }
+            if (ssigState.userScrollPaused) {
+                var pt = setTimeout(scrollLoop, 100);
+                ssigState.timeouts.push(pt);
+                return;
+            }
+            var currentScrollHeight = container.scrollHeight;
+            if (currentScrollHeight > prevScrollHeight) {
+                addLogMessage('ssigAutoScrollScan: scrollHeight grew from ' + prevScrollHeight + ' to ' + currentScrollHeight, 'log');
+                noProgress = 0;
+                prevScrollHeight = currentScrollHeight;
+            }
+            var priorKey = ssigGetRenderedLastRowKey(gridTable);
+            var priorCount = ssigGetRenderedRowCount(gridTable);
+            var currTop = container.scrollTop;
+            var maxScroll = container.scrollHeight - container.clientHeight;
+            var newTop = Math.min(currTop + SSIG_SCROLL.stepPx, maxScroll);
+            ssigState.lastAutoScrollTime = Date.now();
+            container.scrollTo({ top: newTop, behavior: 'auto' });
+            ssigAwaitSettle(gridTable).then(function() {
+                var attempts = 0;
+                function attemptScan() {
+                    var rc = ssigGetRenderedRowCount(gridTable);
+                    if (rc === 0 && attempts < SSIG_RETRY.scanEmptyRetries) {
+                        attempts++;
+                        var rt = setTimeout(attemptScan, SSIG_TIMEOUTS.settleScanMs);
+                        ssigState.timeouts.push(rt);
+                        return;
+                    }
+                    ssigScanVisibleRows(gridTable);
+                    onProgress({ scanned: ssigState.rowStates.length });
+                    var currKey = ssigGetRenderedLastRowKey(gridTable);
+                    var currCount = ssigGetRenderedRowCount(gridTable);
+                    var postScrollHeight = container.scrollHeight;
+                    if (postScrollHeight > prevScrollHeight) {
+                        noProgress = 0;
+                        prevScrollHeight = postScrollHeight;
+                    } else if (currKey === priorKey && currCount === priorCount) {
+                        noProgress++;
+                    } else {
+                        noProgress = 0;
+                    }
+                    var atBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 1;
+                    if (atBottom && noProgress >= 3) {
+                        finishScan('endReached');
+                        return;
+                    }
+                    if (noProgress >= SSIG_RETRY.maxNoProgressIterations) {
+                        finishScan('noProgress');
+                        return;
+                    }
+                    if (typeof requestIdleCallback === 'function') {
+                        var icbId = requestIdleCallback(function() {
+                            var idx = ssigState.idleCallbackIds.indexOf(icbId);
+                            if (idx > -1) {
+                                ssigState.idleCallbackIds.splice(idx, 1);
+                            }
+                            scrollLoop();
+                        }, { timeout: SSIG_TIMEOUTS.idleBetweenBatchesMs * 2 });
+                        ssigState.idleCallbackIds.push(icbId);
+                    } else {
+                        var it = setTimeout(scrollLoop, SSIG_TIMEOUTS.idleBetweenBatchesMs);
+                        ssigState.timeouts.push(it);
+                    }
+                }
+                attemptScan();
+            });
+        }
+        function finishScan(reason) {
+            addLogMessage('ssigAutoScrollScan: done reason=' + reason + ' total=' + ssigState.rowStates.length, 'log');
+            onDone({ total: ssigState.rowStates.length, reason: reason });
+        }
+        function waitForStableScrollHeight(callback) {
+            var checks = 0;
+            var maxChecks = 5;
+            var lastHeight = container.scrollHeight;
+            var stableCount = 0;
+            function checkHeight() {
+                if (!ssigState.isRunning) {
+                    return;
+                }
+                var currentHeight = container.scrollHeight;
+                if (currentHeight === lastHeight) {
+                    stableCount++;
+                } else {
+                    stableCount = 0;
+                    lastHeight = currentHeight;
+                }
+                checks++;
+                if (stableCount >= 2 || checks >= maxChecks) {
+                    callback();
+                    return;
+                }
+                var tid = setTimeout(checkHeight, 500);
+                ssigState.timeouts.push(tid);
+            }
+            var tid = setTimeout(checkHeight, 500);
+            ssigState.timeouts.push(tid);
+        }
+        waitForStableScrollHeight(function() {
+            initialScan();
+        });
+    }
+
+    function startSelectSignedScan() {
+        addLogMessage('startSelectSignedScan: beginning scan', 'log');
+        ssigState.seenKeys = new Set();
+        ssigState.rowStates = [];
+        ssigState.leftPanelRowIndex = 0;
+        ssigState.counters = { total: 0, selected: 0, already: 0, skippedPISigned: 0, skippedNotEligible: 0, strikethrough: 0, failures: 0, pending: 0 };
+        ssigDetectSignatureColumns();
+        ssigAutoScrollScan({
+            onRow: function(rowState) {
+                addLogMessage('startSelectSignedScan: onRow name=' + rowState.nameDisplay, 'log');
+            },
+            onProgress: function(data) {
+                addLogMessage('startSelectSignedScan: scanned ' + data.scanned + ' rows', 'log');
+                ssigUpdateAriaLive('Scanned ' + data.scanned + ' rows');
+            },
+            onDone: function(data) {
+                addLogMessage('startSelectSignedScan: scan done total=' + data.total + ' reason=' + data.reason, 'log');
+                removeCollectingDataPanel('ssig');
+                if (data.reason === 'stopped' || !ssigState.isRunning) {
+                    addLogMessage('startSelectSignedScan: stopped during scan', 'warn');
+                    return;
+                }
+                ssigState.counters.total = ssigState.rowStates.length;
+                ssigState.counters.pending = ssigState.rowStates.length;
+                updateRightPanelSummarySsig(ssigState.counters);
+                var badge = document.getElementById('ssig-status-badge');
+                if (badge) {
+                    badge.textContent = SSIG_LABELS.selecting;
+                }
+                var titleEl = document.getElementById('ssig-progress-title');
+                if (titleEl) {
+                    titleEl.textContent = SSIG_LABELS.progressTitle + ' - Selecting';
+                }
+                ssigUpdateAriaLive('Scan complete. Processing ' + ssigState.rowStates.length + ' rows.');
+                processNextSsigRow(0);
+            }
+        });
+    }
+
+    function processNextSsigRow(index) {
+        if (ssigState.stopRequested || !ssigState.isRunning) {
+            addLogMessage('processNextSsigRow: stopped at index=' + index, 'warn');
+            for (var si = index; si < ssigState.rowStates.length; si++) {
+                var stoppedRs = ssigState.rowStates[si];
+                if (stoppedRs._status !== 'finalized') {
+                    stoppedRs._status = 'finalized';
+                    ssigState.counters.pending--;
+                    updateRightPanelStatusSsig(stoppedRs._rowKey, SSIG_LABELS.statusStopped);
+                }
+            }
+            updateRightPanelSummarySsig(ssigState.counters);
+            finalizeSsigRun();
+            return;
+        }
+        if (index >= ssigState.rowStates.length) {
+            addLogMessage('processNextSsigRow: all rows processed', 'log');
+            finalizeSsigRun();
+            return;
+        }
+        var rs = ssigState.rowStates[index];
+        addLogMessage('processNextSsigRow: index=' + index + ' name=' + rs.nameDisplay + ' eligible=' + rs.eligible + ' reason=' + rs.reason, 'log');
+        if (rs.rowEl && rs.rowEl.querySelector('.log-entry--struckThrough')) {
+            addLogMessage('processNextSsigRow: skipping strikethrough entry: ' + rs.nameDisplay, 'log');
+            rs._status = 'finalized';
+            ssigState.counters.strikethrough++;
+            ssigState.counters.pending--;
+            updateRightPanelStatusSsig(rs._rowKey, SSIG_LABELS.statusStrikethrough);
+            updateRightPanelSummarySsig(ssigState.counters);
+            var tidStrike = setTimeout(function() {
+                processNextSsigRow(index + 1);
+            }, 20);
+            ssigState.timeouts.push(tidStrike);
+            return;
+        }
+        if (rs.reason === 'piSigned') {
+            rs._status = 'finalized';
+            ssigState.counters.skippedPISigned++;
+            ssigState.counters.pending--;
+            updateRightPanelStatusSsig(rs._rowKey, SSIG_LABELS.statusPISigned, 'PI: ' + rs.piSig.text);
+            updateRightPanelSummarySsig(ssigState.counters);
+            var tid1 = setTimeout(function() {
+                processNextSsigRow(index + 1);
+            }, 20);
+            ssigState.timeouts.push(tid1);
+            return;
+        }
+        if (!rs.eligible) {
+            rs._status = 'finalized';
+            ssigState.counters.skippedNotEligible++;
+            ssigState.counters.pending--;
+            updateRightPanelStatusSsig(rs._rowKey, SSIG_LABELS.statusNotEligible, 'Staff: ' + rs.staffSig.text);
+            updateRightPanelSummarySsig(ssigState.counters);
+            var tid2 = setTimeout(function() {
+                processNextSsigRow(index + 1);
+            }, 20);
+            ssigState.timeouts.push(tid2);
+            return;
+        }
+        selectRowCheckbox(rs).then(function(result) {
+            rs._status = 'finalized';
+            if (result === 'already') {
+                ssigState.counters.already++;
+                ssigState.counters.pending--;
+                updateRightPanelStatusSsig(rs._rowKey, SSIG_LABELS.statusAlready);
+                addLogMessage('processNextSsigRow: already checked name=' + rs.nameDisplay, 'log');
+            } else if (result === true) {
+                ssigState.counters.selected++;
+                ssigState.counters.pending--;
+                updateRightPanelStatusSsig(rs._rowKey, SSIG_LABELS.statusSelected);
+                addLogMessage('processNextSsigRow: selected name=' + rs.nameDisplay, 'log');
+            } else {
+                ssigState.counters.failures++;
+                ssigState.counters.pending--;
+                updateRightPanelStatusSsig(rs._rowKey, SSIG_LABELS.statusFailed);
+                addLogMessage('processNextSsigRow: failed name=' + rs.nameDisplay, 'warn');
+            }
+            updateRightPanelSummarySsig(ssigState.counters);
+            var tid3 = setTimeout(function() {
+                processNextSsigRow(index + 1);
+            }, SSIG_TIMEOUTS.clickSettleMs);
+            ssigState.timeouts.push(tid3);
+        });
+    }
+
+    function finalizeSsigRun() {
+        addLogMessage('finalizeSsigRun: selected=' + ssigState.counters.selected + ' already=' + ssigState.counters.already + ' piSigned=' + ssigState.counters.skippedPISigned + ' notEligible=' + ssigState.counters.skippedNotEligible + ' strikethrough=' + ssigState.counters.strikethrough + ' failed=' + ssigState.counters.failures, 'log');
+        ssigSetAriaBusyOff();
+        var badge = document.getElementById('ssig-status-badge');
+        if (badge) {
+            badge.textContent = SSIG_LABELS.done;
+            badge.style.color = '#6bcf7f';
+        }
+        var titleEl = document.getElementById('ssig-progress-title');
+        if (titleEl) {
+            titleEl.textContent = SSIG_LABELS.progressTitle + ' - Complete';
+        }
+        ssigUpdateAriaLive('Selection complete. Selected: ' + ssigState.counters.selected + ', Already: ' + ssigState.counters.already + ', PI Signed: ' + ssigState.counters.skippedPISigned + ', Not Eligible: ' + ssigState.counters.skippedNotEligible + ', Strikethrough: ' + ssigState.counters.strikethrough + ', Failed: ' + ssigState.counters.failures);
+        ssigState.isRunning = false;
+    }
+
+    function selectSignedCheckboxInit() {
+        addLogMessage('selectSignedCheckboxInit: starting feature', 'log');
+        ssigState.focusReturnElement = document.getElementById('ssig-select-btn');
+        resetSsigState();
+        var presenceEl = document.querySelector(SSIG_SELECTORS.presenceCheck);
+        if (!presenceEl) {
+            addLogMessage('selectSignedCheckboxInit: page check failed, showing warning', 'warn');
+            showSsigWarning();
+            return;
+        }
+        addLogMessage('selectSignedCheckboxInit: page valid, opening progress panel', 'log');
+        ssigState.isRunning = true;
+        showSelectSignedCheckboxProgressPanel();
+        ssigSetAriaBusyOn();
+        ssigUpdateAriaLive(SSIG_LABELS.scanning);
+        showCollectingDataPanel('ssig', SSIG_LABELS.progressTitle);
+        startSelectSignedScan();
+    }
+
+    function showSsigWarning() {
+        addLogMessage('showSsigWarning: creating warning popup', 'log');
+        var modal = document.createElement('div');
+        modal.id = 'ssig-warning-modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 30000; display: flex; align-items: center; justify-content: center;';
+        var container = document.createElement('div');
+        container.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; width: 450px; max-width: 90%; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); position: relative;';
+        container.setAttribute('role', 'alertdialog');
+        container.setAttribute('aria-modal', 'true');
+        container.setAttribute('aria-labelledby', 'ssig-warning-title');
+        container.setAttribute('aria-describedby', 'ssig-warning-message');
+        var header = document.createElement('div');
+        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;';
+        var title = document.createElement('h3');
+        title.id = 'ssig-warning-title';
+        title.textContent = 'Document Log Not Found';
+        title.style.cssText = 'margin: 0; color: white; font-size: 18px; font-weight: 600;';
+        var closeButton = document.createElement('button');
+        closeButton.innerHTML = '\u2715';
+        closeButton.setAttribute('aria-label', 'Close warning');
+        closeButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;';
+        closeButton.onmouseover = function() {
+            closeButton.style.background = 'rgba(255, 255, 255, 0.3)';
+        };
+        closeButton.onmouseout = function() {
+            closeButton.style.background = 'rgba(255, 255, 255, 0.2)';
+        };
+        var closeWarning = function() {
+            if (modal.parentNode) {
+                document.body.removeChild(modal);
+            }
+            stopSelectSignedCheckbox();
+        };
+        closeButton.onclick = closeWarning;
+        header.appendChild(title);
+        header.appendChild(closeButton);
+        var messageDiv = document.createElement('p');
+        messageDiv.id = 'ssig-warning-message';
+        messageDiv.textContent = 'You are not on the Document Log page. Please navigate to a page with the Document Log Entries grid before using this feature.';
+        messageDiv.style.cssText = 'color: rgba(255, 255, 255, 0.9); margin: 0; font-size: 14px; line-height: 1.5;';
+        var okButton = document.createElement('button');
+        okButton.textContent = 'OK';
+        okButton.style.cssText = 'background: rgba(255, 255, 255, 0.2); border: 2px solid rgba(255, 255, 255, 0.3); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.3s ease; margin-top: 20px; width: 100%;';
+        okButton.onmouseover = function() {
+            okButton.style.background = 'rgba(255, 255, 255, 0.3)';
+        };
+        okButton.onmouseout = function() {
+            okButton.style.background = 'rgba(255, 255, 255, 0.2)';
+        };
+        okButton.onclick = closeWarning;
+        var keyHandler = function(e) {
+            if (e.key === 'Escape') {
+                closeWarning();
+            }
+        };
+        document.addEventListener('keydown', keyHandler);
+        ssigState.eventListeners.push({ element: document, type: 'keydown', handler: keyHandler });
+        container.appendChild(header);
+        container.appendChild(messageDiv);
+        container.appendChild(okButton);
+        modal.appendChild(container);
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        modal.style.pointerEvents = 'none';
+        container.style.pointerEvents = 'auto';
+        makeDraggable(container, header);
+        document.body.appendChild(modal);
+        okButton.focus();
+        addLogMessage('showSsigWarning: warning displayed', 'log');
+    }
+
+    function stopSelectSignedCheckbox() {
+        addLogMessage('stopSelectSignedCheckbox: stopping', 'log');
+        ssigState.isRunning = false;
+        ssigState.stopRequested = true;
+        for (var i = 0; i < ssigState.idleCallbackIds.length; i++) {
+            if (typeof cancelIdleCallback === 'function') {
+                cancelIdleCallback(ssigState.idleCallbackIds[i]);
+            }
+        }
+        ssigState.idleCallbackIds = [];
+        for (var i2 = 0; i2 < ssigState.rafIds.length; i2++) {
+            cancelAnimationFrame(ssigState.rafIds[i2]);
+        }
+        ssigState.rafIds = [];
+        for (var i3 = 0; i3 < ssigState.observers.length; i3++) {
+            try {
+                ssigState.observers[i3].disconnect();
+            } catch (e) {
+                addLogMessage('stopSelectSignedCheckbox: error disconnecting observer: ' + e, 'error');
+            }
+        }
+        ssigState.observers = [];
+        for (var i4 = 0; i4 < ssigState.timeouts.length; i4++) {
+            try {
+                clearTimeout(ssigState.timeouts[i4]);
+            } catch (e2) {
+                addLogMessage('stopSelectSignedCheckbox: error clearing timeout: ' + e2, 'error');
+            }
+        }
+        ssigState.timeouts = [];
+        for (var i5 = 0; i5 < ssigState.intervals.length; i5++) {
+            try {
+                clearInterval(ssigState.intervals[i5]);
+            } catch (e3) {
+                addLogMessage('stopSelectSignedCheckbox: error clearing interval: ' + e3, 'error');
+            }
+        }
+        ssigState.intervals = [];
+        for (var i6 = 0; i6 < ssigState.eventListeners.length; i6++) {
+            try {
+                var l = ssigState.eventListeners[i6];
+                l.element.removeEventListener(l.type, l.handler);
+            } catch (e4) {
+                addLogMessage('stopSelectSignedCheckbox: error removing listener: ' + e4, 'error');
+            }
+        }
+        ssigState.eventListeners = [];
+        ssigSetAriaBusyOff();
+        var progressModal = document.getElementById('ssig-progress-modal');
+        if (progressModal && progressModal.parentNode) {
+            progressModal.parentNode.removeChild(progressModal);
+        }
+        var warningModal = document.getElementById('ssig-warning-modal');
+        if (warningModal && warningModal.parentNode) {
+            warningModal.parentNode.removeChild(warningModal);
+        }
+        removeCollectingDataPanel('ssig');
+        if (ssigState.focusReturnElement) {
+            ssigState.focusReturnElement.focus();
+        }
+        resetSsigState();
+        addLogMessage('stopSelectSignedCheckbox: cleanup complete', 'log');
+    }
+
     //==========================
     // ADD START DATE FUNCTIONS
     //==========================
@@ -11407,7 +12618,7 @@ function showResponsibilitiesProgressPanel(rolesData) {
         background: rgba(255, 255, 255, 0.05);
     `;
 
-        for (let i = 1; i <= 7; i++) {
+        for (let i = 1; i <= 8; i++) {
             const button = document.createElement('button');
             if (i === 1) {
                 button.textContent = 'Add Signatures';
@@ -11429,6 +12640,9 @@ function showResponsibilitiesProgressPanel(rolesData) {
             } else if (i === 7) {
                 button.textContent = 'Add Start Date';
                 button.id = 'startdate-btn';
+            } else if (i === 8) {
+                button.textContent = 'Select Signed Checkbox';
+                button.id = 'ssig-select-btn';
             }
             button.style.cssText = `
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -11485,6 +12699,11 @@ function showResponsibilitiesProgressPanel(rolesData) {
                 button.onclick = () => {
                     console.log('Add Start Date button clicked');
                     addStartDateInit();
+                };
+            } else if (i === 8) {
+                button.onclick = () => {
+                    console.log('Select Signed Checkbox button clicked');
+                    selectSignedCheckboxInit();
                 };
             }
 
@@ -11798,8 +13017,8 @@ function showResponsibilitiesProgressPanel(rolesData) {
         };
         confirmButton.onclick = () => {
             addLogMessage('openSignaturesInputGUI: Confirm clicked', 'log');
-            const names = parseNames(textarea.value);
-            addLogMessage('openSignaturesInputGUI: parsed ' + names.length + ' name(s)', 'log');
+            const names = sortNamesAlphabetically(parseNames(textarea.value));
+            addLogMessage('openSignaturesInputGUI: parsed and sorted ' + names.length + ' name(s)', 'log');
             if (names.length === 0) {
                 addLogMessage('openSignaturesInputGUI: no names entered, showing warning', 'warn');
                 showWarning('Please enter at least one name.');
@@ -11843,6 +13062,15 @@ function showResponsibilitiesProgressPanel(rolesData) {
             showWarning('Please navigate to the "Request Signatures" page first.');
         }
     }
+    function sortNamesAlphabetically(names) {
+        addLogMessage('sortNamesAlphabetically: sorting ' + names.length + ' name(s)', 'log');
+        var sorted = names.slice().sort(function(a, b) {
+            return a.localeCompare(b, undefined, { sensitivity: 'base' });
+        });
+        addLogMessage('sortNamesAlphabetically: sorted order = ' + JSON.stringify(sorted), 'log');
+        return sorted;
+    }
+
     function parseNames(input) {
         addLogMessage('parseNames: start', 'log');
         if (!input || !input.trim()) {
