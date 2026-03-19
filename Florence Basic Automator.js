@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name Florence Automator
 // @namespace vinh.activity.plan.state
-// @version 1.4.0
+// @version 1.5.0
 // @description
 // @match https://us.v2.researchbinders.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/heads/main/Florence%20Basic%20Automator.js
@@ -8434,7 +8434,21 @@ function showResponsibilitiesProgressPanel(rolesData) {
         datepickerDaySpan: 'span',
         datepickerDayMutedClass: 'text-muted',
         ariaLiveRegion: '.aria-live-region',
-        mainPanelButtonTarget: '.main-gui-panel'
+        mainPanelButtonTarget: '.main-gui-panel',
+        saveButton: 'button.btn.btn-primary.test-submitBtn, .log-entry-form button.btn.btn-primary',
+        saveButtonTextFallback: 'button.btn.btn-primary',
+        toastContainer: '.toast, .toastr, .alert',
+        toastSuccess: '.toast-success, .alert-success, .toast.toast-success',
+        editContextRoot: '.log-entry-form, form.log-entry-form, .document-log-entry-edit, .modal.show, body',
+        memberDisplayInEdit: '.filtered-select__input[readonly], .filtered-select__display, [data-test="member-display"], .log-entry-form__member .form-control[readonly]',
+        startDateReadonlyInGrid: '.test-date-time-picker-3[placeholder*="Start Date"], input[placeholder="Start Date"]',
+        gridDateCellText: '.u-text-overflow-ellipsis, span, div',
+        overlayOrSpinner: '.loading, .spinner, .overlay, .cdk-overlay-container',
+        reasonModal: 'section.test-reasonModal',
+        reasonInput: 'textarea#reason-input, textarea.test-reason',
+        reasonSubmitBtn: 'button.test-reasonSubmitBtn',
+        reasonCancelBtn: 'button.test-reasonCancelBtn',
+        reasonCloseBtn: 'section.test-reasonModal button.test-close-modal-button'
     };
 
     const STARTDATE_TIMEOUTS = {
@@ -8453,7 +8467,17 @@ function showResponsibilitiesProgressPanel(rolesData) {
         scanSettleMs: 250,
         idleBetweenBatchesMs: 80,
         maxScanDurationMs: 120000,
-        retryScanDelayMs: 150
+        retryScanDelayMs: 150,
+        waitSaveButtonMs: 6000,
+        waitSaveCompleteMs: 10000,
+        waitToastMs: 5000,
+        waitEditCloseMs: 8000,
+        waitRowRequeryMs: 500,
+        settleAfterSaveMs: 250,
+        maxPerNameDurationMs: 90000,
+        waitReasonModalMs: 6000,
+        waitReasonSubmitEnabledMs: 3000,
+        waitReasonModalCloseMs: 8000
     };
 
     const STARTDATE_LABELS = {
@@ -8472,7 +8496,19 @@ function showResponsibilitiesProgressPanel(rolesData) {
         scanError: 'Scan Error',
         progressInProgress: 'In Progress',
         progressComplete: 'Complete',
-        progressStopped: 'Stopped'
+        progressStopped: 'Stopped',
+        statusSaving: 'Saving',
+        statusSaved: 'Saved',
+        statusAlreadySet: 'Already Set',
+        statusSaveFailed: 'Save Failed',
+        statusLocating: 'Locating',
+        statusEditing: 'Editing',
+        statusEditFailed: 'Edit Failed',
+        statusMenuFailed: 'Menu Failed',
+        statusDatepickerFailed: 'Datepicker Failed',
+        statusDuplicate: 'Duplicate (ignored)',
+        statusEnteringReason: 'Entering Reason',
+        reasonText: 'Add Start Date'
     };
 
     const STARTDATE_REGEX = {
@@ -8509,6 +8545,15 @@ function showResponsibilitiesProgressPanel(rolesData) {
         retryScanAttempts: 3
     };
 
+    const STARTDATE_COUNTERS = {
+        total: 0,
+        saved: 0,
+        alreadySet: 0,
+        notFound: 0,
+        failures: 0,
+        pending: 0
+    };
+
     var startDateState = {
         isRunning: false,
         stopRequested: false,
@@ -8528,7 +8573,8 @@ function showResponsibilitiesProgressPanel(rolesData) {
         userScrollHandler: null,
         userScrollPaused: false,
         lastAutoScrollTime: 0,
-        leftPanelRowIndex: 0
+        leftPanelRowIndex: 0,
+        counters: { total: 0, saved: 0, alreadySet: 0, notFound: 0, failures: 0, pending: 0 }
     };
 
     function resetStartDateState() {
@@ -8551,6 +8597,14 @@ function showResponsibilitiesProgressPanel(rolesData) {
         startDateState.userScrollPaused = false;
         startDateState.lastAutoScrollTime = 0;
         startDateState.leftPanelRowIndex = 0;
+        startDateState.counters = {
+            total: 0,
+            saved: 0,
+            alreadySet: 0,
+            notFound: 0,
+            failures: 0,
+            pending: 0
+        };
     }
 
     function startDateWaitForElement(selector, timeout) {
@@ -8651,7 +8705,13 @@ function showResponsibilitiesProgressPanel(rolesData) {
                     continue;
                 }
                 if (seenKeys.has(pairKey)) {
-                    addLogMessage('parseNamesInputForStartDate: duplicate pairKey "' + pairKey + '" for "' + name + '", skip', 'log');
+                    addLogMessage('parseNamesInputForStartDate: duplicate pairKey "' + pairKey + '" for "' + name + '"', 'log');
+                    results.push({
+                        display: name,
+                        pairKey: pairKey,
+                        status: STARTDATE_LABELS.statusDuplicate,
+                        isDuplicate: true
+                    });
                     continue;
                 }
                 seenKeys.add(pairKey);
@@ -9449,12 +9509,29 @@ function showResponsibilitiesProgressPanel(rolesData) {
         summaryFooter.id = 'startdate-summary-footer';
         summaryFooter.setAttribute('aria-label', 'Processing summary');
         summaryFooter.style.cssText = 'display: flex; justify-content: space-around; align-items: center; padding: 10px 16px; background: rgba(0, 0, 0, 0.2); border-radius: 8px; margin-top: 12px; flex-shrink: 0;';
+        var nonDuplicateCount = 0;
+        for (var ndi = 0; ndi < startDateState.parsedNames.length; ndi++) {
+            if (!startDateState.parsedNames[ndi].isDuplicate) {
+                nonDuplicateCount++;
+            }
+        }
+        startDateState.counters = {
+            total: nonDuplicateCount,
+            saved: 0,
+            alreadySet: 0,
+            notFound: 0,
+            failures: 0,
+            pending: nonDuplicateCount
+        };
+        addLogMessage('showStartDateProgressPanel: nonDuplicateCount=' + nonDuplicateCount, 'log');
         var summaryItems = [
-            { id: 'startdate-summary-total', label: 'Total', value: String(startDateState.parsedNames.length) },
-            { id: 'startdate-summary-completed', label: 'Completed', value: '0' },
+            { id: 'startdate-summary-total', label: 'Total', value: String(nonDuplicateCount) },
+            { id: 'startdate-summary-saved', label: 'Saved', value: '0' },
+            { id: 'startdate-summary-alreadyset', label: 'Already Set', value: '0' },
             { id: 'startdate-summary-notfound', label: 'Not Found', value: '0' },
             { id: 'startdate-summary-failed', label: 'Failed', value: '0' },
-            { id: 'startdate-summary-pending', label: 'Pending', value: String(startDateState.parsedNames.length) }
+            { id: 'startdate-summary-pending', label: 'Pending', value: String(nonDuplicateCount) },
+            { id: 'startdate-summary-percent', label: 'Progress', value: '0%' }
         ];
         for (var si = 0; si < summaryItems.length; si++) {
             var sItem = document.createElement('div');
@@ -9493,7 +9570,7 @@ function showResponsibilitiesProgressPanel(rolesData) {
         initializeStartDateRightPanel();
         closeButton.focus();
         addLogMessage('showStartDateProgressPanel: displayed', 'log');
-        beginSetStartDateForFirstCandidate();
+        beginSetStartDatesForQueue();
     }
 
     function populateStartDateLeftPanel() {
@@ -9521,15 +9598,24 @@ function showResponsibilitiesProgressPanel(rolesData) {
         rightPanel.innerHTML = '';
         for (var i = 0; i < startDateState.parsedNames.length; i++) {
             var candidate = startDateState.parsedNames[i];
-            var item = createListItem(candidate.display, STARTDATE_LABELS.statusPending, 'pending', i + 1);
+            var statusText = STARTDATE_LABELS.statusPending;
+            var statusType = 'pending';
+            if (candidate.isDuplicate) {
+                statusText = STARTDATE_LABELS.statusDuplicate;
+                statusType = 'duplicate';
+            }
+            var item = createListItem(candidate.display, statusText, statusType, i + 1);
             item.setAttribute('data-pairkey', candidate.pairKey);
+            if (candidate.isDuplicate) {
+                item.setAttribute('data-duplicate', 'true');
+            }
             rightPanel.appendChild(item);
         }
         addLogMessage('initializeStartDateRightPanel: added ' + startDateState.parsedNames.length + ' items', 'log');
     }
 
-    function updateStartDateRightPanelStatus(pairKey, newStatus) {
-        addLogMessage('updateStartDateRightPanelStatus: pairKey=' + pairKey + ' status=' + newStatus, 'log');
+    function updateStartDateRightPanelStatus(pairKey, newStatus, detailsOptional) {
+        addLogMessage('updateStartDateRightPanelStatus: pairKey=' + pairKey + ' status=' + newStatus + (detailsOptional ? ' details=' + detailsOptional : ''), 'log');
         var rightPanel = document.getElementById('startdate-right-panel');
         if (!rightPanel) {
             addLogMessage('updateStartDateRightPanelStatus: right panel not found', 'error');
@@ -9538,80 +9624,95 @@ function showResponsibilitiesProgressPanel(rolesData) {
         var items = rightPanel.querySelectorAll('.' + ELOG_CSS_CLASSNAMES.listItem);
         for (var i = 0; i < items.length; i++) {
             var item = items[i];
-            if (item.getAttribute('data-pairkey') === pairKey) {
-                var badge = item.querySelector('.elog-status-badge');
-                if (badge) {
-                    badge.textContent = newStatus;
-                    var badgeColor = 'rgba(255, 255, 255, 0.7)';
-                    var badgeBg = 'rgba(255, 255, 255, 0.1)';
-                    if (newStatus === STARTDATE_LABELS.statusCompleted) {
-                        badgeColor = '#6bcf7f';
-                        badgeBg = 'rgba(107, 207, 127, 0.2)';
-                    } else if (newStatus === STARTDATE_LABELS.statusNotFound) {
-                        badgeColor = '#ffa500';
-                        badgeBg = 'rgba(255, 165, 0, 0.2)';
-                    } else if (newStatus === STARTDATE_LABELS.statusFailed) {
-                        badgeColor = '#ff6b6b';
-                        badgeBg = 'rgba(255, 107, 107, 0.2)';
-                    } else if (newStatus === STARTDATE_LABELS.statusStopped) {
-                        badgeColor = '#aaa';
-                        badgeBg = 'rgba(170, 170, 170, 0.2)';
-                    } else if (newStatus === STARTDATE_LABELS.statusSettingDate) {
-                        badgeColor = '#64b5f6';
-                        badgeBg = 'rgba(100, 181, 246, 0.2)';
-                    } else if (newStatus === STARTDATE_LABELS.statusPending) {
-                        badgeColor = '#ffd93d';
-                        badgeBg = 'rgba(255, 217, 61, 0.2)';
-                    }
-                    badge.style.color = badgeColor;
-                    badge.style.background = badgeBg;
-                }
-                break;
+            if (item.getAttribute('data-pairkey') !== pairKey) {
+                continue;
             }
+            if (item.getAttribute('data-duplicate') === 'true') {
+                continue;
+            }
+            var badge = item.querySelector('.elog-status-badge');
+            if (badge) {
+                badge.textContent = newStatus;
+                var badgeColor = 'rgba(255, 255, 255, 0.7)';
+                var badgeBg = 'rgba(255, 255, 255, 0.1)';
+                if (newStatus === STARTDATE_LABELS.statusSaved || newStatus === STARTDATE_LABELS.statusCompleted) {
+                    badgeColor = '#6bcf7f';
+                    badgeBg = 'rgba(107, 207, 127, 0.2)';
+                } else if (newStatus === STARTDATE_LABELS.statusAlreadySet) {
+                    badgeColor = '#81c784';
+                    badgeBg = 'rgba(129, 199, 132, 0.2)';
+                } else if (newStatus === STARTDATE_LABELS.statusNotFound) {
+                    badgeColor = '#ffa500';
+                    badgeBg = 'rgba(255, 165, 0, 0.2)';
+                } else if (newStatus === STARTDATE_LABELS.statusFailed ||
+                    newStatus === STARTDATE_LABELS.statusSaveFailed ||
+                    newStatus === STARTDATE_LABELS.statusEditFailed ||
+                    newStatus === STARTDATE_LABELS.statusMenuFailed ||
+                    newStatus === STARTDATE_LABELS.statusDatepickerFailed) {
+                    badgeColor = '#ff6b6b';
+                    badgeBg = 'rgba(255, 107, 107, 0.2)';
+                } else if (newStatus === STARTDATE_LABELS.statusStopped ||
+                    newStatus === STARTDATE_LABELS.statusDuplicate) {
+                    badgeColor = '#aaa';
+                    badgeBg = 'rgba(170, 170, 170, 0.2)';
+                } else if (newStatus === STARTDATE_LABELS.statusSettingDate ||
+                    newStatus === STARTDATE_LABELS.statusSaving ||
+                    newStatus === STARTDATE_LABELS.statusLocating ||
+                    newStatus === STARTDATE_LABELS.statusEditing ||
+                    newStatus === STARTDATE_LABELS.statusEnteringReason) {
+                    badgeColor = '#64b5f6';
+                    badgeBg = 'rgba(100, 181, 246, 0.2)';
+                } else if (newStatus === STARTDATE_LABELS.statusPending) {
+                    badgeColor = '#ffd93d';
+                    badgeBg = 'rgba(255, 217, 61, 0.2)';
+                }
+                badge.style.color = badgeColor;
+                badge.style.background = badgeBg;
+                if (detailsOptional) {
+                    badge.setAttribute('title', detailsOptional);
+                }
+            }
+            break;
         }
-        updateStartDateAriaLive(pairKey + ' ' + newStatus);
+        var ariaMsg = pairKey + ' ' + newStatus;
+        if (detailsOptional) {
+            ariaMsg += ' - ' + detailsOptional;
+        }
+        updateStartDateAriaLive(ariaMsg);
     }
 
-    function updateStartDateSummary() {
-        var completed = 0;
-        var notFound = 0;
-        var failed = 0;
-        var pending = 0;
-        for (var i = 0; i < startDateState.parsedNames.length; i++) {
-            var s = startDateState.parsedNames[i].status;
-            if (s === STARTDATE_LABELS.statusCompleted) {
-                completed++;
-            } else if (s === STARTDATE_LABELS.statusNotFound) {
-                notFound++;
-            } else if (s === STARTDATE_LABELS.statusFailed) {
-                failed++;
-            } else if (s === STARTDATE_LABELS.statusPending || s === STARTDATE_LABELS.statusSettingDate) {
-                pending++;
-            } else if (s === STARTDATE_LABELS.statusStopped) {
-                failed++;
-            }
+    function updateStartDateRightPanelSummary(counters) {
+        var elTotal = document.getElementById('startdate-summary-total');
+        var elSaved = document.getElementById('startdate-summary-saved');
+        var elAlreadySet = document.getElementById('startdate-summary-alreadyset');
+        var elNotFound = document.getElementById('startdate-summary-notfound');
+        var elFailed = document.getElementById('startdate-summary-failed');
+        var elPending = document.getElementById('startdate-summary-pending');
+        var elPercent = document.getElementById('startdate-summary-percent');
+        if (elTotal) {
+            elTotal.textContent = String(counters.total);
         }
-        var el1 = document.getElementById('startdate-summary-total');
-        var el2 = document.getElementById('startdate-summary-completed');
-        var el3 = document.getElementById('startdate-summary-notfound');
-        var el4 = document.getElementById('startdate-summary-failed');
-        var el5 = document.getElementById('startdate-summary-pending');
-        if (el1) {
-            el1.textContent = String(startDateState.parsedNames.length);
+        if (elSaved) {
+            elSaved.textContent = String(counters.saved);
         }
-        if (el2) {
-            el2.textContent = String(completed);
+        if (elAlreadySet) {
+            elAlreadySet.textContent = String(counters.alreadySet);
         }
-        if (el3) {
-            el3.textContent = String(notFound);
+        if (elNotFound) {
+            elNotFound.textContent = String(counters.notFound);
         }
-        if (el4) {
-            el4.textContent = String(failed);
+        if (elFailed) {
+            elFailed.textContent = String(counters.failures);
         }
-        if (el5) {
-            el5.textContent = String(pending);
+        if (elPending) {
+            elPending.textContent = String(counters.pending);
         }
-        addLogMessage('updateStartDateSummary: completed=' + completed + ' notFound=' + notFound + ' failed=' + failed + ' pending=' + pending, 'log');
+        if (elPercent) {
+            var processed = counters.total - counters.pending;
+            var pct = counters.total > 0 ? Math.round((processed / counters.total) * 100) : 0;
+            elPercent.textContent = pct + '%';
+        }
+        addLogMessage('updateStartDateRightPanelSummary: saved=' + counters.saved + ' alreadySet=' + counters.alreadySet + ' notFound=' + counters.notFound + ' failures=' + counters.failures + ' pending=' + counters.pending, 'log');
     }
 
     function findRowByNamePairKey(targetPairKey) {
@@ -10070,8 +10171,690 @@ function showResponsibilitiesProgressPanel(rolesData) {
         });
     }
 
-    function beginSetStartDateForFirstCandidate() {
-        addLogMessage('beginSetStartDateForFirstCandidate: starting', 'log');
+    function parseDateString(text) {
+        if (!text || !text.trim()) {
+            return null;
+        }
+        var t = text.trim();
+        var slashMatch = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (slashMatch) {
+            return {
+                y: parseInt(slashMatch[3], 10),
+                m0: parseInt(slashMatch[1], 10) - 1,
+                d: parseInt(slashMatch[2], 10),
+                raw: t
+            };
+        }
+        var dashMatch = t.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+        if (dashMatch) {
+            return {
+                y: parseInt(dashMatch[3], 10),
+                m0: parseInt(dashMatch[1], 10) - 1,
+                d: parseInt(dashMatch[2], 10),
+                raw: t
+            };
+        }
+        var textMatch = t.match(/(\d{1,2})\s*([A-Za-z]+)\s*(\d{4})/);
+        if (textMatch) {
+            var tMonthStr = textMatch[2].toLowerCase();
+            for (var mi = 0; mi < STARTDATE_MONTHS.length; mi++) {
+                var monthEntry = STARTDATE_MONTHS[mi];
+                for (var ai = 0; ai < monthEntry.aliases.length; ai++) {
+                    if (tMonthStr === monthEntry.aliases[ai]) {
+                        return {
+                            y: parseInt(textMatch[3], 10),
+                            m0: monthEntry.index,
+                            d: parseInt(textMatch[1], 10),
+                            raw: t
+                        };
+                    }
+                }
+            }
+        }
+        var textMatch2 = t.match(/([A-Za-z]+)\s+(\d{1,2}),?\s*(\d{4})/);
+        if (textMatch2) {
+            var tMonthStr2 = textMatch2[1].toLowerCase();
+            for (var mi2 = 0; mi2 < STARTDATE_MONTHS.length; mi2++) {
+                var monthEntry2 = STARTDATE_MONTHS[mi2];
+                for (var ai2 = 0; ai2 < monthEntry2.aliases.length; ai2++) {
+                    if (tMonthStr2 === monthEntry2.aliases[ai2]) {
+                        return {
+                            y: parseInt(textMatch2[3], 10),
+                            m0: monthEntry2.index,
+                            d: parseInt(textMatch2[2], 10),
+                            raw: t
+                        };
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    function waitForOverlayToClear() {
+        addLogMessage('waitForOverlayToClear: checking for overlays', 'log');
+        return new Promise(function(resolve) {
+            var elapsed = 0;
+            var step = 200;
+            function check() {
+                if (startDateState.stopRequested) {
+                    resolve();
+                    return;
+                }
+                var overlays = document.querySelectorAll(STARTDATE_SELECTORS.overlayOrSpinner);
+                var hasVisible = false;
+                for (var oi = 0; oi < overlays.length; oi++) {
+                    var rect = overlays[oi].getBoundingClientRect();
+                    if (rect.width > 0 && rect.height > 0) {
+                        hasVisible = true;
+                        break;
+                    }
+                }
+                if (!hasVisible || elapsed >= 5000) {
+                    if (hasVisible) {
+                        addLogMessage('waitForOverlayToClear: timeout, overlay still present', 'warn');
+                    }
+                    resolve();
+                    return;
+                }
+                elapsed += step;
+                var tid = setTimeout(check, step);
+                startDateState.timeouts.push(tid);
+            }
+            check();
+        });
+    }
+
+    function ensureCorrectEditContextForCandidate(candidate) {
+        addLogMessage('ensureCorrectEditContextForCandidate: verifying for ' + candidate.display, 'log');
+        try {
+            var memberEls = document.querySelectorAll(STARTDATE_SELECTORS.memberDisplayInEdit);
+            for (var mi = 0; mi < memberEls.length; mi++) {
+                var memberText = memberEls[mi].value || memberEls[mi].textContent || '';
+                memberText = memberText.trim();
+                if (!memberText) {
+                    continue;
+                }
+                var memberPairKey = normalizeFirstLastPair(memberText);
+                if (memberPairKey === candidate.pairKey) {
+                    addLogMessage('ensureCorrectEditContextForCandidate: matched for ' + candidate.display, 'log');
+                    return true;
+                }
+            }
+            if (memberEls.length === 0) {
+                addLogMessage('ensureCorrectEditContextForCandidate: no member display found, proceeding with post-save guard', 'log');
+                return true;
+            }
+            addLogMessage('ensureCorrectEditContextForCandidate: mismatch for ' + candidate.pairKey, 'error');
+            return false;
+        } catch (err) {
+            addLogMessage('ensureCorrectEditContextForCandidate: error: ' + err.message, 'error');
+            return false;
+        }
+    }
+
+    function readStartDateFromEditOrGrid(rowEl) {
+        addLogMessage('readStartDateFromEditOrGrid: reading date', 'log');
+        try {
+            var editInputs = document.querySelectorAll(STARTDATE_SELECTORS.startDateReadonlyInGrid);
+            for (var ei = 0; ei < editInputs.length; ei++) {
+                var val = editInputs[ei].value || '';
+                val = val.trim();
+                if (val) {
+                    addLogMessage('readStartDateFromEditOrGrid: edit input value="' + val + '"', 'log');
+                    var parsed = parseDateString(val);
+                    if (parsed) {
+                        return parsed;
+                    }
+                }
+            }
+            if (rowEl) {
+                var cells = rowEl.querySelectorAll(STARTDATE_SELECTORS.mainGridCell);
+                for (var ci = 0; ci < cells.length; ci++) {
+                    var cellEls = cells[ci].querySelectorAll(STARTDATE_SELECTORS.gridDateCellText);
+                    for (var di = 0; di < cellEls.length; di++) {
+                        var cellText = cellEls[di].textContent.trim();
+                        if (!cellText) {
+                            continue;
+                        }
+                        var cellParsed = parseDateString(cellText);
+                        if (cellParsed) {
+                            addLogMessage('readStartDateFromEditOrGrid: grid cell date="' + cellText + '"', 'log');
+                            return cellParsed;
+                        }
+                    }
+                }
+            }
+            addLogMessage('readStartDateFromEditOrGrid: no date found', 'log');
+            return null;
+        } catch (err) {
+            addLogMessage('readStartDateFromEditOrGrid: error: ' + err.message, 'error');
+            return null;
+        }
+    }
+
+    function isDateEqualToTarget(foundDateObj, targetDateObj) {
+        if (!foundDateObj || !targetDateObj) {
+            return false;
+        }
+        var yMatch = foundDateObj.y === targetDateObj.year;
+        var mMatch = foundDateObj.m0 === targetDateObj.monthIndex0;
+        var dMatch = foundDateObj.d === targetDateObj.day;
+        addLogMessage('isDateEqualToTarget: found=' + foundDateObj.y + '/' + foundDateObj.m0 + '/' + foundDateObj.d + ' target=' + targetDateObj.year + '/' + targetDateObj.monthIndex0 + '/' + targetDateObj.day + ' match=' + (yMatch && mMatch && dMatch), 'log');
+        return yMatch && mMatch && dMatch;
+    }
+
+    function findSaveButton() {
+        addLogMessage('findSaveButton: searching', 'log');
+        var contextRoots = document.querySelectorAll(STARTDATE_SELECTORS.editContextRoot);
+        for (var ri = 0; ri < contextRoots.length; ri++) {
+            var root = contextRoots[ri];
+            if (root === document.body) {
+                continue;
+            }
+            var btn = root.querySelector(STARTDATE_SELECTORS.saveButton);
+            if (btn) {
+                addLogMessage('findSaveButton: found in context root ' + ri, 'log');
+                return btn;
+            }
+        }
+        var globalBtn = document.querySelector(STARTDATE_SELECTORS.saveButton);
+        if (globalBtn) {
+            addLogMessage('findSaveButton: found globally', 'log');
+            return globalBtn;
+        }
+        var fallbackBtns = document.querySelectorAll(STARTDATE_SELECTORS.saveButtonTextFallback);
+        for (var fi = 0; fi < fallbackBtns.length; fi++) {
+            var btnText = fallbackBtns[fi].textContent.trim().toLowerCase();
+            if (btnText === 'save') {
+                addLogMessage('findSaveButton: found via text fallback', 'log');
+                return fallbackBtns[fi];
+            }
+        }
+        addLogMessage('findSaveButton: not found', 'warn');
+        return null;
+    }
+
+    function waitForSaveSignal(callback) {
+        addLogMessage('waitForSaveSignal: waiting for save completion', 'log');
+        var elapsed = 0;
+        var step = 300;
+        var signaled = false;
+        function check() {
+            if (signaled) {
+                return;
+            }
+            if (startDateState.stopRequested) {
+                signaled = true;
+                callback(false);
+                return;
+            }
+            if (elapsed >= STARTDATE_TIMEOUTS.waitSaveCompleteMs) {
+                addLogMessage('waitForSaveSignal: timeout', 'warn');
+                signaled = true;
+                callback(false);
+                return;
+            }
+            var toastEl = document.querySelector(STARTDATE_SELECTORS.toastSuccess);
+            if (toastEl) {
+                addLogMessage('waitForSaveSignal: toast success found', 'log');
+                signaled = true;
+                callback(true);
+                return;
+            }
+            var toastContainers = document.querySelectorAll(STARTDATE_SELECTORS.toastContainer);
+            for (var ti = 0; ti < toastContainers.length; ti++) {
+                var tText = toastContainers[ti].textContent.toLowerCase();
+                if (tText.indexOf('saved') !== -1 || tText.indexOf('success') !== -1) {
+                    addLogMessage('waitForSaveSignal: toast text indicates success', 'log');
+                    signaled = true;
+                    callback(true);
+                    return;
+                }
+            }
+            var saveBtn = document.querySelector(STARTDATE_SELECTORS.saveButton);
+            if (!saveBtn) {
+                addLogMessage('waitForSaveSignal: save button disappeared, form likely closed', 'log');
+                signaled = true;
+                callback(true);
+                return;
+            }
+            if (saveBtn.disabled) {
+                var spinnerNearby = document.querySelector(STARTDATE_SELECTORS.overlayOrSpinner);
+                var spinnerVisible = false;
+                if (spinnerNearby) {
+                    var sRect = spinnerNearby.getBoundingClientRect();
+                    if (sRect.width > 0 && sRect.height > 0) {
+                        spinnerVisible = true;
+                    }
+                }
+                if (!spinnerVisible) {
+                    addLogMessage('waitForSaveSignal: save button disabled, no spinner', 'log');
+                    signaled = true;
+                    callback(true);
+                    return;
+                }
+            }
+            elapsed += step;
+            var tid = setTimeout(check, step);
+            startDateState.timeouts.push(tid);
+        }
+        var initTid = setTimeout(check, step);
+        startDateState.timeouts.push(initTid);
+    }
+
+    function verifySavedDateForCandidate(candidate, targetDate, callback) {
+        addLogMessage('verifySavedDateForCandidate: verifying for ' + candidate.display, 'log');
+        try {
+            var freshRow = findRowByNamePairKey(candidate.pairKey);
+            if (!freshRow) {
+                addLogMessage('verifySavedDateForCandidate: row not found after save', 'warn');
+                callback(false);
+                return;
+            }
+            var foundDate = readStartDateFromEditOrGrid(freshRow);
+            if (foundDate && isDateEqualToTarget(foundDate, targetDate)) {
+                addLogMessage('verifySavedDateForCandidate: grid date matches target', 'log');
+                callback(true);
+                return;
+            }
+            addLogMessage('verifySavedDateForCandidate: grid date not matching, re-opening edit', 'log');
+            openRowMenuAndClickEdit(freshRow)
+                .then(function() {
+                var editDate = readStartDateFromEditOrGrid(freshRow);
+                if (editDate && isDateEqualToTarget(editDate, targetDate)) {
+                    addLogMessage('verifySavedDateForCandidate: edit date matches after re-open', 'log');
+                    callback(true);
+                } else {
+                    addLogMessage('verifySavedDateForCandidate: edit date does not match', 'warn');
+                    callback(false);
+                }
+            })
+                .catch(function(err) {
+                addLogMessage('verifySavedDateForCandidate: re-open error: ' + err.message, 'error');
+                callback(false);
+            });
+        } catch (err) {
+            addLogMessage('verifySavedDateForCandidate: error: ' + err.message, 'error');
+            callback(false);
+        }
+    }
+
+    function waitForReasonModalAndSubmit(candidate, callback) {
+        addLogMessage('waitForReasonModalAndSubmit: waiting for reason modal for ' + candidate.display, 'log');
+        var elapsed = 0;
+        var step = 300;
+        function pollForModal() {
+            if (startDateState.stopRequested) {
+                addLogMessage('waitForReasonModalAndSubmit: stop requested', 'log');
+                callback(false);
+                return;
+            }
+            if (elapsed >= STARTDATE_TIMEOUTS.waitReasonModalMs) {
+                addLogMessage('waitForReasonModalAndSubmit: reason modal did not appear within timeout, proceeding', 'log');
+                callback(true);
+                return;
+            }
+            var modal = document.querySelector(STARTDATE_SELECTORS.reasonModal);
+            if (!modal) {
+                elapsed += step;
+                var tid = setTimeout(pollForModal, step);
+                startDateState.timeouts.push(tid);
+                return;
+            }
+            addLogMessage('waitForReasonModalAndSubmit: reason modal found', 'log');
+            updateStartDateRightPanelStatus(candidate.pairKey, STARTDATE_LABELS.statusEnteringReason);
+            var textarea = modal.querySelector(STARTDATE_SELECTORS.reasonInput);
+            if (!textarea) {
+                textarea = document.querySelector(STARTDATE_SELECTORS.reasonInput);
+            }
+            if (!textarea) {
+                addLogMessage('waitForReasonModalAndSubmit: textarea not found in reason modal', 'error');
+                callback(false);
+                return;
+            }
+            addLogMessage('waitForReasonModalAndSubmit: filling reason textarea', 'log');
+            textarea.focus();
+            textarea.value = STARTDATE_LABELS.reasonText;
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            textarea.dispatchEvent(new Event('change', { bubbles: true }));
+            addLogMessage('waitForReasonModalAndSubmit: dispatched input and change events', 'log');
+            var submitElapsed = 0;
+            var submitStep = 200;
+            function pollForSubmitEnabled() {
+                if (startDateState.stopRequested) {
+                    callback(false);
+                    return;
+                }
+                var submitBtn = modal.querySelector(STARTDATE_SELECTORS.reasonSubmitBtn);
+                if (!submitBtn) {
+                    submitBtn = document.querySelector(STARTDATE_SELECTORS.reasonSubmitBtn);
+                }
+                if (!submitBtn) {
+                    addLogMessage('waitForReasonModalAndSubmit: submit button not found', 'error');
+                    callback(false);
+                    return;
+                }
+                if (!submitBtn.disabled) {
+                    addLogMessage('waitForReasonModalAndSubmit: submit button enabled, clicking', 'log');
+                    submitBtn.click();
+                    addLogMessage('waitForReasonModalAndSubmit: clicked reason submit', 'log');
+                    var closePollElapsed = 0;
+                    var closePollStep = 300;
+                    function pollForModalClose() {
+                        if (startDateState.stopRequested) {
+                            callback(false);
+                            return;
+                        }
+                        var stillOpen = document.querySelector(STARTDATE_SELECTORS.reasonModal);
+                        if (!stillOpen) {
+                            addLogMessage('waitForReasonModalAndSubmit: reason modal closed', 'log');
+                            callback(true);
+                            return;
+                        }
+                        if (closePollElapsed >= STARTDATE_TIMEOUTS.waitReasonModalCloseMs) {
+                            addLogMessage('waitForReasonModalAndSubmit: reason modal did not close in time', 'warn');
+                            callback(true);
+                            return;
+                        }
+                        closePollElapsed += closePollStep;
+                        var closeTid = setTimeout(pollForModalClose, closePollStep);
+                        startDateState.timeouts.push(closeTid);
+                    }
+                    var initCloseTid = setTimeout(pollForModalClose, closePollStep);
+                    startDateState.timeouts.push(initCloseTid);
+                    return;
+                }
+                if (submitElapsed >= STARTDATE_TIMEOUTS.waitReasonSubmitEnabledMs) {
+                    addLogMessage('waitForReasonModalAndSubmit: submit button still disabled after timeout, retrying input', 'warn');
+                    textarea.value = '';
+                    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                    textarea.value = STARTDATE_LABELS.reasonText;
+                    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                    textarea.dispatchEvent(new Event('change', { bubbles: true }));
+                    textarea.dispatchEvent(new Event('blur', { bubbles: true }));
+                    var lastChanceTid = setTimeout(function() {
+                        var freshSubmitBtn = modal.querySelector(STARTDATE_SELECTORS.reasonSubmitBtn);
+                        if (!freshSubmitBtn) {
+                            freshSubmitBtn = document.querySelector(STARTDATE_SELECTORS.reasonSubmitBtn);
+                        }
+                        if (freshSubmitBtn && !freshSubmitBtn.disabled) {
+                            addLogMessage('waitForReasonModalAndSubmit: submit enabled after retry, clicking', 'log');
+                            freshSubmitBtn.click();
+                            var finalCloseTid = setTimeout(function() {
+                                callback(true);
+                            }, 1000);
+                            startDateState.timeouts.push(finalCloseTid);
+                        } else {
+                            addLogMessage('waitForReasonModalAndSubmit: submit still disabled after retry', 'error');
+                            callback(false);
+                        }
+                    }, 500);
+                    startDateState.timeouts.push(lastChanceTid);
+                    return;
+                }
+                submitElapsed += submitStep;
+                var submitTid = setTimeout(pollForSubmitEnabled, submitStep);
+                startDateState.timeouts.push(submitTid);
+            }
+            var initSubmitTid = setTimeout(pollForSubmitEnabled, submitStep);
+            startDateState.timeouts.push(initSubmitTid);
+        }
+        var initTid = setTimeout(pollForModal, step);
+        startDateState.timeouts.push(initTid);
+    }
+
+    function performSaveClick(candidate, saveBtn, targetDate, attempt, resolve) {
+        addLogMessage('performSaveClick: attempt ' + (attempt + 1) + ' for ' + candidate.display, 'log');
+        if (startDateState.stopRequested) {
+            resolve(false);
+            return;
+        }
+        if (attempt >= 2) {
+            addLogMessage('performSaveClick: max attempts reached', 'error');
+            resolve(false);
+            return;
+        }
+        updateStartDateRightPanelStatus(candidate.pairKey, STARTDATE_LABELS.statusSaving);
+        saveBtn.click();
+        addLogMessage('performSaveClick: clicked save button, waiting for reason modal', 'log');
+        waitForReasonModalAndSubmit(candidate, function(reasonOk) {
+            if (!reasonOk) {
+                addLogMessage('performSaveClick: reason modal handling failed', 'warn');
+                if (attempt < 1) {
+                    var retryReasonTid = setTimeout(function() {
+                        var freshSaveBtn = findSaveButton();
+                        if (freshSaveBtn) {
+                            performSaveClick(candidate, freshSaveBtn, targetDate, attempt + 1, resolve);
+                        } else {
+                            resolve(false);
+                        }
+                    }, STARTDATE_TIMEOUTS.settleAfterSaveMs);
+                    startDateState.timeouts.push(retryReasonTid);
+                    return;
+                }
+                resolve(false);
+                return;
+            }
+            addLogMessage('performSaveClick: reason modal submitted, save complete for ' + candidate.display, 'log');
+            resolve(true);
+        });
+    }
+
+    function clickSaveAndVerifyForCandidate(candidate, rowEl, targetDate) {
+        addLogMessage('clickSaveAndVerifyForCandidate: saving for ' + candidate.display, 'log');
+        return new Promise(function(resolve) {
+            try {
+                var saveBtn = findSaveButton();
+                if (!saveBtn) {
+                    addLogMessage('clickSaveAndVerifyForCandidate: save button not found', 'error');
+                    resolve(false);
+                    return;
+                }
+                if (saveBtn.disabled || saveBtn.getAttribute('aria-busy') === 'true') {
+                    addLogMessage('clickSaveAndVerifyForCandidate: save button disabled or busy, waiting', 'log');
+                    var waitTid = setTimeout(function() {
+                        if (saveBtn.disabled || saveBtn.getAttribute('aria-busy') === 'true') {
+                            addLogMessage('clickSaveAndVerifyForCandidate: still disabled after wait', 'error');
+                            resolve(false);
+                            return;
+                        }
+                        performSaveClick(candidate, saveBtn, targetDate, 0, resolve);
+                    }, 1000);
+                    startDateState.timeouts.push(waitTid);
+                    return;
+                }
+                performSaveClick(candidate, saveBtn, targetDate, 0, resolve);
+            } catch (err) {
+                addLogMessage('clickSaveAndVerifyForCandidate: error: ' + err.message, 'error');
+                resolve(false);
+            }
+        });
+    }
+
+    function processRowEditAndSave(candidate, rowEl, resolve) {
+        addLogMessage('processRowEditAndSave: processing ' + candidate.display, 'log');
+        if (startDateState.stopRequested) {
+            candidate.status = STARTDATE_LABELS.statusStopped;
+            updateStartDateRightPanelStatus(candidate.pairKey, STARTDATE_LABELS.statusStopped);
+            resolve();
+            return;
+        }
+        candidate.status = STARTDATE_LABELS.statusEditing;
+        updateStartDateRightPanelStatus(candidate.pairKey, STARTDATE_LABELS.statusEditing);
+        openRowMenuAndClickEdit(rowEl)
+            .then(function() {
+            if (startDateState.stopRequested) {
+                throw new Error('Stopped');
+            }
+            addLogMessage('processRowEditAndSave: edit form opened for ' + candidate.display, 'log');
+            if (!ensureCorrectEditContextForCandidate(candidate)) {
+                addLogMessage('processRowEditAndSave: edit context mismatch for ' + candidate.display, 'error');
+                candidate.status = STARTDATE_LABELS.statusEditFailed;
+                updateStartDateRightPanelStatus(candidate.pairKey, STARTDATE_LABELS.statusEditFailed, 'Edit context mismatch');
+                startDateState.counters.failures++;
+                startDateState.counters.pending--;
+                updateStartDateRightPanelSummary(startDateState.counters);
+                resolve();
+                return;
+            }
+            var existingDate = readStartDateFromEditOrGrid(rowEl);
+            if (existingDate && isDateEqualToTarget(existingDate, startDateState.parsedDate)) {
+                addLogMessage('processRowEditAndSave: date already matches for ' + candidate.display, 'log');
+                candidate.status = STARTDATE_LABELS.statusAlreadySet;
+                updateStartDateRightPanelStatus(candidate.pairKey, STARTDATE_LABELS.statusAlreadySet);
+                startDateState.counters.alreadySet++;
+                startDateState.counters.pending--;
+                updateStartDateRightPanelSummary(startDateState.counters);
+                updateStartDateAriaLive(candidate.display + ' already has target date');
+                resolve();
+                return;
+            }
+            addLogMessage('processRowEditAndSave: opening datepicker for ' + candidate.display, 'log');
+            return openStartDatePicker()
+                .then(function(pickerEl) {
+                if (startDateState.stopRequested) {
+                    throw new Error('Stopped');
+                }
+                return startDateDelay(STARTDATE_TIMEOUTS.settleMs).then(function() {
+                    return adjustYearIfNeeded(pickerEl, startDateState.parsedDate.year);
+                }).then(function(yearOk) {
+                    if (!yearOk) {
+                        throw new Error('Year adjustment failed');
+                    }
+                    var freshPicker = getFreshPicker();
+                    if (!freshPicker) {
+                        throw new Error('Picker disappeared after year adjust');
+                    }
+                    return selectMonth(freshPicker, startDateState.parsedDate.monthIndex0);
+                }).then(function(monthOk) {
+                    if (!monthOk) {
+                        throw new Error('Month selection failed');
+                    }
+                    return startDateDelay(STARTDATE_TIMEOUTS.settleMs).then(function() {
+                        var freshPicker = getFreshPicker();
+                        if (!freshPicker) {
+                            throw new Error('Picker disappeared after month select');
+                        }
+                        return selectDay(freshPicker, startDateState.parsedDate.day);
+                    });
+                }).then(function(dayOk) {
+                    if (!dayOk) {
+                        throw new Error('Day selection failed');
+                    }
+                    return startDateDelay(STARTDATE_TIMEOUTS.waitVerifyInputMs);
+                });
+            })
+                .then(function() {
+                addLogMessage('processRowEditAndSave: date selected, saving for ' + candidate.display, 'log');
+                updateStartDateAriaLive('Saving for ' + candidate.display);
+                return clickSaveAndVerifyForCandidate(candidate, rowEl, startDateState.parsedDate);
+            })
+                .then(function(saveOk) {
+                if (saveOk) {
+                    addLogMessage('processRowEditAndSave: save verified for ' + candidate.display, 'log');
+                    candidate.status = STARTDATE_LABELS.statusSaved;
+                    updateStartDateRightPanelStatus(candidate.pairKey, STARTDATE_LABELS.statusSaved);
+                    startDateState.counters.saved++;
+                    startDateState.counters.pending--;
+                    updateStartDateRightPanelSummary(startDateState.counters);
+                    updateStartDateAriaLive('Saved for ' + candidate.display);
+                } else {
+                    addLogMessage('processRowEditAndSave: save failed for ' + candidate.display, 'error');
+                    candidate.status = STARTDATE_LABELS.statusSaveFailed;
+                    updateStartDateRightPanelStatus(candidate.pairKey, STARTDATE_LABELS.statusSaveFailed, 'Save failed');
+                    startDateState.counters.failures++;
+                    startDateState.counters.pending--;
+                    updateStartDateRightPanelSummary(startDateState.counters);
+                }
+                resolve();
+            });
+        })
+            .catch(function(err) {
+            addLogMessage('processRowEditAndSave: error for ' + candidate.display + ': ' + err.message, 'error');
+            if (startDateState.stopRequested) {
+                candidate.status = STARTDATE_LABELS.statusStopped;
+                updateStartDateRightPanelStatus(candidate.pairKey, STARTDATE_LABELS.statusStopped);
+            } else {
+                var failStatus = STARTDATE_LABELS.statusFailed;
+                var failDetail = err.message;
+                if (err.message.indexOf('Menu') !== -1) {
+                    failStatus = STARTDATE_LABELS.statusMenuFailed;
+                    failDetail = 'Menu failed';
+                } else if (err.message.indexOf('Edit') !== -1) {
+                    failStatus = STARTDATE_LABELS.statusEditFailed;
+                    failDetail = 'Edit failed';
+                } else if (err.message.indexOf('picker') !== -1 ||
+                    err.message.indexOf('Picker') !== -1 ||
+                    err.message.indexOf('Year') !== -1 ||
+                    err.message.indexOf('Month') !== -1 ||
+                    err.message.indexOf('Day') !== -1) {
+                    failStatus = STARTDATE_LABELS.statusDatepickerFailed;
+                    failDetail = 'Date picker failed';
+                }
+                candidate.status = failStatus;
+                updateStartDateRightPanelStatus(candidate.pairKey, failStatus, failDetail);
+                startDateState.counters.failures++;
+                startDateState.counters.pending--;
+                updateStartDateRightPanelSummary(startDateState.counters);
+            }
+            resolve();
+        });
+    }
+
+    function processNextStartDateForCandidate(candidate) {
+        addLogMessage('processNextStartDateForCandidate: starting for ' + candidate.display, 'log');
+        return new Promise(function(resolve) {
+            try {
+                if (startDateState.stopRequested) {
+                    candidate.status = STARTDATE_LABELS.statusStopped;
+                    updateStartDateRightPanelStatus(candidate.pairKey, STARTDATE_LABELS.statusStopped);
+                    resolve();
+                    return;
+                }
+                candidate.status = STARTDATE_LABELS.statusLocating;
+                updateStartDateRightPanelStatus(candidate.pairKey, STARTDATE_LABELS.statusLocating);
+                waitForOverlayToClear().then(function() {
+                    if (startDateState.stopRequested) {
+                        candidate.status = STARTDATE_LABELS.statusStopped;
+                        updateStartDateRightPanelStatus(candidate.pairKey, STARTDATE_LABELS.statusStopped);
+                        resolve();
+                        return;
+                    }
+                    var rowEl = findRowByNamePairKey(candidate.pairKey);
+                    if (!rowEl) {
+                        addLogMessage('processNextStartDateForCandidate: row not visible, scrolling for ' + candidate.display, 'log');
+                        scrollToFindRow(candidate, function(foundRow) {
+                            if (!foundRow) {
+                                addLogMessage('processNextStartDateForCandidate: not found for ' + candidate.display, 'warn');
+                                candidate.status = STARTDATE_LABELS.statusNotFound;
+                                updateStartDateRightPanelStatus(candidate.pairKey, STARTDATE_LABELS.statusNotFound);
+                                startDateState.counters.notFound++;
+                                startDateState.counters.pending--;
+                                updateStartDateRightPanelSummary(startDateState.counters);
+                                resolve();
+                                return;
+                            }
+                            processRowEditAndSave(candidate, foundRow, resolve);
+                        });
+                        return;
+                    }
+                    processRowEditAndSave(candidate, rowEl, resolve);
+                });
+            } catch (err) {
+                addLogMessage('processNextStartDateForCandidate: error: ' + err.message, 'error');
+                candidate.status = STARTDATE_LABELS.statusFailed;
+                updateStartDateRightPanelStatus(candidate.pairKey, STARTDATE_LABELS.statusFailed, err.message);
+                startDateState.counters.failures++;
+                startDateState.counters.pending--;
+                updateStartDateRightPanelSummary(startDateState.counters);
+                resolve();
+            }
+        });
+    }
+
+    function beginSetStartDatesForQueue() {
+        addLogMessage('beginSetStartDatesForQueue: starting queue processing', 'log');
         var scannedPairKeys = new Set();
         for (var si = 0; si < startDateState.scannedNames.length; si++) {
             var pk = normalizeFirstLastPair(startDateState.scannedNames[si]);
@@ -10079,52 +10862,69 @@ function showResponsibilitiesProgressPanel(rolesData) {
                 scannedPairKeys.add(pk);
             }
         }
-        addLogMessage('beginSetStartDateForFirstCandidate: scannedPairKeys count=' + scannedPairKeys.size, 'log');
+        addLogMessage('beginSetStartDatesForQueue: scannedPairKeys count=' + scannedPairKeys.size, 'log');
+        var queue = [];
         for (var ni = 0; ni < startDateState.parsedNames.length; ni++) {
-            if (!scannedPairKeys.has(startDateState.parsedNames[ni].pairKey)) {
-                startDateState.parsedNames[ni].status = STARTDATE_LABELS.statusNotFound;
-                updateStartDateRightPanelStatus(startDateState.parsedNames[ni].pairKey, STARTDATE_LABELS.statusNotFound);
+            var candidate = startDateState.parsedNames[ni];
+            if (candidate.isDuplicate) {
+                continue;
+            }
+            if (!scannedPairKeys.has(candidate.pairKey)) {
+                candidate.status = STARTDATE_LABELS.statusNotFound;
+                updateStartDateRightPanelStatus(candidate.pairKey, STARTDATE_LABELS.statusNotFound);
+                startDateState.counters.notFound++;
+                startDateState.counters.pending--;
+            } else {
+                queue.push(candidate);
             }
         }
-        updateStartDateSummary();
-        var firstCandidate = null;
-        for (var fi = 0; fi < startDateState.parsedNames.length; fi++) {
-            if (startDateState.parsedNames[fi].status === STARTDATE_LABELS.statusPending) {
-                firstCandidate = startDateState.parsedNames[fi];
-                break;
-            }
-        }
-        if (!firstCandidate) {
-            addLogMessage('beginSetStartDateForFirstCandidate: no valid candidates found', 'warn');
+        updateStartDateRightPanelSummary(startDateState.counters);
+        addLogMessage('beginSetStartDatesForQueue: queue size=' + queue.length, 'log');
+        if (queue.length === 0) {
+            addLogMessage('beginSetStartDatesForQueue: no candidates to process', 'warn');
             updateStartDateProgressStatus(STARTDATE_LABELS.progressComplete, 'complete');
+            updateStartDateAriaLive('Processing complete. No candidates to process.');
             return;
         }
-        addLogMessage('beginSetStartDateForFirstCandidate: processing ' + firstCandidate.display, 'log');
-        firstCandidate.status = STARTDATE_LABELS.statusSettingDate;
-        updateStartDateRightPanelStatus(firstCandidate.pairKey, STARTDATE_LABELS.statusSettingDate);
-        updateStartDateSummary();
-        if (startDateState.scrollContainer && startDateState.prevScrollTop !== undefined) {
-            addLogMessage('beginSetStartDateForFirstCandidate: restoring scroll position', 'log');
-            startDateState.scrollContainer.scrollTo({ top: startDateState.prevScrollTop, behavior: 'auto' });
+        if (startDateState.scrollContainer) {
+            addLogMessage('beginSetStartDatesForQueue: scrolling to top', 'log');
+            startDateState.scrollContainer.scrollTo({ top: 0, behavior: 'auto' });
         }
-        var rowEl = findRowByNamePairKey(firstCandidate.pairKey);
-        if (!rowEl) {
-            addLogMessage('beginSetStartDateForFirstCandidate: row not visible for ' + firstCandidate.display + ', scrolling to find', 'warn');
-            scrollToFindRow(firstCandidate, function(foundRow) {
-                if (!foundRow) {
-                    addLogMessage('beginSetStartDateForFirstCandidate: could not find row after scroll', 'error');
-                    firstCandidate.status = STARTDATE_LABELS.statusFailed;
-                    updateStartDateRightPanelStatus(firstCandidate.pairKey, STARTDATE_LABELS.statusFailed);
-                    updateStartDateSummary();
-                    markRemainingAsStopped();
-                    updateStartDateProgressStatus(STARTDATE_LABELS.progressComplete, 'complete');
-                    return;
+        var queueIndex = 0;
+        function processNext() {
+            if (!startDateState.isRunning || startDateState.stopRequested) {
+                addLogMessage('beginSetStartDatesForQueue: stopped at index ' + queueIndex, 'log');
+                markRemainingAsStopped();
+                updateStartDateProgressStatus(STARTDATE_LABELS.progressStopped, 'stopped');
+                updateStartDateAriaLive('Processing stopped.');
+                return;
+            }
+            if (queueIndex >= queue.length) {
+                addLogMessage('beginSetStartDatesForQueue: all candidates processed', 'log');
+                updateStartDateProgressStatus(STARTDATE_LABELS.progressComplete, 'complete');
+                var c = startDateState.counters;
+                updateStartDateAriaLive('Complete. Saved: ' + c.saved + ', Already Set: ' + c.alreadySet + ', Not Found: ' + c.notFound + ', Failed: ' + c.failures);
+                return;
+            }
+            var currentCandidate = queue[queueIndex];
+            queueIndex++;
+            processNextStartDateForCandidate(currentCandidate).then(function() {
+                if (typeof requestIdleCallback === 'function') {
+                    var icbId = requestIdleCallback(function() {
+                        var idx = startDateState.idleCallbackIds.indexOf(icbId);
+                        if (idx > -1) {
+                            startDateState.idleCallbackIds.splice(idx, 1);
+                        }
+                        processNext();
+                    }, { timeout: STARTDATE_TIMEOUTS.settleAfterSaveMs * 2 });
+                    startDateState.idleCallbackIds.push(icbId);
+                } else {
+                    var tid = setTimeout(processNext, STARTDATE_TIMEOUTS.settleAfterSaveMs);
+                    startDateState.timeouts.push(tid);
                 }
-                processRowForStartDate(firstCandidate, foundRow);
             });
-            return;
         }
-        processRowForStartDate(firstCandidate, rowEl);
+        processNext();
     }
 
     function scrollToFindRow(candidate, callback) {
@@ -10170,92 +10970,23 @@ function showResponsibilitiesProgressPanel(rolesData) {
         startDateState.timeouts.push(initTid);
     }
 
-    function processRowForStartDate(candidate, rowEl) {
-        addLogMessage('processRowForStartDate: processing ' + candidate.display, 'log');
-        if (startDateState.stopRequested) {
-            candidate.status = STARTDATE_LABELS.statusStopped;
-            updateStartDateRightPanelStatus(candidate.pairKey, STARTDATE_LABELS.statusStopped);
-            updateStartDateSummary();
-            return;
-        }
-        openRowMenuAndClickEdit(rowEl)
-            .then(function() {
-            if (startDateState.stopRequested) {
-                throw new Error('Stopped');
-            }
-            addLogMessage('processRowForStartDate: edit form opened, opening datepicker', 'log');
-            return openStartDatePicker();
-        })
-            .then(function(pickerEl) {
-            if (startDateState.stopRequested) {
-                throw new Error('Stopped');
-            }
-            addLogMessage('processRowForStartDate: datepicker opened, settling before navigation', 'log');
-            return startDateDelay(STARTDATE_TIMEOUTS.settleMs).then(function() {
-                return adjustYearIfNeeded(pickerEl, startDateState.parsedDate.year);
-            }).then(function(yearOk) {
-                if (!yearOk) {
-                    addLogMessage('processRowForStartDate: year adjustment failed', 'warn');
-                    throw new Error('Year adjustment failed');
-                }
-                var freshPicker = getFreshPicker();
-                if (!freshPicker) {
-                    throw new Error('Picker disappeared after year adjust');
-                }
-                return selectMonth(freshPicker, startDateState.parsedDate.monthIndex0);
-            }).then(function(monthOk) {
-                if (!monthOk) {
-                    addLogMessage('processRowForStartDate: month selection failed', 'warn');
-                    throw new Error('Month selection failed');
-                }
-                return startDateDelay(STARTDATE_TIMEOUTS.settleMs).then(function() {
-                    var freshPicker = getFreshPicker();
-                    if (!freshPicker) {
-                        throw new Error('Picker disappeared after month select');
-                    }
-                    return selectDay(freshPicker, startDateState.parsedDate.day);
-                });
-            }).then(function(dayOk) {
-                if (!dayOk) {
-                    addLogMessage('processRowForStartDate: day selection failed', 'warn');
-                    throw new Error('Day selection failed');
-                }
-                addLogMessage('processRowForStartDate: date selection complete for ' + candidate.display, 'log');
-                return startDateDelay(STARTDATE_TIMEOUTS.waitVerifyInputMs);
-            });
-        })
-            .then(function() {
-            addLogMessage('processRowForStartDate: completed for ' + candidate.display, 'log');
-            candidate.status = STARTDATE_LABELS.statusCompleted;
-            updateStartDateRightPanelStatus(candidate.pairKey, STARTDATE_LABELS.statusCompleted);
-            updateStartDateSummary();
-            markRemainingAsStopped();
-            updateStartDateProgressStatus(STARTDATE_LABELS.progressComplete, 'complete');
-            updateStartDateAriaLive('Start date set for ' + candidate.display);
-        })
-            .catch(function(err) {
-            addLogMessage('processRowForStartDate: error for ' + candidate.display + ': ' + err.message, 'error');
-            if (startDateState.stopRequested) {
-                candidate.status = STARTDATE_LABELS.statusStopped;
-                updateStartDateRightPanelStatus(candidate.pairKey, STARTDATE_LABELS.statusStopped);
-            } else {
-                candidate.status = STARTDATE_LABELS.statusFailed;
-                updateStartDateRightPanelStatus(candidate.pairKey, STARTDATE_LABELS.statusFailed);
-            }
-            updateStartDateSummary();
-            markRemainingAsStopped();
-            updateStartDateProgressStatus(startDateState.stopRequested ? STARTDATE_LABELS.progressStopped : STARTDATE_LABELS.progressComplete, startDateState.stopRequested ? 'stopped' : 'complete');
-        });
-    }
-
     function markRemainingAsStopped() {
+        addLogMessage('markRemainingAsStopped: marking remaining as stopped', 'log');
+        var stoppedCount = 0;
         for (var i = 0; i < startDateState.parsedNames.length; i++) {
-            if (startDateState.parsedNames[i].status === STARTDATE_LABELS.statusPending) {
+            var s = startDateState.parsedNames[i].status;
+            if (s === STARTDATE_LABELS.statusPending ||
+                s === STARTDATE_LABELS.statusLocating ||
+                s === STARTDATE_LABELS.statusEditing) {
                 startDateState.parsedNames[i].status = STARTDATE_LABELS.statusStopped;
                 updateStartDateRightPanelStatus(startDateState.parsedNames[i].pairKey, STARTDATE_LABELS.statusStopped);
+                stoppedCount++;
             }
         }
-        updateStartDateSummary();
+        startDateState.counters.failures += stoppedCount;
+        startDateState.counters.pending = 0;
+        updateStartDateRightPanelSummary(startDateState.counters);
+        addLogMessage('markRemainingAsStopped: stopped ' + stoppedCount + ' candidates', 'log');
     }
 
     function updateStartDateProgressStatus(statusText, statusType) {
