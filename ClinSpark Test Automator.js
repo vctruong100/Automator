@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.6.3
+// @version 3.6.4
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -7415,8 +7415,8 @@
                         if (index > -1) {
                             events.splice(index, 1);
                             segmentEventMap[data.segmentValue] = events;
-                            // Refresh the segment
-                            renderSegments(segmentSearch.value);
+                            // Auto-uncheck segment if no events remain, otherwise just refresh
+                            syncSegmentCheckbox(data.segmentValue);
                         }
                     }
                     // Restore to column
@@ -7441,6 +7441,17 @@
 
         // Track segment checkbox states separately to prevent resets
         var segmentCheckboxStates = {};
+
+        // Auto-check/uncheck a segment checkbox based on whether it has study events
+        function syncSegmentCheckbox(segVal) {
+            var hasEvents = segmentEventMap[segVal] && segmentEventMap[segVal].length > 0;
+            segmentCheckboxStates[segVal] = hasEvents;
+            try {
+                localStorage.setItem(STORAGE_SA_BUILDER_SEGMENT_CHECKBOXES, JSON.stringify(segmentCheckboxStates));
+            } catch (e) {}
+            renderSegments(segmentSearch.value);
+            updateSelectAllCheckbox();
+        }
 
         // Load saved checkbox states
         try {
@@ -7593,6 +7604,9 @@
 
                                     // Restore event to Study Events column
                                     restoreEventToStudyEventsColumn({ value: ev.value, text: ev.text });
+
+                                    // Auto-uncheck segment if no events remain
+                                    syncSegmentCheckbox(segVal);
                                 }
                             });
 
@@ -7648,7 +7662,12 @@
 
                                     removeEventFromStudyEventsColumn(data.value);
                                 }
-                                renderSegments(segmentSearch.value);
+                                // Auto-uncheck old segment if it lost its last event
+                                if (data.fromSegment && data.fromSegment !== segVal) {
+                                    syncSegmentCheckbox(data.fromSegment);
+                                }
+                                // Auto-check this segment since it now has events
+                                syncSegmentCheckbox(segVal);
                             }
                         } catch (err) {
                             log("SA Builder: drop error " + err);
@@ -7780,16 +7799,36 @@
             log("SA Builder: Event '" + eventData.text + "' restored to Study Events column");
         }
 
-        // Sort the Study Events column alphabetically
+        // Natural sort comparator: splits text into alphabetic and numeric chunks, compares numerically where possible
+        function naturalSortCompare(strA, strB) {
+            var re = /(\d+|\D+)/g;
+            var partsA = strA.match(re) || [""];
+            var partsB = strB.match(re) || [""];
+            for (var i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+                var a = partsA[i] || "";
+                var b = partsB[i] || "";
+                var numA = parseInt(a, 10);
+                var numB = parseInt(b, 10);
+                if (!isNaN(numA) && !isNaN(numB)) {
+                    if (numA !== numB) return numA - numB;
+                } else {
+                    var cmp = a.toLowerCase().localeCompare(b.toLowerCase());
+                    if (cmp !== 0) return cmp;
+                }
+            }
+            return 0;
+        }
+
+        // Sort the Study Events column using natural sort order
         function sortStudyEventsColumn() {
             var allItems = eventColumn.querySelectorAll("[data-event-value]");
             var itemsArray = Array.prototype.slice.call(allItems);
 
-            // Sort by text content (case-insensitive)
+            // Sort by text content using natural sort (so Day 2 < Day 11)
             itemsArray.sort(function(a, b) {
-                var textA = (a.dataset.eventText || a.textContent || "").toLowerCase();
-                var textB = (b.dataset.eventText || b.textContent || "").toLowerCase();
-                return textA.localeCompare(textB);
+                var textA = a.dataset.eventText || a.textContent || "";
+                var textB = b.dataset.eventText || b.textContent || "";
+                return naturalSortCompare(textA, textB);
             });
 
             // Clear and re-append in sorted order
@@ -7798,7 +7837,7 @@
                 eventColumn.appendChild(item);
             });
 
-            log("SA Builder: Study Events column sorted alphabetically");
+            log("SA Builder: Study Events column sorted (natural order)");
         }
 
         // Populate forms (checkboxes)
@@ -8536,15 +8575,33 @@
                     }
                 }
 
-                // Handle Pre-Reference checkbox
-                if (userSelection.preReference) {
-                    var preRefEl = document.querySelector("#uniform-offset\\.preReference span input#offset\\.preReference.checkbox");
-                    if (!preRefEl) {
-                        preRefEl = document.getElementById("offset.preReference");
-                    }
-                    if (preRefEl && !preRefEl.checked) {
-                        preRefEl.click();
-                        log("SA Builder: Pre-Reference checkbox checked");
+                // Handle Pre-Reference checkbox (must sync with user selection since default inherits from last added item)
+                var preRefContainer = document.getElementById("uniform-offset.preReference");
+                var preRefEl = document.getElementById("offset.preReference");
+                if (preRefEl && preRefContainer) {
+                    var preRefSpan = preRefContainer.querySelector("span");
+                    var preRefCurrentlyChecked = preRefSpan && preRefSpan.classList.contains("checked");
+                    log("SA Builder: Pre-Reference current state: " + (preRefCurrentlyChecked ? "checked" : "unchecked") + ", user wants: " + (userSelection.preReference ? "checked" : "unchecked"));
+                    if (userSelection.preReference !== preRefCurrentlyChecked) {
+                        // Set the native checked property directly
+                        preRefEl.checked = userSelection.preReference;
+                        // Sync uniform.js span class
+                        if (preRefSpan) {
+                            if (userSelection.preReference) {
+                                preRefSpan.classList.add("checked");
+                            } else {
+                                preRefSpan.classList.remove("checked");
+                            }
+                        }
+                        // Try to sync via jQuery uniform if available
+                        try {
+                            if (window.jQuery && window.jQuery.fn.uniform) {
+                                window.jQuery(preRefEl).uniform.update(preRefEl);
+                            }
+                        } catch (ue) {}
+                        // Dispatch change event so the form picks up the new value
+                        preRefEl.dispatchEvent(new Event("change", { bubbles: true }));
+                        log("SA Builder: Pre-Reference checkbox " + (userSelection.preReference ? "checked" : "unchecked"));
                         await sleep(200);
                     }
                 }
