@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.2.1
+// @version     2.2.3
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -621,6 +621,2284 @@
                 popups[i].classList.add(THEME_SCOPE_CLASS);
             }
         }
+    }
+
+    
+    //==========================
+    // PLAP Builder FEATURE
+    //==========================
+    // This section contains all functions related to the PLAP Builder.
+    // This feature automates adding procedure log entries by allowing users to
+    // select segments, drag forms into segments, drag study events into form rows,
+    // configure per-form time relative settings, then automatically populating and submitting them.
+    //==========================
+
+    var STORAGE_BPL_EXISTING = "activityPlanState.bpl.existing";
+    var STORAGE_BPL_SEGMENTS = "activityPlanState.bpl.segments";
+    var STORAGE_BPL_STUDY_EVENTS = "activityPlanState.bpl.studyEvents";
+    var STORAGE_BPL_FORMS = "activityPlanState.bpl.forms";
+    var STORAGE_BPL_USER_DATA = "activityPlanState.bpl.userData";
+    var STORAGE_BPL_MAPPED_ITEMS = "activityPlanState.bpl.mappedItems";
+    var STORAGE_BPL_CURRENT_INDEX = "activityPlanState.bpl.currentIndex";
+    var STORAGE_BPL_RUNNING = "activityPlanState.bpl.running";
+    var STORAGE_BPL_SEGMENT_CHECKBOXES = "activityPlanState.bpl.segmentCheckboxes";
+    var BPL_POPUP_REF = null;
+    var BPL_PROGRESS_POPUP_REF = null;
+    var BPL_CANCELLED = false;
+    var BPL_PAUSE = false;
+    var BPL_TARGET_URL = "https://cenexel.clinspark.com/secure/crfdesign/activityplans/show/";
+    var BPL_ICON_HIDDEN = "\u{1F6AB}";
+    var BPL_ICON_MANDATORY = "\u2757";
+    var BPL_ICON_ENFORCE = "\u{1F512}";
+    var BPL_ICON_REF_ACTIVITY = "\u2B50";
+    var STORAGE_BPL_FULLSCREEN = "activityPlanState.bpl.fullscreen";
+    var STORAGE_BPL_PANEL_WIDTHS = "activityPlanState.bpl.panelWidths";
+    var STORAGE_BPL_HIDE_KEYBIND = "activityPlanState.bpl.hideKeybind";
+
+    function BuildProcedureLogFunctions() {}
+
+    function clearBPLStorage() {
+        try {
+            localStorage.removeItem(STORAGE_BPL_EXISTING);
+            localStorage.removeItem(STORAGE_BPL_SEGMENTS);
+            localStorage.removeItem(STORAGE_BPL_STUDY_EVENTS);
+            localStorage.removeItem(STORAGE_BPL_FORMS);
+            localStorage.removeItem(STORAGE_BPL_USER_DATA);
+            localStorage.removeItem(STORAGE_BPL_MAPPED_ITEMS);
+            localStorage.removeItem(STORAGE_BPL_CURRENT_INDEX);
+            localStorage.removeItem(STORAGE_BPL_RUNNING);
+            localStorage.removeItem(STORAGE_BPL_SEGMENT_CHECKBOXES);
+        } catch (e) {}
+        log("BPL: storage cleared");
+    }
+
+    function isOnBPLPage() {
+        var currentUrl = location.href;
+        return currentUrl.indexOf(BPL_TARGET_URL) !== -1;
+    }
+
+    function scanExistingBPLTable() {
+        var existing = [];
+        var tbody = document.getElementById("saTableBody");
+        if (!tbody) {
+            log("BPL: saTableBody not found");
+            return existing;
+        }
+        var rows = tbody.querySelectorAll("tr");
+        log("BPL: found " + rows.length + " rows in saTableBody");
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var cells = row.querySelectorAll("td");
+            if (cells.length >= 4) {
+                var segment = normalizeSAText(cells[1].textContent);
+                var studyEvent = normalizeSAText(cells[2].textContent);
+                var form = normalizeSAText(cells[3].textContent);
+                if (segment && studyEvent && form) {
+                    var key = segment + " | " + studyEvent + " | " + form;
+                    existing.push(key);
+                }
+            }
+        }
+        log("BPL: collected " + existing.length + " existing items");
+        return existing;
+    }
+
+    async function collectBPLModalDropdownData() {
+        log("BPL: collecting dropdown data from modal");
+
+        await openSelect2Dropdown("s2id_segment");
+        await sleep(300);
+        await closeSelect2Dropdown();
+        var segments = collectSelectOptions("segment");
+        log("BPL: collected " + segments.length + " segments");
+
+        await openSelect2Dropdown("s2id_studyEvent");
+        await sleep(300);
+        await closeSelect2Dropdown();
+        var studyEvents = collectSelectOptions("studyEvent");
+        log("BPL: collected " + studyEvents.length + " study events");
+
+        await openSelect2Dropdown("s2id_form");
+        await sleep(300);
+        await closeSelect2Dropdown();
+        var forms = collectSelectOptions("form");
+        log("BPL: collected " + forms.length + " forms");
+
+        return {
+            segments: segments,
+            studyEvents: studyEvents,
+            forms: forms
+        };
+    }
+
+    function bplFormatTimePoint(days, hours, minutes, seconds, preReference) {
+        var totalHours = (days * 24) + hours;
+        var hStr = String(totalHours);
+        var mStr = String(minutes);
+        if (mStr.length < 2) {
+            mStr = "0" + mStr;
+        }
+        var sStr = String(seconds);
+        if (sStr.length < 2) {
+            sStr = "0" + sStr;
+        }
+        var formatted = hStr + ":" + mStr + ":" + sStr;
+        if (preReference) {
+            formatted = "(-" + formatted + ")";
+        }
+        return formatted;
+    }
+
+    function bplBuildStatusIcons(formData) {
+        var icons = "";
+        if (formData.hidden) {
+            icons += BPL_ICON_HIDDEN;
+        }
+        if (formData.mandatory) {
+            icons += BPL_ICON_MANDATORY;
+        }
+        if (formData.enforce) {
+            icons += BPL_ICON_ENFORCE;
+        }
+        if (formData.refActivity) {
+            icons += BPL_ICON_REF_ACTIVITY;
+        }
+        return icons;
+    }
+
+    function bplBuildFormLabel(segmentText, studyEvents, formText, formData) {
+        var evText = "";
+        if (studyEvents && studyEvents.length > 0) {
+            var names = [];
+            for (var i = 0; i < studyEvents.length; i++) {
+                names.push(studyEvents[i].text);
+            }
+            evText = names.join(", ");
+        }
+        var tp = bplFormatTimePoint(
+            formData.days || 0,
+            formData.hours || 0,
+            formData.minutes || 0,
+            formData.seconds || 0,
+            formData.preReference || false
+        );
+        var statusIcons = bplBuildStatusIcons(formData);
+        var label = segmentText + " - ";
+        if (evText) {
+            label += evText;
+        } else {
+            label += "[No Study Event]";
+        }
+        label += " - " + formText + " - " + tp;
+        if (statusIcons) {
+            label += " - " + statusIcons;
+        }
+        return label;
+    }
+
+    function bplValidateConfiguration(segments, segmentFormMap, formDataStore, segmentCheckboxStates) {
+        var errors = [];
+        var hasAnyForms = false;
+        var missingEventCount = 0;
+        var refActivitySegmentCount = 0;
+        var duplicateComboCount = 0;
+        log("BPL: running validation");
+        for (var si = 0; si < segments.length; si++) {
+            var sv = segments[si].value;
+            if (!segmentCheckboxStates[sv]) {
+                continue;
+            }
+            var fList = segmentFormMap[sv] || [];
+            if (fList.length === 0) {
+                continue;
+            }
+            hasAnyForms = true;
+            var refCount = 0;
+            var seenCombos = {};
+            for (var fi = 0; fi < fList.length; fi++) {
+                var fEntry = fList[fi];
+                var fk = sv + "|" + fEntry.value + "|" + fEntry.index;
+                var fd = formDataStore[fk];
+                if (!fd) {
+                    fd = {
+                        days: 0,
+                        hours: 0,
+                        minutes: 0,
+                        seconds: 0,
+                        hidden: false,
+                        mandatory: true,
+                        enforce: false,
+                        preWindow: "",
+                        postWindow: "",
+                        refActivity: false,
+                        preReference: false,
+                        studyEvents: []
+                    };
+                }
+                var evts = fd.studyEvents || [];
+                if (evts.length === 0) {
+                    missingEventCount = missingEventCount + 1;
+                }
+                for (var ei = 0; ei < evts.length; ei++) {
+                    var comboKey = fEntry.value + "|" + evts[ei].value;
+                    if (seenCombos[comboKey]) {
+                        duplicateComboCount = duplicateComboCount + 1;
+                    }
+                    seenCombos[comboKey] = true;
+                }
+                if (fd.refActivity) {
+                    refCount = refCount + 1;
+                }
+            }
+            if (refCount > 1) {
+                refActivitySegmentCount = refActivitySegmentCount + 1;
+            }
+        }
+        if (!hasAnyForms) {
+            errors.push("No forms have been added to any enabled Segment.");
+            log("BPL: validation error - no forms in any enabled segment");
+        }
+        if (missingEventCount > 0) {
+            errors.push("Missing study event for " + missingEventCount + " form" + (missingEventCount > 1 ? "s" : "") + ".");
+            log("BPL: validation error - " + missingEventCount + " forms missing study events");
+        }
+        if (refActivitySegmentCount > 0) {
+            errors.push("Multiple Reference Activities found in " + refActivitySegmentCount + " segment" + (refActivitySegmentCount > 1 ? "s" : "") + ". Only one per Segment is allowed.");
+            log("BPL: validation error - " + refActivitySegmentCount + " segments with multiple reference activities");
+        }
+        if (duplicateComboCount > 0) {
+            errors.push("Duplicate form + study event combination found " + duplicateComboCount + " time" + (duplicateComboCount > 1 ? "s" : "") + " within the same segment.");
+            log("BPL: validation error - " + duplicateComboCount + " duplicate form+event combos");
+        }
+        log("BPL: validation complete, " + errors.length + " error(s)");
+        return errors;
+    }
+
+    function createBPLSelectionGUI(segments, studyEvents, forms) {
+        var segmentFormMap = {};
+        var formDataStore = {};
+        var segmentCheckboxStates = {};
+        var selectedFormKey = null;
+        var formInstanceCounter = 0;
+        var copiedForm = null;
+
+        var bplHideKeybind = "F4";
+        try {
+            var savedKeybind = localStorage.getItem(STORAGE_BPL_HIDE_KEYBIND);
+            if (savedKeybind) {
+                bplHideKeybind = savedKeybind;
+            }
+        } catch (e) {}
+
+        var defaultPanelWidths = { left: 180, center: 0, forms: 200, time: 260 };
+        var panelWidths = { left: defaultPanelWidths.left, center: 0, forms: defaultPanelWidths.forms, time: defaultPanelWidths.time };
+        try {
+            var savedWidths = localStorage.getItem(STORAGE_BPL_PANEL_WIDTHS);
+            if (savedWidths) {
+                var parsed = JSON.parse(savedWidths);
+                if (parsed.left) {
+                    panelWidths.left = parsed.left;
+                }
+                if (parsed.forms) {
+                    panelWidths.forms = parsed.forms;
+                }
+                if (parsed.time) {
+                    panelWidths.time = parsed.time;
+                }
+            }
+        } catch (e) {}
+
+        try {
+            var savedStates = localStorage.getItem(STORAGE_BPL_SEGMENT_CHECKBOXES);
+            if (savedStates) {
+                segmentCheckboxStates = JSON.parse(savedStates);
+            }
+        } catch (e) {}
+
+        for (var si = 0; si < segments.length; si++) {
+            segmentCheckboxStates[segments[si].value] = segmentCheckboxStates[segments[si].value] !== false;
+            segmentFormMap[segments[si].value] = [];
+        }
+
+        function savePanelWidths() {
+            try {
+                localStorage.setItem(STORAGE_BPL_PANEL_WIDTHS, JSON.stringify(panelWidths));
+            } catch (e) {}
+            log("BPL: panel widths saved");
+        }
+
+        function applyPanelWidths() {
+            leftPanel.style.width = panelWidths.left + "px";
+            leftPanel.style.minWidth = "100px";
+            leftPanel.style.flexShrink = "0";
+            formsPanel.style.width = panelWidths.forms + "px";
+            formsPanel.style.minWidth = "100px";
+            formsPanel.style.flexShrink = "0";
+            timePanel.style.width = panelWidths.time + "px";
+            timePanel.style.minWidth = "140px";
+            timePanel.style.flexShrink = "0";
+            centerPanel.style.flex = "1";
+            centerPanel.style.minWidth = "200px";
+        }
+
+        function createResizeHandle(leftEl, rightEl, leftKey, rightKey) {
+            var handle = document.createElement("div");
+            handle.style.cssText = "width:6px;cursor:col-resize;background:#333;border-radius:3px;flex-shrink:0;transition:background 0.15s;";
+            handle.addEventListener("mouseenter", function() {
+                handle.style.background = "#555";
+            });
+            handle.addEventListener("mouseleave", function() {
+                if (!handle.dataset.dragging) {
+                    handle.style.background = "#333";
+                }
+            });
+            handle.addEventListener("mousedown", function(e) {
+                e.preventDefault();
+                handle.dataset.dragging = "1";
+                handle.style.background = "#7a7aff";
+                var startX = e.clientX;
+                var startLeftW = leftEl.getBoundingClientRect().width;
+                var startRightW = rightEl.getBoundingClientRect().width;
+                function onMouseMove(ev) {
+                    var dx = ev.clientX - startX;
+                    var newLeftW = Math.max(100, startLeftW + dx);
+                    var newRightW = Math.max(100, startRightW - dx);
+                    if (leftKey === "center") {
+                        leftEl.style.flex = "0 0 " + newLeftW + "px";
+                        leftEl.style.width = newLeftW + "px";
+                    } else {
+                        leftEl.style.width = newLeftW + "px";
+                        if (leftKey) {
+                            panelWidths[leftKey] = newLeftW;
+                        }
+                    }
+                    if (rightKey === "center") {
+                        rightEl.style.flex = "0 0 " + newRightW + "px";
+                        rightEl.style.width = newRightW + "px";
+                    } else {
+                        rightEl.style.width = newRightW + "px";
+                        if (rightKey) {
+                            panelWidths[rightKey] = newRightW;
+                        }
+                    }
+                }
+                function onMouseUp() {
+                    delete handle.dataset.dragging;
+                    handle.style.background = "#333";
+                    document.removeEventListener("mousemove", onMouseMove);
+                    document.removeEventListener("mouseup", onMouseUp);
+                    if (leftKey && leftKey !== "center") {
+                        panelWidths[leftKey] = leftEl.getBoundingClientRect().width;
+                    }
+                    if (rightKey && rightKey !== "center") {
+                        panelWidths[rightKey] = rightEl.getBoundingClientRect().width;
+                    }
+                    savePanelWidths();
+                }
+                document.addEventListener("mousemove", onMouseMove);
+                document.addEventListener("mouseup", onMouseUp);
+            });
+            return handle;
+        }
+
+        var container = document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;gap:12px;height:100%;min-height:550px;";
+
+        var fullscreenBtn = document.createElement("button");
+        fullscreenBtn.id = "bplFullscreenBtn";
+        fullscreenBtn.textContent = "\u26F6";
+        fullscreenBtn.title = "Toggle Full Screen";
+        fullscreenBtn.style.cssText = "padding:4px 8px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:14px;cursor:pointer;line-height:1;width:32px;height:32px;display:flex;align-items:center;justify-content:center;";
+        fullscreenBtn.addEventListener("mouseenter", function() {
+            this.style.background = "#555";
+        });
+        fullscreenBtn.addEventListener("mouseleave", function() {
+            this.style.background = "#333";
+        });
+
+        var bplIsFullscreen = false;
+        try {
+            bplIsFullscreen = localStorage.getItem(STORAGE_BPL_FULLSCREEN) === "true";
+        } catch (e) {}
+
+        var origPopupStyles = {};
+
+        function applyFullscreen() {
+            var popup = container.closest("[id^='clinsparkPopup_']");
+            if (!popup) {
+                popup = fullscreenBtn.closest("[id^='clinsparkPopup_']");
+            }
+            if (!popup) {
+                log("BPL: fullscreen toggle - popup not found");
+                return;
+            }
+            if (bplIsFullscreen) {
+                origPopupStyles.width = popup.style.width;
+                origPopupStyles.maxWidth = popup.style.maxWidth;
+                origPopupStyles.height = popup.style.height;
+                origPopupStyles.maxHeight = popup.style.maxHeight;
+                origPopupStyles.top = popup.style.top;
+                origPopupStyles.left = popup.style.left;
+                origPopupStyles.transform = popup.style.transform;
+                origPopupStyles.borderRadius = popup.style.borderRadius;
+                popup.style.width = "100vw";
+                popup.style.maxWidth = "100vw";
+                popup.style.height = "100vh";
+                popup.style.maxHeight = "100vh";
+                popup.style.top = "0";
+                popup.style.left = "0";
+                popup.style.transform = "none";
+                popup.style.borderRadius = "0";
+                fullscreenBtn.textContent = "\u2716\u26F6";
+                fullscreenBtn.title = "Exit Full Screen";
+                log("BPL: entered fullscreen");
+            } else {
+                popup.style.width = origPopupStyles.width || "96%";
+                popup.style.maxWidth = origPopupStyles.maxWidth || "1600px";
+                popup.style.height = origPopupStyles.height || "88%";
+                popup.style.maxHeight = origPopupStyles.maxHeight || "900px";
+                popup.style.top = origPopupStyles.top || "50%";
+                popup.style.left = origPopupStyles.left || "50%";
+                popup.style.transform = origPopupStyles.transform || "translate(-50%, -50%)";
+                popup.style.borderRadius = origPopupStyles.borderRadius || "";
+                fullscreenBtn.textContent = "\u26F6";
+                fullscreenBtn.title = "Toggle Full Screen";
+                log("BPL: exited fullscreen");
+            }
+        }
+
+        fullscreenBtn.addEventListener("mousedown", function(e) {
+            e.stopPropagation();
+        });
+        fullscreenBtn.addEventListener("click", function(e) {
+            e.stopPropagation();
+            bplIsFullscreen = !bplIsFullscreen;
+            try {
+                localStorage.setItem(STORAGE_BPL_FULLSCREEN, String(bplIsFullscreen));
+            } catch (err) {}
+            applyFullscreen();
+        });
+
+        var contentRow = document.createElement("div");
+        contentRow.style.cssText = "display:flex;flex-direction:row;gap:0;flex:1;overflow:hidden;";
+
+        var leftPanel = document.createElement("div");
+        leftPanel.style.cssText = "display:flex;flex-direction:column;border:1px solid #444;border-radius:6px;background:#1a1a1a;overflow:hidden;";
+
+        var leftHeader = document.createElement("div");
+        leftHeader.style.cssText = "padding:10px;font-weight:600;font-size:13px;border-bottom:1px solid #333;background:#222;text-align:center;";
+        leftHeader.textContent = "Study Events";
+
+        var leftSearch = document.createElement("input");
+        leftSearch.type = "text";
+        leftSearch.placeholder = "Search events...";
+        leftSearch.style.cssText = "padding:6px 8px;border:none;border-bottom:1px solid #333;background:#1e1e1e;color:#fff;font-size:12px;outline:none;";
+
+        var leftList = document.createElement("div");
+        leftList.style.cssText = "flex:1;overflow-y:auto;padding:6px;";
+
+        leftPanel.appendChild(leftHeader);
+        leftPanel.appendChild(leftSearch);
+        leftPanel.appendChild(leftList);
+
+        leftList.addEventListener("dragover", function(e) {
+            var hasEvent = false;
+            if (e.dataTransfer.types) {
+                for (var t = 0; t < e.dataTransfer.types.length; t++) {
+                    if (e.dataTransfer.types[t] === "application/x-bpl-event") {
+                        hasEvent = true;
+                        break;
+                    }
+                }
+            }
+            if (hasEvent) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "copy";
+            }
+        });
+        leftList.addEventListener("drop", function(e) {
+            e.preventDefault();
+            log("BPL: event dropped on study event list, no-op");
+        });
+
+        function renderStudyEventsList(filter) {
+            var scrollTop = leftList.scrollTop;
+            leftList.innerHTML = "";
+            var filterLower = (filter || "").toLowerCase();
+            for (var i = 0; i < studyEvents.length; i++) {
+                var ev = studyEvents[i];
+                if (filterLower && ev.text.toLowerCase().indexOf(filterLower) === -1) {
+                    continue;
+                }
+                var evItem = document.createElement("div");
+                evItem.style.cssText = "padding:8px 10px;margin-bottom:4px;border:1px solid #555;border-radius:5px;background:#2a2a2a;cursor:grab;color:#fff;font-size:13px;font-weight:500;transition:all 0.2s ease;box-shadow:0 1px 3px rgba(0,0,0,0.2);";
+                evItem.textContent = ev.text;
+                evItem.draggable = true;
+                evItem.dataset.eventValue = ev.value;
+                evItem.dataset.eventText = ev.text;
+                evItem.addEventListener("mouseenter", function() {
+                    this.style.background = "#333";
+                    this.style.borderColor = "#666";
+                });
+                evItem.addEventListener("mouseleave", function() {
+                    this.style.background = "#2a2a2a";
+                    this.style.borderColor = "#555";
+                });
+                evItem.addEventListener("dragstart", function(e) {
+                    e.dataTransfer.setData("application/x-bpl-event", JSON.stringify({
+                        value: this.dataset.eventValue,
+                        text: this.dataset.eventText
+                    }));
+                    e.dataTransfer.effectAllowed = "copy";
+                    this.style.opacity = "0.5";
+                });
+                evItem.addEventListener("dragend", function() {
+                    this.style.opacity = "1";
+                });
+                leftList.appendChild(evItem);
+            }
+            leftList.scrollTop = scrollTop;
+        }
+
+        leftSearch.addEventListener("input", function() {
+            renderStudyEventsList(this.value);
+        });
+
+        var centerPanel = document.createElement("div");
+        centerPanel.style.cssText = "display:flex;flex-direction:column;border:1px solid #444;border-radius:6px;background:#1a1a1a;overflow:hidden;";
+
+        var centerHeader = document.createElement("div");
+        centerHeader.style.cssText = "padding:10px;font-weight:600;font-size:13px;border-bottom:1px solid #333;background:#222;text-align:center;";
+        centerHeader.textContent = "Segments / Forms Configuration";
+
+        var centerSearch = document.createElement("input");
+        centerSearch.type = "text";
+        centerSearch.placeholder = "Search segments...";
+        centerSearch.style.cssText = "padding:6px 8px;border:none;border-bottom:1px solid #333;background:#1e1e1e;color:#fff;font-size:12px;outline:none;";
+
+        var centerBody = document.createElement("div");
+        centerBody.style.cssText = "flex:1;overflow-y:auto;padding:8px;";
+        centerBody.id = "bplCenterBody";
+
+        centerPanel.appendChild(centerHeader);
+        centerPanel.appendChild(centerSearch);
+        centerPanel.appendChild(centerBody);
+
+        var formsPanel = document.createElement("div");
+        formsPanel.style.cssText = "display:flex;flex-direction:column;border:1px solid #444;border-radius:6px;background:#1a1a1a;overflow:hidden;";
+
+        var formsHeader = document.createElement("div");
+        formsHeader.style.cssText = "padding:10px;font-weight:600;font-size:13px;border-bottom:1px solid #333;background:#222;text-align:center;";
+        formsHeader.textContent = "Forms";
+
+        var formsSearch = document.createElement("input");
+        formsSearch.type = "text";
+        formsSearch.placeholder = "Search forms...";
+        formsSearch.style.cssText = "padding:6px 8px;border:none;border-bottom:1px solid #333;background:#1e1e1e;color:#fff;font-size:12px;outline:none;";
+
+        var formsList = document.createElement("div");
+        formsList.style.cssText = "flex:1;overflow-y:auto;padding:6px;";
+
+        formsPanel.appendChild(formsHeader);
+        formsPanel.appendChild(formsSearch);
+        formsPanel.appendChild(formsList);
+
+        var timePanel = document.createElement("div");
+        timePanel.style.cssText = "display:flex;flex-direction:column;border:1px solid #444;border-radius:6px;background:#1a1a1a;overflow:hidden;";
+
+        var timeHeader = document.createElement("div");
+        timeHeader.style.cssText = "padding:10px;font-weight:600;font-size:13px;border-bottom:1px solid #333;background:#222;text-align:center;";
+        timeHeader.textContent = "Time Relative to Segment";
+
+        var timeBody = document.createElement("div");
+        timeBody.style.cssText = "flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:8px;";
+        timeBody.id = "bplTimeBody";
+
+        timePanel.appendChild(timeHeader);
+        timePanel.appendChild(timeBody);
+
+        var handle1 = createResizeHandle(leftPanel, centerPanel, "left", "center");
+        var handle2 = createResizeHandle(centerPanel, formsPanel, "center", "forms");
+        var handle3 = createResizeHandle(formsPanel, timePanel, "forms", "time");
+
+        applyPanelWidths();
+
+        function renderFormsDragList(filter) {
+            var scrollTop = formsList.scrollTop;
+            formsList.innerHTML = "";
+            var filterLower = (filter || "").toLowerCase();
+            for (var i = 0; i < forms.length; i++) {
+                var frm = forms[i];
+                if (filterLower && frm.text.toLowerCase().indexOf(filterLower) === -1) {
+                    continue;
+                }
+                var frmItem = document.createElement("div");
+                frmItem.style.cssText = "padding:6px 8px;margin-bottom:3px;border:1px solid #555;border-radius:4px;background:#2a2a2a;cursor:grab;color:#fff;font-size:12px;transition:all 0.2s ease;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;";
+                frmItem.textContent = frm.text;
+                frmItem.title = frm.text;
+                frmItem.draggable = true;
+                frmItem.dataset.formValue = frm.value;
+                frmItem.dataset.formText = frm.text;
+                frmItem.addEventListener("mouseenter", function() {
+                    this.style.background = "#333";
+                    this.style.borderColor = "#666";
+                });
+                frmItem.addEventListener("mouseleave", function() {
+                    this.style.background = "#2a2a2a";
+                    this.style.borderColor = "#555";
+                });
+                frmItem.addEventListener("dragstart", function(e) {
+                    e.dataTransfer.setData("application/x-bpl-form", JSON.stringify({
+                        value: this.dataset.formValue,
+                        text: this.dataset.formText
+                    }));
+                    e.dataTransfer.effectAllowed = "copy";
+                    this.style.opacity = "0.5";
+                });
+                frmItem.addEventListener("dragend", function() {
+                    this.style.opacity = "1";
+                });
+                formsList.appendChild(frmItem);
+            }
+            formsList.scrollTop = scrollTop;
+        }
+
+        formsSearch.addEventListener("input", function() {
+            renderFormsDragList(this.value);
+        });
+
+        function getFormDataKey(segVal, formVal, formIndex) {
+            return segVal + "|" + formVal + "|" + formIndex;
+        }
+
+        function getDefaultFormData() {
+            return {
+                days: 0,
+                hours: 0,
+                minutes: 0,
+                seconds: 0,
+                hidden: false,
+                mandatory: true,
+                enforce: false,
+                preWindow: "",
+                postWindow: "",
+                refActivity: false,
+                preReference: false,
+                studyEvents: []
+            };
+        }
+
+        function loadFormDataToPanel(key) {
+            selectedFormKey = key;
+            var data = formDataStore[key] || getDefaultFormData();
+            renderTimePanel(data, key);
+            log("BPL: loaded time panel for key=" + key);
+        }
+
+        function saveFormDataFromPanel(key) {
+            if (!key) {
+                return;
+            }
+            var data = formDataStore[key];
+            if (!data) {
+                return;
+            }
+            var daysEl = document.getElementById("bplDays");
+            var hoursEl = document.getElementById("bplHours");
+            var minutesEl = document.getElementById("bplMinutes");
+            var secondsEl = document.getElementById("bplSeconds");
+            var hiddenEl = document.getElementById("bplHidden");
+            var mandatoryEl = document.getElementById("bplMandatory");
+            var enforceEl = document.getElementById("bplEnforce");
+            var preWindowEl = document.getElementById("bplPreWindow");
+            var postWindowEl = document.getElementById("bplPostWindow");
+            var refActivityEl = document.getElementById("bplRefActivity");
+            var preReferenceEl = document.getElementById("bplPreReference");
+            if (daysEl) {
+                data.days = parseInt(daysEl.value) || 0;
+            }
+            if (hoursEl) {
+                data.hours = parseInt(hoursEl.value) || 0;
+            }
+            if (minutesEl) {
+                data.minutes = parseInt(minutesEl.value) || 0;
+            }
+            if (secondsEl) {
+                data.seconds = parseInt(secondsEl.value) || 0;
+            }
+            if (hiddenEl) {
+                data.hidden = hiddenEl.checked;
+            }
+            if (mandatoryEl) {
+                data.mandatory = mandatoryEl.checked;
+            }
+            if (enforceEl) {
+                data.enforce = enforceEl.checked;
+            }
+            if (preWindowEl) {
+                data.preWindow = preWindowEl.value.trim();
+            }
+            if (postWindowEl) {
+                data.postWindow = postWindowEl.value.trim();
+            }
+            if (refActivityEl) {
+                data.refActivity = refActivityEl.checked;
+            }
+            if (preReferenceEl) {
+                data.preReference = preReferenceEl.checked;
+            }
+            formDataStore[key] = data;
+        }
+
+        function createBPLTimeInput(labelText, id, max) {
+            var row = document.createElement("div");
+            row.style.cssText = "display:flex;flex-direction:column;gap:2px;";
+            var lbl = document.createElement("label");
+            lbl.textContent = labelText;
+            lbl.style.cssText = "font-size:11px;color:#aaa;";
+            var input = document.createElement("input");
+            input.type = "number";
+            input.id = id;
+            input.min = "0";
+            input.max = String(max);
+            input.value = "0";
+            input.style.cssText = "padding:6px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;width:100%;font-size:12px;box-sizing:border-box;";
+            input.addEventListener("input", function() {
+                saveFormDataFromPanel(selectedFormKey);
+                renderCenterPanel(centerSearch.value);
+                runAutoValidation();
+            });
+            row.appendChild(lbl);
+            row.appendChild(input);
+            return row;
+        }
+
+        function createBPLCheckbox(labelText, id, defaultChecked) {
+            var row = document.createElement("div");
+            row.style.cssText = "display:flex;align-items:center;gap:6px;";
+            var cb = document.createElement("input");
+            cb.type = "checkbox";
+            cb.id = id;
+            cb.checked = !!defaultChecked;
+            cb.style.cssText = "width:16px;height:16px;cursor:pointer;accent-color:#007bff;";
+            cb.addEventListener("change", function() {
+                saveFormDataFromPanel(selectedFormKey);
+                renderCenterPanel(centerSearch.value);
+                runAutoValidation();
+            });
+            var lbl = document.createElement("label");
+            lbl.textContent = labelText;
+            lbl.setAttribute("for", id);
+            lbl.style.cssText = "font-size:12px;font-weight:600;cursor:pointer;";
+            row.appendChild(cb);
+            row.appendChild(lbl);
+            return row;
+        }
+
+        function createBPLTextInput(labelText, id) {
+            var row = document.createElement("div");
+            row.style.cssText = "display:flex;flex-direction:column;gap:2px;";
+            var lbl = document.createElement("label");
+            lbl.textContent = labelText;
+            lbl.style.cssText = "font-size:11px;color:#aaa;";
+            var input = document.createElement("input");
+            input.type = "text";
+            input.id = id;
+            input.style.cssText = "padding:6px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;width:100%;font-size:12px;box-sizing:border-box;";
+            input.addEventListener("input", function() {
+                saveFormDataFromPanel(selectedFormKey);
+            });
+            row.appendChild(lbl);
+            row.appendChild(input);
+            return row;
+        }
+
+        function renderTimePanel(data, key) {
+            timeBody.innerHTML = "";
+            if (!key) {
+                var placeholder = document.createElement("div");
+                placeholder.textContent = "Select a form row to edit its time settings";
+                placeholder.style.cssText = "color:#666;font-size:12px;text-align:center;padding:20px;";
+                timeBody.appendChild(placeholder);
+                return;
+            }
+            timeBody.appendChild(createBPLCheckbox("Hidden?", "bplHidden", data.hidden));
+            timeBody.appendChild(createBPLCheckbox("Mandatory", "bplMandatory", data.mandatory));
+            timeBody.appendChild(createBPLCheckbox("Enforce Data Collection Order", "bplEnforce", data.enforce));
+            timeBody.appendChild(createBPLTextInput("Pre-Window", "bplPreWindow"));
+            timeBody.appendChild(createBPLTextInput("Post-Window", "bplPostWindow"));
+            timeBody.appendChild(createBPLCheckbox("Reference Activity", "bplRefActivity", data.refActivity));
+            timeBody.appendChild(createBPLCheckbox("Pre-Reference?", "bplPreReference", data.preReference));
+            timeBody.appendChild(createBPLTimeInput("Days", "bplDays", 200));
+            timeBody.appendChild(createBPLTimeInput("Hours", "bplHours", 23));
+            timeBody.appendChild(createBPLTimeInput("Minutes", "bplMinutes", 59));
+            timeBody.appendChild(createBPLTimeInput("Seconds", "bplSeconds", 59));
+            var daysEl = document.getElementById("bplDays");
+            var hoursEl = document.getElementById("bplHours");
+            var minutesEl = document.getElementById("bplMinutes");
+            var secondsEl = document.getElementById("bplSeconds");
+            var preWindowEl = document.getElementById("bplPreWindow");
+            var postWindowEl = document.getElementById("bplPostWindow");
+            if (daysEl) {
+                daysEl.value = String(data.days || 0);
+            }
+            if (hoursEl) {
+                hoursEl.value = String(data.hours || 0);
+            }
+            if (minutesEl) {
+                minutesEl.value = String(data.minutes || 0);
+            }
+            if (secondsEl) {
+                secondsEl.value = String(data.seconds || 0);
+            }
+            if (preWindowEl) {
+                preWindowEl.value = data.preWindow || "";
+            }
+            if (postWindowEl) {
+                postWindowEl.value = data.postWindow || "";
+            }
+            var refActivityEl = document.getElementById("bplRefActivity");
+            if (refActivityEl) {
+                refActivityEl.addEventListener("change", function() {
+                    var isChecked = this.checked;
+                    var d = document.getElementById("bplDays");
+                    var h = document.getElementById("bplHours");
+                    var m = document.getElementById("bplMinutes");
+                    var s = document.getElementById("bplSeconds");
+                    var pr = document.getElementById("bplPreReference");
+                    if (d) {
+                        d.disabled = isChecked;
+                        d.style.opacity = isChecked ? "0.5" : "1";
+                    }
+                    if (h) {
+                        h.disabled = isChecked;
+                        h.style.opacity = isChecked ? "0.5" : "1";
+                    }
+                    if (m) {
+                        m.disabled = isChecked;
+                        m.style.opacity = isChecked ? "0.5" : "1";
+                    }
+                    if (s) {
+                        s.disabled = isChecked;
+                        s.style.opacity = isChecked ? "0.5" : "1";
+                    }
+                    if (pr) {
+                        pr.disabled = isChecked;
+                        pr.style.opacity = isChecked ? "0.5" : "1";
+                        if (isChecked) {
+                            pr.checked = false;
+                        }
+                    }
+                    saveFormDataFromPanel(selectedFormKey);
+                    renderCenterPanel(centerSearch.value);
+                    runAutoValidation();
+                });
+                if (data.refActivity) {
+                    var d2 = document.getElementById("bplDays");
+                    var h2 = document.getElementById("bplHours");
+                    var m2 = document.getElementById("bplMinutes");
+                    var s2 = document.getElementById("bplSeconds");
+                    var pr2 = document.getElementById("bplPreReference");
+                    if (d2) {
+                        d2.disabled = true;
+                        d2.style.opacity = "0.5";
+                    }
+                    if (h2) {
+                        h2.disabled = true;
+                        h2.style.opacity = "0.5";
+                    }
+                    if (m2) {
+                        m2.disabled = true;
+                        m2.style.opacity = "0.5";
+                    }
+                    if (s2) {
+                        s2.disabled = true;
+                        s2.style.opacity = "0.5";
+                    }
+                    if (pr2) {
+                        pr2.disabled = true;
+                        pr2.style.opacity = "0.5";
+                    }
+                }
+            }
+        }
+
+        function renderCenterPanel(filter) {
+            saveFormDataFromPanel(selectedFormKey);
+            var scrollTop = centerBody.scrollTop;
+            centerBody.innerHTML = "";
+            var filterLower = (filter || "").toLowerCase();
+            for (var si2 = 0; si2 < segments.length; si2++) {
+                var seg = segments[si2];
+                if (filterLower && seg.text.toLowerCase().indexOf(filterLower) === -1) {
+                    continue;
+                }
+                var segBlock = document.createElement("div");
+                segBlock.style.cssText = "margin-bottom:12px;border:1px solid #444;border-radius:6px;background:#1e1e1e;overflow:hidden;";
+                segBlock.dataset.segmentValue = seg.value;
+                var segHeaderDiv = document.createElement("div");
+                segHeaderDiv.style.cssText = "display:flex;align-items:center;gap:8px;padding:8px 10px;background:#292929;border-bottom:1px solid #444;";
+                var segCb = document.createElement("input");
+                segCb.type = "checkbox";
+                segCb.checked = segmentCheckboxStates[seg.value] !== false;
+                segCb.dataset.segmentValue = seg.value;
+                segCb.style.cssText = "width:16px;height:16px;cursor:pointer;accent-color:#007bff;";
+                segCb.addEventListener("change", function() {
+                    segmentCheckboxStates[this.dataset.segmentValue] = this.checked;
+                    try {
+                        localStorage.setItem(STORAGE_BPL_SEGMENT_CHECKBOXES, JSON.stringify(segmentCheckboxStates));
+                    } catch (e) {}
+                    runAutoValidation();
+                });
+                var segLabel = document.createElement("span");
+                segLabel.textContent = seg.text;
+                segLabel.style.cssText = "font-weight:600;font-size:13px;flex:1;";
+                var sortBtn = document.createElement("button");
+                sortBtn.textContent = "\u2195 Sort";
+                sortBtn.style.cssText = "padding:3px 8px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:11px;cursor:pointer;";
+                sortBtn.dataset.segmentValue = seg.value;
+                sortBtn.addEventListener("click", function() {
+                    var sv = this.dataset.segmentValue;
+                    var fSortList = segmentFormMap[sv] || [];
+                    fSortList.sort(function(a, b) {
+                        var keyA = getFormDataKey(sv, a.value, a.index);
+                        var keyB = getFormDataKey(sv, b.value, b.index);
+                        var dataA = formDataStore[keyA] || getDefaultFormData();
+                        var dataB = formDataStore[keyB] || getDefaultFormData();
+                        var tpA = ((dataA.days || 0) * 86400) + ((dataA.hours || 0) * 3600) + ((dataA.minutes || 0) * 60) + (dataA.seconds || 0);
+                        var tpB = ((dataB.days || 0) * 86400) + ((dataB.hours || 0) * 3600) + ((dataB.minutes || 0) * 60) + (dataB.seconds || 0);
+                        if (dataA.preReference) {
+                            tpA = -tpA;
+                        }
+                        if (dataB.preReference) {
+                            tpB = -tpB;
+                        }
+                        if (tpA !== tpB) {
+                            return tpA - tpB;
+                        }
+                        return a.text.localeCompare(b.text);
+                    });
+                    segmentFormMap[sv] = fSortList;
+                    log("BPL: sorted forms in segment " + sv);
+                    renderCenterPanel(centerSearch.value);
+                });
+                var pasteBtn = document.createElement("button");
+                pasteBtn.textContent = "\u{1F4CB} Paste";
+                pasteBtn.style.cssText = "padding:3px 8px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:11px;cursor:pointer;";
+                pasteBtn.dataset.segmentValue = seg.value;
+                pasteBtn.addEventListener("click", (function(segVal) {
+                    return function() {
+                        if (!copiedForm) {
+                            log("BPL: paste attempted but no form copied");
+                            return;
+                        }
+                        if (copiedForm.sourceSegment === segVal) {
+                            var pasteWarnEl = this.parentElement.querySelector(".bpl-paste-warn");
+                            if (!pasteWarnEl) {
+                                pasteWarnEl = document.createElement("span");
+                                pasteWarnEl.className = "bpl-paste-warn";
+                                pasteWarnEl.style.cssText = "color:#ff6b6b;font-size:10px;margin-left:4px;";
+                                this.parentElement.appendChild(pasteWarnEl);
+                            }
+                            pasteWarnEl.textContent = "Cannot paste into the same segment";
+                            setTimeout(function() {
+                                if (pasteWarnEl && pasteWarnEl.parentElement) {
+                                    pasteWarnEl.remove();
+                                }
+                            }, 3000);
+                            log("BPL: paste blocked - same segment " + segVal);
+                            return;
+                        }
+                        var existingForms = segmentFormMap[segVal] || [];
+                        formInstanceCounter = formInstanceCounter + 1;
+                        var newIndex = formInstanceCounter;
+                        existingForms.push({
+                            value: copiedForm.formValue,
+                            text: copiedForm.formText,
+                            index: newIndex
+                        });
+                        segmentFormMap[segVal] = existingForms;
+                        var newKey = getFormDataKey(segVal, copiedForm.formValue, newIndex);
+                        var pastedData = getDefaultFormData();
+                        pastedData.days = copiedForm.days;
+                        pastedData.hours = copiedForm.hours;
+                        pastedData.minutes = copiedForm.minutes;
+                        pastedData.seconds = copiedForm.seconds;
+                        pastedData.hidden = copiedForm.hidden;
+                        pastedData.mandatory = copiedForm.mandatory;
+                        pastedData.enforce = copiedForm.enforce;
+                        pastedData.preWindow = copiedForm.preWindow;
+                        pastedData.postWindow = copiedForm.postWindow;
+                        pastedData.refActivity = copiedForm.refActivity;
+                        pastedData.preReference = copiedForm.preReference;
+                        pastedData.studyEvents = [];
+                        formDataStore[newKey] = pastedData;
+                        log("BPL: pasted form " + copiedForm.formText + " into segment " + segVal + " as instance " + newIndex);
+                        renderCenterPanel(centerSearch.value);
+                        runAutoValidation();
+                    };
+                })(seg.value));
+                segHeaderDiv.appendChild(segCb);
+                segHeaderDiv.appendChild(segLabel);
+                segHeaderDiv.appendChild(sortBtn);
+                segHeaderDiv.appendChild(pasteBtn);
+                segBlock.appendChild(segHeaderDiv);
+                var formDropArea = document.createElement("div");
+                formDropArea.style.cssText = "min-height:40px;padding:6px;";
+                formDropArea.dataset.segmentValue = seg.value;
+                formDropArea.addEventListener("dragover", function(e) {
+                    var hasForm = false;
+                    if (e.dataTransfer.types) {
+                        for (var t = 0; t < e.dataTransfer.types.length; t++) {
+                            if (e.dataTransfer.types[t] === "application/x-bpl-form") {
+                                hasForm = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (hasForm) {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "copy";
+                        this.style.background = "#2a2a4a";
+                    }
+                });
+                formDropArea.addEventListener("dragleave", function() {
+                    this.style.background = "";
+                });
+                formDropArea.addEventListener("drop", (function(segVal) {
+                    return function(e) {
+                        e.preventDefault();
+                        this.style.background = "";
+                        var formJson = e.dataTransfer.getData("application/x-bpl-form");
+                        if (!formJson) {
+                            return;
+                        }
+                        try {
+                            var fData = JSON.parse(formJson);
+                            var existingForms = segmentFormMap[segVal] || [];
+                            formInstanceCounter = formInstanceCounter + 1;
+                            var newIndex = formInstanceCounter;
+                            existingForms.push({
+                                value: fData.value,
+                                text: fData.text,
+                                index: newIndex
+                            });
+                            segmentFormMap[segVal] = existingForms;
+                            var newKey = getFormDataKey(segVal, fData.value, newIndex);
+                            formDataStore[newKey] = getDefaultFormData();
+                            log("BPL: form " + fData.text + " added to segment " + segVal + " as instance " + newIndex);
+                            renderCenterPanel(centerSearch.value);
+                            runAutoValidation();
+                        } catch (err) {
+                            log("BPL: drop error " + err);
+                        }
+                    };
+                })(seg.value));
+                var currentForms = segmentFormMap[seg.value] || [];
+                if (currentForms.length === 0) {
+                    var pholder = document.createElement("div");
+                    pholder.textContent = "Drop forms here";
+                    pholder.style.cssText = "color:#666;font-size:12px;text-align:center;padding:12px;";
+                    formDropArea.appendChild(pholder);
+                } else {
+                    for (var fi = 0; fi < currentForms.length; fi++) {
+                        var fEntry = currentForms[fi];
+                        var fKey = getFormDataKey(seg.value, fEntry.value, fEntry.index);
+                        var fData2 = formDataStore[fKey] || getDefaultFormData();
+                        var fEvents = fData2.studyEvents || [];
+                        var formRow = document.createElement("div");
+                        var isSelected = (fKey === selectedFormKey);
+                        var hasMissingEvents = (fEvents.length === 0);
+                        var rowBorderColor = "#444";
+                        var rowBg = "#2a2a2a";
+                        if (isSelected) {
+                            rowBorderColor = "#7a7aff";
+                            rowBg = "#3a3a5a";
+                        } else if (hasMissingEvents) {
+                            rowBorderColor = "#aa4444";
+                            rowBg = "#3a2a2a";
+                        }
+                        formRow.style.cssText = "display:flex;align-items:center;gap:6px;padding:5px 8px;margin-bottom:4px;border:1px solid " + rowBorderColor + ";border-radius:5px;background:" + rowBg + ";transition:all 0.15s ease;";
+                        formRow.dataset.formKey = fKey;
+                        formRow.dataset.segmentValue = seg.value;
+                        formRow.dataset.formIndex = String(fi);
+                        var eventDropBox = document.createElement("div");
+                        eventDropBox.style.cssText = "min-width:80px;max-width:140px;min-height:24px;padding:2px 4px;border:1px dashed #555;border-radius:3px;background:#1a1a1a;display:flex;flex-wrap:wrap;gap:2px;align-items:center;flex-shrink:0;";
+                        eventDropBox.dataset.formKey = fKey;
+                        if (fEvents.length === 0) {
+                            var evPlaceholder = document.createElement("span");
+                            evPlaceholder.textContent = "\u2B07 Event";
+                            evPlaceholder.style.cssText = "color:#666;font-size:9px;padding:1px;";
+                            eventDropBox.appendChild(evPlaceholder);
+                        } else {
+                            var evTag = document.createElement("span");
+                            evTag.style.cssText = "display:inline-flex;align-items:center;gap:2px;padding:1px 4px;background:#3a3a5a;border-radius:3px;font-size:9px;color:#ccc;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:grab;";
+                            evTag.textContent = fEvents[0].text;
+                            evTag.title = fEvents[0].text;
+                            evTag.draggable = true;
+                            evTag.dataset.eventValue = fEvents[0].value;
+                            evTag.dataset.eventText = fEvents[0].text;
+                            evTag.dataset.sourceFormKey = fKey;
+                            evTag.addEventListener("dragstart", (function(fk, evVal, evText) {
+                                return function(e) {
+                                    e.stopPropagation();
+                                    e.dataTransfer.setData("application/x-bpl-event", JSON.stringify({
+                                        value: evVal,
+                                        text: evText
+                                    }));
+                                    e.dataTransfer.setData("application/x-bpl-event-source", fk);
+                                    e.dataTransfer.effectAllowed = "copyMove";
+                                    this.style.opacity = "0.5";
+                                };
+                            })(fKey, fEvents[0].value, fEvents[0].text));
+                            evTag.addEventListener("dragend", (function(fk) {
+                                return function(e) {
+                                    this.style.opacity = "1";
+                                    if (e.dataTransfer.dropEffect === "none") {
+                                        var d = formDataStore[fk];
+                                        if (d && d.studyEvents) {
+                                            d.studyEvents = [];
+                                            formDataStore[fk] = d;
+                                        }
+                                        log("BPL: event removed from form " + fk + " (dropped outside valid target)");
+                                        renderCenterPanel(centerSearch.value);
+                                        runAutoValidation();
+                                    }
+                                };
+                            })(fKey));
+                            var evRemoveBtn = document.createElement("span");
+                            evRemoveBtn.textContent = "\u00D7";
+                            evRemoveBtn.style.cssText = "cursor:pointer;color:#ff6b6b;font-weight:bold;font-size:11px;margin-left:1px;flex-shrink:0;";
+                            evRemoveBtn.dataset.formKey = fKey;
+                            evRemoveBtn.addEventListener("click", (function(fk) {
+                                return function(e) {
+                                    e.stopPropagation();
+                                    var d = formDataStore[fk];
+                                    if (d && d.studyEvents) {
+                                        d.studyEvents = [];
+                                        formDataStore[fk] = d;
+                                    }
+                                    log("BPL: removed study event from form " + fk);
+                                    renderCenterPanel(centerSearch.value);
+                                    runAutoValidation();
+                                };
+                            })(fKey));
+                            evTag.appendChild(evRemoveBtn);
+                            eventDropBox.appendChild(evTag);
+                        }
+                        eventDropBox.addEventListener("dragover", function(e) {
+                            var hasEvent = false;
+                            if (e.dataTransfer.types) {
+                                for (var t = 0; t < e.dataTransfer.types.length; t++) {
+                                    if (e.dataTransfer.types[t] === "application/x-bpl-event") {
+                                        hasEvent = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (hasEvent) {
+                                e.preventDefault();
+                                e.dataTransfer.dropEffect = "copy";
+                                this.style.borderColor = "#7a7aff";
+                                this.style.background = "#2a2a4a";
+                            }
+                        });
+                        eventDropBox.addEventListener("dragleave", function() {
+                            this.style.borderColor = "#555";
+                            this.style.background = "#1a1a1a";
+                        });
+                        eventDropBox.addEventListener("drop", (function(fk) {
+                            return function(e) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                this.style.borderColor = "#555";
+                                this.style.background = "#1a1a1a";
+                                var evJson = e.dataTransfer.getData("application/x-bpl-event");
+                                if (!evJson) {
+                                    return;
+                                }
+                                try {
+                                    var evData = JSON.parse(evJson);
+                                    var d = formDataStore[fk];
+                                    if (!d) {
+                                        d = getDefaultFormData();
+                                    }
+                                    d.studyEvents = [{
+                                        value: evData.value,
+                                        text: evData.text
+                                    }];
+                                    formDataStore[fk] = d;
+                                    log("BPL: set study event " + evData.text + " on form " + fk);
+                                    renderCenterPanel(centerSearch.value);
+                                    runAutoValidation();
+                                } catch (err) {
+                                    log("BPL: event drop error " + err);
+                                }
+                            };
+                        })(fKey));
+                        var formLabel = document.createElement("span");
+                        formLabel.style.cssText = "flex:1;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;min-width:0;";
+                        formLabel.title = bplBuildFormLabel(seg.text, fEvents, fEntry.text, fData2);
+                        formLabel.textContent = formLabel.title;
+                        if (hasMissingEvents) {
+                            formLabel.style.color = "#ff8888";
+                        }
+                        formLabel.addEventListener("click", (function(k) {
+                            return function() {
+                                saveFormDataFromPanel(selectedFormKey);
+                                loadFormDataToPanel(k);
+                                renderCenterPanel(centerSearch.value);
+                            };
+                        })(fKey));
+                        var arrowUpBtn = document.createElement("button");
+                        arrowUpBtn.textContent = "\u25B2";
+                        arrowUpBtn.style.cssText = "padding:2px 5px;border-radius:3px;border:1px solid #555;background:#333;color:#fff;font-size:10px;cursor:pointer;flex-shrink:0;";
+                        if (fi === 0) {
+                            arrowUpBtn.disabled = true;
+                            arrowUpBtn.style.opacity = "0.3";
+                            arrowUpBtn.style.cursor = "default";
+                        }
+                        arrowUpBtn.dataset.segmentValue = seg.value;
+                        arrowUpBtn.dataset.formIndex = String(fi);
+                        arrowUpBtn.addEventListener("click", (function(sv, idx) {
+                            return function(e) {
+                                e.stopPropagation();
+                                if (idx <= 0) {
+                                    return;
+                                }
+                                var arr = segmentFormMap[sv];
+                                var temp = arr[idx];
+                                arr[idx] = arr[idx - 1];
+                                arr[idx - 1] = temp;
+                                segmentFormMap[sv] = arr;
+                                log("BPL: moved form up in segment " + sv);
+                                renderCenterPanel(centerSearch.value);
+                            };
+                        })(seg.value, fi));
+                        var arrowDownBtn = document.createElement("button");
+                        arrowDownBtn.textContent = "\u25BC";
+                        arrowDownBtn.style.cssText = "padding:2px 5px;border-radius:3px;border:1px solid #555;background:#333;color:#fff;font-size:10px;cursor:pointer;flex-shrink:0;";
+                        if (fi === currentForms.length - 1) {
+                            arrowDownBtn.disabled = true;
+                            arrowDownBtn.style.opacity = "0.3";
+                            arrowDownBtn.style.cursor = "default";
+                        }
+                        arrowDownBtn.dataset.segmentValue = seg.value;
+                        arrowDownBtn.dataset.formIndex = String(fi);
+                        arrowDownBtn.addEventListener("click", (function(sv, idx, maxIdx) {
+                            return function(e) {
+                                e.stopPropagation();
+                                if (idx >= maxIdx) {
+                                    return;
+                                }
+                                var arr = segmentFormMap[sv];
+                                var temp = arr[idx];
+                                arr[idx] = arr[idx + 1];
+                                arr[idx + 1] = temp;
+                                segmentFormMap[sv] = arr;
+                                log("BPL: moved form down in segment " + sv);
+                                renderCenterPanel(centerSearch.value);
+                            };
+                        })(seg.value, fi, currentForms.length - 1));
+                        var removeFormBtn = document.createElement("button");
+                        removeFormBtn.textContent = "\u2715";
+                        removeFormBtn.style.cssText = "padding:2px 6px;border-radius:3px;border:none;background:transparent;color:#ff6b6b;font-size:14px;font-weight:bold;cursor:pointer;flex-shrink:0;";
+                        removeFormBtn.addEventListener("mouseenter", function() {
+                            this.style.background = "rgba(255,107,107,0.2)";
+                        });
+                        removeFormBtn.addEventListener("mouseleave", function() {
+                            this.style.background = "transparent";
+                        });
+                        removeFormBtn.dataset.segmentValue = seg.value;
+                        removeFormBtn.dataset.formIndex = String(fi);
+                        removeFormBtn.dataset.formKey = fKey;
+                        removeFormBtn.addEventListener("click", (function(sv, idx, fk) {
+                            return function(e) {
+                                e.stopPropagation();
+                                var arr = segmentFormMap[sv] || [];
+                                arr.splice(idx, 1);
+                                segmentFormMap[sv] = arr;
+                                delete formDataStore[fk];
+                                if (selectedFormKey === fk) {
+                                    selectedFormKey = null;
+                                    renderTimePanel({}, null);
+                                }
+                                log("BPL: removed form at index " + idx + " from segment " + sv);
+                                renderCenterPanel(centerSearch.value);
+                                runAutoValidation();
+                            };
+                        })(seg.value, fi, fKey));
+                        var copyFormBtn = document.createElement("button");
+                        copyFormBtn.textContent = "\u{1F4CB}";
+                        copyFormBtn.title = "Copy this form instance";
+                        copyFormBtn.style.cssText = "padding:2px 5px;border-radius:3px;border:1px solid #555;background:#333;color:#fff;font-size:10px;cursor:pointer;flex-shrink:0;";
+                        copyFormBtn.addEventListener("click", (function(sv, fv, ft, fk) {
+                            return function(e) {
+                                e.stopPropagation();
+                                var d = formDataStore[fk] || getDefaultFormData();
+                                copiedForm = {
+                                    formValue: fv,
+                                    formText: ft,
+                                    sourceSegment: sv,
+                                    days: d.days || 0,
+                                    hours: d.hours || 0,
+                                    minutes: d.minutes || 0,
+                                    seconds: d.seconds || 0,
+                                    hidden: d.hidden || false,
+                                    mandatory: d.mandatory !== false,
+                                    enforce: d.enforce || false,
+                                    preWindow: d.preWindow || "",
+                                    postWindow: d.postWindow || "",
+                                    refActivity: d.refActivity || false,
+                                    preReference: d.preReference || false
+                                };
+                                log("BPL: copied form " + ft + " from segment " + sv + " (key " + fk + ")");
+                                renderCenterPanel(centerSearch.value);
+                            };
+                        })(seg.value, fEntry.value, fEntry.text, fKey));
+                        formRow.appendChild(eventDropBox);
+                        formRow.appendChild(formLabel);
+                        formRow.appendChild(arrowUpBtn);
+                        formRow.appendChild(arrowDownBtn);
+                        formRow.appendChild(copyFormBtn);
+                        formRow.appendChild(removeFormBtn);
+                        formDropArea.appendChild(formRow);
+                    }
+                }
+                segBlock.appendChild(formDropArea);
+                centerBody.appendChild(segBlock);
+            }
+            centerBody.scrollTop = scrollTop;
+        }
+
+        centerSearch.addEventListener("input", function() {
+            renderCenterPanel(this.value);
+        });
+
+        var legendRow = document.createElement("div");
+        legendRow.style.cssText = "display:flex;gap:16px;padding:8px 12px;border:1px solid #333;border-radius:6px;background:#1a1a1a;font-size:11px;color:#aaa;flex-wrap:wrap;";
+
+        var legendItems = [
+            { icon: BPL_ICON_HIDDEN, label: "Hidden" },
+            { icon: BPL_ICON_MANDATORY, label: "Mandatory" },
+            { icon: BPL_ICON_ENFORCE, label: "Enforce Order" },
+            { icon: BPL_ICON_REF_ACTIVITY, label: "Ref. Activity" }
+        ];
+        for (var li = 0; li < legendItems.length; li++) {
+            var legendItem = document.createElement("span");
+            legendItem.textContent = legendItems[li].icon + " " + legendItems[li].label;
+            legendRow.appendChild(legendItem);
+        }
+
+        var bottomRow = document.createElement("div");
+        bottomRow.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:12px;";
+
+        bottomRow.appendChild(legendRow);
+
+        var confirmArea = document.createElement("div");
+        confirmArea.style.cssText = "display:flex;flex-direction:row;align-items:center;gap:8px;flex-shrink:0;";
+
+        var confirmErrorDiv = document.createElement("div");
+        confirmErrorDiv.id = "bplConfirmError";
+        confirmErrorDiv.style.cssText = "max-width:400px;font-size:11px;color:#ff6b6b;text-align:right;display:none;";
+
+        var confirmBtn = document.createElement("button");
+        confirmBtn.id = "bplConfirmBtn";
+        confirmBtn.textContent = "Confirm";
+        confirmBtn.style.cssText = "padding:10px 24px;border-radius:6px;border:none;background:#28a745;color:#fff;font-weight:600;cursor:pointer;";
+        confirmBtn.addEventListener("mouseenter", function() {
+            this.style.background = "#218838";
+        });
+        confirmBtn.addEventListener("mouseleave", function() {
+            this.style.background = "#28a745";
+        });
+
+        function runAutoValidation() {
+            var errors = bplValidateConfiguration(segments, segmentFormMap, formDataStore, segmentCheckboxStates);
+            if (errors.length === 0) {
+                confirmErrorDiv.style.display = "none";
+                confirmErrorDiv.innerHTML = "";
+            } else {
+                confirmErrorDiv.style.display = "block";
+                confirmErrorDiv.innerHTML = "";
+                for (var ve = 0; ve < errors.length; ve++) {
+                    var errLine = document.createElement("div");
+                    errLine.textContent = errors[ve];
+                    errLine.style.cssText = "margin-bottom:2px;";
+                    confirmErrorDiv.appendChild(errLine);
+                }
+            }
+        }
+
+        confirmBtn.addEventListener("click", function() {
+            saveFormDataFromPanel(selectedFormKey);
+            var errors = bplValidateConfiguration(segments, segmentFormMap, formDataStore, segmentCheckboxStates);
+            if (errors.length > 0) {
+                log("BPL: confirm blocked, " + errors.length + " validation error(s)");
+                confirmErrorDiv.style.display = "block";
+                confirmErrorDiv.innerHTML = "";
+                for (var ve2 = 0; ve2 < errors.length; ve2++) {
+                    var errLine2 = document.createElement("div");
+                    errLine2.textContent = errors[ve2];
+                    errLine2.style.cssText = "margin-bottom:2px;";
+                    confirmErrorDiv.appendChild(errLine2);
+                }
+                return;
+            }
+            confirmErrorDiv.style.display = "none";
+            confirmErrorDiv.innerHTML = "";
+            var mappedItems = [];
+            for (var si3 = 0; si3 < segments.length; si3++) {
+                var sv = segments[si3].value;
+                var sText = segments[si3].text;
+                if (!segmentCheckboxStates[sv]) {
+                    continue;
+                }
+                var fList = segmentFormMap[sv] || [];
+                for (var fi3 = 0; fi3 < fList.length; fi3++) {
+                    var fEntry = fList[fi3];
+                    var fk = getFormDataKey(sv, fEntry.value, fEntry.index);
+                    var fd = formDataStore[fk] || getDefaultFormData();
+                    var evts = fd.studyEvents || [];
+                    for (var ei2 = 0; ei2 < evts.length; ei2++) {
+                        var ev = evts[ei2];
+                        var timeOffset = {
+                            days: fd.days || 0,
+                            hours: fd.hours || 0,
+                            minutes: fd.minutes || 0,
+                            seconds: fd.seconds || 0
+                        };
+                        if (fd.refActivity) {
+                            timeOffset = { days: 0, hours: 0, minutes: 0, seconds: 0 };
+                        }
+                        var tp = bplFormatTimePoint(timeOffset.days, timeOffset.hours, timeOffset.minutes, timeOffset.seconds, fd.preReference);
+                        var statusIcons = bplBuildStatusIcons(fd);
+                        var labelStr = sText + " - " + ev.text + " - " + fEntry.text + " - " + tp;
+                        if (statusIcons) {
+                            labelStr = labelStr + " - " + statusIcons;
+                        }
+                        mappedItems.push({
+                            segmentValue: sv,
+                            segmentText: sText,
+                            eventValue: ev.value,
+                            eventText: ev.text,
+                            formValue: fEntry.value,
+                            formText: fEntry.text,
+                            timeOffset: timeOffset,
+                            hidden: fd.hidden,
+                            mandatory: fd.mandatory,
+                            enforce: fd.enforce,
+                            preWindow: fd.preWindow,
+                            postWindow: fd.postWindow,
+                            refActivity: fd.refActivity,
+                            preReference: fd.preReference,
+                            label: labelStr,
+                            status: "Pending"
+                        });
+                    }
+                }
+            }
+            log("BPL: confirm clicked, " + mappedItems.length + " items to add");
+            if (BPL_POPUP_REF) {
+                BPL_POPUP_REF.close();
+                BPL_POPUP_REF = null;
+            }
+            if (BPL_CANCELLED) {
+                log("BPL: cancelled before add process");
+                return;
+            }
+            startBPLAddProcess(mappedItems);
+        });
+
+        confirmArea.appendChild(confirmErrorDiv);
+        confirmArea.appendChild(confirmBtn);
+        bottomRow.appendChild(confirmArea);
+        contentRow.appendChild(leftPanel);
+        contentRow.appendChild(handle1);
+        contentRow.appendChild(centerPanel);
+        contentRow.appendChild(handle2);
+        contentRow.appendChild(formsPanel);
+        contentRow.appendChild(handle3);
+        contentRow.appendChild(timePanel);
+        container.appendChild(contentRow);
+        container.appendChild(bottomRow);
+
+        renderStudyEventsList("");
+        renderFormsDragList("");
+        renderCenterPanel("");
+        renderTimePanel({}, null);
+        runAutoValidation();
+
+        var keybindBtn = document.createElement("button");
+        keybindBtn.textContent = "\u2328 " + bplHideKeybind;
+        keybindBtn.title = "Configure hide/show keybind (current: " + bplHideKeybind + ")";
+        keybindBtn.style.cssText = "padding:4px 10px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:12px;cursor:pointer;";
+        keybindBtn.addEventListener("mousedown", function(e) {
+            e.stopPropagation();
+        });
+        keybindBtn.addEventListener("click", function(e) {
+            e.stopPropagation();
+            var existingPopup = document.getElementById("bplKeybindPopup");
+            if (existingPopup) {
+                existingPopup.remove();
+                return;
+            }
+            var popup = document.createElement("div");
+            popup.id = "bplKeybindPopup";
+            popup.style.cssText = "position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100001;background:#2a2a2a;border:2px solid #7a7aff;border-radius:8px;padding:20px;text-align:center;min-width:260px;box-shadow:0 4px 20px rgba(0,0,0,0.5);";
+            var popupTitle = document.createElement("div");
+            popupTitle.textContent = "Press any key to set as hide/show keybind";
+            popupTitle.style.cssText = "color:#fff;font-size:13px;margin-bottom:12px;";
+            popup.appendChild(popupTitle);
+            var currentLabel = document.createElement("div");
+            currentLabel.textContent = "Current: " + bplHideKeybind;
+            currentLabel.style.cssText = "color:#aaa;font-size:11px;margin-bottom:12px;";
+            popup.appendChild(currentLabel);
+            var cancelPopupBtn = document.createElement("button");
+            cancelPopupBtn.textContent = "Cancel";
+            cancelPopupBtn.style.cssText = "padding:4px 12px;border-radius:4px;border:1px solid #555;background:#444;color:#fff;font-size:11px;cursor:pointer;";
+            cancelPopupBtn.addEventListener("click", function() {
+                document.removeEventListener("keydown", keybindCaptureHandler, true);
+                popup.remove();
+            });
+            popup.appendChild(cancelPopupBtn);
+            var keybindCaptureHandler = function(ev) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                ev.stopImmediatePropagation();
+                bplHideKeybind = ev.key;
+                try {
+                    localStorage.setItem(STORAGE_BPL_HIDE_KEYBIND, bplHideKeybind);
+                } catch (err) {}
+                keybindBtn.textContent = "\u2328 " + bplHideKeybind;
+                keybindBtn.title = "Configure hide/show keybind (current: " + bplHideKeybind + ")";
+                log("BPL: keybind set to " + bplHideKeybind);
+                document.removeEventListener("keydown", keybindCaptureHandler, true);
+                popup.remove();
+            };
+            document.addEventListener("keydown", keybindCaptureHandler, true);
+            document.body.appendChild(popup);
+        });
+
+        var bplHideKeyHandler = function(e) {
+            if (e.key === bplHideKeybind) {
+                var existingPopup = document.getElementById("bplKeybindPopup");
+                if (existingPopup) {
+                    return;
+                }
+                if (BPL_POPUP_REF && BPL_POPUP_REF.element) {
+                    if (BPL_POPUP_REF.element.style.display === "none") {
+                        BPL_POPUP_REF.element.style.display = "flex";
+                        log("BPL: popup shown via " + bplHideKeybind);
+                    } else {
+                        BPL_POPUP_REF.element.style.display = "none";
+                        log("BPL: popup hidden via " + bplHideKeybind);
+                    }
+                }
+            }
+        };
+        document.addEventListener("keydown", bplHideKeyHandler);
+
+        var bplCleanupKeybind = function() {
+            document.removeEventListener("keydown", bplHideKeyHandler);
+            log("BPL: keybind listener removed");
+        };
+
+        setTimeout(function() {
+            if (bplIsFullscreen) {
+                applyFullscreen();
+            }
+        }, 50);
+
+        return {
+            container: container,
+            fullscreenBtn: fullscreenBtn,
+            keybindBtn: keybindBtn,
+            cleanupKeybind: bplCleanupKeybind
+        };
+    }
+
+    function createBPLMappedItemList(mappedItems, existingItems) {
+        log("BPL: checking " + mappedItems.length + " items for duplicates against " + existingItems.length + " existing");
+        for (var i = 0; i < mappedItems.length; i++) {
+            var item = mappedItems[i];
+            var key = normalizeSAText(item.segmentText) + " | " + normalizeSAText(item.eventText) + " | " + normalizeSAText(item.formText);
+            var isDuplicate = false;
+            for (var j = 0; j < existingItems.length; j++) {
+                if (normalizeSAText(existingItems[j]) === key) {
+                    isDuplicate = true;
+                    break;
+                }
+            }
+            if (isDuplicate) {
+                item.status = "Duplicate";
+                log("BPL: duplicate found - " + key);
+            }
+        }
+        return mappedItems;
+    }
+
+    function createBPLProgressPopup(mappedItems) {
+        var container = document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;gap:12px;max-height:600px;";
+
+        var summaryDiv = document.createElement("div");
+        summaryDiv.id = "bplProgressSummary";
+        summaryDiv.style.cssText = "display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:8px;border:1px solid #333;border-radius:6px;background:#1a1a1a;font-size:12px;text-align:center;";
+
+        function updateSummary() {
+            var total = mappedItems.length;
+            var pending = 0;
+            var processing = 0;
+            var success = 0;
+            var failed = 0;
+            var duplicate = 0;
+            for (var i = 0; i < mappedItems.length; i++) {
+                var s = mappedItems[i].status;
+                if (s === "Pending") {
+                    pending = pending + 1;
+                } else if (s === "Processing") {
+                    processing = processing + 1;
+                } else if (s === "Success") {
+                    success = success + 1;
+                } else if (s === "Failed") {
+                    failed = failed + 1;
+                } else if (s === "Duplicate") {
+                    duplicate = duplicate + 1;
+                }
+            }
+            summaryDiv.innerHTML = "";
+            var items = [
+                { label: "Total", value: total, color: "#fff" },
+                { label: "Pending", value: pending, color: "#aaa" },
+                { label: "In Progress", value: processing, color: "#9df" },
+                { label: "Success", value: success, color: "#4f4" },
+                { label: "Failed", value: failed, color: "#f44" },
+                { label: "Duplicate", value: duplicate, color: "#ff4" }
+            ];
+            for (var j = 0; j < items.length; j++) {
+                var cell = document.createElement("div");
+                cell.style.cssText = "display:flex;flex-direction:column;gap:2px;";
+                var valSpan = document.createElement("div");
+                valSpan.textContent = String(items[j].value);
+                valSpan.style.cssText = "font-size:18px;font-weight:700;color:" + items[j].color + ";";
+                var lblSpan = document.createElement("div");
+                lblSpan.textContent = items[j].label;
+                lblSpan.style.cssText = "font-size:10px;color:#888;";
+                cell.appendChild(valSpan);
+                cell.appendChild(lblSpan);
+                summaryDiv.appendChild(cell);
+            }
+        }
+
+        var statusDiv = document.createElement("div");
+        statusDiv.id = "bplProgressStatus";
+        statusDiv.style.cssText = "text-align:center;font-size:15px;font-weight:600;padding:6px;";
+        statusDiv.textContent = "Processing...";
+
+        var loadingDiv = document.createElement("div");
+        loadingDiv.id = "bplProgressLoading";
+        loadingDiv.style.cssText = "text-align:center;font-size:13px;color:#9df;";
+        loadingDiv.textContent = "Running.";
+
+        var durationDiv = document.createElement("div");
+        durationDiv.id = "bplProgressDuration";
+        durationDiv.style.cssText = "text-align:center;font-size:11px;color:#888;";
+        durationDiv.textContent = "Duration: 0s";
+
+        var listContainer = document.createElement("div");
+        listContainer.id = "bplProgressList";
+        listContainer.style.cssText = "flex:1;overflow-y:auto;border:1px solid #333;border-radius:4px;padding:6px;background:#1a1a1a;max-height:350px;";
+
+        function renderItems() {
+            listContainer.innerHTML = "";
+            for (var i = 0; i < mappedItems.length; i++) {
+                var item = mappedItems[i];
+                var row = document.createElement("div");
+                row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:5px 8px;margin-bottom:3px;border-radius:4px;font-size:11px;";
+
+                if (item.status === "Success") {
+                    row.style.background = "#1a3a1a";
+                } else if (item.status === "Duplicate") {
+                    row.style.background = "#3a3a1a";
+                } else if (item.status === "Failed") {
+                    row.style.background = "#3a1a1a";
+                } else if (item.status === "Processing") {
+                    row.style.background = "#1a2a3a";
+                } else {
+                    row.style.background = "#222";
+                }
+
+                var keySpan = document.createElement("span");
+                keySpan.textContent = item.label;
+                keySpan.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:8px;";
+
+                var statusSpan = document.createElement("span");
+                statusSpan.textContent = item.status;
+                statusSpan.style.cssText = "font-weight:500;flex-shrink:0;";
+                if (item.status === "Success") {
+                    statusSpan.style.color = "#4f4";
+                } else if (item.status === "Duplicate") {
+                    statusSpan.style.color = "#ff4";
+                } else if (item.status === "Failed") {
+                    statusSpan.style.color = "#f44";
+                } else if (item.status === "Processing") {
+                    statusSpan.style.color = "#9df";
+                } else {
+                    statusSpan.style.color = "#aaa";
+                }
+
+                row.appendChild(keySpan);
+                row.appendChild(statusSpan);
+                listContainer.appendChild(row);
+            }
+            updateSummary();
+        }
+
+        renderItems();
+
+        var buttonRow = document.createElement("div");
+        buttonRow.style.cssText = "display:flex;justify-content:center;padding-top:8px;";
+
+        var stopBtn = document.createElement("button");
+        stopBtn.textContent = "Stop";
+        stopBtn.style.cssText = "padding:10px 24px;border-radius:6px;border:none;background:#dc3545;color:#fff;font-weight:600;cursor:pointer;";
+        stopBtn.addEventListener("click", function() {
+            BPL_CANCELLED = true;
+            log("PLAP Builder: stopped by user");
+            clearBPLStorage();
+            if (BPL_PROGRESS_POPUP_REF && BPL_PROGRESS_POPUP_REF.close) {
+                try {
+                    BPL_PROGRESS_POPUP_REF.close();
+                } catch (e) {
+                    log("PLAP Builder: error closing popup - " + String(e));
+                }
+                BPL_PROGRESS_POPUP_REF = null;
+            }
+        });
+
+        buttonRow.appendChild(stopBtn);
+
+        container.appendChild(summaryDiv);
+        container.appendChild(statusDiv);
+        container.appendChild(loadingDiv);
+        container.appendChild(durationDiv);
+        container.appendChild(listContainer);
+        container.appendChild(buttonRow);
+
+        var startTime = Date.now();
+        var dots = 1;
+        var loadingInterval = setInterval(function() {
+            if (!BPL_PROGRESS_POPUP_REF || BPL_CANCELLED) {
+                clearInterval(loadingInterval);
+                return;
+            }
+            dots = (dots % 3) + 1;
+            var text = "Running";
+            for (var i = 0; i < dots; i++) {
+                text = text + ".";
+            }
+            loadingDiv.textContent = text;
+            var elapsed = Math.floor((Date.now() - startTime) / 1000);
+            durationDiv.textContent = "Duration: " + elapsed + "s";
+        }, 500);
+
+        return {
+            element: container,
+            updateStatus: function(text) {
+                statusDiv.textContent = text;
+            },
+            updateItem: function(index, status) {
+                if (mappedItems[index]) {
+                    mappedItems[index].status = status;
+                    renderItems();
+                }
+            },
+            setComplete: function() {
+                clearInterval(loadingInterval);
+                var elapsed = Math.floor((Date.now() - startTime) / 1000);
+                durationDiv.textContent = "Total Duration: " + elapsed + "s";
+                loadingDiv.textContent = "Done!";
+                loadingDiv.style.color = "#4f4";
+                stopBtn.textContent = "Close";
+                stopBtn.style.background = "#28a745";
+                updateSummary();
+            }
+        };
+    }
+
+    async function selectBPLSelect2Value(selectId, value) {
+        if (BPL_CANCELLED) {
+            log("PLAP Builder: cancelled during selectBPLSelect2Value");
+            return false;
+        }
+
+        var select = document.getElementById(selectId);
+        if (!select) {
+            log("PLAP Builder: select element " + selectId + " not found");
+            return false;
+        }
+
+        select.value = value;
+
+        var evt = new Event("change", { bubbles: true });
+        select.dispatchEvent(evt);
+
+        try {
+            if (window.jQuery && window.jQuery.fn.select2) {
+                window.jQuery("#" + selectId).trigger("change");
+            }
+        } catch (e) {}
+
+        await sleep(300);
+
+        if (BPL_CANCELLED) {
+            log("PLAP Builder: cancelled after selectBPLSelect2Value sleep");
+            return false;
+        }
+
+        log("PLAP Builder: selected value " + value + " in " + selectId);
+        return true;
+    }
+
+    async function startBPLAddProcess(mappedItems) {
+        var existingItems = [];
+        try {
+            var raw = localStorage.getItem(STORAGE_BPL_EXISTING);
+            if (raw) {
+                existingItems = JSON.parse(raw);
+            }
+        } catch (e) {}
+
+        mappedItems = createBPLMappedItemList(mappedItems, existingItems);
+
+        log("PLAP Builder: Mapped items list:");
+        for (var i = 0; i < mappedItems.length; i++) {
+            log("  " + (i + 1) + ". " + mappedItems[i].label + " [" + mappedItems[i].status + "]");
+        }
+
+        try {
+            localStorage.setItem(STORAGE_BPL_MAPPED_ITEMS, JSON.stringify(mappedItems));
+            localStorage.setItem(STORAGE_BPL_RUNNING, "1");
+            localStorage.setItem(STORAGE_BPL_CURRENT_INDEX, "0");
+        } catch (e) {}
+
+        var progressContent = createBPLProgressPopup(mappedItems);
+        BPL_PROGRESS_POPUP_REF = createPopup({
+            title: "PLAP Builder - Adding Items",
+            content: progressContent.element,
+            width: "700px",
+            height: "auto",
+            maxHeight: "85%",
+            onClose: function() {
+                BPL_CANCELLED = true;
+                log("BPLAP BuilderPL: cancelled by user (X button)");
+                clearBPLStorage();
+                BPL_PROGRESS_POPUP_REF = null;
+            }
+        });
+
+        if (BPL_CANCELLED) {
+            log("PLAP Builder: cancelled before processing");
+            return;
+        }
+
+        for (var idx = 0; idx < mappedItems.length; idx++) {
+            if (BPL_CANCELLED) {
+                log("PLAP Builder: cancelled");
+                break;
+            }
+
+            var item = mappedItems[idx];
+
+            if (item.status === "Duplicate") {
+                log("PLAP Builder: skipping duplicate - " + item.label);
+                continue;
+            }
+
+            item.status = "Processing";
+            progressContent.updateItem(idx, "Processing");
+            progressContent.updateStatus("Adding item " + (idx + 1) + " of " + mappedItems.length);
+            log("PLAP Builder: adding item " + (idx + 1) + " - " + item.label);
+
+            try {
+                if (BPL_CANCELLED) {
+                    break;
+                }
+
+                if (!clickAddSaButton()) {
+                    log("PLAP Builder: failed to click Add button");
+                    item.status = "Failed";
+                    progressContent.updateItem(idx, "Failed");
+                    break;
+                }
+
+                var modal = await waitForSAModal(10000);
+                if (!modal) {
+                    log("PLAP Builder: modal did not appear");
+                    item.status = "Failed";
+                    progressContent.updateItem(idx, "Failed");
+                    break;
+                }
+
+                if (BPL_CANCELLED) {
+                    break;
+                }
+
+                await sleep(1000);
+
+                if (BPL_CANCELLED) {
+                    break;
+                }
+
+                log("PLAP Builder: selecting segment " + item.segmentText + " (value: " + item.segmentValue + ")");
+                await selectBPLSelect2Value("segment", item.segmentValue);
+                await sleep(500);
+
+                if (BPL_CANCELLED) {
+                    break;
+                }
+
+                log("PLAP Builder: selecting study event " + item.eventText + " (value: " + item.eventValue + ")");
+                await selectBPLSelect2Value("studyEvent", item.eventValue);
+                await sleep(500);
+
+                if (BPL_CANCELLED) {
+                    break;
+                }
+
+                log("PLAP Builder: selecting form " + item.formText + " (value: " + item.formValue + ")");
+                await selectBPLSelect2Value("form", item.formValue);
+                await sleep(500);
+
+                if (BPL_CANCELLED) {
+                    break;
+                }
+
+                if (item.hidden) {
+                    var hiddenCheckboxEl = document.querySelector("#uniform-hidden span input#hidden.checkbox");
+                    if (!hiddenCheckboxEl) {
+                        hiddenCheckboxEl = document.getElementById("hidden");
+                    }
+                    if (hiddenCheckboxEl && !hiddenCheckboxEl.checked) {
+                        hiddenCheckboxEl.click();
+                        log("PLAP Builder: Hidden checkbox checked");
+                        await sleep(200);
+                    }
+                }
+
+                if (!item.mandatory) {
+                    var mandatoryEl = document.querySelector("#uniform-mandatory span input#mandatory.checkbox");
+                    if (!mandatoryEl) {
+                        mandatoryEl = document.getElementById("mandatory");
+                    }
+                    if (mandatoryEl && mandatoryEl.checked) {
+                        mandatoryEl.click();
+                        log("PLAP Builder: Mandatory checkbox unchecked");
+                        await sleep(200);
+                    }
+                }
+
+                if (item.enforce) {
+                    var enforceEl = document.querySelector("#uniform-enforceDataCollectionOrder span input#enforceDataCollectionOrder.checkbox");
+                    if (!enforceEl) {
+                        enforceEl = document.getElementById("enforceDataCollectionOrder");
+                    }
+                    if (enforceEl && !enforceEl.checked) {
+                        enforceEl.click();
+                        log("PLAP Builder: Enforce Data Collection Order checkbox checked");
+                        await sleep(200);
+                    }
+                }
+
+                var preWindow = document.getElementById("preWindow");
+                var postWindow = document.getElementById("postWindow");
+                if (preWindow) {
+                    preWindow.value = item.preWindow || "";
+                    preWindow.dispatchEvent(new Event("input", { bubbles: true }));
+                    log("BPL: Pre-Window set to '" + (item.preWindow || "") + "'");
+                }
+                if (postWindow) {
+                    postWindow.value = item.postWindow || "";
+                    postWindow.dispatchEvent(new Event("input", { bubbles: true }));
+                    log("PLAP Builder: Post-Window set to '" + (item.postWindow || "") + "'");
+                }
+
+                if (item.refActivity) {
+                    var refActivityEl = document.getElementById("referenceActivity");
+                    if (refActivityEl && !refActivityEl.checked) {
+                        refActivityEl.click();
+                        log("PLAP Builder: Reference Activity checkbox checked");
+                        await sleep(200);
+                    }
+                }
+
+                var preRefContainer = document.getElementById("uniform-offset.preReference");
+                var preRefEl = document.getElementById("offset.preReference");
+                if (preRefEl && preRefContainer) {
+                    var preRefSpan = preRefContainer.querySelector("span");
+                    var preRefCurrentlyChecked = preRefSpan && preRefSpan.classList.contains("checked");
+                    log("PLAP Builder: Pre-Reference current state: " + (preRefCurrentlyChecked ? "checked" : "unchecked") + ", user wants: " + (item.preReference ? "checked" : "unchecked"));
+                    if (item.preReference !== preRefCurrentlyChecked) {
+                        preRefEl.checked = item.preReference;
+                        if (preRefSpan) {
+                            if (item.preReference) {
+                                preRefSpan.classList.add("checked");
+                            } else {
+                                preRefSpan.classList.remove("checked");
+                            }
+                        }
+                        try {
+                            if (window.jQuery && window.jQuery.fn.uniform) {
+                                window.jQuery(preRefEl).uniform.update(preRefEl);
+                            }
+                        } catch (ue) {}
+                        preRefEl.dispatchEvent(new Event("change", { bubbles: true }));
+                        log("PLAP Builder: Pre-Reference checkbox " + (item.preReference ? "checked" : "unchecked"));
+                        await sleep(200);
+                    }
+                }
+
+                if (!item.refActivity) {
+                    var daysInput = document.querySelector("input[name='offset.days']");
+                    var hoursInput = document.querySelector("input[name='offset.hours']");
+                    var minutesInput = document.querySelector("input[name='offset.minutes']");
+                    var secondsInput = document.querySelector("input[name='offset.seconds']");
+
+                    if (daysInput) {
+                        daysInput.value = String(item.timeOffset.days);
+                        daysInput.dispatchEvent(new Event("input", { bubbles: true }));
+                    }
+                    if (hoursInput) {
+                        hoursInput.value = String(item.timeOffset.hours);
+                        hoursInput.dispatchEvent(new Event("input", { bubbles: true }));
+                    }
+                    if (minutesInput) {
+                        minutesInput.value = String(item.timeOffset.minutes);
+                        minutesInput.dispatchEvent(new Event("input", { bubbles: true }));
+                    }
+                    if (secondsInput) {
+                        secondsInput.value = String(item.timeOffset.seconds);
+                        secondsInput.dispatchEvent(new Event("input", { bubbles: true }));
+                    }
+                    log("PLAP Builder: time offset set - D:" + item.timeOffset.days + " H:" + item.timeOffset.hours + " M:" + item.timeOffset.minutes + " S:" + item.timeOffset.seconds);
+                } else {
+                    log("PLAP Builder: Skipping time offset (Reference Activity checked)");
+                }
+
+                await sleep(300);
+
+                if (BPL_CANCELLED) {
+                    break;
+                }
+
+                var saveBtn = document.getElementById("actionButton");
+                if (saveBtn) {
+                    saveBtn.click();
+                    log("PLAP Builder: Save button clicked");
+                } else {
+                    log("PLAP Builder: Save button not found");
+                    item.status = "Failed";
+                    progressContent.updateItem(idx, "Failed");
+                    break;
+                }
+
+                var closed = await waitForSAModalClose(10000);
+                if (!closed) {
+                    log("PLAP Builder: modal did not close");
+                    item.status = "Failed";
+                    progressContent.updateItem(idx, "Failed");
+                    break;
+                }
+
+                if (BPL_CANCELLED) {
+                    break;
+                }
+
+                item.status = "Success";
+                progressContent.updateItem(idx, "Success");
+                log("PLAP Builder: item completed - " + item.label);
+
+                await sleep(2000);
+
+                if (BPL_CANCELLED) {
+                    break;
+                }
+
+            } catch (err) {
+                log("PLAP Builder: error adding item - " + String(err));
+                item.status = "Failed";
+                progressContent.updateItem(idx, "Failed");
+                break;
+            }
+        }
+
+        if (!BPL_CANCELLED) {
+            progressContent.updateStatus("Completed!");
+            progressContent.setComplete();
+            log("PLAP Builder: all items processed");
+        }
+
+        if (BPL_CANCELLED) {
+            log("PLAP Builder: cancelled");
+            return;
+        }
+
+        try {
+            localStorage.removeItem(STORAGE_BPL_RUNNING);
+            localStorage.removeItem(STORAGE_BPL_CURRENT_INDEX);
+        } catch (e) {}
+    }
+
+    async function runBuildProcedureLog() {
+        if (!isOnBPLPage()) {
+            createPopup({
+                title: "PLAP Builder",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;font-size:16px;margin-bottom:16px;">\u26A0\uFE0F Wrong Page</p><p>You must be on the Activity Plans Show page to use this feature.</p><p style="margin-top:12px;font-size:12px;color:#fff;">Required URL: ' + BPL_TARGET_URL + '</p></div>',
+                width: "450px",
+                height: "auto"
+            });
+            log("PLAP Builder: wrong page - " + location.href);
+            return;
+        }
+
+        var loadingContent = document.createElement("div");
+        loadingContent.style.cssText = "text-align:center;padding:30px;";
+        loadingContent.innerHTML = '<div style="font-size:16px;margin-bottom:16px;">Collecting data...</div><div id="bplLoadingDots" style="color:#9df;">Loading.</div>';
+
+        var loadingPopup = createPopup({
+            title: "PLAP Builder",
+            content: loadingContent,
+            width: "350px",
+            height: "auto"
+        });
+
+        var dots = 1;
+        var loadingInterval = setInterval(function() {
+            var el = document.getElementById("bplLoadingDots");
+            if (!el || BPL_CANCELLED) {
+                clearInterval(loadingInterval);
+                return;
+            }
+            dots = (dots % 3) + 1;
+            var text = "Loading";
+            for (var i = 0; i < dots; i++) {
+                text = text + ".";
+            }
+            el.textContent = text;
+        }, 500);
+
+        var existingItems = scanExistingBPLTable();
+        try {
+            localStorage.setItem(STORAGE_BPL_EXISTING, JSON.stringify(existingItems));
+        } catch (e) {}
+
+        if (isAddSaButtonDisabled()) {
+            clearInterval(loadingInterval);
+            loadingPopup.close();
+            createPopup({
+                title: "PLAP Builder",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;font-size:16px;margin-bottom:16px;">\u26A0\uFE0F Add Button Disabled</p><p>The Add button is currently disabled. This activity plan may no longer be in design mode.</p></div>',
+                width: "400px",
+                height: "auto"
+            });
+            log("BPL: Add button is disabled");
+            return;
+        }
+
+        if (!clickAddSaButton()) {
+            clearInterval(loadingInterval);
+            loadingPopup.close();
+            createPopup({
+                title: "PLAP Builder",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;">Failed to find or click the Add button.</p></div>',
+                width: "350px",
+                height: "auto"
+            });
+            log("BPL: failed to click Add button");
+            return;
+        }
+
+        var modal = await waitForSAModal(10000);
+        if (!modal) {
+            clearInterval(loadingInterval);
+            loadingPopup.close();
+            createPopup({
+                title: "PLAP Builder",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;">Modal did not appear within timeout.</p></div>',
+                width: "350px",
+                height: "auto"
+            });
+            log("BPL: modal did not appear");
+            return;
+        }
+
+        var dropdownData = await collectBPLModalDropdownData();
+
+        try {
+            localStorage.setItem(STORAGE_BPL_SEGMENTS, JSON.stringify(dropdownData.segments));
+            localStorage.setItem(STORAGE_BPL_STUDY_EVENTS, JSON.stringify(dropdownData.studyEvents));
+            localStorage.setItem(STORAGE_BPL_FORMS, JSON.stringify(dropdownData.forms));
+        } catch (e) {}
+
+        var closeBtn = modal.querySelector(".close, [data-dismiss='modal']");
+        if (closeBtn) {
+            closeBtn.click();
+        } else {
+            var escEvent = new KeyboardEvent("keydown", { key: "Escape", bubbles: true });
+            document.dispatchEvent(escEvent);
+        }
+        await sleep(500);
+
+        clearInterval(loadingInterval);
+        loadingPopup.close();
+
+        if (BPL_CANCELLED) {
+            log("PLAP Builder: cancelled during data collection");
+            return;
+        }
+
+        var guiResult = createBPLSelectionGUI(dropdownData.segments, dropdownData.studyEvents, dropdownData.forms);
+        BPL_POPUP_REF = createPopup({
+            title: "PLAP Builder - Configure Items",
+            content: guiResult.container,
+            width: "96%",
+            maxWidth: "1600px",
+            height: "88%",
+            maxHeight: "900px",
+            onClose: function() {
+                if (BPL_CANCELLED) {
+                    clearBPLStorage();
+                }
+                if (guiResult.cleanupKeybind) {
+                    guiResult.cleanupKeybind();
+                }
+                BPL_POPUP_REF = null;
+            }
+        });
+
+        if (BPL_POPUP_REF && BPL_POPUP_REF.element && guiResult.fullscreenBtn) {
+            var popupHeader = BPL_POPUP_REF.element.querySelector("div");
+            if (popupHeader) {
+                popupHeader.style.gridTemplateColumns = "1fr auto auto auto";
+                var closeBtnEl = popupHeader.querySelector("button");
+                if (closeBtnEl) {
+                    popupHeader.insertBefore(guiResult.keybindBtn, closeBtnEl);
+                    popupHeader.insertBefore(guiResult.fullscreenBtn, closeBtnEl);
+                } else {
+                    popupHeader.appendChild(guiResult.keybindBtn);
+                    popupHeader.appendChild(guiResult.fullscreenBtn);
+                }
+                guiResult.fullscreenBtn.style.cssText = "padding:4px 8px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:14px;cursor:pointer;line-height:1;width:32px;height:32px;display:flex;align-items:center;justify-content:center;";
+                log("BPL: fullscreen and keybind buttons injected into popup header");
+            }
+        }
+
+        if (BPL_CANCELLED) {
+            log("BPL: cancelled after GUI display");
+            return;
+        }
+        log("BPL: selection GUI displayed");
     }
 
     //==========================
@@ -1734,7 +4012,7 @@
 
     // Check if on correct Activity Plan Show page
     function isOnArchiveUpdateFormsPage() {
-        var pattern = /^https:\/\/cenexeltest\.clinspark\.com\/secure\/crfdesign\/activityplans\/show\/\d+$/;
+        var pattern = /^https:\/\/cenexel\.clinspark\.com\/secure\/crfdesign\/activityplans\/show\/\d+$/;
         return pattern.test(location.href.split("?")[0].split("#")[0]);
     }
 
@@ -3211,7 +5489,7 @@
         if (!isOnArchiveUpdateFormsPage()) {
             createPopup({
                 title: "Archive/Update Forms - Error",
-                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">⚠️ Wrong Page</p><p>Navigate to the Activity Plans Show page first.</p><p style="margin-top:12px;font-size:12px;color:#ffffffff;">Required URL: https://cenexeltest.clinspark.com/secure/crfdesign/activityplans/show/{id}</p></div>',
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">⚠️ Wrong Page</p><p>Navigate to the Activity Plans Show page first.</p><p style="margin-top:12px;font-size:12px;color:#ffffffff;">Required URL: https://cenexel.clinspark.com/secure/crfdesign/activityplans/show/{id}</p></div>',
                 width: "450px",
                 height: "auto"
             });
@@ -5627,6 +7905,7 @@
             "Pull Barcode",
             "Pull Lab Barcode",
             "Scheduled Activities Builder",
+            "PLAP Builder",
             "Archive/Update Forms",
             "Copy Activity Forms",
             "Search Methods",
@@ -19981,9 +22260,33 @@
         clearLogsBtn.onmouseenter = () => { clearLogsBtn.style.background = "#5a6268"; };
         clearLogsBtn.onmouseleave = () => { clearLogsBtn.style.background = "#6c757d"; };
 
+        var bplBtn = document.createElement("button");
+        bplBtn.textContent = "PLAP Builder";
+        bplBtn.style.background = "#5b43c7";
+        bplBtn.style.color = "#fff";
+        bplBtn.style.border = "none";
+        bplBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        bplBtn.style.padding = scale(BUTTON_PADDING_PX);
+        bplBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
+        bplBtn.style.cursor = "pointer";
+        bplBtn.style.fontWeight = "500";
+        bplBtn.style.transition = "background 0.2s";
+        bplBtn.onmouseenter = () => { bplBtn.style.background = "#4a37a0"; };
+        bplBtn.onmouseleave = () => { bplBtn.style.background = "#5b43c7"; };
+        bplBtn.addEventListener("click", async function () {
+            BPL_CANCELLED = false;
+            log("BPL: button clicked");
+            if (BPL_PAUSE) {
+                log("BPL: Paused");
+                return;
+            }
+            log("BPL: starting");
+            await runBuildProcedureLog();
+        });
+
         // Apply glassmorphism theme to all panel buttons if glass theme is active
         if (glass) {
-            var allPanelBtns = [runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, importEligBtn, findAeBtn, findFormBtn, findStudyEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, pauseBtn, clearLogsBtn, toggleLogsBtn];
+            var allPanelBtns = [runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, bplBtn, importEligBtn, findAeBtn, findFormBtn, findStudyEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, pauseBtn, clearLogsBtn, toggleLogsBtn];
             for (var gi = 0; gi < allPanelBtns.length; gi++) {
                 var gb = allPanelBtns[gi];
                 gb.className = "ie-btn-primary";
@@ -20004,6 +22307,7 @@
             { el: runBarcodeBtn, label: "Pull Barcode" },
             { el: pullLabBarcodeBtn, label: "Pull Lab Barcode" },
             { el: saBuilderBtn, label: "Scheduled Activities Builder" },
+            { el: bplBtn, label: "PLAP Builder" },
             { el: archiveUpdateFormsBtn, label: "Archive/Update Forms" },
             { el: copyFormsBtn, label: "Copy Activity Forms"},
             { el: searchMethodsBtn, label: "Search Methods" },
