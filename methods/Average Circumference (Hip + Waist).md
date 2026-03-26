@@ -1,22 +1,49 @@
-const itemList = [
+const hipItemList = [
+    "Hip Circumference #1", 
+    "Hip Circumference #2"
+];
+
+const waistItemList = [
     "Waist Circumference #1", 
     "Waist Circumference #2"
 ];
 
+const hipAttachedItem = [
+    "Average Hip Circumference"
+]
 
+const waistAttachedItem = [
+    "Average Waist Circumference"
+]
+
+const item = itemJson.item;
 const sigfig = itemJson.item.significantDigits;
 var maxCount = 2; 
-var list = [];
-var avg = 0;
+var waistList = [];
+var hipList = [];
+var waistAvg = 0;
+var hipAvg = 0;
 
-list = populateList(formJson, itemList);
+waistList = populateList(formJson, waistItemList);
+hipList = populateList(formJson, hipItemList);
 
-avg = calculateAverage(list, sigfig);
-logger("List: " + list);
-logger("List length: " + list.length)
+waistAvg = calculateAverage(waistList, sigfig);
+hipAvg = calculateAverage(hipList, sigfig);
+
+logger("Waist List: " + waistList);
+logger("Hip List: " + hipList);
+
+logger("Waist List length: " + waistList.length)
+logger("Hip List length: " + hipList.length)
+
 logger("Max count: " + maxCount);
-logger("Average: " + avg)
-if (list.length === maxCount) return (avg);
+
+logger("Waist Average: " + waistAvg)
+logger("Hip Average: " + hipAvg)
+
+if (hipAttachedItem.indexOf(item.name) !== -1 && waistList.length === maxCount) return waistAvg;
+if (waistAttachedItem.indexOf(item.name) !== -1 && hipList.length === maxCount) return hipAvg;
+
 return null;
 
 function populateList(form, targetItem) {

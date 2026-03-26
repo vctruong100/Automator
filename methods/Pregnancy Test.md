@@ -1,44 +1,44 @@
+const formName = formJson.form.name;
+
 const studyEvent = [
-    "SCREENING", 
+    "SCREENING",
     "Screening"
 ];
-const formName = [
+const formNames = [
+    "REP_Reproductive Status and Contraception – Female",
     "REP_Female Reproductive Status and Contraceptive Use",
-    "♀️ FEMALE CONTRACEPTIVE/ REPRODUCTIVE STATUS V1.0"
+    "♀️ REP_CONTRACEPTIVE & REPRODUCTIVE STATUS (Female)"
 ];
 const childbearingItem = [
+    "Is the female subject of childbearing potential?",
     "Childbearing potential?"
 ];
-
-const attachedItemCodeList = [
-    "YES",
-    "NO",
-]
-
-const childbearingCodeList = [
-    "YES",
-    "NO",
-]
+const statusItem = [
+    "Female Reproductive Status",
+    "Female subject is considered non-childbearing potential due to"
+];
 
 const gender = formJson.form.subject.volunteer.sexMale;
+const age = formJson.form.subject.volunteer.age;
+logger(age);
+logger(gender);
+if (gender) return "None";
 
-if (gender) return attachedItemCodeList[1];
-
-var form = pullForm(studyEvent, formName);
+var form = pullForm(studyEvent, formNames);
 if (!form) return null;
 
 var childbearing = pullItemFromForm(form, childbearingItem);
-if (!childbearing) return null;
+if (childbearing && childbearing.value !== null && childbearing.value == "Y") return "Pregnancy";
 
-log();
+var status = pullItemFromForm(form, statusItem);
+if (status && status.value !== null && (status.value == status.codeListItems[2].codedValue)) return "None";
+else if (status && status.value !== null) return "Pregnancy";
 
-if (childbearing == childbearingCodeList[0]) return attachedItemCodeList[0];
-else if (childbearing == childbearingCodeList[1]) return attachedItemCodeList[1];
-
-return null;
+return "None";
 
 function log() {
     logger("Childbearing: " + childbearing);
+    logger("Status: " + status);
 }
 
 function pullForm(studyeventList, formNameList) {
@@ -61,7 +61,7 @@ function pullItemFromForm(form, targetItem) {
         if (!group || group.canceled) continue;
         for (j = 0; j < group.items.length; j++) {
             item = group.items[j];
-            if (targetItem.indexOf(item.name) !== -1 && item.value !== null) return item.value;
+            if (targetItem.indexOf(item.name) !== -1 && item.value !== null) return item;
         }
     }
     return null;
@@ -91,4 +91,13 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
         }
     }
     return keepers;
+}
+
+function containsValue(input, keyword) {
+    if (input == null) {
+        return false;
+    }
+
+    var value = input.toString().toLowerCase();
+    return value.indexOf(keyword) !== -1;
 }

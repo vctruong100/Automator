@@ -16,6 +16,8 @@ if (normalizedItem.indexOf("urobilinogen") !== -1) {
 }
 if (item.value == item.codeListItems[0].codedValue) return "NO";
 
+if (!item || item.value == null) return "NO";
+
 return "YES";
 
 function pullItemFromForm(form) {

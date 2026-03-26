@@ -127,17 +127,17 @@
   },
   {
     "id": "M-019",
-    "title": "Is FSH or Pregnancy testing required (For Safety Labs)",
+    "title": "FSH and Pregnancy Test",
     "tags": ["FSH", "Pregnancy", "Safety Labs"],
-    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Is%20FSH%20or%20Pregnancy%20testing%20required%20(For%20Safety%20Labs).md",
-    "updated": "2026-02-12"
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/FSH%20and%20Pregnancy%20Test.md",
+    "updated": "2026-03-26"
   },
   {
     "id": "M-020",
-    "title": "Is the subject a woman of childbearing potential",
-    "tags": ["Childbearing", "Eligibility"],
-    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Is%20the%20subject%20a%20woman%20of%20childbearing%20potential.md",
-    "updated": "2026-02-12"
+    "title": "Pregnancy Test",
+    "tags": ["Pregnancy", "Test"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Pregnancy%20Test.md",
+    "updated": "2026-03-26"
   },
   {
     "id": "M-021",
@@ -488,5 +488,33 @@
     "tags": ["Edit", "Check"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Dipstick%20Result%20for%20ALL.md",
     "updated": "2026-03-13"
+  },
+  {
+    "id": "M-069",
+    "title": "Edit Check Transfer Barcode Contains T",
+    "tags": ["Edit", "Check"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Transfer%20Barcode%20Contains%20T.md",
+    "updated": "2026-03-26"
+  },
+  {
+    "id": "M-070",
+    "title": "Edit Check Range check for any (HR, SYS, DIA, VS, ECG, QtcF, QTC, QT)",
+    "tags": ["Edit", "Check"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Range%20check%20for%20any%20%28HR,%20SYS,%20DIA,%20VS,%20ECG,%20QtcF,%20QTC,%20QT%29.md",
+    "updated": "2026-03-26"
+  },
+  {
+    "id": "M-071",
+    "title": "Average Height & Weight",
+    "tags": ["Average", "Height", "Weight"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20Height%20&%20Weight.md",
+    "updated": "2026-03-26"
+  },
+  {
+    "id": "M-072",
+    "title": "Average Circumference (Hip + Waist)",
+    "tags": ["Average", "Circumference"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20Circumference%20(Hip%20+%20Waist).md",
+    "updated": "2026-03-26"
   }
 ]
