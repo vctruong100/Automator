@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.2.5
+// @version     2.2.6
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -17267,16 +17267,18 @@
                 var ri = 0;
                 while (ri < rows.length) {
                     var tr = rows[ri];
+                    var actPlanSpan = tr.querySelector('span.tooltips[data-original-title="Activity Plan"]');
+                    var actPlan = actPlanSpan ? (actPlanSpan.textContent + "").trim().replace(/\s+/g, " ").toUpperCase() : "";
                     var anchor = tr.querySelector("a[href*='/secure/crfdesign/studylibrary/show/item/']");
                     if (anchor) {
                         var anchorText = (anchor.textContent + "").trim();
                         var code = extractIECodeStrict(anchorText);
                         if (code.length > 0) {
-                            codeSet.add(code.toUpperCase());
+                            codeSet.add(code.toUpperCase() + "||" + actPlan);
                         } else {
                             var cleaned = anchorText.replace(/\s+/g, "").toUpperCase();
                             if (cleaned.length > 0) {
-                                codeSet.add(cleaned);
+                                codeSet.add(cleaned + "||" + actPlan);
                             }
                         }
                     } else {
@@ -17285,7 +17287,7 @@
                             var firstText = (tds[0].textContent + "").trim().replace(/\s+/g, " ");
                             var code2 = extractIECodeStrict(firstText);
                             if (code2.length > 0) {
-                                codeSet.add(code2.toUpperCase());
+                                codeSet.add(code2.toUpperCase() + "||" + actPlan);
                             }
                         }
                     }
@@ -17329,16 +17331,18 @@
             var ri2 = 0;
             while (ri2 < rows2.length) {
                 var tr2 = rows2[ri2];
+                var actPlanSpan2 = tr2.querySelector('span.tooltips[data-original-title="Activity Plan"]');
+                var actPlan2 = actPlanSpan2 ? (actPlanSpan2.textContent + "").trim().replace(/\s+/g, " ").toUpperCase() : "";
                 var anchor2 = tr2.querySelector("a[href*='/secure/crfdesign/studylibrary/show/item/']");
                 if (anchor2) {
                     var anchorText2 = (anchor2.textContent + "").trim();
                     var code3 = extractIECodeStrict(anchorText2);
                     if (code3.length > 0) {
-                        codeSet.add(code3.toUpperCase());
+                        codeSet.add(code3.toUpperCase() + "||" + actPlan2);
                     } else {
                         var cleaned2 = anchorText2.replace(/\s+/g, "").toUpperCase();
                         if (cleaned2.length > 0) {
-                            codeSet.add(cleaned2);
+                            codeSet.add(cleaned2 + "||" + actPlan2);
                         }
                     }
                 } else {
@@ -17347,7 +17351,7 @@
                         var firstText2 = (tds2[0].textContent + "").trim().replace(/\s+/g, " ");
                         var code4 = extractIECodeStrict(firstText2);
                         if (code4.length > 0) {
-                            codeSet.add(code4.toUpperCase());
+                            codeSet.add(code4.toUpperCase() + "||" + actPlan2);
                         }
                     }
                 }
@@ -17993,8 +17997,12 @@
             var fi = 0;
             while (fi < existingArr.length) {
                 var c = existingArr[fi];
+                var parts = c.split("||");
+                var displayCode = parts[0] || "";
+                var displayPlan = parts.length > 1 ? parts[1] : "";
+                var displayText = displayPlan.length > 0 ? (displayPlan + " - " + displayCode) : displayCode;
                 if (filter && filter.length > 0) {
-                    if (c.toLowerCase().indexOf(filter.toLowerCase()) < 0) {
+                    if (displayText.toLowerCase().indexOf(filter.toLowerCase()) < 0) {
                         fi = fi + 1;
                         continue;
                     }
@@ -18003,7 +18011,7 @@
                 row.style.padding = "3px 6px";
                 row.style.fontSize = "12px";
                 row.style.color = "#aaa";
-                row.textContent = c;
+                row.textContent = displayText;
                 leftList.appendChild(row);
                 fi = fi + 1;
             }
@@ -18319,7 +18327,8 @@
                     continue;
                 }
                 var codeDisplay = formatCodeDisplay(parsed.typeUpper, parsed.numberInt, parsed.suffix);
-                var alreadyExists = alreadyExistCodeSet.has(m.code.toUpperCase());
+                var mActPlan = (m.activityPlanText || "").replace(/\s+/g, " ").trim().toUpperCase();
+                var alreadyExists = alreadyExistCodeSet.has(m.code.toUpperCase() + "||" + mActPlan);
                 var statusVal = alreadyExists ? "Already Exist" : "Not Added";
                 var disabledVal = false;
                 var apText = (m.activityPlanText || "").replace(/\s+/g, " ").trim();
@@ -19169,7 +19178,8 @@
                         var itemIdx = itemCheckboxes.length;
                         saEntry.itemIndices.push(itemIdx);
 
-                        var alreadyExists = existingCodeSet.has(item.code.toUpperCase());
+                        var itemActPlan = (item.activityPlanText || "").replace(/\s+/g, " ").trim().toUpperCase();
+                        var alreadyExists = existingCodeSet.has(item.code.toUpperCase() + "||" + itemActPlan);
                         var statusText = alreadyExists ? "Already Exist" : "Not Added";
 
                         var itemRow = document.createElement("div");
@@ -20234,7 +20244,8 @@
             progress.updateItem(mi, "Success");
             successes = successes + 1;
             progress.updateSummary(successes, failures);
-            existingCodeSet.add(mapping.code.toUpperCase());
+            var execActPlan = (mapping.activityPlanText || "").replace(/\s+/g, " ").trim().toUpperCase();
+            existingCodeSet.add(mapping.code.toUpperCase() + "||" + execActPlan);
             await sleep(importIERandomDelay() + 500);
 
             mi = mi + 1;
