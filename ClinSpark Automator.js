@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.2.3
+// @version     2.2.5
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -633,6 +633,8 @@
     // configure per-form time relative settings, then automatically populating and submitting them.
     //==========================
 
+        function SABuilderFunctions() {}
+
     var STORAGE_BPL_EXISTING = "activityPlanState.bpl.existing";
     var STORAGE_BPL_SEGMENTS = "activityPlanState.bpl.segments";
     var STORAGE_BPL_STUDY_EVENTS = "activityPlanState.bpl.studyEvents";
@@ -654,8 +656,7 @@
     var STORAGE_BPL_FULLSCREEN = "activityPlanState.bpl.fullscreen";
     var STORAGE_BPL_PANEL_WIDTHS = "activityPlanState.bpl.panelWidths";
     var STORAGE_BPL_HIDE_KEYBIND = "activityPlanState.bpl.hideKeybind";
-
-    function BuildProcedureLogFunctions() {}
+    var STORAGE_BPL_SESSION = "activityPlanState.bpl.session";
 
     function clearBPLStorage() {
         try {
@@ -668,6 +669,7 @@
             localStorage.removeItem(STORAGE_BPL_CURRENT_INDEX);
             localStorage.removeItem(STORAGE_BPL_RUNNING);
             localStorage.removeItem(STORAGE_BPL_SEGMENT_CHECKBOXES);
+            localStorage.removeItem(STORAGE_BPL_SESSION);
         } catch (e) {}
         log("BPL: storage cleared");
     }
@@ -874,6 +876,146 @@
         return errors;
     }
 
+    function saveBPLSessionState(segmentFormMap, formDataStore, segmentCheckboxStates, formInstanceCounter) {
+        try {
+            var state = {
+                segmentFormMap: segmentFormMap,
+                formDataStore: formDataStore,
+                segmentCheckboxStates: segmentCheckboxStates,
+                formInstanceCounter: formInstanceCounter
+            };
+            localStorage.setItem(STORAGE_BPL_SESSION, JSON.stringify(state));
+            log("BPL: session state saved");
+        } catch (e) {
+            log("BPL: failed to save session state - " + String(e));
+        }
+    }
+
+    function restoreBPLSessionState(segments, studyEvents, forms) {
+        try {
+            var raw = localStorage.getItem(STORAGE_BPL_SESSION);
+            if (!raw) {
+                log("BPL: no saved session state found");
+                return null;
+            }
+            var state = JSON.parse(raw);
+            if (!state || !state.segmentFormMap || !state.formDataStore) {
+                log("BPL: saved session state is invalid");
+                return null;
+            }
+            var validSegmentValues = {};
+            for (var si = 0; si < segments.length; si++) {
+                validSegmentValues[segments[si].value] = true;
+            }
+            var validFormValues = {};
+            for (var fi = 0; fi < forms.length; fi++) {
+                validFormValues[forms[fi].value] = true;
+            }
+            var validEventValues = {};
+            for (var ei = 0; ei < studyEvents.length; ei++) {
+                validEventValues[studyEvents[ei].value] = true;
+            }
+            var restoredSegmentFormMap = {};
+            var restoredFormDataStore = {};
+            var restoredSegmentCheckboxStates = {};
+            var maxIndex = 0;
+            var restoredFormCount = 0;
+            var skippedSegmentCount = 0;
+            var skippedFormCount = 0;
+            var skippedEventCount = 0;
+            var savedMap = state.segmentFormMap;
+            var savedData = state.formDataStore;
+            var savedCheckboxes = state.segmentCheckboxStates || {};
+            for (var segVal in savedMap) {
+                if (!savedMap.hasOwnProperty(segVal)) {
+                    continue;
+                }
+                if (!validSegmentValues[segVal]) {
+                    skippedSegmentCount = skippedSegmentCount + 1;
+                    log("BPL: restore skipping removed segment " + segVal);
+                    continue;
+                }
+                var savedForms = savedMap[segVal];
+                var validForms = [];
+                for (var fIdx = 0; fIdx < savedForms.length; fIdx++) {
+                    var sf = savedForms[fIdx];
+                    if (!validFormValues[sf.value]) {
+                        skippedFormCount = skippedFormCount + 1;
+                        log("BPL: restore skipping removed form " + sf.text + " (value=" + sf.value + ") in segment " + segVal);
+                        continue;
+                    }
+                    validForms.push({
+                        value: sf.value,
+                        text: sf.text,
+                        index: sf.index
+                    });
+                    if (sf.index > maxIndex) {
+                        maxIndex = sf.index;
+                    }
+                    var oldKey = segVal + "|" + sf.value + "|" + sf.index;
+                    var fd = savedData[oldKey];
+                    if (fd) {
+                        var filteredEvents = [];
+                        var savedEvents = fd.studyEvents || [];
+                        for (var evi = 0; evi < savedEvents.length; evi++) {
+                            if (validEventValues[savedEvents[evi].value]) {
+                                filteredEvents.push(savedEvents[evi]);
+                            } else {
+                                skippedEventCount = skippedEventCount + 1;
+                                log("BPL: restore skipping removed study event " + savedEvents[evi].text + " (value=" + savedEvents[evi].value + ")");
+                            }
+                        }
+                        restoredFormDataStore[oldKey] = {
+                            days: fd.days || 0,
+                            hours: fd.hours || 0,
+                            minutes: fd.minutes || 0,
+                            seconds: fd.seconds || 0,
+                            hidden: fd.hidden || false,
+                            mandatory: fd.mandatory !== false,
+                            enforce: fd.enforce || false,
+                            preWindow: fd.preWindow || "",
+                            postWindow: fd.postWindow || "",
+                            refActivity: fd.refActivity || false,
+                            preReference: fd.preReference || false,
+                            studyEvents: filteredEvents
+                        };
+                    }
+                    restoredFormCount = restoredFormCount + 1;
+                }
+                restoredSegmentFormMap[segVal] = validForms;
+            }
+            for (var cbKey in savedCheckboxes) {
+                if (!savedCheckboxes.hasOwnProperty(cbKey)) {
+                    continue;
+                }
+                if (validSegmentValues[cbKey]) {
+                    restoredSegmentCheckboxStates[cbKey] = savedCheckboxes[cbKey];
+                }
+            }
+            var restoredCounter = state.formInstanceCounter || 0;
+            if (maxIndex > restoredCounter) {
+                restoredCounter = maxIndex;
+            }
+            log("BPL: session state restored - " + restoredFormCount + " forms, skipped " + skippedSegmentCount + " segments, " + skippedFormCount + " forms, " + skippedEventCount + " events");
+            return {
+                segmentFormMap: restoredSegmentFormMap,
+                formDataStore: restoredFormDataStore,
+                segmentCheckboxStates: restoredSegmentCheckboxStates,
+                formInstanceCounter: restoredCounter
+            };
+        } catch (e) {
+            log("BPL: failed to restore session state - " + String(e));
+            return null;
+        }
+    }
+
+    function clearBPLSessionState() {
+        try {
+            localStorage.removeItem(STORAGE_BPL_SESSION);
+        } catch (e) {}
+        log("BPL: session state cleared");
+    }
+
     function createBPLSelectionGUI(segments, studyEvents, forms) {
         var segmentFormMap = {};
         var formDataStore = {};
@@ -918,6 +1060,33 @@
         for (var si = 0; si < segments.length; si++) {
             segmentCheckboxStates[segments[si].value] = segmentCheckboxStates[segments[si].value] !== false;
             segmentFormMap[segments[si].value] = [];
+        }
+
+        var restoredState = restoreBPLSessionState(segments, studyEvents, forms);
+        if (restoredState) {
+            for (var rSeg in restoredState.segmentFormMap) {
+                if (restoredState.segmentFormMap.hasOwnProperty(rSeg)) {
+                    if (segmentFormMap.hasOwnProperty(rSeg)) {
+                        segmentFormMap[rSeg] = restoredState.segmentFormMap[rSeg];
+                    }
+                }
+            }
+            for (var rKey in restoredState.formDataStore) {
+                if (restoredState.formDataStore.hasOwnProperty(rKey)) {
+                    formDataStore[rKey] = restoredState.formDataStore[rKey];
+                }
+            }
+            for (var rCb in restoredState.segmentCheckboxStates) {
+                if (restoredState.segmentCheckboxStates.hasOwnProperty(rCb)) {
+                    segmentCheckboxStates[rCb] = restoredState.segmentCheckboxStates[rCb];
+                }
+            }
+            formInstanceCounter = restoredState.formInstanceCounter;
+            log("BPL: session restore applied - formInstanceCounter=" + formInstanceCounter);
+        }
+
+        function saveSession() {
+            saveBPLSessionState(segmentFormMap, formDataStore, segmentCheckboxStates, formInstanceCounter);
         }
 
         function savePanelWidths() {
@@ -1407,6 +1576,7 @@
             input.style.cssText = "padding:6px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;width:100%;font-size:12px;box-sizing:border-box;";
             input.addEventListener("input", function() {
                 saveFormDataFromPanel(selectedFormKey);
+                saveSession();
             });
             row.appendChild(lbl);
             row.appendChild(input);
@@ -1548,6 +1718,7 @@
                     try {
                         localStorage.setItem(STORAGE_BPL_SEGMENT_CHECKBOXES, JSON.stringify(segmentCheckboxStates));
                     } catch (e) {}
+                    saveSession();
                     runAutoValidation();
                 });
                 var segLabel = document.createElement("span");
@@ -1969,6 +2140,7 @@
                 centerBody.appendChild(segBlock);
             }
             centerBody.scrollTop = scrollTop;
+            saveSession();
         }
 
         centerSearch.addEventListener("input", function() {
@@ -1989,6 +2161,44 @@
             legendItem.textContent = legendItems[li].icon + " " + legendItems[li].label;
             legendRow.appendChild(legendItem);
         }
+
+        var clearAllBtn = document.createElement("button");
+        clearAllBtn.textContent = "\uD83D\uDDD1 Clear All";
+        clearAllBtn.style.cssText = "padding:5px 12px;border-radius:4px;border:1px solid #c0392b;background:#2a1a1a;color:#ff6b6b;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;";
+        clearAllBtn.addEventListener("mouseenter", function() {
+            this.style.background = "#3a1a1a";
+            this.style.borderColor = "#e74c3c";
+        });
+        clearAllBtn.addEventListener("mouseleave", function() {
+            this.style.background = "#2a1a1a";
+            this.style.borderColor = "#c0392b";
+        });
+        clearAllBtn.addEventListener("click", function() {
+            var msg = "This will remove ALL configured Segments and Forms from the PLAP Builder.\n\nAll form assignments, study event selections, and time-relative settings will be permanently cleared.\n\nAlready-added Activity Plan items in the system will NOT be affected.\n\nAre you sure you want to clear everything?";
+            if (!confirm(msg)) {
+                log("BPL: clear all cancelled by user");
+                return;
+            }
+            log("BPL: clear all confirmed");
+            for (var cSeg in segmentFormMap) {
+                if (segmentFormMap.hasOwnProperty(cSeg)) {
+                    segmentFormMap[cSeg] = [];
+                }
+            }
+            var fdKeys = Object.keys(formDataStore);
+            for (var fdi = 0; fdi < fdKeys.length; fdi++) {
+                delete formDataStore[fdKeys[fdi]];
+            }
+            formInstanceCounter = 0;
+            selectedFormKey = null;
+            copiedForm = null;
+            clearBPLSessionState();
+            renderCenterPanel(centerSearch.value);
+            renderTimePanel({}, null);
+            runAutoValidation();
+            log("BPL: clear all complete - all segments emptied and session state cleared");
+        });
+        legendRow.appendChild(clearAllBtn);
 
         var bottomRow = document.createElement("div");
         bottomRow.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:12px;";
@@ -2199,9 +2409,15 @@
         };
         document.addEventListener("keydown", bplHideKeyHandler);
 
+        var bplBeforeUnloadHandler = function() {
+            saveSession();
+        };
+        window.addEventListener("beforeunload", bplBeforeUnloadHandler);
+
         var bplCleanupKeybind = function() {
             document.removeEventListener("keydown", bplHideKeyHandler);
-            log("BPL: keybind listener removed");
+            window.removeEventListener("beforeunload", bplBeforeUnloadHandler);
+            log("BPL: keybind and beforeunload listeners removed");
         };
 
         setTimeout(function() {
@@ -2214,7 +2430,8 @@
             container: container,
             fullscreenBtn: fullscreenBtn,
             keybindBtn: keybindBtn,
-            cleanupKeybind: bplCleanupKeybind
+            cleanupKeybind: bplCleanupKeybind,
+            saveSession: saveSession
         };
     }
 
@@ -2867,6 +3084,9 @@
             height: "88%",
             maxHeight: "900px",
             onClose: function() {
+                if (guiResult.saveSession) {
+                    guiResult.saveSession();
+                }
                 if (BPL_CANCELLED) {
                     clearBPLStorage();
                 }
@@ -12950,7 +13170,7 @@
                 e.preventDefault();
                 e.stopPropagation();
             }
-            if (e.key === "F4" || e.key === "F4") {
+            if (e.key === "`" || e.key === "`") {
                 if (PARSE_DEVIATION_POPUP_REF && document.body.contains(PARSE_DEVIATION_POPUP_REF.element)) {
                     log("Hotkey: Closing Parse Deviation popup via backtick");
                     PARSE_DEVIATION_POPUP_REF.close();
