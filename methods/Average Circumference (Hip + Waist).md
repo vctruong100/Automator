@@ -17,7 +17,7 @@ const waistAttachedItem = [
 ]
 
 const item = itemJson.item;
-const sigfig = itemJson.item.significantDigits;
+const sigfig = item.significantDigits;
 var maxCount = 2; 
 var waistList = [];
 var hipList = [];

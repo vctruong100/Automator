@@ -516,5 +516,12 @@
     "tags": ["Average", "Circumference"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20Circumference%20(Hip%20+%20Waist).md",
     "updated": "2026-03-26"
+  },
+  {
+    "id": "M-073",
+    "title": "Average PR, QRS, QT, QTCF, HR (REPEAT + NONREPEAT)",
+    "tags": ["Average", "PR", "QRS", "QT", "QTCF", "HR"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20PR,%20QRS,%20QT,%20QTCF,%20HR%20%28REPEAT%20+%20NONREPEAT%29.md",
+    "updated": "2026-03-27"
   }
 ]

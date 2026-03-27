@@ -1721,9 +1721,11 @@
                     saveSession();
                     runAutoValidation();
                 });
+                var segFormCount = (segmentFormMap[seg.value] || []).length;
                 var segLabel = document.createElement("span");
-                segLabel.textContent = seg.text;
+                segLabel.textContent = seg.text + " (" + segFormCount + " form" + (segFormCount !== 1 ? "s" : "") + ")";
                 segLabel.style.cssText = "font-weight:600;font-size:13px;flex:1;";
+                log("BPL: segment " + seg.text + " has " + segFormCount + " form(s)");
                 var sortBtn = document.createElement("button");
                 sortBtn.textContent = "\u2195 Sort";
                 sortBtn.style.cssText = "padding:3px 8px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:11px;cursor:pointer;";
@@ -1761,23 +1763,6 @@
                     return function() {
                         if (!copiedForm) {
                             log("BPL: paste attempted but no form copied");
-                            return;
-                        }
-                        if (copiedForm.sourceSegment === segVal) {
-                            var pasteWarnEl = this.parentElement.querySelector(".bpl-paste-warn");
-                            if (!pasteWarnEl) {
-                                pasteWarnEl = document.createElement("span");
-                                pasteWarnEl.className = "bpl-paste-warn";
-                                pasteWarnEl.style.cssText = "color:#ff6b6b;font-size:10px;margin-left:4px;";
-                                this.parentElement.appendChild(pasteWarnEl);
-                            }
-                            pasteWarnEl.textContent = "Cannot paste into the same segment";
-                            setTimeout(function() {
-                                if (pasteWarnEl && pasteWarnEl.parentElement) {
-                                    pasteWarnEl.remove();
-                                }
-                            }, 3000);
-                            log("BPL: paste blocked - same segment " + segVal);
                             return;
                         }
                         var existingForms = segmentFormMap[segVal] || [];
@@ -2127,6 +2112,10 @@
                                 renderCenterPanel(centerSearch.value);
                             };
                         })(seg.value, fEntry.value, fEntry.text, fKey));
+                        var rowNumber = document.createElement("span");
+                        rowNumber.textContent = String(fi + 1);
+                        rowNumber.style.cssText = "min-width:20px;text-align:center;font-size:11px;font-weight:700;color:#888;flex-shrink:0;";
+                        formRow.appendChild(rowNumber);
                         formRow.appendChild(eventDropBox);
                         formRow.appendChild(formLabel);
                         formRow.appendChild(arrowUpBtn);
