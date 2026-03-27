@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.6.8
+// @version 3.6.9
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -8876,6 +8876,8 @@
     var STORAGE_BPL_PANEL_WIDTHS = "activityPlanState.bpl.panelWidths";
     var STORAGE_BPL_HIDE_KEYBIND = "activityPlanState.bpl.hideKeybind";
     var STORAGE_BPL_SESSION = "activityPlanState.bpl.session";
+    var BPL_STATE_VERSION = 1;
+    var STORAGE_BPL_SESSION_BACKUP = "activityPlanState.bpl.session.backup";
 
 
     function clearBPLStorage() {
@@ -8889,9 +8891,8 @@
             localStorage.removeItem(STORAGE_BPL_CURRENT_INDEX);
             localStorage.removeItem(STORAGE_BPL_RUNNING);
             localStorage.removeItem(STORAGE_BPL_SEGMENT_CHECKBOXES);
-            localStorage.removeItem(STORAGE_BPL_SESSION);
         } catch (e) {}
-        log("BPL: storage cleared");
+        log("BPL: runtime storage cleared (session state preserved)");
     }
 
     function isOnBPLPage() {
@@ -9099,30 +9100,80 @@
     function saveBPLSessionState(segmentFormMap, formDataStore, segmentCheckboxStates, formInstanceCounter) {
         try {
             var state = {
+                version: BPL_STATE_VERSION,
+                savedAt: new Date().toISOString(),
                 segmentFormMap: segmentFormMap,
                 formDataStore: formDataStore,
                 segmentCheckboxStates: segmentCheckboxStates,
                 formInstanceCounter: formInstanceCounter
             };
-            localStorage.setItem(STORAGE_BPL_SESSION, JSON.stringify(state));
-            log("BPL: session state saved");
+            var serialized = JSON.stringify(state);
+            localStorage.setItem(STORAGE_BPL_SESSION, serialized);
+            localStorage.setItem(STORAGE_BPL_SESSION_BACKUP, serialized);
+            log("BPL: session state saved (version=" + BPL_STATE_VERSION + ", size=" + serialized.length + " bytes)");
         } catch (e) {
             log("BPL: failed to save session state - " + String(e));
         }
     }
 
     function restoreBPLSessionState(segments, studyEvents, forms) {
+        var raw = null;
+        var source = "primary";
         try {
-            var raw = localStorage.getItem(STORAGE_BPL_SESSION);
+            raw = localStorage.getItem(STORAGE_BPL_SESSION);
             if (!raw) {
-                log("BPL: no saved session state found");
+                raw = localStorage.getItem(STORAGE_BPL_SESSION_BACKUP);
+                if (raw) {
+                    source = "backup";
+                    log("BPL: primary session state missing, recovered from backup");
+                }
+            }
+        } catch (e) {
+            log("BPL: localStorage read error during restore - " + String(e));
+        }
+        if (!raw) {
+            log("BPL: no saved session state found (checked primary and backup)");
+            return null;
+        }
+        var state = null;
+        try {
+            state = JSON.parse(raw);
+        } catch (parseErr) {
+            log("BPL: corrupted session data in " + source + " - " + String(parseErr));
+            if (source === "primary") {
+                try {
+                    var backupRaw = localStorage.getItem(STORAGE_BPL_SESSION_BACKUP);
+                    if (backupRaw) {
+                        state = JSON.parse(backupRaw);
+                        source = "backup (fallback after primary corruption)";
+                        log("BPL: recovered session state from backup after primary corruption");
+                    }
+                } catch (backupErr) {
+                    log("BPL: backup also corrupted - " + String(backupErr) + " - preserving raw data");
+                    return null;
+                }
+            }
+            if (!state) {
+                log("BPL: unable to parse any stored session state - preserving raw data in storage");
                 return null;
             }
-            var state = JSON.parse(raw);
-            if (!state || !state.segmentFormMap || !state.formDataStore) {
-                log("BPL: saved session state is invalid");
-                return null;
+        }
+        if (!state || !state.segmentFormMap || !state.formDataStore) {
+            log("BPL: saved session state is structurally invalid (source=" + source + ")");
+            return null;
+        }
+        var savedVersion = state.version || 0;
+        if (savedVersion !== BPL_STATE_VERSION) {
+            log("BPL: version mismatch - saved=" + savedVersion + " current=" + BPL_STATE_VERSION + " - attempting migration");
+            if (savedVersion < BPL_STATE_VERSION) {
+                state.version = BPL_STATE_VERSION;
+                log("BPL: migrated state from version " + savedVersion + " to " + BPL_STATE_VERSION);
+            } else {
+                log("BPL: saved version " + savedVersion + " is newer than current " + BPL_STATE_VERSION + " - loading anyway, preserving raw data");
             }
+        }
+        log("BPL: restoring session state from " + source + " (version=" + savedVersion + ", savedAt=" + (state.savedAt || "unknown") + ")");
+        try {
             var validSegmentValues = {};
             for (var si = 0; si < segments.length; si++) {
                 validSegmentValues[segments[si].value] = true;
@@ -9156,9 +9207,17 @@
                     continue;
                 }
                 var savedForms = savedMap[segVal];
+                if (!Array.isArray(savedForms)) {
+                    log("BPL: restore skipping malformed forms array for segment " + segVal);
+                    continue;
+                }
                 var validForms = [];
                 for (var fIdx = 0; fIdx < savedForms.length; fIdx++) {
                     var sf = savedForms[fIdx];
+                    if (!sf || !sf.value) {
+                        log("BPL: restore skipping malformed form entry at index " + fIdx + " in segment " + segVal);
+                        continue;
+                    }
                     if (!validFormValues[sf.value]) {
                         skippedFormCount = skippedFormCount + 1;
                         log("BPL: restore skipping removed form " + sf.text + " (value=" + sf.value + ") in segment " + segVal);
@@ -9216,7 +9275,7 @@
             if (maxIndex > restoredCounter) {
                 restoredCounter = maxIndex;
             }
-            log("BPL: session state restored - " + restoredFormCount + " forms, skipped " + skippedSegmentCount + " segments, " + skippedFormCount + " forms, " + skippedEventCount + " events");
+            log("BPL: session state restored from " + source + " - " + restoredFormCount + " forms, skipped " + skippedSegmentCount + " segments, " + skippedFormCount + " forms, " + skippedEventCount + " events");
             return {
                 segmentFormMap: restoredSegmentFormMap,
                 formDataStore: restoredFormDataStore,
@@ -9224,7 +9283,7 @@
                 formInstanceCounter: restoredCounter
             };
         } catch (e) {
-            log("BPL: failed to restore session state - " + String(e));
+            log("BPL: failed to restore session state - " + String(e) + " - preserving raw data in storage");
             return null;
         }
     }
@@ -9234,6 +9293,20 @@
             localStorage.removeItem(STORAGE_BPL_SESSION);
         } catch (e) {}
         log("BPL: session state cleared");
+    }
+
+    function clearBPLSessionStateWithBackup() {
+        try {
+            var existing = localStorage.getItem(STORAGE_BPL_SESSION);
+            if (existing) {
+                localStorage.setItem(STORAGE_BPL_SESSION_BACKUP, existing);
+                log("BPL: session state backed up before clear");
+            }
+            localStorage.removeItem(STORAGE_BPL_SESSION);
+        } catch (e) {
+            log("BPL: error during session clear with backup - " + String(e));
+        }
+        log("BPL: session state cleared (backup preserved)");
     }
 
     function createBPLSelectionGUI(segments, studyEvents, forms) {
@@ -9941,9 +10014,11 @@
                     saveSession();
                     runAutoValidation();
                 });
+                var segFormCount = (segmentFormMap[seg.value] || []).length;
                 var segLabel = document.createElement("span");
-                segLabel.textContent = seg.text;
+                segLabel.textContent = seg.text + " (" + segFormCount + " form" + (segFormCount !== 1 ? "s" : "") + ")";
                 segLabel.style.cssText = "font-weight:600;font-size:13px;flex:1;";
+                log("BPL: segment " + seg.text + " has " + segFormCount + " form(s)");
                 var sortBtn = document.createElement("button");
                 sortBtn.textContent = "\u2195 Sort";
                 sortBtn.style.cssText = "padding:3px 8px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:11px;cursor:pointer;";
@@ -9981,23 +10056,6 @@
                     return function() {
                         if (!copiedForm) {
                             log("BPL: paste attempted but no form copied");
-                            return;
-                        }
-                        if (copiedForm.sourceSegment === segVal) {
-                            var pasteWarnEl = this.parentElement.querySelector(".bpl-paste-warn");
-                            if (!pasteWarnEl) {
-                                pasteWarnEl = document.createElement("span");
-                                pasteWarnEl.className = "bpl-paste-warn";
-                                pasteWarnEl.style.cssText = "color:#ff6b6b;font-size:10px;margin-left:4px;";
-                                this.parentElement.appendChild(pasteWarnEl);
-                            }
-                            pasteWarnEl.textContent = "Cannot paste into the same segment";
-                            setTimeout(function() {
-                                if (pasteWarnEl && pasteWarnEl.parentElement) {
-                                    pasteWarnEl.remove();
-                                }
-                            }, 3000);
-                            log("BPL: paste blocked - same segment " + segVal);
                             return;
                         }
                         var existingForms = segmentFormMap[segVal] || [];
@@ -10347,6 +10405,10 @@
                                 renderCenterPanel(centerSearch.value);
                             };
                         })(seg.value, fEntry.value, fEntry.text, fKey));
+                        var rowNumber = document.createElement("span");
+                        rowNumber.textContent = String(fi + 1);
+                        rowNumber.style.cssText = "min-width:20px;text-align:center;font-size:11px;font-weight:700;color:#888;flex-shrink:0;";
+                        formRow.appendChild(rowNumber);
                         formRow.appendChild(eventDropBox);
                         formRow.appendChild(formLabel);
                         formRow.appendChild(arrowUpBtn);
@@ -10412,7 +10474,7 @@
             formInstanceCounter = 0;
             selectedFormKey = null;
             copiedForm = null;
-            clearBPLSessionState();
+            clearBPLSessionStateWithBackup();
             renderCenterPanel(centerSearch.value);
             renderTimePanel({}, null);
             runAutoValidation();
@@ -10802,8 +10864,8 @@
         stopBtn.style.cssText = "padding:10px 24px;border-radius:6px;border:none;background:#dc3545;color:#fff;font-weight:600;cursor:pointer;";
         stopBtn.addEventListener("click", function() {
             BPL_CANCELLED = true;
-            log("PLAP Builder: stopped by user");
-            clearBPLStorage();
+            log("BPL: stopped by user (Stop button)");
+
             if (BPL_PROGRESS_POPUP_REF && BPL_PROGRESS_POPUP_REF.close) {
                 try {
                     BPL_PROGRESS_POPUP_REF.close();
@@ -10929,8 +10991,7 @@
             maxHeight: "85%",
             onClose: function() {
                 BPL_CANCELLED = true;
-                log("BPLAP BuilderPL: cancelled by user (X button)");
-                clearBPLStorage();
+                log("BPL: progress popup closed by user (X button)");
                 BPL_PROGRESS_POPUP_REF = null;
             }
         });
@@ -11188,6 +11249,8 @@
     }
 
     async function runBuildProcedureLog() {
+        BPL_CANCELLED = false;
+        log("BPL: runBuildProcedureLog started, BPL_CANCELLED reset to false");
         if (!isOnBPLPage()) {
             createPopup({
                 title: "PLAP Builder",
@@ -11307,9 +11370,7 @@
                 if (guiResult.saveSession) {
                     guiResult.saveSession();
                 }
-                if (BPL_CANCELLED) {
-                    clearBPLStorage();
-                }
+                log("BPL: GUI popup closed, session state preserved in localStorage");
                 if (guiResult.cleanupKeybind) {
                     guiResult.cleanupKeybind();
                 }
