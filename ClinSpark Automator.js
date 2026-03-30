@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.3.1
+// @version     2.3.2
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -1368,19 +1368,6 @@
             }
             evText = names.join(", ");
         }
-        var timepointStr = "";
-        if (formData.timepointDisplay && formData.timepointDisplay.trim().length > 0) {
-            timepointStr = formData.timepointDisplay;
-        } else {
-            timepointStr = bplFormatTimePoint(
-                formData.days || 0,
-                formData.hours || 0,
-                formData.minutes || 0,
-                formData.seconds || 0,
-                formData.preReference || false
-            );
-        }
-        var exampleTimeStr = formData.exampleTime || "N/A";
         var statusIcons = bplBuildStatusIcons(formData);
         var label = segmentText + " - ";
         if (evText) {
@@ -1388,7 +1375,7 @@
         } else {
             label += "[No Study Event]";
         }
-        label += " - " + formText + " - " + timepointStr + " - " + exampleTimeStr;
+        label += " - " + formText;
         if (statusIcons) {
             label += " " + statusIcons;
         }
@@ -2054,7 +2041,7 @@
 
         var centerSearch = document.createElement("input");
         centerSearch.type = "text";
-        centerSearch.placeholder = "Search segments...";
+        centerSearch.placeholder = "Search segments, forms, events, time...";
         centerSearch.style.cssText = "padding:6px 8px;border:none;border-bottom:1px solid #333;background:#1e1e1e;color:#fff;font-size:12px;outline:none;";
 
         var centerBody = document.createElement("div");
@@ -2460,8 +2447,38 @@
             var filterLower = (filter || "").toLowerCase();
             for (var si2 = 0; si2 < segments.length; si2++) {
                 var seg = segments[si2];
-                if (filterLower && seg.text.toLowerCase().indexOf(filterLower) === -1) {
-                    continue;
+                var segNameMatches = !filterLower || seg.text.toLowerCase().indexOf(filterLower) !== -1;
+                var matchingFormIndices = null;
+                if (!segNameMatches && filterLower) {
+                    var formsToCheck = segmentFormMap[seg.value] || [];
+                    matchingFormIndices = [];
+                    for (var fci = 0; fci < formsToCheck.length; fci++) {
+                        var fcEntry = formsToCheck[fci];
+                        var fcKey = getFormDataKey(seg.value, fcEntry.value, fcEntry.index);
+                        var fcData = formDataStore[fcKey] || getDefaultFormData();
+                        var fcEvents = fcData.studyEvents || [];
+                        var fcIsAuto = fcEntry.autoPopulated || fcData.autoPopulated || false;
+                        if (fcIsAuto && bplHideExisting) {
+                            continue;
+                        }
+                        var searchableText = (fcEntry.text || "").toLowerCase();
+                        for (var evi = 0; evi < fcEvents.length; evi++) {
+                            searchableText += " " + (fcEvents[evi].text || "").toLowerCase();
+                        }
+                        if (fcData.timepointDisplay) {
+                            searchableText += " " + fcData.timepointDisplay.toLowerCase();
+                        }
+                        searchableText += " " + bplFormatTimePoint(fcData.days || 0, fcData.hours || 0, fcData.minutes || 0, fcData.seconds || 0, fcData.preReference || false).toLowerCase();
+                        if (fcData.exampleTime && fcData.exampleTime !== "N/A") {
+                            searchableText += " " + fcData.exampleTime.toLowerCase();
+                        }
+                        if (searchableText.indexOf(filterLower) !== -1) {
+                            matchingFormIndices.push(fci);
+                        }
+                    }
+                    if (matchingFormIndices.length === 0) {
+                        continue;
+                    }
                 }
                 var segBlock = document.createElement("div");
                 segBlock.style.cssText = "margin-bottom:12px;border:1px solid #444;border-radius:6px;background:#1e1e1e;overflow:hidden;";
@@ -2624,6 +2641,9 @@
                         var fEvents = fData2.studyEvents || [];
                         var isAutoPopulated = fEntry.autoPopulated || fData2.autoPopulated || false;
                         if (isAutoPopulated && bplHideExisting) {
+                            continue;
+                        }
+                        if (matchingFormIndices !== null && matchingFormIndices.indexOf(fi) === -1) {
                             continue;
                         }
                         var formRow = document.createElement("div");
@@ -2906,6 +2926,18 @@
                         formRow.appendChild(rowNumber);
                         formRow.appendChild(eventDropBox);
                         formRow.appendChild(formLabel);
+                        var tpStr2 = "";
+                        if (fData2.timepointDisplay && fData2.timepointDisplay.trim().length > 0) {
+                            tpStr2 = fData2.timepointDisplay;
+                        } else {
+                            tpStr2 = bplFormatTimePoint(fData2.days || 0, fData2.hours || 0, fData2.minutes || 0, fData2.seconds || 0, fData2.preReference || false);
+                        }
+                        var etStr2 = fData2.exampleTime || "N/A";
+                        var timeRefLabel = document.createElement("span");
+                        timeRefLabel.textContent = tpStr2 + "  |  " + etStr2;
+                        timeRefLabel.style.cssText = "font-size:10px;color:#888;white-space:nowrap;flex-shrink:0;min-width:0;overflow:hidden;text-overflow:ellipsis;max-width:220px;";
+                        timeRefLabel.title = tpStr2 + "  |  " + etStr2;
+                        formRow.appendChild(timeRefLabel);
                         formRow.appendChild(arrowUpBtn);
                         formRow.appendChild(arrowDownBtn);
                         formRow.appendChild(copyFormBtn);
@@ -2933,7 +2965,6 @@
             { icon: BPL_ICON_ENFORCE, label: "Enforce Order" },
             { icon: BPL_ICON_REF_ACTIVITY, label: "Ref. Activity" },
             { icon: BPL_ICON_PRE_REF, label: "Pre-Reference" },
-            { icon: "\u{1F4CC}", label: "Auto-Populated" }
         ];
         for (var li = 0; li < legendItems.length; li++) {
             var legendItem = document.createElement("span");
