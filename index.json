@@ -235,14 +235,14 @@
     "title": "Protocol Check Vital Signs Range #1 (NON-REPEAT)",
     "tags": ["Protocol Check", "Vitals", "NON-REPEAT"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Vital%20Signs%20Range%20%231%20(NON-REPEAT).md",
-    "updated": "2026-02-12"
+    "updated": "2026-03-30"
   },
   {
     "id": "M-035",
     "title": "Protocol Check Vital Signs Range #2 (REPEAT)",
     "tags": ["Protocol Check", "Vitals", "REPEAT"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Vital%20Signs%20Range%20%232%20(REPEAT).md",
-    "updated": "2026-02-12"
+    "updated": "2026-03-30"
   },
   {
     "id": "M-036",

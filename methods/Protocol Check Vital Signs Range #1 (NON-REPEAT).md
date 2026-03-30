@@ -76,11 +76,11 @@ if (
     hr < hr_min_range
 ) return attachedItemCodeList[3]; // Out of Normal Range
 else if ( // IR
-    sys <= sys_max_range ||
-    sys >= sys_min_range ||
-    dia <= dia_max_range ||
-    dia >= dia_min_range ||
-    hr <= hr_max_range ||
+    sys <= sys_max_range &&
+    sys >= sys_min_range &&
+    dia <= dia_max_range &&
+    dia >= dia_min_range &&
+    hr <= hr_max_range &&
     hr >= hr_min_range
 ) return attachedItemCodeList[4]; // Within Normal Range
 
