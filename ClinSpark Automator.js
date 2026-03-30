@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.2.8
+// @version     2.2.9
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -8205,7 +8205,7 @@
         var buttonLabels = [
             "Pull Barcode",
             "Pull Lab Barcode",
-            "Scheduled Activities Builder",
+            // "Scheduled Activities Builder",
             "PLAP Builder",
             "Archive/Update Forms",
             "Copy Activity Forms",
@@ -22618,7 +22618,7 @@
         var panelButtons = [
             { el: runBarcodeBtn, label: "Pull Barcode" },
             { el: pullLabBarcodeBtn, label: "Pull Lab Barcode" },
-            { el: saBuilderBtn, label: "Scheduled Activities Builder" },
+            // { el: saBuilderBtn, label: "Scheduled Activities Builder" },
             { el: bplBtn, label: "PLAP Builder" },
             { el: archiveUpdateFormsBtn, label: "Archive/Update Forms" },
             { el: copyFormsBtn, label: "Copy Activity Forms"},

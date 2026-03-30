@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.6.9
+// @version 3.7.0
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -5315,7 +5315,7 @@
             "Pull Lab Barcode",
             "Add Existing Subject",
             "Search Methods",
-            "Scheduled Activities Builder",
+            // "Scheduled Activities Builder",
             "PLAP Builder",
             "Run Form (OOR) Below Range",
             "Run Form (OOR) Above Range",
@@ -29062,19 +29062,19 @@
         addExistingSubjectBtn.onmouseenter = () => { addExistingSubjectBtn.style.background = "#4a37a0"; };
         addExistingSubjectBtn.onmouseleave = () => { addExistingSubjectBtn.style.background = "#5b43c7"; };
 
-        var saBuilderBtn = document.createElement("button");
-        saBuilderBtn.textContent = "Scheduled Activities Builder";
-        saBuilderBtn.style.background = "#5b43c7";
-        saBuilderBtn.style.color = "#fff";
-        saBuilderBtn.style.border = "none";
-        saBuilderBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
-        saBuilderBtn.style.padding = scale(BUTTON_PADDING_PX);
-        saBuilderBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        saBuilderBtn.style.cursor = "pointer";
-        saBuilderBtn.style.fontWeight = "500";
-        saBuilderBtn.style.transition = "background 0.2s";
-        saBuilderBtn.onmouseenter = () => { saBuilderBtn.style.background = "#4a37a0"; };
-        saBuilderBtn.onmouseleave = () => { saBuilderBtn.style.background = "#5b43c7"; };
+        // var saBuilderBtn = document.createElement("button");
+        // saBuilderBtn.textContent = "Scheduled Activities Builder";
+        // saBuilderBtn.style.background = "#5b43c7";
+        // saBuilderBtn.style.color = "#fff";
+        // saBuilderBtn.style.border = "none";
+        // saBuilderBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        // saBuilderBtn.style.padding = scale(BUTTON_PADDING_PX);
+        // saBuilderBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
+        // saBuilderBtn.style.cursor = "pointer";
+        // saBuilderBtn.style.fontWeight = "500";
+        // saBuilderBtn.style.transition = "background 0.2s";
+        // saBuilderBtn.onmouseenter = () => { saBuilderBtn.style.background = "#4a37a0"; };
+        // saBuilderBtn.onmouseleave = () => { saBuilderBtn.style.background = "#5b43c7"; };
 
         var bplBtn = document.createElement("button");
         bplBtn.textContent = "PLAP Builder";
@@ -29355,7 +29355,7 @@
 
         // Apply glassmorphism theme to all panel buttons if glass theme is active
         if (glass) {
-            var allPanelBtns = [runPlansBtn, runStudyBtn, runAddCohortBtn, runConsentBtn, runAllBtn, runNonScrnBtn, addExistingSubjectBtn, saBuilderBtn, bplBtn, runBarcodeBtn, runFormOORBtn, runFormOORABtn, runFormIRBtn, parseMethodBtn, searchMethodsBtn, archiveUpdateFormsBtn, copyFormsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn, runLockSamplePathsBtn, importEligBtn, findFormBtn, pullLabBarcodeBtn, findStudyEventsBtn, clearMappingBtn, collectAllBtn];
+            var allPanelBtns = [runPlansBtn, runStudyBtn, runAddCohortBtn, runConsentBtn, runAllBtn, runNonScrnBtn, addExistingSubjectBtn, bplBtn, runBarcodeBtn, runFormOORBtn, runFormOORABtn, runFormIRBtn, parseMethodBtn, searchMethodsBtn, archiveUpdateFormsBtn, copyFormsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn, runLockSamplePathsBtn, importEligBtn, findFormBtn, pullLabBarcodeBtn, findStudyEventsBtn, clearMappingBtn, collectAllBtn];
             for (var gi = 0; gi < allPanelBtns.length; gi++) {
                 var gb = allPanelBtns[gi];
                 gb.className = "ie-btn-primary";
@@ -29384,7 +29384,7 @@
             { el: pullLabBarcodeBtn, label: "Pull Lab Barcode" },
             { el: addExistingSubjectBtn, label: "Add Existing Subject" },
             { el: searchMethodsBtn, label: "Search Methods" },
-            { el: saBuilderBtn, label: "Scheduled Activities Builder" },
+            // { el: saBuilderBtn, label: "Scheduled Activities Builder" },
             { el: bplBtn, label: "PLAP Builder" },
             { el: runFormOORBtn, label: "Run Form (OOR) Below Range" },
             { el: runFormOORABtn, label: "Run Form (OOR) Above Range" },
@@ -30142,16 +30142,16 @@
         parseMethodBtn.addEventListener("click", function () {
             openParseMethod();
         });
-        saBuilderBtn.addEventListener("click", async function () {
-            SA_BUILDER_CANCELLED = false;
-            log("SA Builder: button clicked");
-            if (SA_BUILDER_PAUSE) {
-                log("SA Builder: Paused");
-                return;
-            }
-            log("SA Builder: starting");
-            await runSABuilder();
-        });
+        // saBuilderBtn.addEventListener("click", async function () {
+        //     SA_BUILDER_CANCELLED = false;
+        //     log("SA Builder: button clicked");
+        //     if (SA_BUILDER_PAUSE) {
+        //         log("SA Builder: Paused");
+        //         return;
+        //     }
+        //     log("SA Builder: starting");
+        //     await runSABuilder();
+        // });
         bplBtn.addEventListener("click", async function () {
             BPL_CANCELLED = false;
             log("BPL: button clicked");
