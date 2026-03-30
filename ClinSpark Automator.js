@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.3.0
+// @version     2.3.1
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -649,7 +649,7 @@
     var BPL_PROGRESS_POPUP_REF = null;
     var BPL_CANCELLED = false;
     var BPL_PAUSE = false;
-    var BPL_TARGET_URL = "https://cenexeltest.clinspark.com/secure/crfdesign/activityplans/show/";
+    var BPL_TARGET_URL = "https://cenexel.clinspark.com/secure/crfdesign/activityplans/show/";
     var BPL_ICON_HIDDEN = "\u{1F6AB}";
     var BPL_ICON_MANDATORY = "\u2757";
     var BPL_ICON_ENFORCE = "\u{1F512}";
