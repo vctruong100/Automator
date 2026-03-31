@@ -10865,8 +10865,7 @@
                             var newFormData = getDefaultFormData();
                             var segRef = getSegmentRefDateTime(segVal);
                             newFormData.segmentRefDateTime = segRef;
-                            var tpStr = bplFormatTimePoint(0, 0, 0, 0, false);
-                            newFormData.exampleTime = bplComputeExampleTime(segRef, tpStr, false);
+                            newFormData.exampleTime = bplComputeExampleTime(segRef, "0:00:00", false);
                             formDataStore[newKey] = newFormData;
                             log("BPL: form " + fData.text + " added to segment " + segVal + " as instance " + newIndex);
                             renderCenterPanel(centerSearch.value);
@@ -11182,9 +11181,10 @@
                             tpStr2 = bplFormatTimePoint(fData2.days || 0, fData2.hours || 0, fData2.minutes || 0, fData2.seconds || 0, fData2.preReference || false);
                         }
                         var etStr2 = fData2.exampleTime || "N/A";
+                        var segIndexLabel = " (" + (si2 + 1) + ")";
                         var timeRefLabel = document.createElement("span");
-                        timeRefLabel.textContent = tpStr2 + "   |   " + etStr2;
-                        timeRefLabel.style.cssText = "font-size:10px;color:#888;white-space:pre;flex-shrink:0;min-width:0;overflow:hidden;text-overflow:ellipsis;max-width:220px;";                        timeRefLabel.title = tpStr2 + "  |  " + etStr2;
+                        timeRefLabel.textContent = tpStr2 + segIndexLabel + "   |   " + etStr2;
+                        timeRefLabel.style.cssText = "font-size:10px;color:#888;white-space:pre;flex-shrink:0;min-width:0;overflow:hidden;text-overflow:ellipsis;max-width:220px;";                        timeRefLabel.title = tpStr2 + segIndexLabel + "  |  " + etStr2;
                         var iconsStr = bplBuildStatusIcons(fData2);
                         var iconsLabel = document.createElement("span");
                         iconsLabel.textContent = iconsStr;
@@ -11229,14 +11229,14 @@
         collapseAllBtn.style.cssText = "padding:5px 12px;border-radius:4px;border:1px solid #555;background:#2a2a2a;color:#aaa;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;";
         collapseAllBtn.addEventListener("click", function() {
             var allCollapsed = true;
-            for (var si = 0; si < segments.length; si++) {
-                if (!segmentCollapseStates[segments[si].value]) {
+            for (var ci = 0; ci < segments.length; ci++) {
+                if (!segmentCollapseStates[segments[ci].value]) {
                     allCollapsed = false;
                     break;
                 }
             }
-            for (var si2 = 0; si2 < segments.length; si2++) {
-                segmentCollapseStates[segments[si2].value] = !allCollapsed;
+            for (var ci2 = 0; ci2 < segments.length; ci2++) {
+                segmentCollapseStates[segments[ci2].value] = !allCollapsed;
             }
             this.textContent = !allCollapsed ? "\u25B6 Expand All" : "\u25BC Collapse All";
             renderCenterPanel(centerSearch.value);
@@ -12252,6 +12252,7 @@
         }
         log("BPL: selection GUI displayed");
     }
+
 
     //==========================
     // FIND STUDY EVENTS FEATURE
