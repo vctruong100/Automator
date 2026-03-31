@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.3.2
+// @version     2.3.3
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -1368,7 +1368,6 @@
             }
             evText = names.join(", ");
         }
-        var statusIcons = bplBuildStatusIcons(formData);
         var label = segmentText + " - ";
         if (evText) {
             label += evText;
@@ -1376,9 +1375,6 @@
             label += "[No Study Event]";
         }
         label += " - " + formText;
-        if (statusIcons) {
-            label += " " + statusIcons;
-        }
         return label;
     }
 
@@ -2936,6 +2932,11 @@
                         var timeRefLabel = document.createElement("span");
                         timeRefLabel.textContent = tpStr2 + "   |   " + etStr2;
                         timeRefLabel.style.cssText = "font-size:10px;color:#888;white-space:pre;flex-shrink:0;min-width:0;overflow:hidden;text-overflow:ellipsis;max-width:220px;";                        timeRefLabel.title = tpStr2 + "  |  " + etStr2;
+                        var iconsStr = bplBuildStatusIcons(fData2);
+                        var iconsLabel = document.createElement("span");
+                        iconsLabel.textContent = iconsStr;
+                        iconsLabel.style.cssText = "font-size:11px;flex-shrink:0;white-space:nowrap;";
+                        formRow.appendChild(iconsLabel);
                         formRow.appendChild(timeRefLabel);
                         formRow.appendChild(arrowUpBtn);
                         formRow.appendChild(arrowDownBtn);
