@@ -11152,9 +11152,8 @@
                         }
                         var etStr2 = fData2.exampleTime || "N/A";
                         var timeRefLabel = document.createElement("span");
-                        timeRefLabel.textContent = tpStr2 + "  |  " + etStr2;
-                        timeRefLabel.style.cssText = "font-size:10px;color:#888;white-space:nowrap;flex-shrink:0;min-width:0;overflow:hidden;text-overflow:ellipsis;max-width:220px;";
-                        timeRefLabel.title = tpStr2 + "  |  " + etStr2;
+                        timeRefLabel.textContent = tpStr2 + "   |   " + etStr2;
+                        timeRefLabel.style.cssText = "font-size:10px;color:#888;white-space:pre;flex-shrink:0;min-width:0;overflow:hidden;text-overflow:ellipsis;max-width:220px;";                        timeRefLabel.title = tpStr2 + "  |  " + etStr2;
                         formRow.appendChild(timeRefLabel);
                         formRow.appendChild(arrowUpBtn);
                         formRow.appendChild(arrowDownBtn);
