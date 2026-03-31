@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.8.2
+// @version 3.8.3
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -9902,6 +9902,7 @@
         var selectedFormKey = null;
         var formInstanceCounter = 0;
         var copiedForm = null;
+        var segmentCollapseStates = {};
 
         var bplHideExisting = false;
         try {
@@ -10370,6 +10371,20 @@
             };
         }
 
+        function getSegmentRefDateTime(segVal) {
+            if (!segmentOffsets) return "N/A";
+            for (var si = 0; si < segments.length; si++) {
+                if (segments[si].value === segVal) {
+                    var segText = segments[si].text;
+                    if (segmentOffsets[segText]) {
+                        return segmentOffsets[segText].referenceDateTime || "N/A";
+                    }
+                    break;
+                }
+            }
+            return "N/A";
+        }
+
         function loadFormDataToPanel(key) {
             selectedFormKey = key;
             var data = formDataStore[key] || getDefaultFormData();
@@ -10432,6 +10447,12 @@
             if (preReferenceEl) {
                 data.preReference = preReferenceEl.checked;
             }
+            if (!data.segmentRefDateTime) {
+                var keyParts = key.split("|");
+                data.segmentRefDateTime = getSegmentRefDateTime(keyParts[0]);
+            }
+            var tpStr = bplFormatTimePoint(data.days || 0, data.hours || 0, data.minutes || 0, data.seconds || 0, false);
+            data.exampleTime = bplComputeExampleTime(data.segmentRefDateTime || "N/A", tpStr, data.preReference || false);
             formDataStore[key] = data;
         }
 
@@ -10779,19 +10800,33 @@
                         pastedData.refActivity = copiedForm.refActivity;
                         pastedData.preReference = copiedForm.preReference;
                         pastedData.studyEvents = [];
+                        var segRef = getSegmentRefDateTime(segVal);
+                        pastedData.segmentRefDateTime = segRef;
+                        var tpStr = bplFormatTimePoint(pastedData.days || 0, pastedData.hours || 0, pastedData.minutes || 0, pastedData.seconds || 0, false);
+                        pastedData.exampleTime = bplComputeExampleTime(segRef, tpStr, pastedData.preReference || false);
                         formDataStore[newKey] = pastedData;
                         log("BPL: pasted form " + copiedForm.formText + " into segment " + segVal + " as instance " + newIndex);
                         renderCenterPanel(centerSearch.value);
                         runAutoValidation();
                     };
                 })(seg.value));
+                var collapseBtn = document.createElement("button");
+                collapseBtn.textContent = segmentCollapseStates[seg.value] ? "\u25B6 Expand" : "\u25BC Collapse";
+                collapseBtn.style.cssText = "padding:3px 8px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:11px;cursor:pointer;";
+                collapseBtn.dataset.segmentValue = seg.value;
+                collapseBtn.addEventListener("click", function() {
+                    var sv = this.dataset.segmentValue;
+                    segmentCollapseStates[sv] = !segmentCollapseStates[sv];
+                    renderCenterPanel(centerSearch.value);
+                });
                 segHeaderDiv.appendChild(segCb);
                 segHeaderDiv.appendChild(segLabel);
                 segHeaderDiv.appendChild(sortBtn);
+                segHeaderDiv.appendChild(collapseBtn);
                 segHeaderDiv.appendChild(pasteBtn);
                 segBlock.appendChild(segHeaderDiv);
                 var formDropArea = document.createElement("div");
-                formDropArea.style.cssText = "min-height:40px;padding:6px;";
+                formDropArea.style.cssText = "min-height:40px;padding:6px;" + (segmentCollapseStates[seg.value] ? "display:none;" : "");
                 formDropArea.dataset.segmentValue = seg.value;
                 formDropArea.addEventListener("dragover", function(e) {
                     var hasForm = false;
@@ -10832,7 +10867,12 @@
                             });
                             segmentFormMap[segVal] = existingForms;
                             var newKey = getFormDataKey(segVal, fData.value, newIndex);
-                            formDataStore[newKey] = getDefaultFormData();
+                            var newFormData = getDefaultFormData();
+                            var segRef = getSegmentRefDateTime(segVal);
+                            newFormData.segmentRefDateTime = segRef;
+                            var tpStr = bplFormatTimePoint(0, 0, 0, 0, false);
+                            newFormData.exampleTime = bplComputeExampleTime(segRef, tpStr, false);
+                            formDataStore[newKey] = newFormData;
                             log("BPL: form " + fData.text + " added to segment " + segVal + " as instance " + newIndex);
                             renderCenterPanel(centerSearch.value);
                             runAutoValidation();
@@ -11189,6 +11229,25 @@
             legendItem.textContent = legendItems[li].icon + " " + legendItems[li].label;
             legendRow.appendChild(legendItem);
         }
+
+        var collapseAllBtn = document.createElement("button");
+        collapseAllBtn.textContent = "\u25BC Collapse All";
+        collapseAllBtn.style.cssText = "padding:5px 12px;border-radius:4px;border:1px solid #555;background:#2a2a2a;color:#aaa;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;";
+        collapseAllBtn.addEventListener("click", function() {
+            var allCollapsed = true;
+            for (var si = 0; si < segments.length; si++) {
+                if (!segmentCollapseStates[segments[si].value]) {
+                    allCollapsed = false;
+                    break;
+                }
+            }
+            for (var si2 = 0; si2 < segments.length; si2++) {
+                segmentCollapseStates[segments[si2].value] = !allCollapsed;
+            }
+            this.textContent = !allCollapsed ? "\u25B6 Expand All" : "\u25BC Collapse All";
+            renderCenterPanel(centerSearch.value);
+        });
+        legendRow.appendChild(collapseAllBtn);
 
         var hideExistingBtn = document.createElement("button");
         hideExistingBtn.textContent = bplHideExisting ? "\u{1F441} Show Existing" : "\u{1F6AB} Hide Existing";
