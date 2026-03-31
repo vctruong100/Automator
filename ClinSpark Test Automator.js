@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.8.3
+// @version 3.8.4
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -10530,28 +10530,6 @@
                 autoBanner.style.cssText = "padding:6px 8px;background:#3a3500;border:1px solid #665500;border-radius:4px;margin-bottom:8px;font-size:11px;color:#d4a017;";
                 autoBanner.textContent = "\u{1F4CC} Auto-populated from SA table (read-only)";
                 timeBody.appendChild(autoBanner);
-                if (data.timepointDisplay || data.exampleTime) {
-                    var infoBlock = document.createElement("div");
-                    infoBlock.style.cssText = "padding:4px 8px;background:#2a2a1a;border:1px solid #444;border-radius:4px;margin-bottom:8px;font-size:11px;color:#ccc;";
-                    if (data.timepointDisplay) {
-                        var tpLine = document.createElement("div");
-                        tpLine.textContent = "Timepoint: " + data.timepointDisplay;
-                        tpLine.style.cssText = "margin-bottom:2px;";
-                        infoBlock.appendChild(tpLine);
-                    }
-                    if (data.exampleTime && data.exampleTime !== "N/A") {
-                        var etLine = document.createElement("div");
-                        etLine.textContent = "Example Time: " + data.exampleTime;
-                        etLine.style.cssText = "margin-bottom:2px;";
-                        infoBlock.appendChild(etLine);
-                    }
-                    if (data.segmentRefDateTime && data.segmentRefDateTime !== "N/A") {
-                        var srLine = document.createElement("div");
-                        srLine.textContent = "Segment Ref: " + data.segmentRefDateTime;
-                        infoBlock.appendChild(srLine);
-                    }
-                    timeBody.appendChild(infoBlock);
-                }
             }
             timeBody.appendChild(createBPLCheckbox("Hidden?", "bplHidden", data.hidden));
             timeBody.appendChild(createBPLCheckbox("Mandatory", "bplMandatory", data.mandatory));
@@ -10592,16 +10570,9 @@
                 var allInputs = timeBody.querySelectorAll("input");
                 for (var ai = 0; ai < allInputs.length; ai++) {
                     var inp = allInputs[ai];
-                    if (inp.type === "checkbox") {
-                        inp.disabled = true;
-                        inp.style.pointerEvents = "none";
-                        inp.style.opacity = "0.8";
-                    } else {
-                        inp.readOnly = true;
-                        inp.style.pointerEvents = "none";
-                    }
-                    inp.style.cursor = "default";
                     inp.tabIndex = -1;
+                    inp.style.pointerEvents = "none";
+                    inp.style.cursor = "default";
                 }
             }
             var refActivityEl = document.getElementById("bplRefActivity");
