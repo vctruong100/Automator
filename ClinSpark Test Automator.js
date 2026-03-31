@@ -8882,8 +8882,6 @@
     var STORAGE_BPL_SEGMENT_OFFSETS = "activityPlanState.bpl.segmentOffsets";
     var STORAGE_BPL_SA_TABLE_DATA = "activityPlanState.bpl.saTableData";
     var STORAGE_BPL_HIDE_EXISTING = "activityPlanState.bpl.hideExisting";
-    var BPL_ICON_PRE_REF = "\u23EA";
-
 
     function clearBPLStorage() {
         try {
@@ -9570,9 +9568,6 @@
         }
         if (formData.refActivity) {
             icons += BPL_ICON_REF_ACTIVITY;
-        }
-        if (formData.preReference) {
-            icons += BPL_ICON_PRE_REF;
         }
         return icons;
     }
@@ -11222,7 +11217,6 @@
             { icon: BPL_ICON_MANDATORY, label: "Mandatory" },
             { icon: BPL_ICON_ENFORCE, label: "Enforce Order" },
             { icon: BPL_ICON_REF_ACTIVITY, label: "Ref. Activity" },
-            { icon: BPL_ICON_PRE_REF, label: "Pre-Reference" },
         ];
         for (var li = 0; li < legendItems.length; li++) {
             var legendItem = document.createElement("span");
