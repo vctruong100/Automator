@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.8.4
+// @version 3.8.5
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -5317,9 +5317,7 @@
             "Search Methods",
             // "Scheduled Activities Builder",
             "PLAP Builder",
-            "Run Form (OOR) Below Range",
-            "Run Form (OOR) Above Range",
-            "Run Form (IR) In Range",
+            "Populate Form",
             "Collect All",
             "Import I/E",
             "Clear Mapping",
@@ -20556,7 +20554,7 @@
     }
 
     //==========================
-    // RUN FORM FEATURES (OOR A, OOR B, IR)
+    // Populate Form FEATURES (OOR A, OOR B, IR)
     //==========================
     // This section contains all functions related to form automation features:
     // - Run Form (OOR) A: Out of Range values below minimum
@@ -20616,6 +20614,249 @@
         return String(raw);
     }
 
+    var RUN_FORM_OPTION_PANEL_OPEN = false;
+
+    function showRunFormOptionPanel() {
+        return new Promise(function (resolve) {
+            if (RUN_FORM_OPTION_PANEL_OPEN) {
+                log("Run Form: option panel already open; ignoring");
+                resolve(null);
+                return;
+            }
+            RUN_FORM_OPTION_PANEL_OPEN = true;
+            log("Run Form: opening option panel");
+
+            var glass = isGlassTheme();
+            if (glass) {
+                injectThemeStylesIfNeeded();
+            }
+
+            var overlay = document.createElement("div");
+            overlay.style.position = "fixed";
+            overlay.style.top = "0";
+            overlay.style.left = "0";
+            overlay.style.width = "100%";
+            overlay.style.height = "100%";
+            overlay.style.background = glass ? "rgba(0,0,0,0.45)" : "rgba(0,0,0,0.6)";
+            overlay.style.zIndex = glass ? String(THEME_Z_OVERLAY - 1) : "999997";
+            overlay.style.display = "flex";
+            overlay.style.alignItems = "center";
+            overlay.style.justifyContent = "center";
+
+            var panel = document.createElement("div");
+            panel.setAttribute("role", "dialog");
+            panel.setAttribute("aria-label", "Run Form Options");
+            panel.setAttribute("tabindex", "-1");
+            if (glass) {
+                panel.classList.add(THEME_SCOPE_CLASS);
+                panel.classList.add("ie-glass-panel");
+            } else {
+                panel.style.background = "#1a1a1a";
+                panel.style.border = "1px solid #444";
+                panel.style.boxShadow = "0 8px 30px rgba(0,0,0,0.5)";
+            }
+            panel.style.borderRadius = String(THEME_RADIUS) + "px";
+            panel.style.width = "360px";
+            panel.style.maxWidth = "90vw";
+            panel.style.padding = "0";
+            panel.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
+            panel.style.fontSize = "14px";
+            panel.style.zIndex = glass ? String(THEME_Z_OVERLAY) : "999998";
+            panel.style.outline = "none";
+            panel.style.overflow = "hidden";
+            panel.style.display = "flex";
+            panel.style.flexDirection = "column";
+
+            var headerBar = document.createElement("div");
+            if (glass) {
+                headerBar.classList.add("ie-glass-panel-header");
+                headerBar.style.borderRadius = String(THEME_RADIUS) + "px " + String(THEME_RADIUS) + "px 0 0";
+            } else {
+                headerBar.style.borderBottom = "1px solid #444";
+            }
+            headerBar.style.display = "flex";
+            headerBar.style.alignItems = "center";
+            headerBar.style.justifyContent = "space-between";
+            headerBar.style.padding = "12px 16px";
+            headerBar.style.boxSizing = "border-box";
+
+            var titleEl = document.createElement("div");
+            titleEl.textContent = "Run Form";
+            titleEl.style.fontWeight = "600";
+            titleEl.style.fontSize = "16px";
+            titleEl.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
+            headerBar.appendChild(titleEl);
+
+            var closeBtn = document.createElement("button");
+            closeBtn.textContent = "\u2715";
+            closeBtn.setAttribute("aria-label", "Close");
+            closeBtn.style.background = "transparent";
+            closeBtn.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
+            closeBtn.style.border = "none";
+            closeBtn.style.fontSize = "18px";
+            closeBtn.style.cursor = "pointer";
+            closeBtn.style.padding = "4px 8px";
+            closeBtn.style.borderRadius = "4px";
+            closeBtn.style.lineHeight = "1";
+            closeBtn.style.width = "32px";
+            closeBtn.style.height = "32px";
+            closeBtn.style.display = "flex";
+            closeBtn.style.alignItems = "center";
+            closeBtn.style.justifyContent = "center";
+            closeBtn.addEventListener("mouseenter", function () {
+                closeBtn.style.background = glass ? THEME_SURFACE_BG_HEAVY : "#333";
+            });
+            closeBtn.addEventListener("mouseleave", function () {
+                closeBtn.style.background = "transparent";
+            });
+            headerBar.appendChild(closeBtn);
+            panel.appendChild(headerBar);
+
+            var descEl = document.createElement("div");
+            descEl.textContent = "Select how values should be generated relative to the allowed range:";
+            descEl.style.padding = "12px 16px 4px 16px";
+            descEl.style.fontSize = "13px";
+            descEl.style.color = glass ? THEME_TEXT_MUTED : "#aaa";
+            panel.appendChild(descEl);
+
+            var optionsContainer = document.createElement("div");
+            optionsContainer.style.display = "flex";
+            optionsContainer.style.flexDirection = "column";
+            optionsContainer.style.gap = "8px";
+            optionsContainer.style.padding = "12px 16px 16px 16px";
+
+            var RUN_FORM_OPTIONS = [
+                { mode: "lowOor", label: "\u2B07\uFE0F\u2757 Low Out of Range", desc: "Value strictly below the lower bound" },
+                { mode: "lowNorm", label: "\u2B07\uFE0F\u2705 Low Normal Range", desc: "Value at or near the lower bound" },
+                { mode: "highNorm", label: "\u2B06\uFE0F\u2705 High Normal Range", desc: "Value at or near the upper bound" },
+                { mode: "highOor", label: "\u2B06\uFE0F\u2757 High Out of Range", desc: "Value strictly above the upper bound" },
+                { mode: "randomIr", label: "\uD83C\uDFB2\u2705 Random In Range", desc: "Random value within the allowed range" }
+            ];
+
+            var resolved = false;
+
+            function cleanup() {
+                RUN_FORM_OPTION_PANEL_OPEN = false;
+                document.removeEventListener("keydown", escHandler);
+                if (overlay && overlay.parentNode) {
+                    overlay.parentNode.removeChild(overlay);
+                }
+            }
+
+            function doSelect(selectedMode) {
+                if (resolved) {
+                    return;
+                }
+                resolved = true;
+                log("Run Form: option selected mode=" + String(selectedMode));
+                cleanup();
+                resolve(selectedMode);
+            }
+
+            function doCancel() {
+                if (resolved) {
+                    return;
+                }
+                resolved = true;
+                log("Run Form: option panel cancelled");
+                cleanup();
+                resolve(null);
+            }
+
+            var optIdx = 0;
+            while (optIdx < RUN_FORM_OPTIONS.length) {
+                (function (opt, idx) {
+                    var optBtn = document.createElement("button");
+                    optBtn.setAttribute("role", "option");
+                    optBtn.setAttribute("tabindex", "0");
+                    optBtn.style.display = "flex";
+                    optBtn.style.flexDirection = "column";
+                    optBtn.style.alignItems = "flex-start";
+                    optBtn.style.width = "100%";
+                    optBtn.style.padding = "10px 14px";
+                    optBtn.style.border = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #444";
+                    optBtn.style.borderRadius = "8px";
+                    optBtn.style.cursor = "pointer";
+                    optBtn.style.background = glass ? THEME_SURFACE_BG : "#222";
+                    optBtn.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
+                    optBtn.style.fontFamily = "inherit";
+                    optBtn.style.fontSize = "14px";
+                    optBtn.style.textAlign = "left";
+                    optBtn.style.transition = "background 0.15s, border-color 0.15s, transform 0.1s";
+                    optBtn.style.outline = "none";
+
+                    var labelSpan = document.createElement("span");
+                    labelSpan.textContent = opt.label;
+                    labelSpan.style.fontWeight = "600";
+                    labelSpan.style.fontSize = "14px";
+                    optBtn.appendChild(labelSpan);
+
+                    var descSpan = document.createElement("span");
+                    descSpan.textContent = opt.desc;
+                    descSpan.style.fontSize = "12px";
+                    descSpan.style.color = glass ? THEME_TEXT_MUTED : "#999";
+                    descSpan.style.marginTop = "2px";
+                    optBtn.appendChild(descSpan);
+
+                    optBtn.addEventListener("mouseenter", function () {
+                        optBtn.style.background = glass ? THEME_SURFACE_BG_HEAVY : "#333";
+                        optBtn.style.borderColor = glass ? THEME_ACCENT : "#5b43c7";
+                    });
+                    optBtn.addEventListener("mouseleave", function () {
+                        optBtn.style.background = glass ? THEME_SURFACE_BG : "#222";
+                        optBtn.style.borderColor = glass ? THEME_SURFACE_BORDER : "#444";
+                    });
+                    optBtn.addEventListener("focus", function () {
+                        optBtn.style.boxShadow = glass ? THEME_OUTLINE_FOCUS : "0 0 0 3px rgba(91,67,199,0.5)";
+                    });
+                    optBtn.addEventListener("blur", function () {
+                        optBtn.style.boxShadow = "none";
+                    });
+                    optBtn.addEventListener("click", function () {
+                        doSelect(opt.mode);
+                    });
+                    optBtn.addEventListener("keydown", function (e) {
+                        if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            doSelect(opt.mode);
+                        }
+                    });
+
+                    optionsContainer.appendChild(optBtn);
+                })(RUN_FORM_OPTIONS[optIdx], optIdx);
+                optIdx = optIdx + 1;
+            }
+
+            panel.appendChild(optionsContainer);
+            overlay.appendChild(panel);
+            document.body.appendChild(overlay);
+
+            overlay.addEventListener("click", function (e) {
+                if (e.target === overlay) {
+                    doCancel();
+                }
+            });
+
+            closeBtn.addEventListener("click", function () {
+                doCancel();
+            });
+
+            var escHandler = function (e) {
+                if (e.key === "Escape") {
+                    doCancel();
+                }
+            };
+            document.addEventListener("keydown", escHandler);
+
+            panel.focus();
+
+            var firstOptBtn = optionsContainer.querySelector("button");
+            if (firstOptBtn) {
+                firstOptBtn.focus();
+            }
+        });
+    }
+
     function getItemTextCellFromRow(tr) {
         if (!tr) {
             return null;
@@ -20638,7 +20879,12 @@
     function getRangeTextFromItemText(itemTextTd) {
         var t = "";
         if (itemTextTd) {
-            t = getText(itemTextTd);
+            var clone = itemTextTd.cloneNode(true);
+            var helpClone = clone.querySelector("div.itemHelpText");
+            if (helpClone) {
+                helpClone.parentNode.removeChild(helpClone);
+            }
+            t = getText(clone);
         }
         return t;
     }
@@ -20651,7 +20897,7 @@
         s = s.replace(/\u00A0/g, " ");
         s = s.trim();
 
-        var m2 = s.match(/(\d+(?:\.\d+)?)\s*(?:-|–|—|to|TO)\s*(\d+(?:\.\d+)?)/i);
+        var m2 = s.match(/(\d+(?:\.\d+)?)\s*[A-Za-z%°]*\s*(?:-|–|—|to|TO)\s*(\d+(?:\.\d+)?)/i);
         if (m2 && m2[1] && m2[2]) {
             var a = parseFloat(m2[1]);
             var b = parseFloat(m2[2]);
@@ -20697,13 +20943,13 @@
 
     function findRangeSpecForRow(tr) {
         var td = getItemTextCellFromRow(tr);
-        var helpText = getRangeTextFromHelp(td);
-        var spec = parseRangeSpecFromText(helpText);
+        var itemText = getRangeTextFromItemText(td);
+        var spec = parseRangeSpecFromText(itemText);
         if (spec) {
             return spec;
         }
-        var itemText = getRangeTextFromItemText(td);
-        var spec2 = parseRangeSpecFromText(itemText);
+        var helpText = getRangeTextFromHelp(td);
+        var spec2 = parseRangeSpecFromText(helpText);
         if (spec2) {
             return spec2;
         }
@@ -20721,141 +20967,165 @@
         if (!spec || !mode) {
             return null;
         }
-        if (spec.kind === "between") {
-            var lo = Math.floor(spec.min);
-            var hi = Math.floor(spec.max);
-            if (mode === "ir") {
-                if (hi < lo) {
+        if (mode === "lowOor" || mode === "oorA") {
+            if (spec.kind === "between") {
+                var loA1 = Math.floor(spec.min) - 1;
+                if (loA1 >= 0) {
+                    return loA1;
+                }
+                return 0;
+            }
+            if (spec.kind === "ge") {
+                var loA2 = Math.floor(spec.t) - 1;
+                if (loA2 >= 0) {
+                    return loA2;
+                }
+                return 0;
+            }
+            if (spec.kind === "gt") {
+                var loA3 = Math.floor(spec.t) - 1;
+                if (loA3 >= 0) {
+                    return loA3;
+                }
+                return 0;
+            }
+            if (spec.kind === "lt") {
+                var loA4 = Math.floor(spec.t) - 2;
+                if (loA4 >= 0) {
+                    return randomIntInInclusiveRange(0, loA4);
+                }
+                return 0;
+            }
+            if (spec.kind === "le") {
+                var loA5 = Math.floor(spec.t) - 1;
+                if (loA5 >= 0) {
+                    return randomIntInInclusiveRange(0, loA5);
+                }
+                return 0;
+            }
+            return null;
+        }
+        if (mode === "lowNorm") {
+            if (spec.kind === "between") {
+                return Math.floor(spec.min);
+            }
+            if (spec.kind === "ge") {
+                return Math.floor(spec.t);
+            }
+            if (spec.kind === "gt") {
+                return Math.floor(spec.t) + 1;
+            }
+            if (spec.kind === "lt") {
+                var lnLt = Math.floor(spec.t) - 2;
+                if (lnLt >= 0) {
+                    return lnLt;
+                }
+                return 0;
+            }
+            if (spec.kind === "le") {
+                var lnLe = Math.floor(spec.t) - 1;
+                if (lnLe >= 0) {
+                    return lnLe;
+                }
+                return 0;
+            }
+            return null;
+        }
+        if (mode === "highNorm") {
+            if (spec.kind === "between") {
+                return Math.floor(spec.max);
+            }
+            if (spec.kind === "le") {
+                return Math.floor(spec.t);
+            }
+            if (spec.kind === "lt") {
+                return Math.floor(spec.t) - 1;
+            }
+            if (spec.kind === "ge") {
+                return Math.floor(spec.t) + 50;
+            }
+            if (spec.kind === "gt") {
+                return Math.floor(spec.t) + 50;
+            }
+            return null;
+        }
+        if (mode === "highOor" || mode === "oorB") {
+            if (spec.kind === "between") {
+                return Math.floor(spec.max) + 1;
+            }
+            if (spec.kind === "le") {
+                return Math.floor(spec.t) + 1;
+            }
+            if (spec.kind === "lt") {
+                return Math.floor(spec.t);
+            }
+            if (spec.kind === "ge") {
+                return Math.floor(spec.t) + 101;
+            }
+            if (spec.kind === "gt") {
+                return Math.floor(spec.t) + 101;
+            }
+            return null;
+        }
+        if (mode === "randomIr" || mode === "ir") {
+            if (spec.kind === "between") {
+                var rLo = Math.floor(spec.min);
+                var rHi = Math.floor(spec.max);
+                if (rHi < rLo) {
                     return null;
                 }
-                return randomIntInInclusiveRange(lo, hi);
+                return randomIntInInclusiveRange(rLo, rHi);
             }
-            if (mode === "oorA") {
-                var belowA = lo - 1;
-                if (belowA >= 0) {
-                    return belowA;
-                } else {
-                    return 0;
+            if (spec.kind === "ge") {
+                return randomIntInInclusiveRange(Math.floor(spec.t), Math.floor(spec.t) + 100);
+            }
+            if (spec.kind === "gt") {
+                return randomIntInInclusiveRange(Math.floor(spec.t) + 1, Math.floor(spec.t) + 100);
+            }
+            if (spec.kind === "le") {
+                var rLe = Math.floor(spec.t);
+                if (rLe >= 0) {
+                    return randomIntInInclusiveRange(0, rLe);
                 }
+                return 0;
             }
-            if (mode === "oorB") {
-                return hi + 1;
+            if (spec.kind === "lt") {
+                var rLt = Math.floor(spec.t) - 1;
+                if (rLt >= 0) {
+                    return randomIntInInclusiveRange(0, rLt);
+                }
+                return 0;
             }
-            if (mode === "oor") {
-                var below = lo - 1;
-                var above = hi + 1;
-                var coin = Math.random() < 0.5;
-                if (coin) {
-                    if (below >= 0) {
-                        return below;
-                    } else {
-                        return above;
+            return null;
+        }
+        if (mode === "oor") {
+            if (spec.kind === "between") {
+                var belowO = Math.floor(spec.min) - 1;
+                var aboveO = Math.floor(spec.max) + 1;
+                var coinO = Math.random() < 0.5;
+                if (coinO) {
+                    if (belowO >= 0) {
+                        return belowO;
                     }
-                } else {
-                    return above;
+                    return aboveO;
                 }
+                return aboveO;
             }
-            return null;
-        }
-        if (spec.kind === "lt") {
-            var t1 = Math.floor(spec.t);
-            if (mode === "ir") {
-                var maxVal = t1 - 1;
-                if (maxVal >= 0) {
-                    return randomIntInInclusiveRange(0, maxVal);
-                } else {
-                    return 0;
+            if (spec.kind === "lt") {
+                return Math.floor(spec.t);
+            }
+            if (spec.kind === "le") {
+                return Math.floor(spec.t) + 1;
+            }
+            if (spec.kind === "gt") {
+                return Math.floor(spec.t);
+            }
+            if (spec.kind === "ge") {
+                var v2O = Math.floor(spec.t) - 1;
+                if (v2O >= 0) {
+                    return v2O;
                 }
-            }
-            if (mode === "oorA") {
-                return t1 + 1;
-            }
-            if (mode === "oorB") {
-                return t1 + 1;
-            }
-            if (mode === "oor") {
-                return t1;
-            }
-            return null;
-        }
-        if (spec.kind === "le") {
-            var t2 = Math.floor(spec.t);
-            if (mode === "ir") {
-                if (t2 >= 0) {
-                    return randomIntInInclusiveRange(0, t2);
-                } else {
-                    return 0;
-                }
-            }
-            if (mode === "oorA") {
-                return t2 + 1;
-            }
-            if (mode === "oorB") {
-                return t2 + 1;
-            }
-            if (mode === "oor") {
-                return t2 + 1;
-            }
-            return null;
-        }
-        if (spec.kind === "gt") {
-            var t3 = Math.floor(spec.t);
-            if (mode === "ir") {
-                var minVal = t3 + 1;
-                var maxVal = t3 + 100;
-                return randomIntInInclusiveRange(minVal, maxVal);
-            }
-            if (mode === "oorA") {
-                var v3a = t3 - 1;
-                if (v3a >= 0) {
-                    return v3a;
-                } else {
-                    return 0;
-                }
-            }
-            if (mode === "oorB") {
-                var v3b = t3 - 1;
-                if (v3b >= 0) {
-                    return v3b;
-                } else {
-                    return 0;
-                }
-            }
-            if (mode === "oor") {
-                return t3;
-            }
-            return null;
-        }
-        if (spec.kind === "ge") {
-            var t4 = Math.floor(spec.t);
-            if (mode === "ir") {
-                var minVal = t4;
-                var maxVal = t4 + 100;
-                return randomIntInInclusiveRange(minVal, maxVal);
-            }
-            if (mode === "oorA") {
-                var v4a = t4 - 1;
-                if (v4a >= 0) {
-                    return v4a;
-                } else {
-                    return 0;
-                }
-            }
-            if (mode === "oorB") {
-                var v4b = t4 - 1;
-                if (v4b >= 0) {
-                    return v4b;
-                } else {
-                    return 0;
-                }
-            }
-            if (mode === "oor") {
-                var v2 = t4 - 1;
-                if (v2 >= 0) {
-                    return v2;
-                } else {
-                    return 0;
-                }
+                return 0;
             }
             return null;
         }
@@ -20870,39 +21140,44 @@
         if (typeof places === "number") {
             p = places;
         }
+        if (spec.kind === "between" && (mode === "randomIr" || mode === "ir")) {
+            var lo = spec.min;
+            var hi = spec.max;
+            var base = Math.random() * (hi - lo) + lo;
+            var outR = p <= 0 ? Math.round(base) : parseFloat(base.toFixed(p));
+            return outR;
+        }
+        if (spec.kind === "between" && mode === "lowNorm") {
+            var outLN = p <= 0 ? Math.round(spec.min) : parseFloat(Number(spec.min).toFixed(p));
+            return outLN;
+        }
+        if (spec.kind === "between" && mode === "highNorm") {
+            var outHN = p <= 0 ? Math.round(spec.max) : parseFloat(Number(spec.max).toFixed(p));
+            return outHN;
+        }
+        if (spec.kind === "between" && (mode === "lowOor" || mode === "oorA")) {
+            var belowA = spec.min - 1;
+            var outA = p <= 0 ? Math.round(belowA) : parseFloat(belowA.toFixed(p));
+            return outA;
+        }
+        if (spec.kind === "between" && (mode === "highOor" || mode === "oorB")) {
+            var aboveB = spec.max + 1;
+            var outB = p <= 0 ? Math.round(aboveB) : parseFloat(aboveB.toFixed(p));
+            return outB;
+        }
+        if (spec.kind === "between" && mode === "oor") {
+            var below = spec.min - 1;
+            var above = spec.max + 1;
+            var coin = Math.random() < 0.5;
+            var pick = coin ? below : above;
+            var out2 = p <= 0 ? Math.round(pick) : parseFloat(pick.toFixed(p));
+            return out2;
+        }
         var iv = pickIntegerForSpec(spec, mode);
         if (iv === null || iv === undefined) {
-            if (spec.kind === "between") {
-                var lo = spec.min;
-                var hi = spec.max;
-                if (mode === "ir") {
-                    var base = Math.random() * (hi - lo) + lo;
-                    var out = p <= 0 ? Math.round(base) : parseFloat(base.toFixed(p));
-                    return out;
-                }
-                if (mode === "oorA") {
-                    var belowA = spec.min - 1;
-                    var outA = p <= 0 ? Math.round(belowA) : parseFloat(belowA.toFixed(p));
-                    return outA;
-                }
-                if (mode === "oorB") {
-                    var aboveB = spec.max + 1;
-                    var outB = p <= 0 ? Math.round(aboveB) : parseFloat(aboveB.toFixed(p));
-                    return outB;
-                }
-                if (mode === "oor") {
-                    var below = spec.min - 1;
-                    var above = spec.max + 1;
-                    var coin = Math.random() < 0.5;
-                    var pick = coin ? below : above;
-                    var out2 = p <= 0 ? Math.round(pick) : parseFloat(pick.toFixed(p));
-                    return out2;
-                }
-                return null;
-            }
             return null;
         }
-        var out3 = p <= 0 ? Math.round(iv) : parseFloat(iv.toFixed(p));
+        var out3 = p <= 0 ? Math.round(iv) : parseFloat(Number(iv).toFixed(p));
         return out3;
     }
 
@@ -21251,7 +21526,7 @@
             }
             var modeInt = getFormValueMode();
             var n = null;
-            if (modeInt === "oor" || modeInt === "ir" || modeInt === "oorA" || modeInt === "oorB") {
+            if (modeInt === "oor" || modeInt === "ir" || modeInt === "oorA" || modeInt === "oorB" || modeInt === "lowOor" || modeInt === "lowNorm" || modeInt === "highNorm" || modeInt === "highOor" || modeInt === "randomIr") {
                 var trI = controlTd.closest("tr[id^=\"itemDataCollectRow_\"]");
                 var specI = findRangeSpecForRow(trI);
                 if (specI) {
@@ -21281,7 +21556,7 @@
             var p = getDecimalPlacesFromMeta(controlTd);
             var modeDec = getFormValueMode();
             var d = null;
-            if (modeDec === "oor" || modeDec === "ir" || modeDec === "oorA" || modeDec === "oorB") {
+            if (modeDec === "oor" || modeDec === "ir" || modeDec === "oorA" || modeDec === "oorB" || modeDec === "lowOor" || modeDec === "lowNorm" || modeDec === "highNorm" || modeDec === "highOor" || modeDec === "randomIr") {
                 var trD = controlTd.closest("tr[id^=\"itemDataCollectRow_\"]");
                 var specD = findRangeSpecForRow(trD);
                 if (specD) {
@@ -29926,45 +30201,19 @@
         runBarcodeBtn.style.transition = "background 0.2s";
         runBarcodeBtn.onmouseenter = () => { runBarcodeBtn.style.background = "#4a37a0"; };
         runBarcodeBtn.onmouseleave = () => { runBarcodeBtn.style.background = "#5b43c7"; };
-        var runFormOORBtn = document.createElement("button");
-        runFormOORBtn.textContent = "Run Form (OOR) Below Range";
-        runFormOORBtn.style.background = "#f0ad4e";
-        runFormOORBtn.style.color = "#fff";
-        runFormOORBtn.style.border = "none";
-        runFormOORBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
-        runFormOORBtn.style.padding = scale(BUTTON_PADDING_PX);
-        runFormOORBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        runFormOORBtn.style.cursor = "pointer";
-        runFormOORBtn.style.fontWeight = "500";
-        runFormOORBtn.style.transition = "background 0.2s";
-        runFormOORBtn.onmouseenter = () => { runFormOORBtn.style.background = "#ec971f"; };
-        runFormOORBtn.onmouseleave = () => { runFormOORBtn.style.background = "#f0ad4e"; };
-        var runFormOORABtn = document.createElement("button");
-        runFormOORABtn.textContent = "Run Form (OOR) Above Range";
-        runFormOORABtn.style.background = "#f0ad4e";
-        runFormOORABtn.style.color = "#fff";
-        runFormOORABtn.style.border = "none";
-        runFormOORABtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
-        runFormOORABtn.style.padding = scale(BUTTON_PADDING_PX);
-        runFormOORABtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        runFormOORABtn.style.cursor = "pointer";
-        runFormOORABtn.style.fontWeight = "500";
-        runFormOORABtn.style.transition = "background 0.2s";
-        runFormOORABtn.onmouseenter = () => { runFormOORABtn.style.background = "#ec971f"; };
-        runFormOORABtn.onmouseleave = () => { runFormOORABtn.style.background = "#f0ad4e"; };
-        var runFormIRBtn = document.createElement("button");
-        runFormIRBtn.textContent = "Run Form (In Range)";
-        runFormIRBtn.style.background = "#f0ad4e";
-        runFormIRBtn.style.color = "#fff";
-        runFormIRBtn.style.border = "none";
-        runFormIRBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
-        runFormIRBtn.style.padding = scale(BUTTON_PADDING_PX);
-        runFormIRBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        runFormIRBtn.style.cursor = "pointer";
-        runFormIRBtn.style.fontWeight = "500";
-        runFormIRBtn.style.transition = "background 0.2s";
-        runFormIRBtn.onmouseenter = () => { runFormIRBtn.style.background = "#ec971f"; };
-        runFormIRBtn.onmouseleave = () => { runFormIRBtn.style.background = "#f0ad4e"; };
+        var runFormBtn = document.createElement("button");
+        runFormBtn.textContent = "Popualate Form";
+        runFormBtn.style.background = "#f0ad4e";
+        runFormBtn.style.color = "#fff";
+        runFormBtn.style.border = "none";
+        runFormBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        runFormBtn.style.padding = scale(BUTTON_PADDING_PX);
+        runFormBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
+        runFormBtn.style.cursor = "pointer";
+        runFormBtn.style.fontWeight = "500";
+        runFormBtn.style.transition = "background 0.2s";
+        runFormBtn.onmouseenter = () => { runFormBtn.style.background = "#ec971f"; };
+        runFormBtn.onmouseleave = () => { runFormBtn.style.background = "#f0ad4e"; };
         var parseMethodBtn = document.createElement("button");
         parseMethodBtn.textContent = "Item Method Forms";
         parseMethodBtn.style.background = "#4a90e2";
@@ -30178,7 +30427,7 @@
 
         // Apply glassmorphism theme to all panel buttons if glass theme is active
         if (glass) {
-            var allPanelBtns = [runPlansBtn, runStudyBtn, runAddCohortBtn, runConsentBtn, runAllBtn, runNonScrnBtn, addExistingSubjectBtn, bplBtn, runBarcodeBtn, runFormOORBtn, runFormOORABtn, runFormIRBtn, parseMethodBtn, searchMethodsBtn, archiveUpdateFormsBtn, copyFormsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn, runLockSamplePathsBtn, importEligBtn, findFormBtn, pullLabBarcodeBtn, findStudyEventsBtn, clearMappingBtn, collectAllBtn];
+            var allPanelBtns = [runPlansBtn, runStudyBtn, runAddCohortBtn, runConsentBtn, runAllBtn, runNonScrnBtn, addExistingSubjectBtn, bplBtn, runBarcodeBtn, runFormBtn, parseMethodBtn, searchMethodsBtn, archiveUpdateFormsBtn, copyFormsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn, runLockSamplePathsBtn, importEligBtn, findFormBtn, pullLabBarcodeBtn, findStudyEventsBtn, clearMappingBtn, collectAllBtn];
             for (var gi = 0; gi < allPanelBtns.length; gi++) {
                 var gb = allPanelBtns[gi];
                 gb.className = "ie-btn-primary";
@@ -30209,9 +30458,7 @@
             { el: searchMethodsBtn, label: "Search Methods" },
             // { el: saBuilderBtn, label: "Scheduled Activities Builder" },
             { el: bplBtn, label: "PLAP Builder" },
-            { el: runFormOORBtn, label: "Run Form (OOR) Below Range" },
-            { el: runFormOORABtn, label: "Run Form (OOR) Above Range" },
-            { el: runFormIRBtn, label: "Run Form (IR) In Range" },
+            { el: runFormBtn, label: "Populate Form" },
             { el: collectAllBtn, label: "Collect All" },
             { el: importEligBtn, label: "Import I/E" },
             { el: clearMappingBtn, label: "Clear Mapping" },
@@ -30927,22 +31174,15 @@
             log("Run Barcode: button clicked");
             await APS_RunBarcode();
         });
-        runFormOORBtn.addEventListener("click", function () {
+        runFormBtn.addEventListener("click", async function () {
+            var selectedMode = await showRunFormOptionPanel();
+            if (!selectedMode) {
+                log("Run Form: cancelled by user");
+                return;
+            }
             RUN_FORM_V2_START_TS = Date.now();
-            log("Run Form (OOR) A clicked");
-            setFormValueMode("oorA");
-            runFormAutomationV2();
-        });
-        runFormOORABtn.addEventListener("click", function () {
-            RUN_FORM_V2_START_TS = Date.now();
-            log("Run Form (OOR) B clicked");
-            setFormValueMode("oorB");
-            runFormAutomationV2();
-        });
-        runFormIRBtn.addEventListener("click", function () {
-            RUN_FORM_V2_START_TS = Date.now();
-            log("Run Form (IR) clicked");
-            setFormValueMode("ir");
+            log("Run Form: mode=" + selectedMode);
+            setFormValueMode(selectedMode);
             runFormAutomationV2();
         });
         collectAllBtn.addEventListener("click", function () {
