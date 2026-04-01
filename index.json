@@ -523,5 +523,12 @@
     "tags": ["Average", "PR", "QRS", "QT", "QTCF", "HR"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20PR,%20QRS,%20QT,%20QTCF,%20HR%20%28REPEAT%20+%20NONREPEAT%29.md",
     "updated": "2026-03-27"
+  },
+  {
+    "id": "M-074",
+    "title": "Edit Check Range check for ALL (HR, SYS, DIA, PR, RR, QtcF, QTC, QRS, QT)",
+    "tags": ["Edit", "Check"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Range%20check%20for%20ALL%20%28HR,%20SYS,%20DIA,%20PR,%20RR,%20QtcF,%20QTC,%20QRS,%20QT%29.md",
+    "updated": "2026-03-27"
   }
 ]
