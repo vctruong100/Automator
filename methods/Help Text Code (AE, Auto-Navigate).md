@@ -22,6 +22,11 @@ Button Redirect to Image Page (use direct link):
   }
 </style>
  
+Direct image on Form (use direct link):
+<img 
+  src="https://i.ibb.co/B210NMmj/image-4.png" 
+  style="max-width: 500px; width: 100%; height: auto;"
+>
 
 Auto-navigate to AEs:
 Copy and paste the code below:

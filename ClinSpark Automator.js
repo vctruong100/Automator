@@ -2312,6 +2312,28 @@
                 autoBanner.style.cssText = "padding:6px 8px;background:#3a3500;border:1px solid #665500;border-radius:4px;margin-bottom:8px;font-size:11px;color:#d4a017;";
                 autoBanner.textContent = "\u{1F4CC} Auto-populated from SA table (read-only)";
                 timeBody.appendChild(autoBanner);
+                if (data.timepointDisplay || data.exampleTime) {
+                    var infoBlock = document.createElement("div");
+                    infoBlock.style.cssText = "padding:4px 8px;background:#2a2a1a;border:1px solid #444;border-radius:4px;margin-bottom:8px;font-size:11px;color:#ccc;";
+                    if (data.timepointDisplay) {
+                        var tpLine = document.createElement("div");
+                        tpLine.textContent = "Timepoint: " + data.timepointDisplay;
+                        tpLine.style.cssText = "margin-bottom:2px;";
+                        infoBlock.appendChild(tpLine);
+                    }
+                    if (data.exampleTime && data.exampleTime !== "N/A") {
+                        var etLine = document.createElement("div");
+                        etLine.textContent = "Example Time: " + data.exampleTime;
+                        etLine.style.cssText = "margin-bottom:2px;";
+                        infoBlock.appendChild(etLine);
+                    }
+                    if (data.segmentRefDateTime && data.segmentRefDateTime !== "N/A") {
+                        var srLine = document.createElement("div");
+                        srLine.textContent = "Segment Ref: " + data.segmentRefDateTime;
+                        infoBlock.appendChild(srLine);
+                    }
+                    timeBody.appendChild(infoBlock);
+                }
             }
             timeBody.appendChild(createBPLCheckbox("Hidden?", "bplHidden", data.hidden));
             timeBody.appendChild(createBPLCheckbox("Mandatory", "bplMandatory", data.mandatory));
@@ -2352,9 +2374,16 @@
                 var allInputs = timeBody.querySelectorAll("input");
                 for (var ai = 0; ai < allInputs.length; ai++) {
                     var inp = allInputs[ai];
-                    inp.tabIndex = -1;
-                    inp.style.pointerEvents = "none";
+                    if (inp.type === "checkbox") {
+                        inp.disabled = true;
+                        inp.style.pointerEvents = "none";
+                        inp.style.opacity = "0.8";
+                    } else {
+                        inp.readOnly = true;
+                        inp.style.pointerEvents = "none";
+                    }
                     inp.style.cursor = "default";
+                    inp.tabIndex = -1;
                 }
             }
             var refActivityEl = document.getElementById("bplRefActivity");
@@ -2934,10 +2963,9 @@
                             tpStr2 = bplFormatTimePoint(fData2.days || 0, fData2.hours || 0, fData2.minutes || 0, fData2.seconds || 0, fData2.preReference || false);
                         }
                         var etStr2 = fData2.exampleTime || "N/A";
-                        var segIndexLabel = " (" + (si2 + 1) + ")";
                         var timeRefLabel = document.createElement("span");
-                        timeRefLabel.textContent = tpStr2 + segIndexLabel + "   |   " + etStr2;
-                        timeRefLabel.style.cssText = "font-size:10px;color:#888;white-space:pre;flex-shrink:0;min-width:0;overflow:hidden;text-overflow:ellipsis;max-width:220px;";                        timeRefLabel.title = tpStr2 + segIndexLabel + "  |  " + etStr2;
+                        timeRefLabel.textContent = tpStr2 + "   |   " + etStr2;
+                        timeRefLabel.style.cssText = "font-size:10px;color:#888;white-space:pre;flex-shrink:0;min-width:0;overflow:hidden;text-overflow:ellipsis;max-width:220px;";                        timeRefLabel.title = tpStr2 + "  |  " + etStr2;
                         var iconsStr = bplBuildStatusIcons(fData2);
                         var iconsLabel = document.createElement("span");
                         iconsLabel.textContent = iconsStr;

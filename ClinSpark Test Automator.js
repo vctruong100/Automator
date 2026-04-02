@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.8.5
+// @version 3.8.6
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -20968,6 +20968,7 @@
             return null;
         }
         if (mode === "lowOor" || mode === "oorA") {
+        if (mode === "lowOor" || mode === "oorA") {
             if (spec.kind === "between") {
                 var loA1 = Math.floor(spec.min) - 1;
                 if (loA1 >= 0) {
@@ -21004,6 +21005,16 @@
                 return 0;
             }
             return null;
+        }
+        if (mode === "lowNorm") {
+            if (spec.kind === "between") {
+                return Math.floor(spec.min);
+            }
+            if (spec.kind === "ge") {
+                return Math.floor(spec.t);
+            }
+            if (spec.kind === "gt") {
+                return Math.floor(spec.t) + 1;
         }
         if (mode === "lowNorm") {
             if (spec.kind === "between") {
@@ -21052,6 +21063,10 @@
         if (mode === "highOor" || mode === "oorB") {
             if (spec.kind === "between") {
                 return Math.floor(spec.max) + 1;
+        }
+        if (mode === "highOor" || mode === "oorB") {
+            if (spec.kind === "between") {
+                return Math.floor(spec.max) + 1;
             }
             if (spec.kind === "le") {
                 return Math.floor(spec.t) + 1;
@@ -21078,6 +21093,11 @@
             }
             if (spec.kind === "ge") {
                 return randomIntInInclusiveRange(Math.floor(spec.t), Math.floor(spec.t) + 100);
+                }
+                return randomIntInInclusiveRange(rLo, rHi);
+            }
+            if (spec.kind === "ge") {
+                return randomIntInInclusiveRange(Math.floor(spec.t), Math.floor(spec.t) + 100);
             }
             if (spec.kind === "gt") {
                 return randomIntInInclusiveRange(Math.floor(spec.t) + 1, Math.floor(spec.t) + 100);
@@ -21093,9 +21113,14 @@
                 var rLt = Math.floor(spec.t) - 1;
                 if (rLt >= 0) {
                     return randomIntInInclusiveRange(0, rLt);
+            if (spec.kind === "lt") {
+                var rLt = Math.floor(spec.t) - 1;
+                if (rLt >= 0) {
+                    return randomIntInInclusiveRange(0, rLt);
                 }
                 return 0;
             }
+            return null;
             return null;
         }
         if (mode === "oor") {
@@ -21173,6 +21198,8 @@
             var out2 = p <= 0 ? Math.round(pick) : parseFloat(pick.toFixed(p));
             return out2;
         }
+        var iv = pickIntegerForSpec(spec, mode);
+        if (iv === null || iv === undefined) {
         var iv = pickIntegerForSpec(spec, mode);
         if (iv === null || iv === undefined) {
             return null;
