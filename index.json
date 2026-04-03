@@ -530,5 +530,12 @@
     "tags": ["Edit", "Check"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Range%20check%20for%20ALL%20%28HR,%20SYS,%20DIA,%20PR,%20RR,%20QtcF,%20QTC,%20QRS,%20QT%29.md",
     "updated": "2026-04-01"
+  },
+  {
+    "id": "M-075",
+    "title": "Edit Check Kit Accession Number Format",
+    "tags": ["Edit", "Check"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Kit%20Accession%20Number%20Format.md",
+    "updated": "2026-04-03"
   }
 ]
