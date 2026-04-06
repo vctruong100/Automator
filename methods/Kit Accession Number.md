@@ -1,74 +1,69 @@
-const formName = [
+const formNames = [
     "(*)🩸D1, D2, D3, D4, D7, D10, D14_Predose_Safety Labs + PD/PK - 6 TUBES", 
     "(*)🩸Sched B_Visit 2 W1, D0_Safeties + PK/ADA/Biomarkers_PREDOSE - 8 TUBES", 
     "(*)🩸D15 24h_Safety Labs + PD/PK - 6 TUBES",
+    "(*)🩸D1, D2, D3, D4, D7, D10, D14_Predose_Safety Labs + PD/PK - 6 TUBES V2",
+    "(*)🩸D15 24h_Safety Labs + PD/PK - 6 TUBES V2",
+    "(*)LAB_🩸Part 2_D1 PREDOSE, D3,  D4, D18 PREDOSE _Safeties + PK - 3 TUBES",
+    "(*) LAB_🩸Part 2_D5 PREDOSE, D6 PREDOSE, D7, D8, D11, D14, D19 24h - 6 TUBES",
 ];
+
+const d1FormNames = [
+    "(*)🩸D1, D2, D3, D4, D7, D10, D14_Predose_Safety Labs + PD/PK - 6 TUBES", 
+    "(*)🩸D1, D2, D3, D4, D7, D10, D14_Predose_Safety Labs + PD/PK - 6 TUBES V2",
+]
 const itemName = ["Process No.", "Kit Accession Number"];
 const currentStudyEvent = formJson.form.studyEventName;
+
 var form = null;
 logger("Study event: " + currentStudyEvent);
 
 const D1events = [
-  "D1 (PRE)",
-  "D1 (OHR)",
-  "D1 (0.5hr) ±5",
-  "D1 (1hr) ±5",
-  "D1 (1.5hr) ±1.5",
-  "D1 (2hr) ±30",
-  "D1 (3hr) ±30",
-  "D1 (4hr) ±30",
-  "D1 (6hr) ±30",
-  "D1 (8hr) ±30",
-  "D1 (12hr) ±1h"
+    "Day 1 P2 (0.5hr)",
+    "D1 (PRE)",
+];
+const D5events = [
+    "D5 (PRE) -1h",
+]
+const D14events = [
+    "D14 (PRE) -1h",
 ];
 
-const D2events = [
-  "D14 (PRE) -1h",
-  "D14 (0.5hr) ±5",
-  "D14(1hr) ±5",
-  "D14 (1.5hr) ±5",
-  "D14 (2hr) ±30",
-  "D14 (3hr) ±30",
-  "D14 (4hr) ±30",
-  "D14 (6hr) ±30",
-  "D14 (8hr) ±30",
-  "D14(12hr) ±1h",
-  "D14(18 hr) ±1h"
+const D15events = [
+    "D15 (24hr)"
 ];
-
-const D3events = [
-    "D15 (24hr) ±1h", "D15 (36hr) ±1h"
-];
-
-if (D1events.indexOf(currentStudyEvent) !== -1) {
-    logger("D1");
-    form = pullForm(D1events, formName)
+const D18events = [
+    "Day 18 (PRE)"
+]
+if (containsValue(currentStudyEvent, "day 18")) {
+    logger('P5 D18');
+    form = pullForm(D18events, formNames);
 }
-else if (D2events.indexOf(currentStudyEvent) !== -1) {
-    logger("D2")
-    form = pullForm(D2events, formName)
+else if (containsValue(currentStudyEvent, "day 5")) {
+    logger("P2 D5");
+    form = pullForm(D5events, formNames);
 }
-else if (D3events.indexOf(currentStudyEvent) !== -1) {
-    logger("D3")
-    form = pullForm(D3events, formName);
+else if (containsValue(currentStudyEvent, "d15")) {
+    form = pullForm(D15events, formNames);
+}
+else if (containsValue(currentStudyEvent, "d14")) {
+    form = pullForm(D14events, formNames);
+}
+else if (containsValue(currentStudyEvent, "day 1")) {
+    form = pullForm(D1events, formNames);
+}
+else if (containsValue(currentStudyEvent, "d1")) {
+    form = pullForm(D1events, d1FormNames);
 }
 
 if (!form) return null;
 var result = pullItemFromForm(form, itemName);
 
-log()
-
 return result;
-
-function log() {
-    logger("Day " + D1events[0] + ": " + D1events.indexOf(currentStudyEvent) !== -1);
-    logger("Day " + D2events[0] + ": " + D2events.indexOf(currentStudyEvent) !== -1);
-    logger("Day " + D3events[0] + ": " + D3events.indexOf(currentStudyEvent) !== -1);
-}
 
 function pullForm(studyeventList, formNameList) {
     for (var i = 0; i < studyeventList.length; i++) {
-        for (var j = 0; j < formNameList.length; j++) {
+        for (var j = formNameList.length - 1; j >= 0; j--) {
             var temp = checkForm(studyeventList[i], formNameList[j]);
             if (temp) return temp;
         }
@@ -95,7 +90,7 @@ function checkForm(studyevent, form) {
     var arrayForms = findFormData(studyevent, form);
     var completedForm = collectCompleted(arrayForms, true);
     if (!completedForm || completedForm.length === 0) return null;
-    return completedForm[completedForm.length - 1];
+    return completedForm[0];
 }
 
 function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
@@ -111,4 +106,13 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
         }
     }
     return keepers;
+}
+
+function containsValue(input, keyword) {
+    if (input == null) {
+        return false;
+    }
+
+    var value = input.toString().toLowerCase();
+    return value.indexOf(keyword) !== -1;
 }
