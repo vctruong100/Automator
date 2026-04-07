@@ -87,6 +87,14 @@
     var STORAGE_LOCK_ACTIVITY_PLANS_POPUP = "activityPlanState.lockActivityPlans.popup";
     var LOCK_ACTIVITY_PLANS_POPUP_REF = null;
 
+    var STORAGE_EPOCH_QUEUE = "activityPlanState.epochQueue";      
+    var STORAGE_EPOCH_INDEX = "activityPlanState.epochQueueIndex";  
+    var STORAGE_SUBJECT_NUMBER = "activityPlanState.subjectNumber";     
+    var STORAGE_EPOCH_COMPLETED_MAP = "activityPlanState.epochCompletedMap"; 
+    var STORAGE_EPOCH_SOURCE_FLAGS = "activityPlanState.epochSourceFlags";  
+    var STORAGE_LINKED_SOURCE_COUNTER = "activityPlanState.linkedSourceCounter"; 
+    var STORAGE_PRIMARY_LINKED_SUBJECT_NUMBER = "activityPlanState.primaryLinkedSubjectNumber"; 
+
     const STORAGE_PANEL_HIDDEN = "activityPlanState.panel.hidden";
     const STORAGE_PANEL_HOTKEY = "activityPlanState.panel.hotkey";
     const PANEL_TOGGLE_KEY = "F2";
@@ -366,6 +374,134 @@
     var PULL_LAB_BARCODE_RIGHT_LIST_EL = null;
     var PULL_LAB_BARCODE_SUMMARY_EL = null;
     var PULL_LAB_BARCODE_STATUS_MAP = {};
+
+    //==========================
+    // RUN ALL FUNCTIONS
+    //==========================
+    // This section contains all helper functions for Run All feature.
+    //=========================
+
+    function getEpochQueue() {
+        var raw = null;
+        try {
+            raw = localStorage.getItem(STORAGE_EPOCH_QUEUE);
+        } catch(e) {}
+        if (!raw) return {};
+        try {
+            return JSON.parse(raw);
+        } catch(e) {
+            return [];
+        }
+    }
+
+    function setEpochQueue(arr) {
+        try {
+            localStorage.setItem(STORAGE_EPOCH_QUEUE, JSON.stringify(arr));
+        } catch (e) {}
+    }
+
+    function getEpochIndex() {
+        var raw = null;
+        try {
+            raw = localStorage.getItem(STORAGE_EPOCH_INDEX);
+        } catch (e) {}
+        if (!raw) return 0;
+        return parseInt(raw, 10) || 0;
+    }
+
+    function setEpochIndex(n) {
+        try {
+            localStorage.setItem(STORAGE_EPOCH_INDEX, String(n));
+        } catch (e) {}
+    }
+
+    function getEpochCompletedMap() {
+        var raw = null;
+        try {
+            raw = localStorage.getItem(STORAGE_EPOCH_COMPLETED_MAP);
+        }
+        catch (e) {}
+    }
+
+    function markEpochCompleted(href) {
+        var map = getEpochCompletedMap();
+        map[href] = true;
+        try {
+            localStorage.setItem(STORAGE_EPOCH_COMPLETED_MAP, JSON.stringify(map));
+        } catch (e) {}
+    }
+
+    function isEpochCompleted(href) {
+        return !!getEpochCompletedMap()[href];
+    }
+
+    function getEpochSourceFlags() {
+        var raw = null;
+        try {
+            raw = localStorage.getItem(STORAGE_EPOCH_SOURCE_FLAGS);
+        } catch (e) {}
+        if (!raw) return {};
+        try {
+            return JSON.parse(raw);
+        } catch (e) { return {}; }
+    }
+
+    function setEpochSourceFlagsForIndex(idx, flags) {
+        var all = getEpochSourceFlags();
+        all[String(idx)] = flags;
+        try {
+            localStorage.setItem(STORAGE_EPOCH_SOURCE_FLAGS, JSON.stringify(all));
+        } catch (e) {}
+    }
+
+    function getLinkedSourceCounter() {
+        var raw = null;
+        try {
+            raw = localStorage.getItem(STORAGE_LINKED_SOURCE_COUNTER);
+        } catch (e) {}
+        if (!raw) return 0;
+        return parseInt(raw, 10) || 0;
+    }
+
+    function getStoredSubjectNumber() {
+        var raw = null;
+        try {
+            raw = localStorage.getItem(STORAGE_SUBJECT_NUMBER);
+        } catch (e) {}
+    }
+
+    function setStoredSubjectNumber() {
+        try {
+            localStorage.setItem(STORAGE_SUBJECT_NUMBER, String(val));
+        } catch (e) {}
+    }
+
+    function getPrimaryLinkedSubjectNumber() {
+        var raw = null;
+        try {
+            raw = localStorage.getItem(STORAGE_PRIMARY_LINKED_SUBJECT_NUMBER);
+        } catch (e) {}
+        return raw || "";
+    }
+
+    function setPrimaryLinkedSubjectNumber(val) {
+        try {
+           localStorage.setItem(STORAGE_PRIMARY_LINKED_SUBJECT_NUMBER, String(val));
+        } catch (e) {}
+    }
+
+    function clearEpochQueueState() {
+        try {
+            localStorage.removeItem(STORAGE_EPOCH_QUEUE);
+            localStorage.removeItem(STORAGE_EPOCH_INDEX);
+            localStorage.removeItem(STORAGE_SUBJECT_NUMBER);
+            localStorage.removeItem(STORAGE_EPOCH_COMPLETED_MAP);
+            localStorage.removeItem(STORAGE_EPOCH_SOURCE_FLAGS);
+            localStorage.removeItem(STORAGE_LINKED_SOURCE_COUNTER);
+            localStorage.removeItem(STORAGE_PRIMARY_LINKED_SUBJECT_NUMBER);
+        } catch (e) {}
+        log("Cleared all epoch queue state");
+    }
 
     //==========================
     // PULL LAB BARCODE FEATURE
