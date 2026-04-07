@@ -1,6 +1,4 @@
-const studyEvent = formJson.form.studyEventName;
-const item = itemJson.item;
-
+// Add item names
 const studyEventNames = [
     "Day 1 (pre)",
     "DAY 1 (Pre)",
@@ -31,6 +29,11 @@ const range = {
     "V5 (D175 to D189)": 7,
     "V6 (Within 4 weeks)": 28
 };
+
+
+// ======== Don't modify ========
+const studyEvent = formJson.form.studyEventName;
+const item = itemJson.item;
 
 var form = pullForm(formNames, studyEventNames);
 var day1Date = pullItemFromForm(form, startDateItem);

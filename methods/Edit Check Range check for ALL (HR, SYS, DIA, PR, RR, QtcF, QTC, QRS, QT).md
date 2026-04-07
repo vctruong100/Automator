@@ -1,3 +1,5 @@
+
+// Add item names
 const SYS = [
     "SYS (P: 90-140)", "SYS_3", "SYS_1", "SYS_2"
 ];
@@ -40,6 +42,7 @@ const QtRange = [400, 500];
 const errorMsg = "OOR, Repeat"; // Custom Error Message
 const RepeatErrorMsg = "OOR, SF"; // Custom Repeat Error Message
 
+// ======== Don't modify ========
 const item = itemJson.item;
 const isMale = formJson.form.subject.volunteer.sexMale;
 const groupName = getItemGroupName(formJson);

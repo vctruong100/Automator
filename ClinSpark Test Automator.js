@@ -22814,8 +22814,8 @@
     }
 
     // Orchestrate cohort add + activation flow and continue to consent if in ALL mode.
-    async function processCohortShowPage() {
-        log("processCohortShowPage start");
+    async function processCohortShowPageScreening() {
+        log("processCohortShowPageScreening start");
         var auto = getQueryParam("autocohort");
         var mode = getRunMode();
         var go = (mode === "epoch" || mode === "all") || (auto === "1" && mode && mode.length > 0);
@@ -31543,7 +31543,7 @@
             } else if (amode === "epochAddCohort" || autoAdd === "1") {
                 processCohortShowPageAddCohort();
             } else {
-                processCohortShowPage();
+                processCohortShowPageScreening();
             }
             return;
         }

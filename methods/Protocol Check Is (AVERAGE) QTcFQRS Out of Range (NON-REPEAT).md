@@ -1,3 +1,4 @@
+// Add Item names
 const QTcFitems = [
     '- QTcF (≤ 450 msec "Males") (≤ 470 msec "Females")', 
     "QTcF", 
@@ -13,16 +14,18 @@ const QRSitems = [
     "QRS_Protocol"
 ];
 
+// Replace codelist values
 const attachedItemCodeList = [
     "⭕Pending Results",
     "✅ Within Protocol Range",
     "🛑 Out of protocol range, SF"
 ]
 
-// Inclusive
+// Inclusive (Edit)
 var QTcF_max_range = 450;
 var QRS_max_range = 120;
 
+// ======== Don't modify ========
 var QTcFmaxCount = 3; 
 var QTcFlist = [];
 var QTcFavg = 0;

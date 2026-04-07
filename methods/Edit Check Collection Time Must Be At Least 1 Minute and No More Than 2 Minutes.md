@@ -1,7 +1,9 @@
+// Add Item Names
 const timeItem = [
     "Time Collected (#1)"
 ]
 
+// ======== Don't modify ========
 const minimum = 1;
 const maximum = 2;
 

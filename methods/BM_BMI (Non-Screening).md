@@ -1,6 +1,4 @@
-const currentStudyEvent = formJson.form.studyEventName;
-const item = itemJson.item;
-const sigfig = itemJson.item.significantDigits;
+// Add item names
 
 const heightitemList = [
     "VS_HEIGHT",
@@ -25,6 +23,12 @@ const screeningBMI_Form = [
     "📏 SCREEN BODY MEASUREMENTS (HEIGHT / WEIGHT / BMI)",
     "📏 BM_BODY MEASUREMENTS (HEIGHT / WEIGHT / BMI)"
 ];
+
+// ======== Don't modify ========
+
+const currentStudyEvent = formJson.form.studyEventName;
+const item = itemJson.item;
+const sigfig = itemJson.item.significantDigits;
 
 var weight = 0;
 var height = 0;

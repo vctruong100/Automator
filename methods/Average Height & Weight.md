@@ -1,3 +1,5 @@
+
+// Add item names
 const heightItemList = [
     "BMI_HEIGHT #1", 
     "BMI_HEIGHT #2"
@@ -16,6 +18,7 @@ const weightAttachedItem = [
     "Average Weight"
 ];
 
+// ======== Don't modify ========
 const item = itemJson.item;
 const sigfig = item.significantDigits;
 var maxCount = 0;

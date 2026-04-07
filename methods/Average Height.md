@@ -1,14 +1,16 @@
+// Add item names
 const itemList = [
     "BMI_HEIGHT #1", 
     "BMI_HEIGHT #2"
 ];
 
+// ======== Don't modify ========
 const sigfig = itemJson.item.significantDigits;
 var maxCount = 0; 
 var list = [];
 var avg = 0;
 
-list = populateList(formJson, itemList, list);
+list = populateList(formJson, itemList);
 
 avg = calculateAverage(list, sigfig);
 logger("List: " + list);

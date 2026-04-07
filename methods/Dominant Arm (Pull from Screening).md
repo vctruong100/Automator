@@ -1,3 +1,4 @@
+// Add Item Names
 const itemList = [
     "Hip Circumference #1", 
     "Hip Circumference #2"
@@ -6,6 +7,7 @@ const attachedItem = [
     "Average Hip Circumference"
 ];
 
+// ======== Don't modify ========
 const sigfig = itemJson.item.significantDigits;
 var maxCount = 0; 
 var list = [];

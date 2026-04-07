@@ -1,8 +1,10 @@
+// Add item names
 const itemList = [
     "BMI_WEIGHT #1", 
     "BMI_WEIGHT #2"
 ];
 
+// ======== Don't modify ========
 const sigfig = itemJson.item.significantDigits;
 var maxCount = 0; 
 var list = [];

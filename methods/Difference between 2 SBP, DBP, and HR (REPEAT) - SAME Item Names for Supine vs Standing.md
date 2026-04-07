@@ -1,4 +1,5 @@
 /* jshint strict: false */ 
+// Add item names
 const itemJsn = itemJson.item;
 const currentItemName = itemJsn.name;
 
@@ -19,6 +20,7 @@ const SBPdifferenceItem = ["Difference in SBP"];
 const DBPdifferenceItem = ["Difference in DBP"];
 const HRdifferenceItem = ["Difference in HR"];
 
+// ======== Don't modify ========
 var supineSBP = pullItemFromForm(formJson, SBPitem, "supine");
 var supineDBP = pullItemFromForm(formJson, DBPitem, "supine");
 var supineHR = pullItemFromForm(formJson, HRitem, "supine");

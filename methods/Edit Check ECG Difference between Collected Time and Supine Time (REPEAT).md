@@ -1,5 +1,4 @@
-const item = itemJson.item;
-const form = formJson.form;
+// Add item names
 const confirmationItem = [
     "Scn_remained_Semi_recumbent_ECG",
     "REMAIN_IN_SUPINE_START #1",
@@ -20,6 +19,9 @@ const supinetimeStart = [
 
 const difference = 5;
 
+// ======== Don't modify ========
+const item = itemJson.item;
+const form = formJson.form;
 const confirmation = pullItemFromForm(formJson, confirmationItem);
 
 var supineTime = null;

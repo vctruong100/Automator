@@ -1,3 +1,4 @@
+// Add item names
 const dbpItems = [
     "Diastolic BP", 
     "SCRN_Diastolic BP",
@@ -38,6 +39,8 @@ const hrItem = [
 const hrAttachedItem = [
     "🧮 HR AVERAGE:"
 ]
+
+// ======== Don't modify ========
 var item = itemJson.item;
 const sigfig = itemJson.item.significantDigits;
 var maxCount = 0; 

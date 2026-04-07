@@ -1,7 +1,5 @@
 /* jshint strict: false */ 
-const itemJsn = itemJson.item;
-const currentItemName = itemJsn.name;
-
+// Add item names here
 const SBPitem = [
     "Systolic BP (SCR Protocol Range)", 
     "Systolic BP (Protocol Range)"
@@ -18,6 +16,11 @@ const HRitem = [
 const SBPdifferenceItem = ["Difference in SBP"];
 const DBPdifferenceItem = ["Difference in DBP"];
 const HRdifferenceItem = ["Difference in HR"];
+
+// ======== Don't modify ========
+
+const itemJsn = itemJson.item;
+const currentItemName = itemJsn.name;
 
 var supineSBP = pullItemFromForm(formJson, SBPitem, "supine");
 var supineDBP = pullItemFromForm(formJson, DBPitem, "supine");

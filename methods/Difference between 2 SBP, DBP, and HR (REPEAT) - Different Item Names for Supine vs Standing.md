@@ -1,3 +1,5 @@
+// Add item names
+
 const sysItem = [
     "SYS (I: 90-145) repeat", 
     "SYS (I: 90-150) repeat",
@@ -42,10 +44,12 @@ const hrAttachedItem = [
     "Repeat_ortho hr check",
 ]
 
-const sysRange = 20;
-const diaRange = 10;
-const hrRange = 30;
+// Inclusive (Editable)
+const sysDifferenceRange = 20;
+const diaDifferenceRange = 10;
+const hrDifferenceRange = 30;
 
+// ======== Don't modify ========
 var sysSemi = null;
 var sysStanding = null;
 
@@ -61,15 +65,15 @@ logger("Attached item: " + item.name);
 if (sysAttachedItem.indexOf(item.name) !== -1) {
     sysSemi = pullLastItemFromForm(formJson, sysItem);
     sysStanding = pullLastItemFromForm(formJson, sysStandingItem);
-    return checkDifference(sysRange, sysSemi, sysStanding);
+    return checkDifference(sysDifferenceRange, sysSemi, sysStanding);
 } else if (diaAttachedItem.indexOf(item.name) !== -1) {
     diaSemi = pullLastItemFromForm(formJson, diaItem);
     diaStanding = pullLastItemFromForm(formJson, diaStandingItem);
-    return checkDifference(diaRange, diaSemi, diaStanding);
+    return checkDifference(diaDifferenceRange, diaSemi, diaStanding);
 } else if (hrAttachedItem.indexOf(item.name) !== -1) {
     hrSemi = pullLastItemFromForm(formJson, hrItem);
     hrStanding = pullLastItemFromForm(formJson, hrStandingItem);
-    return checkDifference(hrRange, hrSemi, hrStanding);
+    return checkDifference(hrDifferenceRange, hrSemi, hrStanding);
 }
 
 return null;

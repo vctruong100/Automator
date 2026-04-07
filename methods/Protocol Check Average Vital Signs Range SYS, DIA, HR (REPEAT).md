@@ -1,3 +1,4 @@
+// Add item names
 const dbpItems = [
     "Diastolic BP", 
     "SCRN_Diastolic BP",
@@ -42,6 +43,7 @@ const hrAttachedItem = [
     "🧮 HR AVERAGE:.",
 ]
 
+// Replace codelist
 const attachedItemCodeList = [
     "⭕Pending Results",
     "✅ Within Protocol Range",
@@ -52,7 +54,7 @@ const attachedItemCodeList = [
     "No",
 ]
 
-// Inclusive
+// Inclusive (Edit)
 var sys_min_range = 90;
 var sys_max_range = 169;
 
@@ -62,8 +64,9 @@ var dia_max_range = 99;
 var hr_min_range = 50;
 var hr_max_range = 100;
 
-var maxCount = 3;
+var maxCount = 3; // how many items per type to check for average calculation
 
+// ======== Don't modify ========
 var item = itemJson.item;
 const sigfig = itemJson.item.significantDigits;
 var pending = false;

@@ -1,7 +1,12 @@
+
+// Add item names
 const pcvoidItem = [
     "PCVOID",
     "PCVOID w/edit check",
 ]
+
+
+// ======== Don't modify ========
 const item = itemJson.item;
 const difference = 60;
 var groupid = null;

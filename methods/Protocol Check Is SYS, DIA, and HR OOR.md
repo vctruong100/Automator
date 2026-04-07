@@ -1,46 +1,39 @@
-// Add item names (for different naming conventions)
+// Add item names 
 const sysItems = [
+    "Systolic BP (P: 90 - 140 mmHg)",
     "SYS (2 of 3)",
     "Repeat SYS (2 of 3)",
     "Repeat SYS",
 ];
 
 const diaItems = [
+    "Diastolic BP (P: 50 - 90 mmHg)",
     "DIA (2 of 3)",
     "Repeat DIA (2 of 3)",
     "Repeat DIA",
 ];
 
 const hrItems = [
+    "Heart Rate (P: 40 - 100 bpm)",
     "HR (2 of 3)",
     "Repeat HR (2 of 3)",
     "HR (60 - 100 bpm)",
     "Repeat HR",
 ]
 
-const tempItems = [
-    "Repeat Temp:",
-]
+const item = itemJson.item;
+const nocodeList = item.codeListItems[0].codedValue;
+const yesSFcodeList = item.codeListItems[1].codedValue;
 
-const attachedItemCodeList = [
-    "⭕Pending Results",
-    "✅ Within Protocol Range",
-    "🛑 Out of protocol range, SF",
-    "❗Out of Normal Range",
-    "✅ Within Normal Range"
-]
-// Inclusive (Edit)
+// Inclusive
 var sys_min_range = 90;
 var sys_max_range = 140;
 
-var dia_min_range = 50
+var dia_min_range = 50;
 var dia_max_range = 90;
 
-var hr_min_range = 60;
+var hr_min_range = 40;
 var hr_max_range = 100;
-
-// ======== Don't modify ========
-var item = itemJson.item;
 
 var isRepeat = isItemInRepeat(formJson);
 
@@ -55,9 +48,8 @@ else {
     var hr = pullItemFromFirst(formJson, hrItems);
 }
 
-log();
 
-if (!sys || sys === null || !dia || dia == null || !hr || hr == null) return attachedItemCodeList[0]
+if (!sys || sys === null || !dia || dia == null || !hr || hr == null) return null;
 // OOR
 if (
     sys > sys_max_range ||
@@ -66,7 +58,7 @@ if (
     dia < dia_min_range ||
     hr > hr_max_range ||
     hr < hr_min_range
-) return attachedItemCodeList[3]; // Out of Protocol Range
+) return yesSFcodeList; // Out of Protocol Range
 else if ( // IR
     sys <= sys_max_range &&
     sys >= sys_min_range && 
@@ -74,9 +66,9 @@ else if ( // IR
     dia >= dia_min_range &&
     hr <= hr_max_range &&
     hr >= hr_min_range
-) return attachedItemCodeList[4]; // Within Normal Range
+) return nocodeList; // Within Normal Range
 
-return attachedItemCodeList[0];
+return null;
 
 function log() {
     logger("sys: " + sys);

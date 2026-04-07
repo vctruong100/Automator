@@ -1,3 +1,4 @@
+// Add item names
 const baselineForms = [
     "ECG_Predose_Triplicate ECG (baseline) (SPONSOR PROVIDED MACHINE)"
 ];
@@ -13,9 +14,13 @@ const qtcfItems = [
     "QTcF #2", 
     "QTcF #3"
 ];
-const item = itemJson.item;
+
+// Inclusive (Editable)
 const protocol_avg_qtcf_range = 500;
 const protocol_difference = 60;
+
+// ======== Don't modify ========
+const item = itemJson.item;
 
 var maxCount = 3; // max number of qtcf items
 var qtcfOOR = false;

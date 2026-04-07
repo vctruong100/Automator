@@ -1,6 +1,4 @@
-const item = itemJson.item;
-const form = formJson.form;
-const studyevent = formJson.form.studyEventName;
+// Add item names
 var ecgFormNames = [
   "⚡DAY-1 ECG SINGLE 12 LEAD V1",
   "⚡ECG SINGLE 12 LEAD"
@@ -29,6 +27,10 @@ const supinetimeStart = [
 
 const difference = 5;
 
+// ======== Don't modify ========
+const item = itemJson.item; 
+const form = formJson.form;
+const studyevent = formJson.form.studyEventName;
 const confirmation = pullItemFromForm(formJson, confirmationItem);
 
 var supineTime = null;

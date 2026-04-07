@@ -1,9 +1,11 @@
+// Add Item Names
 const startTimeItem = [
     "CSSRS_COLLECTION_DATETIME"
 ]
 
-const difference = 5;
+const difference = 5; // in minutes
 
+// ======== Don't modify ========
 var startTime = pullItemFromForm(formJson, startTimeItem);
 var endTime = itemJson.item;
 

@@ -1,3 +1,4 @@
+// ======== Add item names ========
 const baselineStudyEvent = [
     "Visit 2 Week 1 Day 0",
 ];
@@ -8,6 +9,8 @@ const baselineFormName = [
 const baselineItem = [
     "Baseline QTcF"
 ];
+
+// ======== Don't modify ========
 const sigfig = itemJson.item.significantDigits;
 
 var form = pullForm(baselineStudyEvent, baselineFormName);

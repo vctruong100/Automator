@@ -1,9 +1,9 @@
 /* jshint strict: false */
-var form = formJson.form;
-var item = itemJson.item;
+
 
 const RepeatGroupName = ["Average Calculation_Repeat", "Average Calculation_Repeat_V2"];
 
+// Add item names
 // items to pull for calculation
 const PRitem = ["PR", "PR V4"];
 const QRSitem = ["QRS", "QRS V4"];
@@ -17,6 +17,10 @@ const QRSattach = ["avg_QRS"];
 const QTcFattach = ["avg_QTcf"];
 const QTattach = ["Avg_QT"];
 const HRattach = ["HR", "Avg_HR"];
+
+// ======== Don't modify ========
+var form = formJson.form;
+var item = itemJson.item;
 
 var PRlist = [];
 var QRSlist = [];

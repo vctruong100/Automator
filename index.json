@@ -537,5 +537,19 @@
     "tags": ["Edit", "Check"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Kit%20Accession%20Number%20Format.md",
     "updated": "2026-04-03"
+  },
+  {
+    "id": "M-076",
+    "title": "Protocol Check If QTcF above 450 for male or 470 for female",
+    "tags": ["Protocol", "Check"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20If%20QTcF%20above%20450%20for%20male%20or%20470%20for%20female.md",
+    "updated": "2026-04-07"
+  },
+  {
+    "id": "M-077",
+    "title": "Protocol Check If SYS, DIA, and HR OOR",
+    "tags": ["Protocol", "Check"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Is%20SYS,%20DIA,%20and%20HR%20OOR.md",
+    "updated": "2026-04-07"
   }
 ]

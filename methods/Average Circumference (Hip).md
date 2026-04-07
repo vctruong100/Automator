@@ -1,8 +1,10 @@
+// Add item names
 const itemList = [
     "Hip Circumference #1", 
     "Hip Circumference #2"
 ];
 
+// ======== Don't modify ========
 const sigfig = itemJson.item.significantDigits;
 var maxCount = 2; 
 var list = [];

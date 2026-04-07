@@ -1,7 +1,4 @@
-const item = itemJson.item;
-const studyevent = formJson.form.studyEventName;
-const form = formJson.form;
-
+// Add item names
 const doseForms = [
     "IP_Study Drug Exposure - Blinded Study Medication Part A",
     "IP_Study Drug Exposure - Blinded Study Medication Part B",
@@ -14,6 +11,11 @@ const doseStudyEvent = [
 const doseItem = [
     "Datetime of Administration",    
 ]
+
+// ======== Don't modify ========
+const item = itemJson.item;
+const studyevent = formJson.form.studyEventName;
+const form = formJson.form;
 
 var upperInterval = getUpperIntervalValue(studyevent);
 if (upperInterval) {

@@ -1,7 +1,4 @@
-const currentStudyEvent = formJson.form.studyEventName;
-const item = itemJson.item;
-const sigfig = itemJson.item.significantDigits;
-
+// Add item names
 const heightitemList = [
     "BM_HT", 
     "BM_HT_Visit 2",
@@ -22,6 +19,8 @@ const screeningBMI_Form = [
     "📏 SCREEN BODY MEASUREMENTS (HEIGHT / WEIGHT / BMI)",
     "📏 BM_BODY MEASUREMENTS (HEIGHT / WEIGHT / BMI)"
 ];
+
+// Replace the Yes or No codelist value
 const attachedItemCodeList = [
     "Yes",
     "NO, SF",
@@ -30,6 +29,12 @@ const attachedItemCodeList = [
 // inclusive
 var BMI_lower_range = 18;
 var BMI_upper_range = 30;
+
+
+// ======== Don't modify ========
+const currentStudyEvent = formJson.form.studyEventName;
+const item = itemJson.item;
+const sigfig = itemJson.item.significantDigits;
 
 var weight = 0;
 var height = 0;

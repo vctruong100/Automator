@@ -1,3 +1,4 @@
+// Add item names
 const baselineForm = [
     "⚡DAY-1 ECG SINGLE 12 LEAD V1",
     "ECG_Predose_Triplicate ECG (baseline) (SPONSOR PROVIDED MACHINE)",
@@ -13,15 +14,22 @@ const baselineItem = [
     "Baseline QTcF",
     "QTcF.",
 ];
+
+const maxRange = 500;
+const maleRange = 450;
+const femaleRange = 470;
+const differenceRange = 60;
+
+// ======== Don't modify ========
 const item = itemJson.item;
 const sexMale = formJson.form.subject.volunteer.sexMale;
 var diff = 0;
 
 logger("Is it male: " + sexMale);
 logger("Qtcf value: " + item.value);
-if (item.value > 500) return log("500", item.value);
-else if (sexMale && item.value > 450) return log("male", item.value);
-else if (!sexMale && item.value > 470) return log("female", item.value);
+if (item.value > maxRange) return log("500", item.value);
+else if (sexMale && item.value > maleRange) return log("male", item.value);
+else if (!sexMale && item.value > femaleRange) return log("female", item.value);
 
 var form = pullForm(baselineEvent, baselineForm);
 if (!form) return null;
@@ -34,19 +42,19 @@ return true;
 
 function log(type, val)  {
     if (type == "500") {
-        customErrorMessage("OOR > 500. REPEAT 2 TIMES: " + val);
+        customErrorMessage("OOR > " + maxRange + ". REPEAT 2 TIMES: " + val);
         return false;
     }
     else if (type == "male") {
-        customErrorMessage("Male QTcF OOR > 450: " + val);
+        customErrorMessage("Male QTcF OOR > " + maleRange + ": " + val);
         return false;
     }
     else if (type == "female") {
-        customErrorMessage("Female QTcF OOR > 470: " + val);
+        customErrorMessage("Female QTcF OOR > " + femaleRange + ": " + val);
         return false;
     }
     else if (type == "base") {
-        customErrorMessage("Difference From Baseline OOR > 60. REPEAT 2 TIMES: " + val);
+        customErrorMessage("Difference From Baseline OOR > " + differenceRange + ". REPEAT 2 TIMES: " + val);
         return false;
     }
 }
@@ -81,7 +89,7 @@ function checkBaseline(itemValue) {
     if (baseline !== null && baseline !== undefined) {
         diff = (itemValue - baseline)
         logger("Difference: " + diff)
-        if (diff >= 60) {
+        if (diff >= differenceRange) {
             return true;
         }
         return false;

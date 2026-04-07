@@ -1,6 +1,4 @@
-var item = itemJson.item;
-const sigfig = itemJson.item.significantDigits;
-
+// Add item names
 const dbpItems = [
     "Diastolic BP", 
     "SCRN_Diastolic BP",
@@ -46,8 +44,13 @@ const repeatItem = [
     "▶ Is VS repeat required?",    
 ]
 
+// Inclusive (Edit)
 const sysAvg_maxRange = 170;
 const diaAvg_maxRange = 100;
+
+// ======== Don't modify ========
+var item = itemJson.item;
+const sigfig = itemJson.item.significantDigits;
 
 var repeat = pullItemFromForm(formJson, repeatItem);
 logger("Repeat: " + repeat);

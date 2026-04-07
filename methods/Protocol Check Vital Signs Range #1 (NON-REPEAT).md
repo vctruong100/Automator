@@ -1,3 +1,4 @@
+// Add item names (for different naming conventions)
 const sysItems = [
     "SYS",
     "SYS (1 of 3)",
@@ -21,6 +22,8 @@ const tempItems = [
     "ORAL TEMP (35.8C - 37.6C)",
     "ORAL_TEMP",
 ]
+
+// Replace
 const attachedItemCodeList = [
     "⭕Pending Results",
     "✅ Within Protocol Range",
@@ -31,7 +34,7 @@ const attachedItemCodeList = [
     "No",
 ]
 
-// Inclusive
+// Inclusive (Edit)
 var sys_min_range = 90;
 var sys_max_range = 169;
 
@@ -47,6 +50,8 @@ var temp_max_range = 37.6;
 var rr_min_range = 10;
 var rr_max_range = 20;
 
+
+// ======== Don't modify ========
 var item = itemJson.item;
 
 var isRepeat = isItemInRepeat(formJson);
