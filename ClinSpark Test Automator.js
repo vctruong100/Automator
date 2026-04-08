@@ -381,12 +381,35 @@
     // This section contains all helper functions for Run All feature.
     //=========================
 
+    function advanceToNextEpoch() {
+        var queue = getEpochQueue();
+        var idx = getEpochIndex() + 1;
+        setEpochIndex(idx);
+
+        if (idx >= queue.length) {
+            clearEpochQueueState();
+            setRunMode("consent");
+            updateRunAllPopupStatus("Running ICF Barcode");
+            location.href = STUDY_SHOW_URL + "?autoconsent=1";
+            return;
+        }
+
+        var next = queue[idx];
+        updateRunAllPopupStatus("Running Add Cohort Subjects (" + String(idx + 1) + "/" + String(queue.length) + ")");
+        
+        if (isEpochCompleted(next.href)) {
+            advanceToNextEpoch();
+            return;
+        }
+        
+        location.href = location.origin + next.href + "?autoepoch=1";
+    }
     function getEpochQueue() {
         var raw = null;
         try {
             raw = localStorage.getItem(STORAGE_EPOCH_QUEUE);
         } catch(e) {}
-        if (!raw) return {};
+        if (!raw) return [];
         try {
             return JSON.parse(raw);
         } catch(e) {
@@ -421,6 +444,8 @@
             raw = localStorage.getItem(STORAGE_EPOCH_COMPLETED_MAP);
         }
         catch (e) {}
+        if (!raw) return {};
+        try { return JSON.parse(raw); } catch (e) { return {}; }
     }
 
     function markEpochCompleted(href) {
@@ -463,14 +488,21 @@
         return parseInt(raw, 10) || 0;
     }
 
+    function setLinkedSourceCounter(n) {
+        try {
+            localStorage.setItem(STORAGE_LINKED_SOURCE_COUNTER, String(n));
+        } catch (e) {}
+    }
+
     function getStoredSubjectNumber() {
         var raw = null;
         try {
             raw = localStorage.getItem(STORAGE_SUBJECT_NUMBER);
         } catch (e) {}
+        return raw || "";
     }
 
-    function setStoredSubjectNumber() {
+    function setStoredSubjectNumber(val) {
         try {
             localStorage.setItem(STORAGE_SUBJECT_NUMBER, String(val));
         } catch (e) {}
@@ -22949,6 +22981,419 @@
         return true;
     }
 
+    async function processCohortShowPageNonScreening() {
+        var auto = getQueryParam("autocohortnonscreen");
+        var mode = getRunMode();
+        var go = (mode === "epoch" || mode === "all") || (auto === "1" && mode && mode.length > 0);
+        if (!go) {
+            log("Non-screening cohort page not in run mode");
+            return;
+        }
+        if (isPaused()) {
+            log("Paused; skipping non-screening cohort automation");
+            return;
+        }
+        var epochQueue = getEpochQueue();
+        var epochIdx = getEpochIndex();
+        var epochName = (epochQueue[epochIdx] || {}).name || "Unknown";
+
+        var g = getCohortGuard();
+        var successOnLoad = hasSuccessAlert();
+        if (successOnLoad && (g === "postsave" || g === "inprogress")) {
+            var listReadyX = await waitForListTable(12000);
+            if (!listReadyX) {
+                await sleep(800);
+            }
+            var targetVolX = getLastVolunteerId();
+            if (!targetVolX) {
+                targetVolX = getLastSelectedVolunteerId();
+            }
+
+            var targetRowX = null;
+            var waitedRowX = 0;
+
+            while (waitedRowX < 30000) {
+                if (isPaused()) {
+                    return;
+                }
+                targetRowX = findCohortRowByVolunteerId(targetVolX);
+                if (targetRowX) break;
+                await sleep(300);
+                waitedRowX += 300;
+            }
+            if (!targetRowX) { return;}
+
+            var subjSpanX = targetRowX.querySelector("span.tooltips[data-original-title='Subject Number']");
+            if (subjSpanX) {
+                var subjNumX = (subjSpanX.textContent || "").trim();
+                if (subjNumX.length > 0) {
+                    setStoredSubjectNumber(subjNumX);
+                    log("Non-scrn: captured Subject Number=" + subjNumX);
+                }
+            }
+
+            var actionBtnX = getRowActionButton(targetRowX);
+            if (!actionBtnX) { log("action button not found"); return; }
+            actionBtnX.click();
+            await sleep(300);
+            var planLinkX = getMenuLinkActivatePlan(targetRowX);
+            if (!planLinkX) return; 
+            planLinkX.click();
+            var ok1X = await clickBootboxOk(5000);
+            if (!ok1X) {
+                await sleep(500);
+            }
+            var foundX = await waitForActivateVolunteerById(targetVolX, 45000);
+            if (!foundX) { return; }
+            foundX.link.click();
+            var ok2X = await clickBootboxOk(5000);
+            if (!ok2X) {await sleep(500); }
+
+            markEpochCompleted(epochQueue[epochIdx].href);
+            log("Non-screening epoch completed: " + epochName);
+            setCohortGuard("done");
+            clearSelectedVolunteerIds();
+            advanceToNextEpoch();
+            return;
+        }
+
+        var openedEdit = await clickActionsDropdownIfNeeded();
+        if (!openedEdit) { log("Non-scrn: Actions dropdown not found"); return ;}
+
+        var editLink = document.querySelector('a[href^="/secure/administration/manage/studies/cohort/update/"][data-toggle="modal"]');
+        var editHref = "";
+        var cohortId = "";
+        if (editLink) {
+            editHref = editLink.getAttribute("href") + "";
+            cohortId = parseCohortIdFromUpdateHref(editHref);
+        }
+
+        var storageKeyAdd = "activityPlanState.cohortAdd.editDoneMap";
+        var addMapRaw = null;
+        try {
+            addMapRaw = localStorage.getItem(storageKeyAdd);
+        } catch (e) {};
+        var addMap = {};
+        if (addMapRaw) {
+            try {
+                addMap = JSON.parse(addMapRaw);
+            } catch (e) {}
+        }
+        if (typeof addMap !== "object" || addMap === null) { 
+            addMap = {};
+        }
+        var alreadyEditedAdd = cohortId && cohortId.length > 0 && !!addMap[String(cohortId)];
+
+        if (editLink && !alreadyEditedAdd) {
+            editLink.click();
+            var editModal = await waitForSelector("#ajaxModal, .modal", 6000);
+            if (editModal) {
+                var groups = editModal.querySelectorAll("#modalbody .form-group, .modal-body .form-group, form .form-group");
+                if (!groups || groups.length === 0) {
+                    var waited = 0;
+                    while (waited < 6000) {
+                        if (isPaused()) return;
+                        groups = editModal.querySelectorAll("#modalbody .form-group, .modal-body .form-group, form .form-group");
+                        if (groups && groups.length > 0) break;
+                        await sleep(300);
+                        waited += 300;
+                    }
+                }   
+                if (!groups || groups.length === 0) {
+                    var checkIds = ["sourceLeadInCohorts","sourceRandomizationCohorts","sourceScreeningCohorts",
+                        "allowSubjectsActiveInCohorts","allowSubjectsActiveInStudies"];
+                    var foundAny = false;
+                    var checkWait = 0;
+                    while (checkWait < 6000) {
+                        if (isPaused()) return;
+                        for (var ci = 0; ci < checkIds.length; ci++) {
+                            if (document.getElementById(checkIds[ci])) { foundAny = true; break; }
+                        }
+                        if (foundAny) break;
+                        await sleep(300);
+                        checkWait += 300;
+                    }
+                }
+
+                var srcLeadIn = false;
+                var srcRandom = false;
+                var srcScreening = false;
+                var elLeadIn = document.getElementById("sourceLeadInCohorts");
+                var elRandom = document.getElementById("sourceRandomizationCohorts");
+                var elScreening = document.getElementById("sourceScreeningCohorts");
+                if (elLeadIn) srcLeadIn = elLeadIn.checked;
+                if (elRandom) srcRandom = elRandom.checked;
+                if (elScreening) srcScreening = elScreening.checked;
+
+                setEpochSourceFlagsForIndex(epochIdx, {
+                    sourceLeadIn: srcLeadIn,
+                    sourceRandomization: srcRandom,
+                    sourceScreening: srcScreening
+                });
+
+                setCheckboxStateById("allowSubjectsActiveInCohorts", true);
+                setCheckboxStateById("allowSubjectsActiveInStudies", true);
+                setCheckboxStateById("requireVolunteerRecruitment", false);
+                setCheckboxStateById("allowRecruitmentEligible", false);
+                setCheckboxStateById("allowRecruitmentIdentified", false);
+                setCheckboxStateById("allowRecruitmentIneligible", false);
+                setCheckboxStateById("allowRecruitmentRemoved", false);
+                setCheckboxStateById("allowEligibilityEligible", true);
+                setCheckboxStateById("allowEligibilityPending", true);
+                setCheckboxStateById("allowEligibilityIneligible", true);
+                setCheckboxStateById("allowEligibilityUnspecified", true);
+                setCheckboxStateById("allowStatusActive", true);
+                setCheckboxStateById("allowStatusComplete", false);
+                setCheckboxStateById("allowStatusTerminated", false);
+                setCheckboxStateById("allowStatusWithdrawn", false);
+                setCheckboxStateById("requireInformedConsent", false);
+                setCheckboxStateById("requireOverVolunteeringCheck", false);
+
+                var reason = editModal.querySelector('textarea#reasonForChange');
+                if (reason) {
+                    reason.value = "Test";
+                    reason.dispatchEvent(new Event("input", { bubbles: true}))
+                }
+                var saveBtnEdit = await waitForSelector("#actionButton", 5000);
+                if (saveBtnEdit) {
+                    if (cohortId) {
+                        addMap[String(cohortId)] = 1;
+                        try {
+                            localStorage.setItem(storageKeyAdd, JSON.stringify(addMap));
+                        } catch (e) {}
+                    }
+                    saveBtnEdit.click();
+                    await sleep(2000);
+                    log("Edit modal saved");
+                }
+            }
+        } else {
+            var flagsMap = getEpochSourceFlags();
+            if (!flagsMap[String(epochIdx)]) {
+                log("No flag found, using default")
+            }
+        }
+
+            var flags = (getEpochSourceFlags()[String(epochIdx)]) || {};
+            var hasLinkedSource = flags.sourceScreening || flags.sourceLeadIn || flags.sourceRandomization;
+            var activityPlanIndex = 0;
+            if (hasLinkedSource) {
+                activityPlanIndex = getLinkedSourceCounter();
+                setLinkedSourceCounter(activityPlanIndex + 1);
+                log("Non-scrn: linked source counter=" + String(activityPlanIndex) + " (incremented)");
+            }
+        
+            // Track primary linked subject number (first epoch with leadIn or randomization)
+            if (flags.sourceLeadIn || flags.sourceRandomization) {
+                if (!getPrimaryLinkedSubjectNumber()) {
+                    var currentSubjNum = getStoredSubjectNumber();
+                    if (currentSubjNum) {
+                        setPrimaryLinkedSubjectNumber(currentSubjNum);
+                        log("Non-scrn: set primary linked subject number=" + currentSubjNum);
+                    }
+                }
+            }
+        
+            // --- ADD SUBJECT ---
+            setCohortGuard("inprogress");
+            clearLastVolunteerId();
+            clearSelectedVolunteerIds();
+        
+            var opened = await clickActionsDropdownIfNeeded();
+            if (!opened) { log("Non-scrn: Actions dropdown not found for add"); return; }
+        
+            var addLink = await waitForSelector('a#addCohortAssignmentButton[data-toggle="modal"]', 3000);
+            if (!addLink) {
+                addLink = document.querySelector('a[href^="/secure/study/cohortassign/manage/save/"][data-toggle="modal"]');
+            }
+            if (!addLink) { log("Non-scrn: Add Cohort Assignment link not found"); return; }
+            addLink.click();
+            log("Non-scrn: Add Cohort Assignment clicked");
+        
+            var modal = await waitForSelector("#ajaxModal, .modal", 5000);
+            if (!modal) { log("Non-scrn: Modal not found"); return; }
+        
+            // Activity Plan selection (index-based for linked sources)
+            var planSel = await waitForSelector('select#activityPlan', 5000);
+            if (planSel) {
+                var opts = planSel.querySelectorAll("option");
+                var chosen = null;
+                var optIdx = 0;
+                var validIdx = 0;
+                while (optIdx < opts.length) {
+                    var val = (opts[optIdx].value + "").trim();
+                    if (val.length > 0) {
+                        if (hasLinkedSource && validIdx === activityPlanIndex) {
+                            chosen = opts[optIdx];
+                            break;
+                        } else if (!hasLinkedSource && validIdx === 0) {
+                            chosen = opts[optIdx];
+                            break;
+                        }
+                        validIdx++;
+                    }
+                    optIdx++;
+                }
+                if (!chosen) {
+                    // Fallback: pick first valid option
+                    var fb = 0;
+                    while (fb < opts.length) {
+                        if ((opts[fb].value + "").trim().length > 0) { chosen = opts[fb]; break; }
+                        fb++;
+                    }
+                }
+                if (chosen) {
+                    planSel.value = chosen.value;
+                    planSel.dispatchEvent(new Event("change", { bubbles: true }));
+                    log("Non-scrn: ActivityPlan chosen index=" + String(activityPlanIndex) + " value=" + String(chosen.value));
+                }
+            }
+        
+            // Search type — use Existing Cohort Assignments for non-screening (same subject)
+            var searchSel = await waitForSelector('select#cohortAssignmentSearch', 5000);
+            if (searchSel && searchSel.value !== "Existing") {
+                searchSel.value = "Existing";
+                searchSel.dispatchEvent(new Event("change", { bubbles: true }));
+                await sleep(500);
+            }
+        
+            // --- DATEPICKER (only if sourceLeadIn or sourceRandomization) ---
+            if (flags.sourceLeadIn || flags.sourceRandomization) {
+                var initialSegmentRefDiv = modal.querySelector('div#initialSegmentReferenceDiv');
+                var hasInitialRef = !!initialSegmentRefDiv;
+                if (hasInitialRef) {
+                    var style = window.getComputedStyle(initialSegmentRefDiv);
+                    var isVisible = style.display !== "none" && style.visibility !== "hidden";
+                    if (isVisible) {
+                        log("Non-scrn: datepicker visible; auto-selecting today");
+                        var picker = modal.querySelector('span#initialSegmentReferencePicker');
+                        var addon = picker ? picker.querySelector('span.input-group-addon') : null;
+                        if (addon) {
+                            addon.click();
+                            await sleep(400);
+                            // Click today
+                            var waitedD = 0;
+                            var todayCell = null;
+                            while (waitedD < 8000) {
+                                if (isPaused()) return;
+                                var daysPanel = document.querySelector('div.datepicker-days');
+                                if (daysPanel) {
+                                    todayCell = daysPanel.querySelector('td.day.active.today') || daysPanel.querySelector('td.day.today.active');
+                                    if (todayCell) break;
+                                }
+                                await sleep(300);
+                                waitedD += 300;
+                            }
+                            if (todayCell) {
+                                todayCell.click();
+                                await sleep(300);
+                                log("Non-scrn: today clicked in datepicker");
+                            }
+                        }
+                    } else {
+                        log("Non-scrn: datepicker hidden; skipping");
+                    }
+                }
+            }
+        
+            // --- SUBJECT NUMBER INPUT (for epochs with leadIn/randomization that are NOT the first) ---
+            if ((flags.sourceLeadIn || flags.sourceRandomization) && activityPlanIndex > 0) {
+                var primarySubjNum = getPrimaryLinkedSubjectNumber();
+                if (primarySubjNum) {
+                    // Look for Subject Number input in the modal
+                    var subjInput = modal.querySelector('input#subjectNumber');
+                    if (!subjInput) {
+                        subjInput = modal.querySelector('input[name="subjectNumber"]');
+                    }
+                    if (subjInput) {
+                        subjInput.value = primarySubjNum;
+                        subjInput.dispatchEvent(new Event("input", { bubbles: true }));
+                        subjInput.dispatchEvent(new Event("change", { bubbles: true }));
+                        log("Non-scrn: populated Subject Number input=" + primarySubjNum);
+                    } else {
+                        log("Non-scrn: Subject Number input not found in modal");
+                    }
+                }
+            }
+        
+            // --- VOLUNTEER SEARCH (reuse subject number from previous epoch) ---
+            var subjectNumber = getStoredSubjectNumber();
+            log("Non-scrn: searching with subject number=" + subjectNumber);
+        
+            var s2container = modal.querySelector('#s2id_volunteer');
+            if (!s2container) { s2container = modal.querySelector('.select2-container.form-control.select2'); }
+            if (!s2container) { log("Non-scrn: Select2 container not found"); return; }
+        
+            var s2choice = s2container.querySelector('a.select2-choice');
+            if (s2choice) { s2choice.click(); await sleep(150); }
+            var focusser = s2container.querySelector('input.select2-focusser');
+            if (focusser) {
+                focusser.focus();
+                focusser.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowDown", keyCode: 40 }));
+                focusser.click();
+                await sleep(150);
+            }
+            var s2drop = document.querySelector('#select2-drop.select2-drop-active');
+            if (!s2drop) { s2drop = s2container.querySelector('.select2-drop'); }
+            if (!s2drop) {
+                s2choice = s2container.querySelector('a.select2-choice');
+                if (s2choice) { s2choice.click(); }
+                s2drop = await waitForSelector('#select2-drop.select2-drop-active', 2000);
+            }
+            if (!s2drop) { log("Non-scrn: Select2 drop not found"); return; }
+        
+            var s2input = s2drop.querySelector('input.select2-input');
+            if (!s2input) { s2input = await waitForSelector('#select2-drop.select2-drop-active input.select2-input', 2000); }
+            if (!s2input) { log("Non-scrn: Select2 input not found"); return; }
+        
+            // Type subject number to search for the same volunteer
+            s2input.value = subjectNumber;
+            s2input.dispatchEvent(new Event("input", { bubbles: true }));
+            s2input.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, key: subjectNumber, keyCode: 0 }));
+            log("Non-scrn: typed subject number=" + subjectNumber);
+        
+            // Wait for selection
+            var selectionConfirmed = false;
+            var confirmWait = 0;
+            while (confirmWait < 12000) {
+                s2input.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Enter", keyCode: 13 }));
+                s2input.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, key: "Enter", keyCode: 13 }));
+                await sleep(400);
+                var containerClass = s2container.getAttribute("class") + "";
+                var hasAllow = containerClass.indexOf("select2-allowclear") !== -1;
+                var notOpen = containerClass.indexOf("select2-dropdown-open") === -1;
+                var chosenEl = s2container.querySelector('.select2-chosen') || s2container.querySelector('[id^="select2-chosen-"]');
+                var chosenText = chosenEl ? (chosenEl.textContent + "").trim() : "";
+                var notSearch = chosenText.toLowerCase() !== "search";
+                if (hasAllow && notOpen && notSearch) {
+                    selectionConfirmed = true;
+                    var volIdParsed = extractVolunteerIdFromChosenText(chosenText);
+                    if (volIdParsed) {
+                        appendSelectedVolunteerId(volIdParsed);
+                        log("Non-scrn: volunteer selected id=" + volIdParsed);
+                    }
+                    break;
+                }
+                confirmWait += 400;
+            }
+            if (!selectionConfirmed) {
+                log("Non-scrn: volunteer selection not confirmed");
+                return;
+            }
+        
+            // Save
+            var saveBtn = await waitForSelector('button#actionButton.btn.green[type="button"]', 5000);
+            if (!saveBtn) { saveBtn = document.querySelector('button#actionButton'); }
+            if (!saveBtn) { log("Non-scrn: Save button not found"); return; }
+            saveBtn.click();
+            log("Non-scrn: Save clicked");
+        
+            var lastSelected = getLastSelectedVolunteerId();
+            if (lastSelected) { setLastVolunteerId(lastSelected); }
+            setCohortGuard("postsave");
+        
+    }
+
     // Orchestrate cohort add + activation flow and continue to consent if in ALL mode.
     async function processCohortShowPageScreening() {
         log("processCohortShowPageScreening start");
@@ -23008,6 +23453,14 @@
                 clearCohortGuard();
                 return;
             }
+            var subjSpanX = targetRowX.querySelector("span.tooltips[data-original-title='Subject Number']");
+            if (subjSpanX) {
+                var subjNumX = (subjSpanX.textContent || "").trim();
+                if (subjNumX.length > 0) {
+                    setStoredSubjectNumber(subjNumX);
+                    log("Captured Subject Number (onload)=" + subjNumX);
+                }
+            }
             var actionBtnX = getRowActionButton(targetRowX);
             if (!actionBtnX) {
                 log("Action button not found in row");
@@ -23044,11 +23497,8 @@
                 await sleep(500);
             }
             if (mode === "all") {
-                setRunMode("consent");
-                await sleep(3000);
-                location.href = STUDY_SHOW_URL + "?autoconsent=1";
-                updateRunAllPopupStatus("Running ICF Barcode");
-                log("Continuing ALL to consent after pause");
+                markEpochCompleted(getEpochQueue()[getEpochIndex()].href);
+                advanceToNextEpoch();
                 return;
             }
             clearContinueEpoch();
@@ -23590,11 +24040,8 @@
             await sleep(500);
         }
         if (getRunMode() === "all") {
-            setRunMode("consent");
-            updateRunAllPopupStatus("Running ICF Barcode");
-            await sleep(3000);
-            location.href = STUDY_SHOW_URL + "?autoconsent=1";
-            log("Continuing ALL to consent after pause");
+            markEpochCompleted(getEpochQueue()[getEpochIndex()].href);
+            advanceToNextEpoch();
             return;
         }
         clearContinueEpoch();
@@ -27027,34 +27474,46 @@
             return;
         }
         var anchors = tbody.querySelectorAll('a[href^="/secure/administration/studies/epoch/show/"]');
-        var target = null;
+        if (anchors.length === 0) {
+            return;
+        }
+
+        var screeningEntry = null;
+        var otherEntries = [];
         var i = 0;
         while (i < anchors.length) {
             var a = anchors[i];
-            var text = a.textContent + "";
-            var match = isScreeningLabel(text);
-            if (match) {
-                target = a;
-                break;
+            var name = (a.textContent + "").trim();
+            var href = a.getAttribute("href") + "";
+            if (isScreeningLabel(name) && !screeningEntry) {
+                screeningEntry = { name: name, href: href};
+            } else {
+                otherEntries.push({name: name, href: href})
             }
             i = i + 1;
         }
-        if (!target && anchors.length > 0) {
-            target = anchors[0];
+        var epochQueue = [];
+        if (screeningEntry) {
+            epochQueue.push(screeningEntry);
         }
-        if (!target) {
-            return;
+        var k = 0;
+        while (k < otherEntries.length) {
+            epochQueue.push(otherEntries[k]);
+            k = k + 1;
         }
-        var href = target.getAttribute("href") + "";
-        if (href.length === 0) {
-            return;
-        }
+        if (epochQueue.length === 0) return;
+
+        setEpochQueue(epochQueue);
+        setEpochIndex(0);
+        setLinkedSourceCounter(0);
+
         var mode = getRunMode();
         if (mode === "all") {
-            updateRunAllPopupStatus("Running Add Cohort Subjects");
+            updateRunAllPopupStatus("Running Add Cohort Subjects (1/" + String(epochQueue.length) + ")");
         }
-        location.href = location.origin + href + "?autoepoch=1";
-        log("Routing to epoch show");
+        var firstHref = epochQueue[0].href;
+        location.href = location.origin + firstHref + "?autoepoch=1";
+        log("Routing to epoch show: " + epochQueue[0].name);
     }
 
     // If edit-study flag present, set study to ACTIVE and save reason.
@@ -27132,29 +27591,41 @@
 
         var anchors = document.querySelectorAll('a[href^="/secure/administration/studies/cohort/show/"]');
         if (anchors.length === 0) {
+            log("No cohorts found on epoch page; skipping to next epoch");
+            var eq = getEpochQueue();
+            var ei = getEpochIndex();
+            if (eq.length > 0 && ei < eq.length) {
+                markEpochCompleted(eq[ei].href);
+            }
+            advanceToNextEpoch();
             return;
         }
-        var target = null;
-        var i = 0;
-        while (i < anchors.length) {
-            var a = anchors[i];
-            var text = a.textContent + "";
-            var match = isScreeningLabel(text);
-            if (match) {
-                target = a;
-                break;
-            }
-            i = i + 1;
-        }
-        if (!target) {
-            target = anchors[0];
-        }
+        var target = anchors[0];
         var href = target.getAttribute("href") + "";
+
         if (href.length === 0) {
             return;
         }
-        location.href = location.origin + href + "?autocohort=1";
-        log("Routing to cohort show");
+
+        var epochQueue = getEpochQueue();
+        var epochIdx = getEpochIndex();
+        var isScreening = false;
+        if (epochQueue.length > 0 && epochIdx < epochQueue.length) {
+            var currentEpoch = epochQueue[epochIdx];
+            isScreening = isScreeningLabel(currentEpoch.name);
+        }
+        else {
+            isScreening = true;
+        }
+
+        if (isScreening) {
+            location.href = location.origin + href + "?autocohort=1";
+            log("Routing to cohort show (screening)")
+        }
+        else {
+            location.href = location.origin + href + "?autocohortnonscreen=1";
+            log("Routing to cohort show (non-screening)")
+        }
     }
 
     //==========================
@@ -29075,6 +29546,7 @@
         clearConsentScanIndex();
         clearLastVolunteerId();
         clearSelectedVolunteerIds();
+        clearEpochQueueState();
         try {
             localStorage.removeItem(STORAGE_EDIT_STUDY);
             localStorage.removeItem(STORAGE_CHECK_ELIG_LOCK);
@@ -31126,6 +31598,7 @@
                     log("Run All: cancelled by user (close button)");
                     clearAllRunState();
                     clearCohortGuard();
+                    clearEpochQueueState();
                     try {
                         localStorage.removeItem(STORAGE_RUN_MODE);
                         localStorage.removeItem(STORAGE_KEY);
@@ -31674,12 +32147,27 @@
             var amode = getRunMode();
             var autoImport = getQueryParam("autocohortimport");
             var autoAdd = getQueryParam("autocohortadd");
+            var autoNonScreen = getQueryParam("autocohortnonscreen");
             if (amode === "epochImport" || autoImport === "1") {
                 processCohortShowPageImportNonScrn();
             } else if (amode === "epochAddCohort" || autoAdd === "1") {
                 processCohortShowPageAddCohort();
+            } else if (autoNonScreen === "1") {
+                processCohortShowPageNonScreening();
             } else {
-                processCohortShowPageScreening();
+                var isNonScrn = false;
+                if (amode === "all" || amode === "epoch") {
+                    var eq = getEpochQueue();
+                    var ei = getEpochIndex();
+                    if (eq.length > 0 && ei < eq.length) {
+                        isNonScrn = !isScreeningLabel(eq[ei].name);
+                    }
+                }
+                if (isNonScrn) {
+                    processCohortShowPageNonScreening();
+                } else {
+                    processCohortShowPageScreening();
+                }
             }
             return;
         }

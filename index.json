@@ -551,5 +551,33 @@
     "tags": ["Protocol", "Check"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Is%20SYS,%20DIA,%20and%20HR%20OOR.md",
     "updated": "2026-04-07"
+  },
+  {
+    "id": "M-078",
+    "title": "BMI Pull From Screening",
+    "tags": ["Screening", "BMI"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/BMI%20Pull%20From%20Screening.md",
+    "updated": "2026-04-08"
+  },
+  {
+    "id": "M-079",
+    "title": "LDL Reduction Calculation",
+    "tags": ["Calculation"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/LDL%20Reduction%20Calculation.md",
+    "updated": "2026-04-08"
+  },
+  {
+    "id": "M-080",
+    "title": "LDL Titration Decision",
+    "tags": ["Calculation"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/LDL%20Titration%20Decision.md",
+    "updated": "2026-04-08"
+  },
+  {
+    "id": "M-081",
+    "title": "Glycemia Next Step",
+    "tags": ["Calculation"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Glycemia%20Next%20Step.md",
+    "updated": "2026-04-08"
   }
 ]

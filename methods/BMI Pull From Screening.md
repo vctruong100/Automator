@@ -1,39 +1,20 @@
-const currentEvent = formJson.form.studyEventName;
-const studyevents = {
-    "Day 1": "Day-1",
-    "Day 2": "Day 1",
-    "Day 3": "Day 2",
-    "Day 4": "Day 3",
-    "Day 5": "Day 4",
-    "Day 6": "Day 5",
-    "Day 7": "Day 6",
-    "Day 8": "Day 7",
-    "Day 9": "Day 8",
-    "Day 10": "Day 9",
-    "Day 11": "Day 10",
-    "Day 12": "Day 11",
-    "Day 13": "Day 12",
-    "Day 18": "Day 17"
-}
+const studyEventNames = [
+    "Screening",
+    "SCREENING",
+]
 
-const mealForms = [
-    'STOP SNACKS', "Snack End", 
-    'STOP DINNER', "Dinner End",
-    'STOP LUNCH', "Lunch End",
-    'STOP BREAKFAST', "Breakfast End",
-];
+const bmiForms = [
+    "📏 BM_BODY MEASUREMENTS (HEIGHT / WEIGHT / BMI)"    
+]
 
-const prevEvent = studyevents[currentEvent];
-var form = pullForm([prevEvent], mealForms);
-if (!form) {
-    var preprevEvent = studyevents[prevEvent]; 
-    form = pullForm([preprevEvent], mealForms)
-}
+const itemName = [
+    "VS_BMI"    
+]
+
+var form = pullForm(studyEventNames, bmiForms);
 if (!form) return null;
-var mealTime = form.form.itemGroups[0].items[0].value;
-if (mealTime && mealTime !== null) return mealTime;
 
-return null;
+return pullItemFromForm(form, itemName);
 
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
@@ -46,7 +27,7 @@ function pullItemFromForm(form, targetItem) {
         if (!group || group.canceled) continue;
         for (j = 0; j < group.items.length; j++) {
             item = group.items[j];
-            if (targetItem.indexOf(item.name) !== -1 && item.value !== null) return item.value;
+            if (targetItem.indexOf(item.name) !== -1 && item.value !== null && !item.canceled && item.value !== "") return item.value;
         }
     }
     return null;

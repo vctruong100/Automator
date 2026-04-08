@@ -1,5 +1,5 @@
 Button Redirect to Image Page (use direct link):
-<a href="https://i.ibb.co/Kj0sKf2W/image-4.png" 
+<a href="https://i.ibb.co/FbnX6XvJ/image-6.png" 
    target="_blank"
    class="img-link-btn">
   Click to View Image
@@ -24,9 +24,15 @@ Button Redirect to Image Page (use direct link):
  
 Direct image on Form (use direct link):
 <img 
-  src="https://i.ibb.co/B210NMmj/image-4.png" 
+  src="https://i.ibb.co/FbnX6XvJ/image-6.png" 
   style="max-width: 500px; width: 100%; height: auto;"
 >
+
+Multiple images side-by-side:
+<div style="display: flex; gap: 10px; flex-wrap: wrap;">
+  <img src="https://i.ibb.co/Hfg7GQjw/image-5.png" style="width: 100%; max-width: 200px;">
+  <img src="https://i.ibb.co/8gZMtwLH/image-1.jpg" style="width: 100%; max-width: 200px;">
+</div>
 
 Auto-navigate to AEs:
 Copy and paste the code below:
