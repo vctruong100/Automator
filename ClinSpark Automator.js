@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.3.6
+// @version     2.3.7
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -22731,8 +22731,13 @@
         log("[EditSE] Button clicked");
         var currentUrl = location.href.split("?")[0].split("#")[0];
         if (currentUrl !== EDIT_SE_LIST_URL) {
-            log("[EditSE] Wrong page: " + currentUrl);
-            showWrongPagePopup(EDIT_SE_FEATURE_NAME, EDIT_SE_LIST_URL, location.pathname);
+            createPopup({
+                title: "Edit Study Events List",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;font-size:16px;margin-bottom:16px;">\u26A0\uFE0F Wrong Page</p><p>You must be on the Study List page to use this feature.</p><p style="margin-top:12px;font-size:12px;color:#ffffffff;word-wrap:break-word;word-break:break-all;">Required URL: ' + EDIT_SE_LIST_URL + '</p></div>',
+                width: "450px",
+                height: "auto"
+            });
+            log("[EditSE]: wrong page - " + location.href);
             return;
         }
         var collected = editSE_collectStudyEvents();
@@ -23265,7 +23270,7 @@
         // Open popup
         EDIT_SE_POPUP_REF = createPopup({
             title: EDIT_SE_FEATURE_NAME,
-            description: "Manage, add, rename, and reorder study events",
+            description: "Manage, add, rename, and reorder study events. Sorting will not apply to the actual study event list.",
             content: root,
             width: "820px",
             height: "560px",

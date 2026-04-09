@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.8.9
+// @version 3.9.0
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -430,8 +430,13 @@
         log("[EditSE] Button clicked");
         var currentUrl = location.href.split("?")[0].split("#")[0];
         if (currentUrl !== EDIT_SE_LIST_URL) {
-            log("[EditSE] Wrong page: " + currentUrl);
-            showWrongPagePopup(EDIT_SE_FEATURE_NAME, EDIT_SE_LIST_URL, location.pathname);
+            createPopup({
+                title: "Edit Study Events List",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;font-size:16px;margin-bottom:16px;">\u26A0\uFE0F Wrong Page</p><p>You must be on the Study List page to use this feature.</p><p style="margin-top:12px;font-size:12px;color:#ffffffff;word-wrap:break-word;word-break:break-all;">Required URL: ' + EDIT_SE_LIST_URL + '</p></div>',
+                width: "450px",
+                height: "auto"
+            });
+            log("[EditSE]: wrong page - " + location.href);
             return;
         }
         var collected = editSE_collectStudyEvents();
@@ -6724,7 +6729,7 @@
             "Search Methods",
             // "Scheduled Activities Builder",
             "PLAP Builder",
-            "Populate Form",
+            "Run Form",
             "Collect All",
             "Import I/E",
             "Clear Mapping",
@@ -21962,7 +21967,7 @@
     }
 
     //==========================
-    // Populate Form FEATURES (OOR A, OOR B, IR)
+    // Run Form FEATURES (OOR A, OOR B, IR)
     //==========================
     // This section contains all functions related to form automation features:
     // - Run Form (OOR) A: Out of Range values below minimum
@@ -32054,7 +32059,7 @@
         runBarcodeBtn.onmouseenter = () => { runBarcodeBtn.style.background = "#4a37a0"; };
         runBarcodeBtn.onmouseleave = () => { runBarcodeBtn.style.background = "#5b43c7"; };
         var runFormBtn = document.createElement("button");
-        runFormBtn.textContent = "Popualate Form";
+        runFormBtn.textContent = "Run Form";
         runFormBtn.style.background = "#f0ad4e";
         runFormBtn.style.color = "#fff";
         runFormBtn.style.border = "none";
@@ -32327,7 +32332,7 @@
             { el: searchMethodsBtn, label: "Search Methods" },
             // { el: saBuilderBtn, label: "Scheduled Activities Builder" },
             { el: bplBtn, label: "PLAP Builder" },
-            { el: runFormBtn, label: "Populate Form" },
+            { el: runFormBtn, label: "Run Form" },
             { el: collectAllBtn, label: "Collect All" },
             { el: importEligBtn, label: "Import I/E" },
             { el: clearMappingBtn, label: "Clear Mapping" },
