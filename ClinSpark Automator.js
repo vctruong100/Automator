@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.3.5
+// @version     2.3.6
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -135,6 +135,16 @@
     var PARSE_METHOD_CANCELED = false;
     var PARSE_METHOD_COLLECTED_METHODS = [];
     var PARSE_METHOD_COLLECTED_FORMS = [];
+
+    // Edit Study Events List Feature
+    var EDIT_SE_LIST_URL = "https://cenexel.clinspark.com/secure/crfdesign/studylibrary/list/studyevent";
+    var EDIT_SE_ADD_BATCH_HREF = "/secure/crfdesign/studylibrary/batchsave/studyevent";
+    var EDIT_SE_FEATURE_NAME = "Edit Study Events List";
+    var STORAGE_EDIT_SE_PENDING = "activityPlanState.editSE.pending";
+    var EDIT_SE_CANCELED = false;
+    var EDIT_SE_POPUP_REF = null;
+    var EDIT_SE_COLLECTED = null;   // [{name, href, originalName}]  — href is null for added rows
+    var EDIT_SE_FINAL_ORDER = null; // [{name, href, status, reason}]
 
     // Cohort Eligibility Feature
     var STORAGE_COHORT_ELIG_DATA = "activityPlanState.cohortElig.data";
@@ -9052,6 +9062,7 @@
             "Cohort Eligibility",
             "Subject Eligibility",
             "Parse Study Event",
+            "Edit Study Events List",
             "Pause",
             "Clear Logs",
             "Hide Logs"
@@ -22676,6 +22687,1233 @@
         }
     }
 
+    // ================================================================
+    // Edit Study Events List — Feature Implementation
+    // ================================================================
+
+    function editSE_cleanup() {
+        EDIT_SE_CANCELED = false;
+        EDIT_SE_COLLECTED = null;
+        EDIT_SE_FINAL_ORDER = null;
+        if (EDIT_SE_POPUP_REF) {
+            try { EDIT_SE_POPUP_REF.close(); } catch (e) {}
+            EDIT_SE_POPUP_REF = null;
+        }
+    }
+
+    function editSE_collectStudyEvents() {
+        var tbody = document.getElementById("sortableTable");
+        if (!tbody) {
+            log("[EditSE] sortableTable not found");
+            return [];
+        }
+        var rows = tbody.querySelectorAll("tr");
+        var results = [];
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            // skip "no records" placeholder
+            if (row.querySelector("td.dataTables_empty") || row.classList.contains("odd") && row.querySelector("td[colspan]")) continue;
+            var cells = row.querySelectorAll("td");
+            if (!cells || cells.length < 2) continue;
+            var dragTd = row.querySelector("td.dragHandle");
+            var anchor = dragTd ? dragTd.querySelector("a[href]") : null;
+            var href = anchor ? anchor.getAttribute("href") : null;
+            // study event name is inside the anchor in the first td (dragHandle)
+            var name = anchor ? anchor.textContent.trim() : "";
+            if (!name) continue;
+            results.push({ name: name, href: href, originalName: name });
+        }
+        log("[EditSE] Collected " + results.length + " study events");
+        return results;
+    }
+
+    function editSE_start() {
+        log("[EditSE] Button clicked");
+        var currentUrl = location.href.split("?")[0].split("#")[0];
+        if (currentUrl !== EDIT_SE_LIST_URL) {
+            log("[EditSE] Wrong page: " + currentUrl);
+            showWrongPagePopup(EDIT_SE_FEATURE_NAME, EDIT_SE_LIST_URL, location.pathname);
+            return;
+        }
+        var collected = editSE_collectStudyEvents();
+        if (collected.length === 0) {
+            log("[EditSE] No study events found in table");
+            var emptyPopup = createPopup({
+                title: EDIT_SE_FEATURE_NAME,
+                content: "<div style='padding:20px;text-align:center;'>No study events found in the table.</div>",
+                width: "360px", height: "auto"
+            });
+            return;
+        }
+        EDIT_SE_COLLECTED = collected;
+        editSE_openSelectionGUI(collected);
+    }
+
+    function editSE_openSelectionGUI(collected) {
+        var glass = isGlassTheme();
+
+        // State
+        var rows = []; // {name, href, originalName, status:'original'|'added'|'updated', reason:'Update'}
+        for (var ci = 0; ci < collected.length; ci++) {
+            rows.push({
+                name: collected[ci].name,
+                href: collected[ci].href,
+                originalName: collected[ci].name,
+                status: "original",
+                reason: "Update"
+            });
+        }
+
+        var selectedIdx = -1;
+        var locked = false; // true once Confirm pressed
+
+        // ---------- root ----------
+        var root = document.createElement("div");
+        root.style.display = "flex";
+        root.style.flexDirection = "column";
+        root.style.height = "100%";
+        root.style.gap = "0";
+
+        // ---------- top: left + right ----------
+        var topRow = document.createElement("div");
+        topRow.style.display = "flex";
+        topRow.style.flex = "1";
+        topRow.style.overflow = "hidden";
+        topRow.style.gap = "10px";
+        topRow.style.minHeight = "0";
+
+        // ===== LEFT PANEL =====
+        var leftPanel = document.createElement("div");
+        leftPanel.style.flex = "3";
+        leftPanel.style.display = "flex";
+        leftPanel.style.flexDirection = "column";
+        leftPanel.style.gap = "6px";
+        leftPanel.style.minWidth = "0";
+
+        // search + sort row
+        var searchRow = document.createElement("div");
+        searchRow.style.display = "flex";
+        searchRow.style.gap = "6px";
+        searchRow.style.alignItems = "center";
+
+        var searchInput = document.createElement("input");
+        searchInput.type = "text";
+        searchInput.placeholder = "Search study events...";
+        searchInput.style.flex = "1";
+        searchInput.style.padding = "6px 10px";
+        searchInput.style.borderRadius = "6px";
+        searchInput.style.border = "1px solid " + (glass ? "rgba(255,255,255,0.25)" : "#555");
+        searchInput.style.background = glass ? "rgba(15,10,40,0.55)" : "#222";
+        searchInput.style.color = glass ? "#fff" : "#fff";
+        searchInput.style.fontSize = "13px";
+        searchInput.style.outline = "none";
+
+        var sortBtn = document.createElement("button");
+        sortBtn.textContent = "Sort A-Z";
+        sortBtn.style.padding = "6px 12px";
+        sortBtn.style.borderRadius = "6px";
+        sortBtn.style.border = "none";
+        sortBtn.style.background = glass ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)" : "#5b43c7";
+        sortBtn.style.color = "#fff";
+        sortBtn.style.cursor = "pointer";
+        sortBtn.style.fontSize = "12px";
+        sortBtn.style.fontWeight = "600";
+        sortBtn.style.whiteSpace = "nowrap";
+
+        searchRow.appendChild(searchInput);
+        searchRow.appendChild(sortBtn);
+        leftPanel.appendChild(searchRow);
+
+        // scrollable table
+        var tableWrap = document.createElement("div");
+        tableWrap.style.flex = "1";
+        tableWrap.style.overflowY = "auto";
+        tableWrap.style.border = "1px solid " + (glass ? "rgba(255,255,255,0.18)" : "#444");
+        tableWrap.style.borderRadius = "6px";
+        tableWrap.style.background = glass ? "rgba(15,10,40,0.35)" : "#1a1a1a";
+
+        var table = document.createElement("table");
+        table.style.width = "100%";
+        table.style.borderCollapse = "collapse";
+        table.style.fontSize = "13px";
+
+        var tableBody = document.createElement("tbody");
+        table.appendChild(tableBody);
+        tableWrap.appendChild(table);
+        leftPanel.appendChild(tableWrap);
+
+        // ===== RIGHT PANEL =====
+        var rightPanel = document.createElement("div");
+        rightPanel.style.flex = "1.2";
+        rightPanel.style.display = "flex";
+        rightPanel.style.flexDirection = "column";
+        rightPanel.style.gap = "10px";
+        rightPanel.style.minWidth = "200px";
+
+        // -- top half: Add New --
+        var addBox = document.createElement("div");
+        addBox.style.border = "1px solid " + (glass ? "rgba(255,255,255,0.18)" : "#444");
+        addBox.style.borderRadius = "8px";
+        addBox.style.padding = "10px";
+        addBox.style.background = glass ? "rgba(15,10,40,0.35)" : "#1a1a1a";
+        addBox.style.display = "flex";
+        addBox.style.flexDirection = "column";
+        addBox.style.gap = "6px";
+
+        var addTitle = document.createElement("div");
+        addTitle.textContent = "Add New Study Event";
+        addTitle.style.fontWeight = "600";
+        addTitle.style.fontSize = "13px";
+        addTitle.style.marginBottom = "2px";
+        addBox.appendChild(addTitle);
+
+        var addInput = document.createElement("input");
+        addInput.type = "text";
+        addInput.placeholder = "Study Event Name";
+        addInput.style.padding = "6px 10px";
+        addInput.style.borderRadius = "6px";
+        addInput.style.border = "1px solid " + (glass ? "rgba(255,255,255,0.25)" : "#555");
+        addInput.style.background = glass ? "rgba(15,10,40,0.55)" : "#222";
+        addInput.style.color = "#fff";
+        addInput.style.fontSize = "13px";
+        addInput.style.outline = "none";
+        addBox.appendChild(addInput);
+
+        var addError = document.createElement("div");
+        addError.style.color = "#ef4444";
+        addError.style.fontSize = "12px";
+        addError.style.minHeight = "16px";
+        addBox.appendChild(addError);
+
+        var addBtn = document.createElement("button");
+        addBtn.textContent = "Add";
+        addBtn.style.padding = "6px 14px";
+        addBtn.style.borderRadius = "6px";
+        addBtn.style.border = "none";
+        addBtn.style.background = "#10b981";
+        addBtn.style.color = "#fff";
+        addBtn.style.cursor = "pointer";
+        addBtn.style.fontWeight = "600";
+        addBtn.style.fontSize = "13px";
+        addBox.appendChild(addBtn);
+
+        rightPanel.appendChild(addBox);
+
+        // -- bottom half: Edit Selected (hidden initially) --
+        var editBox = document.createElement("div");
+        editBox.style.border = "1px solid " + (glass ? "rgba(255,255,255,0.18)" : "#444");
+        editBox.style.borderRadius = "8px";
+        editBox.style.padding = "10px";
+        editBox.style.background = glass ? "rgba(15,10,40,0.35)" : "#1a1a1a";
+        editBox.style.display = "none";
+        editBox.style.flexDirection = "column";
+        editBox.style.gap = "6px";
+
+        var editTitle = document.createElement("div");
+        editTitle.textContent = "Edit Selected";
+        editTitle.style.fontWeight = "600";
+        editTitle.style.fontSize = "13px";
+        editTitle.style.marginBottom = "2px";
+        editBox.appendChild(editTitle);
+
+        var editNameLabel = document.createElement("div");
+        editNameLabel.textContent = "Study Event Name";
+        editNameLabel.style.fontSize = "11px";
+        editNameLabel.style.color = glass ? "rgba(255,255,255,0.65)" : "#999";
+        editBox.appendChild(editNameLabel);
+
+        var editNameInput = document.createElement("input");
+        editNameInput.type = "text";
+        editNameInput.style.padding = "6px 10px";
+        editNameInput.style.borderRadius = "6px";
+        editNameInput.style.border = "1px solid " + (glass ? "rgba(255,255,255,0.25)" : "#555");
+        editNameInput.style.background = glass ? "rgba(15,10,40,0.55)" : "#222";
+        editNameInput.style.color = "#fff";
+        editNameInput.style.fontSize = "13px";
+        editNameInput.style.outline = "none";
+        editBox.appendChild(editNameInput);
+
+        var editReasonLabel = document.createElement("div");
+        editReasonLabel.textContent = "Reason";
+        editReasonLabel.style.fontSize = "11px";
+        editReasonLabel.style.color = glass ? "rgba(255,255,255,0.65)" : "#999";
+        editBox.appendChild(editReasonLabel);
+
+        var editReasonInput = document.createElement("input");
+        editReasonInput.type = "text";
+        editReasonInput.value = "Update";
+        editReasonInput.style.padding = "6px 10px";
+        editReasonInput.style.borderRadius = "6px";
+        editReasonInput.style.border = "1px solid " + (glass ? "rgba(255,255,255,0.25)" : "#555");
+        editReasonInput.style.background = glass ? "rgba(15,10,40,0.55)" : "#222";
+        editReasonInput.style.color = "#fff";
+        editReasonInput.style.fontSize = "13px";
+        editReasonInput.style.outline = "none";
+        editBox.appendChild(editReasonInput);
+
+        rightPanel.appendChild(editBox);
+
+        topRow.appendChild(leftPanel);
+        topRow.appendChild(rightPanel);
+        root.appendChild(topRow);
+
+        // ---------- bottom bar: error + confirm ----------
+        var bottomBar = document.createElement("div");
+        bottomBar.style.display = "flex";
+        bottomBar.style.justifyContent = "flex-end";
+        bottomBar.style.alignItems = "center";
+        bottomBar.style.gap = "12px";
+        bottomBar.style.paddingTop = "10px";
+        bottomBar.style.borderTop = "1px solid " + (glass ? "rgba(255,255,255,0.15)" : "#333");
+        bottomBar.style.marginTop = "8px";
+
+        var errorMsg = document.createElement("div");
+        errorMsg.style.flex = "1";
+        errorMsg.style.color = "#ef4444";
+        errorMsg.style.fontSize = "12px";
+        errorMsg.style.fontWeight = "500";
+
+        var confirmBtn = document.createElement("button");
+        confirmBtn.textContent = "Confirm";
+        confirmBtn.disabled = true;
+        confirmBtn.style.padding = "8px 22px";
+        confirmBtn.style.borderRadius = "8px";
+        confirmBtn.style.border = "none";
+        confirmBtn.style.background = "#5b43c7";
+        confirmBtn.style.color = "#fff";
+        confirmBtn.style.cursor = "pointer";
+        confirmBtn.style.fontWeight = "700";
+        confirmBtn.style.fontSize = "14px";
+        confirmBtn.style.opacity = "0.5";
+        confirmBtn.style.transition = "opacity 0.2s";
+
+        bottomBar.appendChild(errorMsg);
+        bottomBar.appendChild(confirmBtn);
+        root.appendChild(bottomBar);
+
+        // ========== RENDER / HELPERS ==========
+        var dragSrcIdx = null;
+
+        function getRowColor(st) {
+            if (st === "added") return glass ? "rgba(16,185,129,0.18)" : "rgba(16,185,129,0.15)";
+            if (st === "updated") return glass ? "rgba(245,158,11,0.18)" : "rgba(245,158,11,0.15)";
+            return "transparent";
+        }
+
+        function getStatusBadge(st) {
+            if (st === "added") return '<span style="color:#10b981;font-size:11px;font-weight:600;margin-left:6px;">● Added</span>';
+            if (st === "updated") return '<span style="color:#f59e0b;font-size:11px;font-weight:600;margin-left:6px;">● Updated</span>';
+            return "";
+        }
+
+        function renderTable() {
+            tableBody.innerHTML = "";
+            var filter = searchInput.value.trim().toLowerCase();
+            for (var ri = 0; ri < rows.length; ri++) {
+                if (filter && rows[ri].name.toLowerCase().indexOf(filter) === -1) continue;
+                (function(idx) {
+                    var tr = document.createElement("tr");
+                    tr.setAttribute("draggable", "true");
+                    tr.style.cursor = "grab";
+                    tr.style.background = idx === selectedIdx ? (glass ? "rgba(167,139,250,0.22)" : "rgba(91,67,199,0.25)") : getRowColor(rows[idx].status);
+                    tr.style.borderBottom = "1px solid " + (glass ? "rgba(255,255,255,0.08)" : "#333");
+                    tr.style.transition = "background 0.15s";
+
+                    tr.addEventListener("mouseenter", function() {
+                        if (idx !== selectedIdx) tr.style.background = glass ? "rgba(255,255,255,0.08)" : "#2a2a2a";
+                    });
+                    tr.addEventListener("mouseleave", function() {
+                        tr.style.background = idx === selectedIdx ? (glass ? "rgba(167,139,250,0.22)" : "rgba(91,67,199,0.25)") : getRowColor(rows[idx].status);
+                    });
+
+                    // drag handle cell
+                    var handleTd = document.createElement("td");
+                    handleTd.textContent = "☰";
+                    handleTd.style.padding = "6px 8px";
+                    handleTd.style.color = glass ? "rgba(255,255,255,0.45)" : "#666";
+                    handleTd.style.fontSize = "14px";
+                    handleTd.style.width = "28px";
+                    handleTd.style.textAlign = "center";
+                    handleTd.style.userSelect = "none";
+                    tr.appendChild(handleTd);
+
+                    // name cell
+                    var nameTd = document.createElement("td");
+                    nameTd.style.padding = "6px 8px";
+                    nameTd.innerHTML = '<span>' + escapeHTML(rows[idx].name) + '</span>' + getStatusBadge(rows[idx].status);
+                    tr.appendChild(nameTd);
+
+                    // click to select
+                    tr.addEventListener("click", function() {
+                        if (locked) return;
+                        selectedIdx = idx;
+                        showEditPanel(idx);
+                        renderTable();
+                    });
+
+                    // drag events
+                    tr.addEventListener("dragstart", function(e) {
+                        if (locked) { e.preventDefault(); return; }
+                        dragSrcIdx = idx;
+                        e.dataTransfer.effectAllowed = "move";
+                        tr.style.opacity = "0.5";
+                    });
+                    tr.addEventListener("dragend", function() {
+                        tr.style.opacity = "1";
+                        dragSrcIdx = null;
+                    });
+                    tr.addEventListener("dragover", function(e) {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "move";
+                    });
+                    tr.addEventListener("drop", function(e) {
+                        e.preventDefault();
+                        if (dragSrcIdx === null || dragSrcIdx === idx) return;
+                        var item = rows.splice(dragSrcIdx, 1)[0];
+                        rows.splice(idx, 0, item);
+                        // fix selectedIdx
+                        if (selectedIdx === dragSrcIdx) {
+                            selectedIdx = idx;
+                        } else if (dragSrcIdx < selectedIdx && idx >= selectedIdx) {
+                            selectedIdx--;
+                        } else if (dragSrcIdx > selectedIdx && idx <= selectedIdx) {
+                            selectedIdx++;
+                        }
+                        renderTable();
+                        validate();
+                    });
+
+                    tableBody.appendChild(tr);
+                })(ri);
+            }
+        }
+
+        function escapeHTML(str) {
+            var d = document.createElement("div");
+            d.textContent = str;
+            return d.innerHTML;
+        }
+
+        function showEditPanel(idx) {
+            editBox.style.display = "flex";
+            var r = rows[idx];
+            editNameInput.value = r.name;
+            editReasonInput.value = r.reason || "Update";
+            editReasonInput.disabled = (r.status === "added");
+        }
+
+        function validate() {
+            var errors = [];
+            var nameMap = {};
+            for (var vi = 0; vi < rows.length; vi++) {
+                var key = rows[vi].name.trim().toLowerCase();
+                if (!nameMap[key]) nameMap[key] = 0;
+                nameMap[key]++;
+            }
+            var dupCount = 0;
+            for (var dk in nameMap) {
+                if (nameMap.hasOwnProperty(dk) && nameMap[dk] > 1) {
+                    dupCount += nameMap[dk];
+                }
+            }
+            if (dupCount > 0) {
+                errors.push("Duplicate study events found " + dupCount + " times");
+            }
+
+            var hasChanges = false;
+            for (var hi = 0; hi < rows.length; hi++) {
+                if (rows[hi].status === "added" || rows[hi].status === "updated") {
+                    hasChanges = true;
+                    break;
+                }
+            }
+
+            errorMsg.textContent = errors.join("; ");
+
+            var canConfirm = errors.length === 0 && hasChanges && !locked;
+            confirmBtn.disabled = !canConfirm;
+            confirmBtn.style.opacity = canConfirm ? "1" : "0.5";
+            confirmBtn.style.cursor = canConfirm ? "pointer" : "default";
+            return errors.length === 0;
+        }
+
+        // Sort button
+        // Natural sort comparator: splits text into alphabetic and numeric chunks
+        function editSE_naturalSort(strA, strB) {
+            var re = /(\d+|\D+)/g;
+            var partsA = strA.match(re) || [""];
+            var partsB = strB.match(re) || [""];
+            for (var ns = 0; ns < Math.max(partsA.length, partsB.length); ns++) {
+                var pa = partsA[ns] || "";
+                var pb = partsB[ns] || "";
+                var na = parseInt(pa, 10);
+                var nb = parseInt(pb, 10);
+                if (!isNaN(na) && !isNaN(nb)) {
+                    if (na !== nb) return na - nb;
+                } else {
+                    var cmp = pa.toLowerCase().localeCompare(pb.toLowerCase());
+                    if (cmp !== 0) return cmp;
+                }
+            }
+            return 0;
+        }
+
+        sortBtn.addEventListener("click", function() {
+            if (locked) return;
+            rows.sort(function(a, b) {
+                return editSE_naturalSort(a.name, b.name);
+            });
+            selectedIdx = -1;
+            editBox.style.display = "none";
+            renderTable();
+            validate();
+        });
+
+        // Search
+        searchInput.addEventListener("input", function() {
+            renderTable();
+        });
+
+        // Add
+        function doAdd() {
+            if (locked) return;
+            var val = addInput.value.trim();
+            if (!val) { addError.textContent = "Name cannot be empty"; return; }
+            // check duplicate
+            for (var ai = 0; ai < rows.length; ai++) {
+                if (rows[ai].name.trim().toLowerCase() === val.toLowerCase()) {
+                    addError.textContent = "Duplicate: \"" + val + "\" already exists";
+                    return;
+                }
+            }
+            addError.textContent = "";
+            var newRow = { name: val, href: null, originalName: null, status: "added", reason: "" };
+            rows.push(newRow);
+            // sort using natural order (Day 2 before Day 11)
+            rows.sort(function(a, b) {
+                return editSE_naturalSort(a.name, b.name);
+            });
+            selectedIdx = -1;
+            for (var fi = 0; fi < rows.length; fi++) {
+                if (rows[fi] === newRow) { selectedIdx = fi; break; }
+            }
+            renderTable();
+            showEditPanel(selectedIdx);
+            validate();
+            log("[EditSE] Added new study event: " + val);
+        }
+
+        addBtn.addEventListener("click", doAdd);
+        addInput.addEventListener("keydown", function(e) {
+            if (e.key === "Enter") doAdd();
+        });
+
+        // Edit name live
+        editNameInput.addEventListener("input", function() {
+            if (locked || selectedIdx < 0 || selectedIdx >= rows.length) return;
+            var r = rows[selectedIdx];
+            var newName = editNameInput.value;
+            r.name = newName;
+            // determine status
+            if (r.status !== "added") {
+                if (newName.trim() !== r.originalName.trim()) {
+                    r.status = "updated";
+                } else {
+                    r.status = "original";
+                }
+            }
+            renderTable();
+            validate();
+        });
+
+        // Edit reason live
+        editReasonInput.addEventListener("input", function() {
+            if (locked || selectedIdx < 0 || selectedIdx >= rows.length) return;
+            rows[selectedIdx].reason = editReasonInput.value;
+        });
+
+        // Confirm
+        confirmBtn.addEventListener("click", function() {
+            if (confirmBtn.disabled || locked) return;
+            if (!validate()) return;
+            locked = true;
+            confirmBtn.disabled = true;
+            confirmBtn.style.opacity = "0.5";
+            // capture final order
+            EDIT_SE_FINAL_ORDER = [];
+            for (var oi = 0; oi < rows.length; oi++) {
+                EDIT_SE_FINAL_ORDER.push({
+                    name: rows[oi].name.trim(),
+                    href: rows[oi].href,
+                    originalName: rows[oi].originalName,
+                    status: rows[oi].status,
+                    reason: rows[oi].reason
+                });
+            }
+            log("[EditSE] Confirmed " + EDIT_SE_FINAL_ORDER.length + " events. Starting execution...");
+            if (EDIT_SE_POPUP_REF) {
+                try { EDIT_SE_POPUP_REF.close(); } catch (e) {}
+                EDIT_SE_POPUP_REF = null;
+            }
+            editSE_executePhase();
+        });
+
+        // Initial render
+        renderTable();
+        validate();
+
+        // Open popup
+        EDIT_SE_POPUP_REF = createPopup({
+            title: EDIT_SE_FEATURE_NAME,
+            description: "Manage, add, rename, and reorder study events",
+            content: root,
+            width: "820px",
+            height: "560px",
+            maxWidth: "95%",
+            maxHeight: "90%",
+            onClose: function() {
+                if (!locked) editSE_cleanup();
+            }
+        });
+    }
+
+    // ===== EXECUTION PHASE =====
+    async function editSE_executePhase() {
+        var order = EDIT_SE_FINAL_ORDER;
+        if (!order || order.length === 0) {
+            log("[EditSE] No events to process");
+            editSE_cleanup();
+            return;
+        }
+
+        var added = [];
+        var updated = [];
+        for (var i = 0; i < order.length; i++) {
+            if (order[i].status === "added") added.push(order[i]);
+            if (order[i].status === "updated") updated.push(order[i]);
+        }
+        log("[EditSE] Execution: " + added.length + " to add, " + updated.length + " to update");
+
+        // Show progress popup
+        var progressRoot = document.createElement("div");
+        progressRoot.style.padding = "16px";
+        progressRoot.style.display = "flex";
+        progressRoot.style.flexDirection = "column";
+        progressRoot.style.gap = "10px";
+        progressRoot.style.fontSize = "13px";
+
+        var progressStatus = document.createElement("div");
+        progressStatus.textContent = "Starting...";
+        progressStatus.style.fontWeight = "600";
+        progressRoot.appendChild(progressStatus);
+
+        var progressBar = document.createElement("div");
+        progressBar.style.height = "6px";
+        progressBar.style.borderRadius = "3px";
+        progressBar.style.background = "#333";
+        progressBar.style.overflow = "hidden";
+        var progressFill = document.createElement("div");
+        progressFill.style.height = "100%";
+        progressFill.style.width = "0%";
+        progressFill.style.background = "linear-gradient(90deg, #667eea, #764ba2)";
+        progressFill.style.borderRadius = "3px";
+        progressFill.style.transition = "width 0.3s";
+        progressBar.appendChild(progressFill);
+        progressRoot.appendChild(progressBar);
+
+        var progressLog = document.createElement("div");
+        progressLog.style.maxHeight = "200px";
+        progressLog.style.overflowY = "auto";
+        progressLog.style.fontSize = "12px";
+        progressLog.style.color = "#ccc";
+        progressLog.style.whiteSpace = "pre-wrap";
+        progressLog.style.wordBreak = "break-word";
+        progressRoot.appendChild(progressLog);
+
+        var progressPopup = createPopup({
+            title: EDIT_SE_FEATURE_NAME + " — Processing",
+            content: progressRoot,
+            width: "500px",
+            height: "auto",
+            maxHeight: "80%",
+            onClose: function() {
+                EDIT_SE_CANCELED = true;
+                log("[EditSE] Processing canceled by user");
+            }
+        });
+
+        function plog(msg) {
+            log("[EditSE] " + msg);
+            var line = document.createElement("div");
+            line.textContent = msg;
+            progressLog.appendChild(line);
+            progressLog.scrollTop = progressLog.scrollHeight;
+        }
+
+        var totalSteps = updated.length + (added.length > 0 ? 1 : 0);
+        var doneSteps = 0;
+
+        function updateProgress(msg) {
+            progressStatus.textContent = msg;
+            var pct = totalSteps > 0 ? Math.round((doneSteps / totalSteps) * 100) : 0;
+            progressFill.style.width = pct + "%";
+        }
+
+        var aborted = false;
+        var updateErrors = 0;
+
+        // ── Phase 1: Update existing study events via background fetch + POST ──
+        // Uses fetchPage/submitForm (GM.xmlHttpRequest) pattern, same as Lock Activity Plans.
+        if (updated.length > 0 && !EDIT_SE_CANCELED) {
+            plog("Phase 1: Updating " + updated.length + " existing study event(s)...");
+
+            for (var ui = 0; ui < updated.length; ui++) {
+                if (EDIT_SE_CANCELED) { plog("Canceled by user."); aborted = true; break; }
+                var ue = updated[ui];
+                var ueName = ue.originalName;
+                var ueHref = ue.href;
+                updateProgress("Updating (" + (ui + 1) + "/" + updated.length + "): " + ueName + " → " + ue.name);
+                plog("Updating: " + ueName + " → " + ue.name);
+
+                if (!ueHref) {
+                    plog("WARN: No href for " + ueName + ", skipping.");
+                    doneSteps++;
+                    updateErrors++;
+                    continue;
+                }
+
+                try {
+                    // Step 1: Fetch the show page to discover the edit link
+                    var showUrl = location.origin + ueHref;
+                    plog("  Fetching show page: " + showUrl);
+                    var showHtml = await fetchPage(showUrl);
+                    var showDoc = parseHtml(showHtml);
+
+                    // Step 2: Find the edit link (href containing "update/studyevent")
+                    var editLink = null;
+                    var candidates = showDoc.querySelectorAll('a[href*="update/studyevent"]');
+                    if (candidates.length > 0) {
+                        editLink = candidates[0].getAttribute("href");
+                    }
+                    // Fallback: any anchor with data-target="#ajaxModal" whose text contains "Edit"
+                    if (!editLink) {
+                        var modalAnchors = showDoc.querySelectorAll('a[data-target="#ajaxModal"]');
+                        for (var ci = 0; ci < modalAnchors.length; ci++) {
+                            var cText = modalAnchors[ci].textContent.trim().toLowerCase();
+                            if (cText.indexOf("edit") !== -1) {
+                                editLink = modalAnchors[ci].getAttribute("href");
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!editLink) {
+                        plog("ERROR: No edit link found on show page for " + ueName);
+                        updateErrors++;
+                        doneSteps++;
+                        continue;
+                    }
+
+                    // Step 3: Fetch the edit modal content
+                    var editUrl = editLink.startsWith("http") ? editLink : location.origin + editLink;
+                    plog("  Fetching edit modal: " + editUrl);
+                    var editHtml = await fetchPage(editUrl);
+                    var editDoc = parseHtml(editHtml);
+
+                    var form = editDoc.querySelector("form");
+                    if (!form) {
+                        plog("ERROR: No form found in edit modal for " + ueName);
+                        updateErrors++;
+                        doneSteps++;
+                        continue;
+                    }
+
+                    // Step 4: Build URL-encoded form data from all inputs (preserves hidden fields, CSRF, etc.)
+                    var allInputs = form.querySelectorAll("input, textarea, select");
+                    var formDataParts = [];
+                    for (var fi = 0; fi < allInputs.length; fi++) {
+                        var inp = allInputs[fi];
+                        var inpName = inp.getAttribute("name");
+                        if (!inpName) continue;
+                        var inpType = (inp.getAttribute("type") || "").toLowerCase();
+                        var inpTag = inp.tagName.toLowerCase();
+                        var inpValue = "";
+
+                        if (inpType === "checkbox" || inpType === "radio") {
+                            if (inp.checked || inp.hasAttribute("checked")) {
+                                inpValue = inp.value || inp.getAttribute("value") || "on";
+                            } else {
+                                continue;
+                            }
+                        } else if (inpTag === "select") {
+                            var selOpt = inp.querySelector("option[selected]");
+                            if (selOpt) {
+                                inpValue = selOpt.value || selOpt.getAttribute("value") || "";
+                            } else {
+                                var firstOpt = inp.querySelector("option");
+                                inpValue = firstOpt ? (firstOpt.value || firstOpt.getAttribute("value") || "") : "";
+                            }
+                        } else {
+                            inpValue = inp.value || inp.getAttribute("value") || "";
+                        }
+
+                        formDataParts.push(encodeURIComponent(inpName) + "=" + encodeURIComponent(inpValue));
+                    }
+                    var formDataStr = formDataParts.join("&");
+
+                    // Step 5: Override name and reasonForChange in the encoded form data
+                    // Remove existing name/reasonForChange entries and append new ones
+                    var filteredParts = [];
+                    for (var pi = 0; pi < formDataParts.length; pi++) {
+                        var partKey = formDataParts[pi].split("=")[0];
+                        if (partKey === "name" || partKey === "reasonForChange") continue;
+                        filteredParts.push(formDataParts[pi]);
+                    }
+                    filteredParts.push("name=" + encodeURIComponent(ue.name));
+                    filteredParts.push("reasonForChange=" + encodeURIComponent(ue.reason || "Update"));
+                    formDataStr = filteredParts.join("&");
+
+                    // Step 6: POST to the edit URL (same URL used to fetch the modal, NOT form action)
+                    plog("  Submitting update to: " + editUrl);
+                    var resultHtml = await submitForm(editUrl, formDataStr);
+
+                    // Check for error in response
+                    var resultDoc = parseHtml(resultHtml);
+                    var errorAlert = resultDoc.querySelector("div.alert.alert-danger");
+                    if (errorAlert) {
+                        var errText = (errorAlert.textContent || "").trim();
+                        plog("ERROR: Server returned error for " + ueName + ": " + errText);
+                        updateErrors++;
+                    } else {
+                        plog("  ✓ Update saved for: " + ueName + " → " + ue.name);
+                    }
+                } catch (editErr) {
+                    plog("ERROR updating " + ueName + ": " + String(editErr));
+                    updateErrors++;
+                }
+
+                doneSteps++;
+                updateProgress("Updated (" + (ui + 1) + "/" + updated.length + ")");
+                await sleep(300);
+            }
+            if (updateErrors > 0) {
+                plog("Phase 1 complete with " + updateErrors + " error(s).");
+            } else {
+                plog("Phase 1 complete: all " + updated.length + " update(s) successful.");
+            }
+        }
+
+        // ── Phase 2: Add Batch (triggers page reload — persist state first) ──
+        if (added.length > 0 && !aborted && !EDIT_SE_CANCELED) {
+            updateProgress("Adding " + added.length + " new study event(s)...");
+            plog("Phase 2: Adding " + added.length + " study event(s) via Add Batch...");
+
+            // Persist state to localStorage BEFORE the save that will reload the page
+            try {
+                var pendingState = {
+                    added: added,
+                    updated: updated,
+                    order: order,
+                    hadErrors: updateErrors > 0
+                };
+                localStorage.setItem(STORAGE_EDIT_SE_PENDING, JSON.stringify(pendingState));
+                log("[EditSE] Persisted pending state to localStorage");
+            } catch (storageErr) {
+                plog("WARN: Could not persist state: " + String(storageErr));
+            }
+
+            try {
+                // Find and click Add Batch button
+                var addBatchLink = document.querySelector('a[href="' + EDIT_SE_ADD_BATCH_HREF + '"]');
+                if (!addBatchLink) {
+                    var allLinks = document.querySelectorAll("a[href]");
+                    for (var li = 0; li < allLinks.length; li++) {
+                        if (allLinks[li].getAttribute("href").indexOf("batchsave/studyevent") !== -1) {
+                            addBatchLink = allLinks[li];
+                            break;
+                        }
+                    }
+                }
+                if (!addBatchLink) {
+                    plog("ERROR: Add Batch button not found. Aborting.");
+                    try { localStorage.removeItem(STORAGE_EDIT_SE_PENDING); } catch (e) {}
+                    aborted = true;
+                } else {
+                    addBatchLink.click();
+                    plog("Clicked Add Batch button, waiting for modal...");
+                    await sleep(1500);
+
+                    // Wait for modal with textarea
+                    var textarea = null;
+                    var modalWaitStart = Date.now();
+                    while (Date.now() - modalWaitStart < 10000) {
+                        textarea = document.getElementById("studyEvents");
+                        if (textarea) break;
+                        await sleep(200);
+                    }
+
+                    if (!textarea) {
+                        plog("ERROR: studyEvents textarea not found in modal. Aborting.");
+                        try { localStorage.removeItem(STORAGE_EDIT_SE_PENDING); } catch (e) {}
+                        aborted = true;
+                    } else {
+                        var lines = [];
+                        for (var ai = 0; ai < added.length; ai++) {
+                            lines.push(added[ai].name.trim());
+                        }
+                        textarea.value = lines.join("\n");
+                        textarea.dispatchEvent(new Event("input", { bubbles: true }));
+                        textarea.dispatchEvent(new Event("change", { bubbles: true }));
+                        plog("Filled textarea with " + lines.length + " study event(s)");
+
+                        await sleep(500);
+                        var saveBtn = document.getElementById("actionButton");
+                        if (!saveBtn) {
+                            var modals = document.querySelectorAll(".modal.in .btn-primary, .modal.show .btn-primary");
+                            if (modals.length > 0) saveBtn = modals[modals.length - 1];
+                        }
+                        if (!saveBtn) {
+                            plog("ERROR: Save button not found. Aborting.");
+                            try { localStorage.removeItem(STORAGE_EDIT_SE_PENDING); } catch (e) {}
+                            aborted = true;
+                        } else {
+                            plog("Clicking Save — page will likely reload...");
+                            saveBtn.click();
+                            // Page reload expected here. If it does NOT reload, we handle it below.
+                            // Wait a generous amount of time; if we're still alive, the page didn't reload.
+                            await sleep(5000);
+
+                            // If we reach here, the page did NOT reload (unlikely but handle gracefully)
+                            plog("Add Batch save completed (no page reload detected).");
+                            try { localStorage.removeItem(STORAGE_EDIT_SE_PENDING); } catch (e) {}
+                            doneSteps++;
+                            updateProgress("Add Batch done");
+                        }
+                    }
+                }
+            } catch (e) {
+                plog("ERROR during Add Batch: " + String(e));
+                try { localStorage.removeItem(STORAGE_EDIT_SE_PENDING); } catch (e2) {}
+                aborted = true;
+            }
+        }
+
+        // Close progress popup and show summary
+        // (Only reached if Add Batch didn't reload the page, or if there were no adds)
+        try { progressPopup.close(); } catch (e5) {}
+
+        var hadErrors = aborted || EDIT_SE_CANCELED || updateErrors > 0;
+        editSE_showSummary(added, updated, hadErrors);
+    }
+
+    // ===== RESUME AFTER PAGE RELOAD =====
+    function editSE_resumeAfterReload() {
+        var raw = null;
+        try { raw = localStorage.getItem(STORAGE_EDIT_SE_PENDING); } catch (e) {}
+        if (!raw) return false;
+
+        try { localStorage.removeItem(STORAGE_EDIT_SE_PENDING); } catch (e) {}
+
+        var state = null;
+        try { state = JSON.parse(raw); } catch (e) {
+            log("[EditSE] Failed to parse pending state: " + String(e));
+            return false;
+        }
+        if (!state || !state.order) {
+            log("[EditSE] Invalid pending state");
+            return false;
+        }
+
+        log("[EditSE] Resuming after page reload — showing summary");
+        EDIT_SE_FINAL_ORDER = state.order;
+        editSE_showSummary(state.added || [], state.updated || [], state.hadErrors || false);
+        return true;
+    }
+    // ===== SUMMARY GUI =====
+    function editSE_showSummary(added, updated, hadErrors) {
+        var glass = isGlassTheme();
+        var summaryRoot = document.createElement("div");
+        summaryRoot.style.padding = "16px";
+        summaryRoot.style.display = "flex";
+        summaryRoot.style.flexDirection = "column";
+        summaryRoot.style.gap = "12px";
+        summaryRoot.style.fontSize = "13px";
+
+        // Stats
+        var statsDiv = document.createElement("div");
+        statsDiv.style.display = "flex";
+        statsDiv.style.gap = "16px";
+        statsDiv.style.flexWrap = "wrap";
+
+        function statCard(label, count, color) {
+            var card = document.createElement("div");
+            card.style.padding = "10px 16px";
+            card.style.borderRadius = "8px";
+            card.style.background = glass ? "rgba(15,10,40,0.4)" : "#1a1a1a";
+            card.style.border = "1px solid " + (glass ? "rgba(255,255,255,0.15)" : "#333");
+            card.style.textAlign = "center";
+            var num = document.createElement("div");
+            num.textContent = String(count);
+            num.style.fontSize = "22px";
+            num.style.fontWeight = "700";
+            num.style.color = color;
+            card.appendChild(num);
+            var lbl = document.createElement("div");
+            lbl.textContent = label;
+            lbl.style.fontSize = "11px";
+            lbl.style.color = glass ? "rgba(255,255,255,0.65)" : "#999";
+            card.appendChild(lbl);
+            return card;
+        }
+
+        statsDiv.appendChild(statCard("Added", added.length, "#10b981"));
+        statsDiv.appendChild(statCard("Updated", updated.length, "#f59e0b"));
+        summaryRoot.appendChild(statsDiv);
+
+        if (hadErrors) {
+            var errDiv = document.createElement("div");
+            errDiv.textContent = "⚠ Some operations may have failed. Check logs for details.";
+            errDiv.style.color = "#ef4444";
+            errDiv.style.fontWeight = "500";
+            summaryRoot.appendChild(errDiv);
+        }
+
+        // Lists
+        if (added.length > 0) {
+            var addedSection = document.createElement("div");
+            var addedHeader = document.createElement("div");
+            addedHeader.textContent = "Added Study Events:";
+            addedHeader.style.fontWeight = "600";
+            addedHeader.style.marginBottom = "4px";
+            addedHeader.style.color = "#10b981";
+            addedSection.appendChild(addedHeader);
+            for (var a = 0; a < added.length; a++) {
+                var line = document.createElement("div");
+                line.textContent = "  • " + added[a].name;
+                line.style.fontSize = "12px";
+                line.style.paddingLeft = "8px";
+                addedSection.appendChild(line);
+            }
+            summaryRoot.appendChild(addedSection);
+        }
+        if (updated.length > 0) {
+            var updatedSection = document.createElement("div");
+            var updatedHeader = document.createElement("div");
+            updatedHeader.textContent = "Updated Study Events:";
+            updatedHeader.style.fontWeight = "600";
+            updatedHeader.style.marginBottom = "4px";
+            updatedHeader.style.color = "#f59e0b";
+            updatedSection.appendChild(updatedHeader);
+            for (var u = 0; u < updated.length; u++) {
+                var uline = document.createElement("div");
+                uline.textContent = "  • " + updated[u].originalName + " → " + updated[u].name;
+                uline.style.fontSize = "12px";
+                uline.style.paddingLeft = "8px";
+                updatedSection.appendChild(uline);
+            }
+            summaryRoot.appendChild(updatedSection);
+        }
+
+        // Button
+        var btnWrap = document.createElement("div");
+        btnWrap.style.display = "flex";
+        btnWrap.style.justifyContent = "flex-end";
+        btnWrap.style.paddingTop = "8px";
+        btnWrap.style.borderTop = "1px solid " + (glass ? "rgba(255,255,255,0.15)" : "#333");
+
+        var actionBtn = document.createElement("button");
+        actionBtn.textContent = "Confirm";
+        actionBtn.style.padding = "8px 22px";
+        actionBtn.style.borderRadius = "8px";
+        actionBtn.style.border = "none";
+        actionBtn.style.background = "#10b981";
+        actionBtn.style.color = "#fff";
+        actionBtn.style.cursor = "pointer";
+        actionBtn.style.fontWeight = "700";
+        actionBtn.style.fontSize = "14px";
+
+        btnWrap.appendChild(actionBtn);
+        summaryRoot.appendChild(btnWrap);
+
+        var summaryPopup = createPopup({
+            title: EDIT_SE_FEATURE_NAME + " — Summary",
+            content: summaryRoot,
+            width: "500px",
+            height: "auto",
+            maxHeight: "85%",
+            onClose: function() {
+                editSE_cleanup();
+            }
+        });
+
+        actionBtn.addEventListener("click", function() {
+            summaryPopup.close();
+            editSE_cleanup();
+            log("[EditSE] Process complete. Cleanup done.");
+        });
+    }
+
+    // ===== TABLE SORT =====
+    async function editSE_sortTable() {
+        log("[EditSE] Starting table sort...");
+        var order = EDIT_SE_FINAL_ORDER;
+        if (!order || order.length === 0) {
+            log("[EditSE] No order data for sort");
+            return;
+        }
+
+        var tbody = document.getElementById("sortableTable");
+        if (!tbody) {
+            log("[EditSE] sortableTable not found for sorting");
+            return;
+        }
+
+        // Build a map from lowercased name → tr element
+        // Name is inside the anchor within td.dragHandle (first td)
+        function buildRowMap() {
+            var map = {};
+            var rows = tbody.querySelectorAll("tr");
+            for (var ri = 0; ri < rows.length; ri++) {
+                var dragTd = rows[ri].querySelector("td.dragHandle");
+                var anchor = dragTd ? dragTd.querySelector("a") : null;
+                var name = anchor ? anchor.textContent.trim().toLowerCase() : "";
+                if (name) map[name] = rows[ri];
+            }
+            return map;
+        }
+
+        var rowMap = buildRowMap();
+        var placed = 0;
+        var notFound = [];
+
+        // Sort by iterating through the desired order from first to last.
+        // For each study event, find its row and append it to tbody.
+        // Appending a node that already exists in the DOM moves it to the end.
+        // This builds the correct order sequentially: first at top, last at bottom.
+        for (var si = 0; si < order.length; si++) {
+            var targetName = order[si].name.trim().toLowerCase();
+            var targetRow = rowMap[targetName];
+            if (targetRow) {
+                tbody.appendChild(targetRow);
+                placed++;
+            } else {
+                notFound.push(order[si].name);
+            }
+        }
+
+        log("[EditSE] DOM reorder complete: " + placed + "/" + order.length + " rows placed");
+        if (notFound.length > 0) {
+            log("[EditSE] Rows not found for sort (" + notFound.length + "): " + notFound.join(", "));
+        }
+
+        // Build serialized row order from row IDs (se_62397 → se[]=62397)
+        var serializedParts = [];
+        var allRows = tbody.querySelectorAll("tr[id]");
+        for (var sr = 0; sr < allRows.length; sr++) {
+            var rowId = allRows[sr].id;
+            if (rowId && rowId.indexOf("se_") === 0) {
+                serializedParts.push("se[]=" + rowId.replace("se_", ""));
+            }
+        }
+        var serializedOrder = serializedParts.join("&");
+        log("[EditSE] Serialized order (" + serializedParts.length + " rows): " + serializedOrder);
+
+        // ── Persist the new order to the ClinSpark server ──
+        // ClinSpark uses jQuery UI sortable with an update/stop callback that POSTs
+        // the serialized order via AJAX. We try multiple strategies to invoke that handler.
+        var jq = window.jQuery || window.$;
+        var saved = false;
+
+        // Strategy 1: Invoke the sortable widget's own _trigger method.
+        // This is how jQuery UI internally fires callbacks — it calls the bound
+        // options.update function AND dispatches the "sortupdate" event on the element.
+        if (jq && !saved) {
+            try {
+                var $sortable = jq("#sortableTable");
+                var widgetInstance = $sortable.sortable("instance");
+                if (widgetInstance) {
+                    $sortable.sortable("refresh");
+                    var $firstRow = $sortable.find("tr:first");
+                    var mockUi = { item: $firstRow, sender: null };
+
+                    if (typeof widgetInstance._trigger === "function") {
+                        log("[EditSE] Strategy 1: Invoking widget._trigger(update/stop)...");
+                        widgetInstance._trigger("update", null, mockUi);
+                        widgetInstance._trigger("stop", null, mockUi);
+                        saved = true;
+                        log("[EditSE] Strategy 1: _trigger invoked successfully");
+                        await sleep(1500);
+                    }
+                }
+            } catch (e1) {
+                log("[EditSE] Strategy 1 error: " + String(e1));
+            }
+        }
+
+        // Strategy 2: Directly call the sortable options.update/stop callback functions.
+        if (jq && !saved) {
+            try {
+                var $sortable2 = jq("#sortableTable");
+                var widgetInstance2 = $sortable2.sortable("instance");
+                if (widgetInstance2 && widgetInstance2.options) {
+                    $sortable2.sortable("refresh");
+                    var $firstRow2 = $sortable2.find("tr:first");
+                    var mockUi2 = { item: $firstRow2, sender: null };
+
+                    if (typeof widgetInstance2.options.update === "function") {
+                        log("[EditSE] Strategy 2: Calling options.update directly...");
+                        widgetInstance2.options.update.call(tbody, null, mockUi2);
+                        saved = true;
+                        log("[EditSE] Strategy 2: options.update called");
+                    }
+                    if (typeof widgetInstance2.options.stop === "function") {
+                        log("[EditSE] Strategy 2: Calling options.stop directly...");
+                        widgetInstance2.options.stop.call(tbody, null, mockUi2);
+                        saved = true;
+                        log("[EditSE] Strategy 2: options.stop called");
+                    }
+                    if (saved) await sleep(1500);
+                }
+            } catch (e2) {
+                log("[EditSE] Strategy 2 error: " + String(e2));
+            }
+        }
+
+        // Strategy 3: Trigger sortupdate/sortstop events WITH proper ui data.
+        if (jq && !saved) {
+            try {
+                var $sortable3 = jq("#sortableTable");
+                $sortable3.sortable("refresh");
+                var $firstRow3 = $sortable3.find("tr:first");
+                log("[EditSE] Strategy 3: Triggering sortupdate/sortstop events with ui...");
+                $sortable3.trigger("sortupdate", [{ item: $firstRow3, sender: null }]);
+                $sortable3.trigger("sortstop", [{ item: $firstRow3, sender: null }]);
+                saved = true;
+                log("[EditSE] Strategy 3: Events triggered");
+                await sleep(1500);
+            } catch (e3) {
+                log("[EditSE] Strategy 3 error: " + String(e3));
+            }
+        }
+
+        // Strategy 4: Manual POST with serialized row order via GM.xmlHttpRequest.
+        // ClinSpark's sortable likely POSTs to /studyEvent/sort with se[]=id format.
+        if (!saved && serializedOrder) {
+            try {
+                var sortUrl = location.origin + "/studyEvent/sort";
+                log("[EditSE] Strategy 4: Manual POST to " + sortUrl);
+                log("[EditSE] Data: " + serializedOrder);
+                var resultHtml = await submitForm(sortUrl, serializedOrder);
+                var resultLen = resultHtml ? resultHtml.length : 0;
+                log("[EditSE] Strategy 4: POST complete (response " + resultLen + " chars)");
+                saved = true;
+            } catch (e4) {
+                log("[EditSE] Strategy 4 error: " + String(e4));
+            }
+        }
+
+        log("[EditSE] Table sort complete. Persisted: " + saved);
+    }
 
     function createPopup(options) {
         var glass = isGlassTheme();
@@ -22737,9 +23975,10 @@
         headerBar.style.gridTemplateColumns = "1fr auto";
         headerBar.style.alignItems = "center";
         headerBar.style.gap = String(PANEL_HEADER_GAP_PX) + "px";
-        headerBar.style.height = String(PANEL_HEADER_HEIGHT_PX) + "px";
+        headerBar.style.minHeight = String(PANEL_HEADER_HEIGHT_PX) + "px";
         headerBar.style.boxSizing = "border-box";
-        headerBar.style.padding = "0 12px";
+        headerBar.style.padding = "8px 12px";
+        headerBar.style.flexShrink = "0";
         if (!glass) {
             headerBar.style.borderBottom = "1px solid #444";
         } else {
@@ -22782,11 +24021,14 @@
         closeBtn.style.lineHeight = "1";
         closeBtn.style.padding = "4px 8px";
         closeBtn.style.borderRadius = "4px";
-        closeBtn.style.width = "32px";
-        closeBtn.style.height = "32px";
+        closeBtn.style.width = "28px";
+        closeBtn.style.height = "28px";
         closeBtn.style.display = "flex";
         closeBtn.style.alignItems = "center";
         closeBtn.style.justifyContent = "center";
+        closeBtn.style.flexShrink = "0";
+        closeBtn.style.overflow = "hidden";
+        closeBtn.style.boxSizing = "border-box";
         closeBtn.addEventListener("mouseenter", function() {
             closeBtn.style.background = glass ? THEME_SURFACE_BG_HEAVY : "#333";
         });
@@ -23392,6 +24634,23 @@
         });
         PULL_LAB_BARCODE_BUTTON_REF = pullLabBarcodeBtn;
 
+        var editStudyEventsBtn = document.createElement("button");
+        editStudyEventsBtn.textContent = "Edit Study Events List";
+        editStudyEventsBtn.style.background = "#5b43c7";
+        editStudyEventsBtn.style.color = "#fff";
+        editStudyEventsBtn.style.border = "none";
+        editStudyEventsBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        editStudyEventsBtn.style.padding = scale(BUTTON_PADDING_PX);
+        editStudyEventsBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
+        editStudyEventsBtn.style.cursor = "pointer";
+        editStudyEventsBtn.style.fontWeight = "500";
+        editStudyEventsBtn.style.transition = "background 0.2s";
+        editStudyEventsBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
+        editStudyEventsBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
+        editStudyEventsBtn.addEventListener("click", function() {
+            editSE_start();
+        });
+
         var clearLogsBtn = document.createElement("button");
         clearLogsBtn.textContent = "Clear Logs";
         clearLogsBtn.style.background = "#6c757d";
@@ -23432,7 +24691,7 @@
 
         // Apply glassmorphism theme to all panel buttons if glass theme is active
         if (glass) {
-            var allPanelBtns = [runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, bplBtn, importEligBtn, findAeBtn, findFormBtn, findStudyEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, pauseBtn, clearLogsBtn, toggleLogsBtn];
+            var allPanelBtns = [runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, bplBtn, importEligBtn, findAeBtn, findFormBtn, findStudyEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, editStudyEventsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn];
             for (var gi = 0; gi < allPanelBtns.length; gi++) {
                 var gb = allPanelBtns[gi];
                 gb.className = "ie-btn-primary";
@@ -23466,6 +24725,7 @@
             { el: openEligBtn, label: "Cohort Eligibility" },
             { el: subjectEligBtn, label: "Subject Eligibility" },
             { el: parseStudyEventBtn, label: "Parse Study Event" },
+            { el: editStudyEventsBtn, label: "Edit Study Events List" },
             { el: pauseBtn, label: "Pause" },
             { el: clearLogsBtn, label: "Clear Logs" },
             { el: toggleLogsBtn, label: "Hide Logs" }
@@ -23776,6 +25036,9 @@
             addButtonToPanel(label, handler);
         };
         bindPanelHotkeyOnce();
+
+        // Resume Edit Study Events after page reload (Add Batch triggers reload)
+        editSE_resumeAfterReload();
 
         parseDeviationCheckOnPageLoad();
 
