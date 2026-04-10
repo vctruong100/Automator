@@ -364,32 +364,11 @@
     "updated": "2026-02-17"
   },
   {
-    "id": "M-053",
-    "title": "Edit Check ECG Difference between Collected Time and Supine Time (REPEAT)",
-    "tags": ["Supine", "ECG", "Difference"],
-    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20ECG%20Difference%20between%20Collected%20Time%20and%20Supine%20Time%20(REPEAT).md",
-    "updated": "2026-02-17"
-  },
-  {
-    "id": "M-054",
-    "title": "Edit Check ECG Difference between Collected Time and Supine Time (NON-REPEAT)",
-    "tags": ["Supine", "ECG", "Difference"],
-    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20ECG%20Difference%20between%20Collected%20Time%20and%20Supine%20Time%20(NON-REPEAT).md",
-    "updated": "2026-02-17"
-  },
-  {
     "id": "M-055",
     "title": "Weight (Screening)",
     "tags": ["Weight", "Screening"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Weight%20(Screening).md",
     "updated": "2026-02-18"
-  },
-  {
-    "id": "M-056",
-    "title": "Edit Check Difference between Start and End Time",
-    "tags": ["Start", "End", "Time", "Difference"],
-    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Difference%20between%20Start%20and%20End%20Time.md",
-    "updated": "2026-02-25"
   },
   {
     "id": "M-057",
@@ -459,13 +438,6 @@
     "title": "Function Is Within Last Year",
     "tags": ["Function", "Year"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Function%20Is%20Within%20Last%20Year.md",
-    "updated": "2026-03-10"
-  },
-  {
-    "id": "M-065",
-    "title": "Edit Check Collection Time Must Be At Least 1 Minute and No More Than 2 Minutes",
-    "tags": ["Edit", "Check"],
-    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Collection%20Time%20Must%20Be%20At%20Least%201%20Minute%20and%20No%20More%20Than%202%20Minutes.md",
     "updated": "2026-03-10"
   },
   {
