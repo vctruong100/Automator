@@ -1,3 +1,4 @@
+	
 const sysItem = [
     "SYS (I: 80-150)",
     "Systolic Blood Pressure",
@@ -79,15 +80,15 @@ function checkDifference(range, semi, standing) {
     var diff = standing - semi;
     logger("Difference: " + diff);
     var absDiff = Math.abs(diff);
-    
+    logger("Absolute Difference: " + absDiff);
     if (containsValue(item.name, "hr_diff")) {
         if (diff >= range) return "YES, increased by " + absDiff + " mmHg.";
         else if (diff < range && diff >= 0) return "NO, increased by " + absDiff + " mmHg.";
         else if (diff < 0) return "NO, decreased by " + absDiff + " mmHg.";
     }
     else {
-        if (diff >= range) return "YES, decreased by " + absDiff + " mmHg.";
-        else if (diff < range && diff >= 0) return "NO, increased by " + absDiff + " mmHg.";
+        if (diff < 0 && absDiff >= range) return "YES, decreased by " + absDiff + " mmHg.";
+        else if (diff >= 0) return "NO, increased by " + absDiff + " mmHg.";
         else if (diff < 0) return "NO, increased by " + absDiff + " mmHg.";
     }
 }

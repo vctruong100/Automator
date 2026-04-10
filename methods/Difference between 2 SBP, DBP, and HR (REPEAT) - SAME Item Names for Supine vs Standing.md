@@ -59,8 +59,6 @@ var hrSemi = null;
 var hrStanding = null;
 
 const item = itemJson.item;
-var groupName = getItemGroupName(formJson);
-var isRepeat = containsValue(groupName, "repeat");
 
 logger("Attached item: " + item.name);
 if (sysAttachedItem.indexOf(item.name) !== -1) {
@@ -88,38 +86,21 @@ function containsValue(input, keyword) {
     return value.indexOf(keyword) !== -1;
 }
 
-function getItemGroupName(form) {
-    for (var i = 0; i < form.form.itemGroups.length; i++) {
-        var group = form.form.itemGroups[i];
-        var items = group.items;
-        if (!items || items.length < 1) continue;
-    
-        for (var j = 0; j < items.length; j++) {
-            var it = items[j];
-            if (it.id === item.id) {
-                return group.name;
-            }
-        }
-    }
-    return null;
-}
-
-
 function checkDifference(range, semi, standing) {
     logger("Semi: " + semi);
     logger("Standing: " + standing);
     var diff = standing - semi;
     logger("Difference: " + diff);
     var absDiff = Math.abs(diff);
-    
+    logger("Absolute Difference: " + absDiff);
     if (containsValue(item.name, "hr_diff")) {
         if (diff >= range) return "YES, increased by " + absDiff + " mmHg.";
         else if (diff < range && diff >= 0) return "NO, increased by " + absDiff + " mmHg.";
         else if (diff < 0) return "NO, decreased by " + absDiff + " mmHg.";
     }
     else {
-        if (diff >= range) return "YES, decreased by " + absDiff + " mmHg.";
-        else if (diff < range && diff >= 0) return "NO, increased by " + absDiff + " mmHg.";
+        if (diff < 0 && absDiff >= range) return "YES, decreased by " + absDiff + " mmHg.";
+        else if (diff >= 0) return "NO, increased by " + absDiff + " mmHg.";
         else if (diff < 0) return "NO, increased by " + absDiff + " mmHg.";
     }
 }
