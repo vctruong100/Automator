@@ -586,5 +586,12 @@
     "tags": ["Edit Check"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Item%20Name%20Range.md",
     "updated": "2026-04-10"
+  },
+  {
+    "id": "M-083",
+    "title": "Edit Check Difference between Start Time and Collection Time (Minutes Only)",
+    "tags": ["Edit Check"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Difference%20between%20Start%20Time%20and%20Collection%20Time%20%28Minutes%20Only%29.md",
+    "updated": "2026-04-10"
   }
 ]

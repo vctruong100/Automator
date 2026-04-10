@@ -1,60 +1,98 @@
-/* jshint strict: false */ 
-// Add item names here
-const SBPitem = [
-    "Systolic BP (SCR Protocol Range)", 
-    "Systolic BP (Protocol Range)"
-];
-const DBPitem = [
-    "Diastolic BP (SCR_Protocol Range)", 
-    "Diastolic BP (Protocol Range)"
-];
-const HRitem = [
-    "Heart Rate (Protocol range) v2.0",
-    "Heart Rate (Protocol range)", 
-];
+const sysItem = [
+    "SYS (I: 80-150)",
+    "Systolic Blood Pressure",
+]
+const diaItem = [
+    "DIA (I: 50-99)",
+    "DIA (I: 50-90)"
+]
 
-const SBPdifferenceItem = ["Difference in SBP"];
-const DBPdifferenceItem = ["Difference in DBP"];
-const HRdifferenceItem = ["Difference in HR"];
+const hrItem = [
+    "HR (I: 60-100)"
+]
 
-// ======== Don't modify ========
+const sysStandingItem = [
+    "SYS (I: 90-145) standing",
+    "SYS (I: 90-150) standing",
+]
 
-const itemJsn = itemJson.item;
-const currentItemName = itemJsn.name;
+const diaStandingItem = [
+    "DIA (I: 50-90) standing",
+    "DIA (I: 50-99) standing",
+]
 
-var supineSBP = pullItemFromForm(formJson, SBPitem, "supine");
-var supineDBP = pullItemFromForm(formJson, DBPitem, "supine");
-var supineHR = pullItemFromForm(formJson, HRitem, "supine");
+const hrStandingItem = [
+    "HR (I: 45-90) standing",
+    "HR (I: 45-100) standing",
+]
 
-var standingSBP = pullItemFromForm(formJson, SBPitem, "standing");
-var standingDBP = pullItemFromForm(formJson, DBPitem, "standing");
-var standingHR = pullItemFromForm(formJson, HRitem, "standing");
+const sysAttachedItem = [
+    "Systolic_BP_Diff",
+    "ortho sbp check",
+]
 
-var ortho = null;
-logger("Supine SBP: " + supineSBP + ", Standing SBP: " + standingSBP);
-logger("Supine DBP: " + supineDBP + ", Standing DBP: " + standingDBP);
-logger("Supine HR: " + supineHR + ", Standing HR: " + standingHR);
+const diaAttachedItem = [
+    "Diastolic_BP_Diff",
+    "Repeat_ortho dbp check",
+]
 
-if (SBPdifferenceItem.indexOf(currentItemName) !== -1) {
-    if (!supineSBP || supineSBP == null || !standingSBP || standingSBP == null) return null;
-    ortho = String(calculateDifference(supineSBP, standingSBP));
+const hrAttachedItem = [
+    "HR_Diff",
+    "Repeat_ortho hr check",
+]
+
+const sysRange = 19;
+const diaRange = 9;
+const hrRange = 30;
+
+var sysSemi = null;
+var sysStanding = null;
+
+var diaSemi = null;
+var diaStanding = null;
+
+var hrSemi = null;
+var hrStanding = null;
+
+const item = itemJson.item;
+
+logger("Attached item: " + item.name);
+if (sysAttachedItem.indexOf(item.name) !== -1) {
+    sysSemi = pullLastItemFromForm(formJson, sysItem);
+    sysStanding = pullFirstItemFromForm(formJson, sysStandingItem);
+    return checkDifference(sysRange, sysSemi, sysStanding);
+} else if (diaAttachedItem.indexOf(item.name) !== -1) {
+    diaSemi = pullLastItemFromForm(formJson, diaItem);
+    diaStanding = pullFirstItemFromForm(formJson, diaStandingItem);
+    return checkDifference(diaRange, diaSemi, diaStanding);
+} else if (hrAttachedItem.indexOf(item.name) !== -1) {
+    hrSemi = pullLastItemFromForm(formJson, hrItem);
+    hrStanding = pullFirstItemFromForm(formJson, hrStandingItem);
+    return checkDifference(hrRange, hrSemi, hrStanding);
 }
-if (DBPdifferenceItem.indexOf(currentItemName) !== -1) {
-    if (!supineDBP || supineDBP == null || !standingDBP || standingDBP == null) return null;
-    ortho = String(calculateDifference(supineDBP, standingDBP));
+
+return null;
+
+function checkDifference(range, semi, standing) {
+    logger("Semi: " + semi);
+    logger("Standing: " + standing);
+    var diff = standing - semi;
+    logger("Difference: " + diff);
+    var absDiff = Math.abs(diff);
+    
+    if (containsValue(item.name, "hr_diff")) {
+        if (diff >= range) return "YES, increased by " + absDiff + " mmHg.";
+        else if (diff < range && diff >= 0) return "NO, increased by " + absDiff + " mmHg.";
+        else if (diff < 0) return "NO, decreased by " + absDiff + " mmHg.";
+    }
+    else {
+        if (diff >= range) return "YES, decreased by " + absDiff + " mmHg.";
+        else if (diff < range && diff >= 0) return "NO, increased by " + absDiff + " mmHg.";
+        else if (diff < 0) return "NO, increased by " + absDiff + " mmHg.";
+    }
 }
-if (HRdifferenceItem.indexOf(currentItemName) !== -1) {
-    if (!supineHR || supineHR == null || !standingHR || standingHR == null) return null;
-    ortho = String(calculateDifference(supineHR, standingHR));
-}
 
-logger("SBP Difference: " + String(calculateDifference(supineSBP, standingSBP)));
-logger("DBP Difference: " + String(calculateDifference(supineDBP, standingDBP)));
-logger("HR Difference: "  + String(calculateDifference(supineHR, standingHR)));
-
-return ortho;
-
-function pullItemFromForm(form, targetItem, keyword) {
+function pullFirstItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
     
@@ -62,20 +100,13 @@ function pullItemFromForm(form, targetItem, keyword) {
     
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
-        groupName = group.name.toString().toLowerCase();
-        if (!group || group.canceled || groupName.indexOf(keyword) == -1) continue;
+        if (!group || group.canceled) continue;
         for (j = 0; j < group.items.length; j++) {
             item = group.items[j];
-            if (item && item.value !== null && !item.canceled && item.value !== "") {
-                if (matchesAny(targetItem, item.name)) return item.value;
-            }
+            if (targetItem.indexOf(item.name) !== -1 && item.value !== null && !item.canceled && item.value !== "") return item.value;
         }
     }
     return null;
-}
-
-function calculateDifference(supine, standing) {
-    return parseInt(supine, 10) - parseInt(standing, 10);
 }
 
 function containsValue(input, keyword) {
@@ -87,30 +118,19 @@ function containsValue(input, keyword) {
     return value.indexOf(keyword) !== -1;
 }
 
-function normalizeNameStrict(s) {
-    if (s === undefined || s === null) {
-        return "";
-    }
-    var t = String(s);
-    t = t.normalize ? t.normalize('NFKC') : t;
-    t = t.replace(/[\u200B-\u200D\uFEFF\u00A0]/g, ' ');
-    t = t.replace(/\s+/g, ' ');
-    t = t.trim().toLowerCase();
-    return t;
-}
-function matchesAny(targetNames, name) {
-    if (!targetNames || targetNames.length < 1) {
-        return false;
-    }
-    if (!name) {
-        return false;
-    }
-    var normalizedName = normalizeNameStrict(name);
-    for (var i = 0; i < targetNames.length; i++) {
-        var candidate = normalizeNameStrict(targetNames[i]);
-        if (candidate === normalizedName) {
-            return true;
+function pullLastItemFromForm(form, targetItem) {
+    var itemGroups = form.form.itemGroups;
+    var group, items, item, i, j, value;
+    
+	if (!itemGroups || itemGroups.length < 1) return null;
+    
+    for (i = itemGroups.length - 1; i >= 0; i--) {
+        group = itemGroups[i];
+        if (!group || group.canceled) continue;
+        for (j = 0; j < group.items.length; j++) {
+            item = group.items[j];
+            if (targetItem.indexOf(item.name) !== -1 && item.value !== null && !item.canceled && item.value !== "") return item.value;
         }
     }
-    return false;
+    return null;
 }

@@ -44,13 +44,6 @@ var dia_max_range = 99;
 var hr_min_range = 60;
 var hr_max_range = 100;
 
-var temp_min_range = 35.8;
-var temp_max_range = 37.6;
-
-var rr_min_range = 10;
-var rr_max_range = 20;
-
-
 // ======== Don't modify ========
 var item = itemJson.item;
 
