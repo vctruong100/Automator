@@ -7,12 +7,12 @@ logger("Item name: " + item.name);
 logger("Value: " + item.value);
 var groupName = getItemGroupName(formJson);
 var isRepeat = containsValue(groupName, "repeat");
-var isQtcF = containsValue(item.name, "qtcf") || containsValue(item.name, "qtc");
+var isQtcOrQTcF = containsValue(item.name, "qtcf") || containsValue(item.name, "qtc");
 var isMale = formJson.form.subject.volunteer.sexMale;
 
-logger("Is repeat: " + isRepeat + ", Is Male: " + isMale + ", is QTCF: " + isQtcF);
+logger("Is repeat: " + isRepeat + ", Is Male: " + isMale + ", is isQtcOrQTcF: " + isQtcOrQTcF);
 
-if (isQtcF) {   
+if (isQtcOrQTcF) {   
     var qtcfDict = parseMultiRange(item.name);
     logger(JSON.stringify(qtcfDict, null, 2))
     var range;
