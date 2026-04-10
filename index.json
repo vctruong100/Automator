@@ -579,5 +579,12 @@
     "tags": ["Calculation"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Glycemia%20Next%20Step.md",
     "updated": "2026-04-08"
+  },
+  {
+    "id": "M-082",
+    "title": "Edit Check Item Name Range",
+    "tags": ["Edit Check"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Item%20Name%20Range.md",
+    "updated": "2026-04-10"
   }
 ]
