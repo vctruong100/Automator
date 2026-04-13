@@ -1,5 +1,6 @@
 // Add Item Names
 const startTimeItem = [
+    "Start Semirecumbent Time",
     "VS_Repeat Start supine time",
     "VS_COLLECTION_DATE/TIME",
 ]
@@ -15,7 +16,9 @@ const difference = 5; // in minutes
 var methodType = "B";
 
 // ======== Don't modify ========
-var startTime = pullItemFromForm(formJson, startTimeItem);
+var isRepeat = containsValue(getItemGroupName(formJson), "repeat");
+
+var startTime = pullItemFromForm(formJson, startTimeItem, isRepeat);
 var endTime = itemJson.item;
 
 logger("Collected Time: " + endTime.value);
@@ -135,20 +138,61 @@ function formatDateTimeByType(item) {
     return value;
 }
 
-function pullItemFromForm(form, targetItem) {
+function pullItemFromForm(form, targetItem, isRepeat) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
     
 	if (!itemGroups || itemGroups.length < 1) return null;
     
-    for (i = 0; i < itemGroups.length; i++) {
-        group = itemGroups[i];
-        if (!group || group.canceled) continue;
-        for (j = 0; j < group.items.length; j++) {
-            item = group.items[j];
-            if (targetItem.indexOf(item.name) !== -1) {
-                logger("Start Time: " + item.value);
-                if (item.value !== null && !item.canceled && item.value !== "") return item;
+    if (!isRepeat) {
+        for (i = 0; i < itemGroups.length; i++) {
+            group = itemGroups[i];
+            if (!group || group.canceled) continue;
+            for (j = 0; j < group.items.length; j++) {
+                item = group.items[j];
+                if (targetItem.indexOf(item.name) !== -1) {
+                    logger("Start Time: " + item.value);
+                    if (item.value !== null && !item.canceled && item.value !== "") return item;
+                }
+            }
+        }
+    }
+    else {
+        for (i = itemGroups.length - 1; i >= 0; i--) {
+            group = itemGroups[i];
+            if (!group || group.canceled) continue;
+            for (j = group.items.length - 1; j >= 0; j--) {
+                item = group.items[j];
+                if (targetItem.indexOf(item.name) !== -1) {
+                    logger("Start Time: " + item.value);
+                    if (item.value !== null && !item.canceled && item.value !== "") return item;
+                }
+            }
+        }
+    }
+    return null;
+}
+
+function containsValue(input, keyword) {
+    if (input == null) {
+        return false;
+    }
+
+    var value = input.toString().toLowerCase();
+    return value.indexOf(keyword) !== -1;
+}
+
+function getItemGroupName(form) {
+    var item = itemJson.item;
+    for (var i = 0; i < form.form.itemGroups.length; i++) {
+        var group = form.form.itemGroups[i];
+        var items = group.items;
+        if (!items || items.length < 1) continue;
+
+        for (var j = 0; j < items.length; j++) {
+            var it = items[j];
+            if (it.id === item.id) {
+                return group.name;
             }
         }
     }
