@@ -27,7 +27,6 @@ var endTimeMs = endTime.dateValueMs;
 
 var differenceInMins;
 
-// ======== METHOD SWITCH ========
 if (methodType === "A") {
 
     // Method A: true difference, then floor
@@ -52,7 +51,7 @@ if (methodType === "A") {
 logger("Diff (min): " + differenceInMins);
 
 if (differenceInMins < 0) {
-    customErrorMessage("Collected End Time is less than Start Time. Start Time: " + formatDateTimeByType(startTime));
+    customErrorMessage("Collected time is less than previous collection. Previous collection: " + formatDateTimeByType(startTime));
     return false;
 }
 
