@@ -6,36 +6,61 @@ const startTimeItem = [
 
 const difference = 5; // in minutes
 
+// Two Approaches: Method A and Method B
+// Let's say Start Time is 10:00:59 and End Time is 10:10:00
+// If using Method A, this will calculate the actual difference (9 minutes and 1 second) and round down: 9 minutes.
+// If using Method B, this will round down both Time (10:00:00 and 10:10:00) and calculate the difference: 10 minutes.
+// Adjust ("A" or "B") below on what method to use.
+
+var methodType = "B";
+
 // ======== Don't modify ========
 var startTime = pullItemFromForm(formJson, startTimeItem);
 var endTime = itemJson.item;
+
 logger("Collected Time: " + endTime.value);
+
 if (!startTime || startTime.value == null || !endTime || endTime.value == null) return null;
 
 var startTimeMs = startTime.dateValueMs;
 var endTimeMs = endTime.dateValueMs;
 
-var startMin = Math.floor(startTimeMs / (1000 * 60));
-var endMin = Math.floor(endTimeMs / (1000 * 60));
+var differenceInMins;
 
-var differenceInMins = endMin - startMin;
+// ======== METHOD SWITCH ========
+if (methodType === "A") {
 
-logger("Start (min): " + startMin);
-logger("End (min): " + endMin);
+    // Method A: true difference, then floor
+    var diffMs = endTimeMs - startTimeMs;
+    differenceInMins = Math.floor(diffMs / (1000 * 60));
+
+    logger("Method A used");
+
+} else {
+
+    // Method B: floor each first, then subtract
+    var startMin = Math.floor(startTimeMs / (1000 * 60));
+    var endMin = Math.floor(endTimeMs / (1000 * 60));
+
+    differenceInMins = endMin - startMin;
+
+    logger("Method B used");
+    logger("Start (min): " + startMin);
+    logger("End (min): " + endMin);
+}
+
 logger("Diff (min): " + differenceInMins);
 
-logger(differenceInMins)
 if (differenceInMins < 0) {
-    customErrorMessage("Collected End Time is less than Start Time. Start Time: " + formatDateTimeByType(startTime))
+    customErrorMessage("Collected End Time is less than Start Time. Start Time: " + formatDateTimeByType(startTime));
     return false;
 }
 
-logger(differenceInMins)
-if(differenceInMins >= difference){
+if (differenceInMins >= difference) {
     return true;
 }
 
-customErrorMessage("Difference is out of range: " + Math.abs(differenceInMins) + " minutes, Start Time: " + formatDateTimeByType(startTime));
+customErrorMessage("Out of Window. Collected time must be " + difference + " minutes from prior collection: " + formatDateTimeByType(startTime));
 return false;
 
 
