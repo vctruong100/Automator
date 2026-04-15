@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.3.7
+// @version     2.3.8
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -8992,7 +8992,30 @@
     // functions for updating the UI based on the current settings.
     //=========================
     var STORAGE_BUTTON_VISIBILITY = "activityPlanState.buttonVisibility";
-    var SETTINGS_POPUP_REF = null;
+    var STORAGE_BUTTON_LAYOUT = "activityPlanState.buttonLayout";
+    var SETTINGS_MODAL_OPEN = false;
+
+    var PANEL_BUTTON_DEFS = [
+        { id: "Pull Barcode", label: "Pull Barcode" },
+        { id: "Pull Lab Barcode", label: "Pull Lab Barcode" },
+        { id: "PLAP Builder", label: "PLAP Builder" },
+        { id: "Archive/Update Forms", label: "Archive/Update Forms" },
+        { id: "Copy Activity Forms", label: "Copy Activity Forms" },
+        { id: "Search Methods", label: "Search Methods" },
+        { id: "Parse Deviation", label: "Parse Deviation" },
+        { id: "Import I/E", label: "Import I/E" },
+        { id: "Find Adverse Event", label: "Find Adverse Event" },
+        { id: "Find Form", label: "Find Form" },
+        { id: "Find Study Events", label: "Find Study Events" },
+        { id: "Item Method Forms", label: "Item Method Forms" },
+        { id: "Cohort Eligibility", label: "Cohort Eligibility" },
+        { id: "Subject Eligibility", label: "Subject Eligibility" },
+        { id: "Parse Study Event", label: "Parse Study Event" },
+        { id: "Edit Study Events List", label: "Edit Study Events List" },
+        { id: "Pause", label: "Pause" },
+        { id: "Clear Logs", label: "Clear Logs" },
+        { id: "Hide Logs", label: "Hide Logs" }
+    ];
 
     function getPanelHotkey() {
         try {
@@ -9032,229 +9055,186 @@
         } catch (e) {}
     }
 
-    function isButtonVisible(label) {
-        var visibility = getButtonVisibility();
-        if (!visibility) {
-            return true;
+    function loadButtonLayout() {
+        try {
+            var raw = localStorage.getItem(STORAGE_BUTTON_LAYOUT);
+            if (!raw) return null;
+            var parsed = JSON.parse(raw);
+            if (!Array.isArray(parsed)) return null;
+            return parsed;
+        } catch (e) {
+            return null;
         }
-        if (visibility.hasOwnProperty(label)) {
-            return visibility[label];
+    }
+
+    function saveButtonLayout(layout) {
+        try {
+            localStorage.setItem(STORAGE_BUTTON_LAYOUT, JSON.stringify(layout));
+        } catch (e) {}
+    }
+
+    function getEffectiveButtonLayout() {
+        var saved = loadButtonLayout();
+        var defaultLayout = [];
+        for (var di = 0; di < PANEL_BUTTON_DEFS.length; di++) {
+            defaultLayout.push({ id: PANEL_BUTTON_DEFS[di].id, position: di, visible: true });
+        }
+        if (!saved || !Array.isArray(saved)) {
+            // Migrate from old visibility map if it exists
+            var oldVis = getButtonVisibility();
+            if (oldVis) {
+                for (var mi = 0; mi < defaultLayout.length; mi++) {
+                    if (oldVis.hasOwnProperty(defaultLayout[mi].id)) {
+                        defaultLayout[mi].visible = !!oldVis[defaultLayout[mi].id];
+                    }
+                }
+            }
+            return defaultLayout;
+        }
+        var savedIds = {};
+        for (var s = 0; s < saved.length; s++) { savedIds[saved[s].id] = true; }
+        var maxPos = -1;
+        for (var mm = 0; mm < saved.length; mm++) {
+            if (saved[mm].position > maxPos) maxPos = saved[mm].position;
+        }
+        var currentIds = {};
+        for (var c = 0; c < PANEL_BUTTON_DEFS.length; c++) { currentIds[PANEL_BUTTON_DEFS[c].id] = true; }
+        for (var n = 0; n < PANEL_BUTTON_DEFS.length; n++) {
+            if (!savedIds[PANEL_BUTTON_DEFS[n].id]) {
+                maxPos++;
+                saved.push({ id: PANEL_BUTTON_DEFS[n].id, position: maxPos, visible: true });
+            }
+        }
+        return saved.filter(function(e) { return currentIds[e.id]; });
+    }
+
+    function buildPanelDefMap() {
+        var map = {};
+        for (var i = 0; i < PANEL_BUTTON_DEFS.length; i++) {
+            map[PANEL_BUTTON_DEFS[i].id] = PANEL_BUTTON_DEFS[i];
+        }
+        return map;
+    }
+
+    function isButtonVisible(label) {
+        var layout = getEffectiveButtonLayout();
+        for (var i = 0; i < layout.length; i++) {
+            if (layout[i].id === label) {
+                return layout[i].visible;
+            }
         }
         return true;
     }
 
     function openSettingsPopup() {
-        var glass = isGlassTheme();
-        var buttonLabels = [
-            "Pull Barcode",
-            "Pull Lab Barcode",
-            // "Scheduled Activities Builder",
-            "PLAP Builder",
-            "Archive/Update Forms",
-            "Copy Activity Forms",
-            "Search Methods",
-            "Parse Deviation",
-            "Import I/E",
-            "Find Adverse Event",
-            "Find Form",
-            "Find Study Events",
-            "Item Method Forms",
-            "Cohort Eligibility",
-            "Subject Eligibility",
-            "Parse Study Event",
-            "Edit Study Events List",
-            "Pause",
-            "Clear Logs",
-            "Hide Logs"
-        ];
+        if (SETTINGS_MODAL_OPEN) return null;
+        SETTINGS_MODAL_OPEN = true;
 
-        var currentVisibility = getButtonVisibility() || {};
+        var pendingLayout = JSON.parse(JSON.stringify(getEffectiveButtonLayout()));
+        var originalLayout = JSON.parse(JSON.stringify(pendingLayout));
+        var pendingTheme = getThemeMode();
+        var originalTheme = pendingTheme;
+        var pendingHotkey = getPanelHotkey();
+        var originalHotkey = pendingHotkey;
+        var cfgHasDirty = false;
 
+        // --- Theme-aware color palette ---
+        var _g = (getThemeMode() === THEME_MODE_GLASS);
+        var tc = {
+            containerBg: _g ? "linear-gradient(135deg,#667eea 0%,#764ba2 100%)" : "#1a1a1a",
+            headerBg: _g ? "rgba(255,255,255,0.1)" : "#222",
+            headerBorder: _g ? "rgba(255,255,255,0.2)" : "#333",
+            sectionBorder: _g ? "rgba(255,255,255,0.15)" : "#2a2a2a",
+            closeBg: _g ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.1)",
+            textSec: _g ? "rgba(255,255,255,0.9)" : "#ccc",
+            textMuted: _g ? "rgba(255,255,255,0.5)" : "#777",
+            textHint: _g ? "rgba(255,255,255,0.45)" : "#666",
+            inputBg: _g ? "rgba(15,10,40,0.7)" : "#2a2a2a",
+            inputBorder: _g ? "rgba(255,255,255,0.3)" : "#444",
+            inputText: _g ? "#e0e0ff" : "#fff",
+            inputFocus: _g ? "rgba(255,255,255,0.6)" : "#5b43c7",
+            gridBg: _g ? "rgba(0,0,0,0.15)" : "rgba(0,0,0,0.3)",
+            cellBg: _g ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.04)",
+            cellHover: _g ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.08)",
+            cellDrag: _g ? "rgba(118,75,162,0.45)" : "rgba(91,67,199,0.3)",
+            cellDragBorder: _g ? "rgba(180,140,255,0.5)" : "rgba(91,67,199,0.5)",
+            cellFaded: _g ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.02)",
+            tBtnActiveBg: _g ? "rgba(255,255,255,0.25)" : "#5b43c7",
+            tBtnActiveBorder: _g ? "rgba(255,255,255,0.5)" : "rgba(91,67,199,0.8)",
+            tBtnInactiveBg: _g ? "rgba(0,0,0,0.15)" : "#333",
+            tBtnInactiveBorder: _g ? "rgba(255,255,255,0.2)" : "#444",
+            tBtnHover: _g ? "rgba(0,0,0,0.25)" : "#444",
+            cancelBg: _g ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.1)",
+            cancelBorder: _g ? "rgba(255,255,255,0.3)" : "#444",
+            cancelHover: _g ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.15)"
+        };
+
+        // --- Overlay ---
+        var overlay = document.createElement("div");
+        overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:30000;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;";
+
+        // --- Container ---
         var container = document.createElement("div");
-        container.style.display = "flex";
-        container.style.flexDirection = "column";
-        container.style.gap = "8px";
-        container.style.minWidth = "280px";
+        container.setAttribute("role", "dialog");
+        container.setAttribute("aria-modal", "true");
+        container.setAttribute("aria-labelledby", "cfg-modal-title");
+        container.style.cssText = "background:" + tc.containerBg + ";border-radius:12px;padding:0;width:520px;max-width:94%;box-shadow:0 15px 35px rgba(0,0,0,0.4);position:relative;display:flex;flex-direction:column;max-height:92vh;";
 
-        var description = document.createElement("div");
-        description.textContent = "Select which buttons to display in the panel:";
-        description.style.fontSize = "13px";
-        description.style.color = glass ? THEME_TEXT_MUTED : "#aaa";
-        description.style.marginBottom = "12px";
-        container.appendChild(description);
+        // --- Header ---
+        var modalHeader = document.createElement("div");
+        modalHeader.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid " + tc.headerBorder + ";background:" + tc.headerBg + ";border-radius:12px 12px 0 0;flex-shrink:0;";
 
-        var checkboxContainer = document.createElement("div");
-        checkboxContainer.style.display = "flex";
-        checkboxContainer.style.flexDirection = "column";
-        checkboxContainer.style.gap = "6px";
-        checkboxContainer.style.maxHeight = "320px";
-        checkboxContainer.style.overflowY = "auto";
-        checkboxContainer.style.paddingRight = "8px";
+        var modalTitle = document.createElement("h3");
+        modalTitle.id = "cfg-modal-title";
+        modalTitle.textContent = "Settings";
+        modalTitle.style.cssText = "margin:0;color:white;font-size:16px;font-weight:600;";
 
-        var checkboxes = [];
+        var modalClose = document.createElement("button");
+        modalClose.innerHTML = "\u2715";
+        modalClose.setAttribute("aria-label", "Close settings");
+        modalClose.setAttribute("type", "button");
+        modalClose.style.cssText = "background:" + tc.closeBg + ";border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all 0.3s ease;";
+        modalClose.onmouseover = function() { modalClose.style.background = "rgba(255,67,54,0.8)"; };
+        modalClose.onmouseout = function() { modalClose.style.background = tc.closeBg; };
 
-        for (var i = 0; i < buttonLabels.length; i++) {
-            var label = buttonLabels[i];
-            var isChecked = currentVisibility.hasOwnProperty(label) ? currentVisibility[label] : true;
+        modalHeader.appendChild(modalTitle);
+        modalHeader.appendChild(modalClose);
 
-            var row = document.createElement("label");
-            row.style.display = "flex";
-            row.style.alignItems = "center";
-            row.style.gap = "10px";
-            row.style.padding = "8px 12px";
-            row.style.background = glass ? THEME_SURFACE_BG : "#1a1a1a";
-            row.style.borderRadius = "6px";
-            row.style.cursor = "pointer";
-            row.style.transition = "background 0.15s";
-            row.onmouseenter = (function(r) { return function() { r.style.background = glass ? THEME_SURFACE_BG_HEAVY : "#252525"; }; })(row);
-            row.onmouseleave = (function(r) { return function() { r.style.background = glass ? THEME_SURFACE_BG : "#1a1a1a"; }; })(row);
+        // --- Body (scrollable) ---
+        var modalBody = document.createElement("div");
+        modalBody.style.cssText = "padding:16px;overflow-y:auto;flex:1;";
 
-            var checkbox = document.createElement("input");
-            checkbox.type = "checkbox";
-            checkbox.checked = isChecked;
-            checkbox.style.width = "18px";
-            checkbox.style.height = "18px";
-            checkbox.style.cursor = "pointer";
-            checkbox.style.accentColor = glass ? THEME_ACCENT : "#5b43c7";
-            checkbox.dataset.label = label;
-
-            var labelText = document.createElement("span");
-            labelText.textContent = label;
-            labelText.style.fontSize = "14px";
-            labelText.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
-
-            row.appendChild(checkbox);
-            row.appendChild(labelText);
-            checkboxContainer.appendChild(row);
-            checkboxes.push(checkbox);
-        }
-
-        container.appendChild(checkboxContainer);
-
-        // Theme Toggle Section
-        var themeSection = document.createElement("div");
-        themeSection.style.marginTop = "20px";
-        themeSection.style.paddingTop = "20px";
-        themeSection.style.borderTop = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #333";
-
-        var themeLabel = document.createElement("div");
-        themeLabel.textContent = "UI Theme:";
-        themeLabel.style.fontSize = "13px";
-        themeLabel.style.color = glass ? THEME_TEXT_MUTED : "#aaa";
-        themeLabel.style.marginBottom = "8px";
-        themeSection.appendChild(themeLabel);
-
-        var themeRow = document.createElement("div");
-        themeRow.style.display = "flex";
-        themeRow.style.gap = "10px";
-
-        var themes = [
-            { value: THEME_MODE_BLACK, label: "Black" },
-            { value: THEME_MODE_GLASS, label: "Glassmorphism" }
-        ];
-        for (var ti = 0; ti < themes.length; ti++) {
-            var themeOpt = themes[ti];
-            var themeBtn = document.createElement("button");
-            themeBtn.textContent = themeOpt.label;
-            themeBtn.dataset.themeValue = themeOpt.value;
-            var isActive = (glass && themeOpt.value === THEME_MODE_GLASS) || (!glass && themeOpt.value === THEME_MODE_BLACK);
-            if (isActive) {
-                themeBtn.style.background = glass ? THEME_ACCENT : "#5b43c7";
-                themeBtn.style.color = glass ? THEME_TEXT_INVERSE : "#fff";
-                themeBtn.style.fontWeight = "600";
-            } else {
-                themeBtn.style.background = glass ? THEME_SURFACE_BG : "#333";
-                themeBtn.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
-                themeBtn.style.fontWeight = "400";
-            }
-            themeBtn.style.border = "none";
-            themeBtn.style.borderRadius = "6px";
-            themeBtn.style.padding = "8px 16px";
-            themeBtn.style.cursor = "pointer";
-            themeBtn.style.fontSize = "13px";
-            themeBtn.style.flex = "1";
-            themeBtn.addEventListener("click", (function(val, allBtns) {
-                return function() {
-                    try { localStorage.setItem(STORAGE_THEME_MODE, val); } catch(e) {}
-                    // Update button appearances
-                    var siblings = themeRow.querySelectorAll("button");
-                    for (var si = 0; si < siblings.length; si++) {
-                        if (siblings[si].dataset.themeValue === val) {
-                            siblings[si].style.background = val === THEME_MODE_GLASS ? THEME_ACCENT : "#5b43c7";
-                            siblings[si].style.color = val === THEME_MODE_GLASS ? THEME_TEXT_INVERSE : "#fff";
-                            siblings[si].style.fontWeight = "600";
-                        } else {
-                            siblings[si].style.background = val === THEME_MODE_GLASS ? THEME_SURFACE_BG : "#333";
-                            siblings[si].style.color = val === THEME_MODE_GLASS ? THEME_TEXT_PRIMARY : "#fff";
-                            siblings[si].style.fontWeight = "400";
-                        }
-                    }
-                };
-            })(themeOpt.value));
-            themeRow.appendChild(themeBtn);
-        }
-        themeSection.appendChild(themeRow);
-
-        var themeHint = document.createElement("div");
-        themeHint.textContent = "Theme change will apply after Save & Refresh";
-        themeHint.style.fontSize = "11px";
-        themeHint.style.color = glass ? THEME_TEXT_MUTED : "#666";
-        themeHint.style.marginTop = "6px";
-        themeHint.style.fontStyle = "italic";
-        themeSection.appendChild(themeHint);
-
-        container.appendChild(themeSection);
-
-        // Hotkey Configuration Section
+        // === HOTKEY SECTION ===
         var hotkeySection = document.createElement("div");
-        hotkeySection.style.marginTop = "20px";
-        hotkeySection.style.paddingTop = "20px";
-        hotkeySection.style.borderTop = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #333";
-
-        var hotkeyLabel = document.createElement("div");
-        hotkeyLabel.textContent = "Panel Toggle Hotkey:";
-        hotkeyLabel.style.fontSize = "13px";
-        hotkeyLabel.style.color = glass ? THEME_TEXT_MUTED : "#aaa";
-        hotkeyLabel.style.marginBottom = "8px";
-        hotkeySection.appendChild(hotkeyLabel);
-
-        var hotkeyInputRow = document.createElement("div");
-        hotkeyInputRow.style.display = "flex";
-        hotkeyInputRow.style.gap = "10px";
-        hotkeyInputRow.style.alignItems = "center";
+        var hotkeyTitle = document.createElement("div");
+        hotkeyTitle.textContent = "Panel Toggle Hotkey";
+        hotkeyTitle.style.cssText = "color:" + tc.textSec + ";font-size:13px;font-weight:600;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;";
+        hotkeySection.appendChild(hotkeyTitle);
 
         var hotkeyInput = document.createElement("input");
         hotkeyInput.type = "text";
-        hotkeyInput.value = getPanelHotkey();
-        hotkeyInput.placeholder = "Press a key...";
-        hotkeyInput.style.flex = "1";
-        hotkeyInput.style.padding = "10px 12px";
-        hotkeyInput.style.background = glass ? THEME_SURFACE_BG : "#2a2a2a";
-        hotkeyInput.style.border = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #444";
-        hotkeyInput.style.borderRadius = "6px";
-        hotkeyInput.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
-        hotkeyInput.style.fontSize = "14px";
-        hotkeyInput.style.outline = "none";
-        hotkeyInput.style.fontFamily = "monospace";
-        hotkeyInput.style.cursor = "pointer";
-
-        hotkeyInput.addEventListener("focus", function() {
-            this.style.borderColor = glass ? THEME_ACCENT : "#5b43c7";
-        });
-
-        hotkeyInput.addEventListener("blur", function() {
-            this.style.borderColor = glass ? THEME_SURFACE_BORDER : "#333";
-        });
-
+        hotkeyInput.readOnly = true;
+        hotkeyInput.value = pendingHotkey;
+        hotkeyInput.setAttribute("aria-label", "Panel toggle hotkey");
+        hotkeyInput.setAttribute("placeholder", "Click and press a key\u2026");
+        hotkeyInput.style.cssText = "width:100%;box-sizing:border-box;padding:10px 12px;background:" + tc.inputBg + " !important;border:2px solid " + tc.inputBorder + ";border-radius:8px;color:" + tc.inputText + " !important;font-size:14px;font-weight:500;outline:none;cursor:pointer;text-align:center;letter-spacing:0.5px;transition:border-color 0.3s ease;font-family:monospace;-webkit-text-fill-color:" + tc.inputText + " !important;opacity:1 !important;";
+        hotkeyInput.onfocus = function() {
+            hotkeyInput.style.borderColor = tc.inputFocus;
+            hotkeyInput.value = "";
+            hotkeyInput.setAttribute("placeholder", "Press any key\u2026");
+        };
+        hotkeyInput.onblur = function() {
+            hotkeyInput.style.borderColor = tc.inputBorder;
+            if (!pendingHotkey || pendingHotkey === originalHotkey) {
+                hotkeyInput.value = pendingHotkey || originalHotkey;
+            }
+        };
         hotkeyInput.addEventListener("keydown", function(e) {
             e.preventDefault();
             e.stopPropagation();
-
             var key = e.key;
             var code = e.code;
             var displayKey = key;
-
-            // Handle special keys
             if (key.length === 1 && key.match(/[a-z]/i)) {
                 displayKey = key.toUpperCase();
             } else if (code && code.startsWith("Key")) {
@@ -9276,142 +9256,416 @@
             } else if (code) {
                 displayKey = code;
             }
-
-            this.value = displayKey;
-            return false;
+            hotkeyInput.value = displayKey;
+            pendingHotkey = displayKey;
+            checkDirty();
         });
+        hotkeySection.appendChild(hotkeyInput);
 
-        // Prevent typing but allow key capture for hotkey capture
-        hotkeyInput.addEventListener("keypress", function(e) {
+        // === DISPLAY SECTION ===
+        var displaySection = document.createElement("div");
+        displaySection.style.cssText = "margin-top:18px;padding-top:14px;border-top:1px solid " + tc.sectionBorder + ";";
+        var displayTitle = document.createElement("div");
+        displayTitle.textContent = "Display";
+        displayTitle.style.cssText = "color:" + tc.textSec + ";font-size:13px;font-weight:600;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;";
+        displaySection.appendChild(displayTitle);
+
+        // Theme row
+        var themeRow = document.createElement("div");
+        themeRow.style.cssText = "display:flex;gap:8px;margin-bottom:10px;";
+        var themes = [
+            { value: THEME_MODE_BLACK, label: "Black" },
+            { value: THEME_MODE_GLASS, label: "Glassmorphism" }
+        ];
+        for (var ti = 0; ti < themes.length; ti++) {
+            (function(themeOpt) {
+                var themeBtn = document.createElement("button");
+                themeBtn.textContent = themeOpt.label;
+                themeBtn.setAttribute("type", "button");
+                themeBtn.dataset.themeValue = themeOpt.value;
+                var isActive = (pendingTheme === themeOpt.value);
+                themeBtn.style.cssText = "flex:1;padding:8px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:" + (isActive ? "600" : "400") + ";border:1px solid " + (isActive ? tc.tBtnActiveBorder : tc.tBtnInactiveBorder) + ";background:" + (isActive ? tc.tBtnActiveBg : tc.tBtnInactiveBg) + ";color:white;transition:all 0.2s ease;";
+                themeBtn.onclick = function() {
+                    pendingTheme = themeOpt.value;
+                    var siblings = themeRow.querySelectorAll("button");
+                    for (var si = 0; si < siblings.length; si++) {
+                        var isA = siblings[si].dataset.themeValue === pendingTheme;
+                        siblings[si].style.fontWeight = isA ? "600" : "400";
+                        siblings[si].style.border = "1px solid " + (isA ? tc.tBtnActiveBorder : tc.tBtnInactiveBorder);
+                        siblings[si].style.background = isA ? tc.tBtnActiveBg : tc.tBtnInactiveBg;
+                    }
+                    checkDirty();
+                };
+                themeBtn.onmouseover = function() { if (pendingTheme !== themeOpt.value) themeBtn.style.background = tc.tBtnHover; };
+                themeBtn.onmouseout = function() { if (pendingTheme !== themeOpt.value) themeBtn.style.background = tc.tBtnInactiveBg; };
+                themeRow.appendChild(themeBtn);
+            })(themes[ti]);
+        }
+        displaySection.appendChild(themeRow);
+
+        var themeHint = document.createElement("div");
+        themeHint.textContent = "Theme change will apply after Save & Refresh";
+        themeHint.style.cssText = "font-size:11px;color:" + tc.textMuted + ";font-style:italic;margin-bottom:6px;";
+        displaySection.appendChild(themeHint);
+
+        // === FEATURE BUTTONS SECTION (2-column grid) ===
+        var btnSection = document.createElement("div");
+        btnSection.style.cssText = "margin-top:18px;padding-top:14px;border-top:1px solid " + tc.sectionBorder + ";";
+        var btnSectionTitle = document.createElement("div");
+        btnSectionTitle.textContent = "Feature Buttons";
+        btnSectionTitle.style.cssText = "color:" + tc.textSec + ";font-size:13px;font-weight:600;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;";
+        btnSection.appendChild(btnSectionTitle);
+        var btnSectionHint = document.createElement("div");
+        btnSectionHint.textContent = "Drag buttons to reorder. Dropped button inserts at that cell; others shift right.";
+        btnSectionHint.style.cssText = "font-size:11px;color:" + tc.textHint + ";margin-bottom:10px;font-style:italic;";
+        btnSection.appendChild(btnSectionHint);
+
+        var btnGridContainer = document.createElement("div");
+        btnGridContainer.style.cssText = "max-height:480px;overflow-y:auto;border-radius:6px;background:" + tc.gridBg + ";padding:6px;";
+        btnGridContainer.setAttribute("role", "grid");
+        btnGridContainer.setAttribute("aria-label", "Feature button order and visibility");
+        var defMap = buildPanelDefMap();
+        var dragSrcPos = null;
+
+        // --- Auto-scroll during drag ---
+        var autoScrollRAF = null;
+        var autoScrollSpeed = 0;
+        function startAutoScroll() {
+            if (autoScrollRAF) return;
+            function tick() {
+                if (autoScrollSpeed !== 0) {
+                    btnGridContainer.scrollTop += autoScrollSpeed;
+                }
+                autoScrollRAF = requestAnimationFrame(tick);
+            }
+            autoScrollRAF = requestAnimationFrame(tick);
+        }
+        function stopAutoScroll() {
+            if (autoScrollRAF) {
+                cancelAnimationFrame(autoScrollRAF);
+                autoScrollRAF = null;
+            }
+            autoScrollSpeed = 0;
+        }
+        btnGridContainer.addEventListener("dragover", function(e) {
             e.preventDefault();
-            return false;
-        });
-
-        var hotkeyResetBtn = document.createElement("button");
-        hotkeyResetBtn.textContent = "Reset";
-        hotkeyResetBtn.style.background = glass ? THEME_SURFACE_BG : "#333";
-        hotkeyResetBtn.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
-        hotkeyResetBtn.style.border = "none";
-        hotkeyResetBtn.style.borderRadius = "6px";
-        hotkeyResetBtn.style.padding = "10px 16px";
-        hotkeyResetBtn.style.cursor = "pointer";
-        hotkeyResetBtn.style.fontSize = "13px";
-        if (glass) hotkeyResetBtn.className = "ie-btn-secondary";
-        hotkeyResetBtn.onmouseenter = function() { this.style.background = glass ? THEME_SURFACE_BG_HEAVY : "#444"; };
-        hotkeyResetBtn.onmouseleave = function() { this.style.background = glass ? THEME_SURFACE_BG : "#333"; };
-        hotkeyResetBtn.addEventListener("click", function() {
-            hotkeyInput.value = "F2";
-        });
-
-        hotkeyInputRow.appendChild(hotkeyInput);
-        hotkeyInputRow.appendChild(hotkeyResetBtn);
-        hotkeySection.appendChild(hotkeyInputRow);
-
-        var hotkeyHint = document.createElement("div");
-        hotkeyHint.textContent = "Click the input field and press any key to set a new hotkey";
-        hotkeyHint.style.fontSize = "11px";
-        hotkeyHint.style.color = glass ? THEME_TEXT_MUTED : "#666";
-        hotkeyHint.style.marginTop = "6px";
-        hotkeyHint.style.fontStyle = "italic";
-        hotkeySection.appendChild(hotkeyHint);
-
-        container.appendChild(hotkeySection);
-
-        var buttonRow = document.createElement("div");
-
-        buttonRow.style.display = "flex";
-        buttonRow.style.gap = "10px";
-        buttonRow.style.marginTop = "16px";
-        buttonRow.style.justifyContent = "flex-end";
-
-        var selectAllBtn = document.createElement("button");
-        selectAllBtn.textContent = "Select All";
-        selectAllBtn.style.background = glass ? THEME_SURFACE_BG : "#333";
-        selectAllBtn.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
-        selectAllBtn.style.border = "none";
-        selectAllBtn.style.borderRadius = "6px";
-        selectAllBtn.style.padding = "8px 16px";
-        selectAllBtn.style.cursor = "pointer";
-        selectAllBtn.style.fontSize = "13px";
-        if (glass) selectAllBtn.className = "ie-btn-secondary";
-        selectAllBtn.onmouseenter = function() { this.style.background = glass ? THEME_SURFACE_BG_HEAVY : "#444"; };
-        selectAllBtn.onmouseleave = function() { this.style.background = glass ? THEME_SURFACE_BG : "#333"; };
-        selectAllBtn.addEventListener("click", function() {
-            for (var j = 0; j < checkboxes.length; j++) {
-                checkboxes[j].checked = true;
+            var rect = btnGridContainer.getBoundingClientRect();
+            var y = e.clientY;
+            var edgeZone = 40;
+            if (y - rect.top < edgeZone) {
+                autoScrollSpeed = -Math.max(2, Math.round((edgeZone - (y - rect.top)) / 4));
+                startAutoScroll();
+            } else if (rect.bottom - y < edgeZone) {
+                autoScrollSpeed = Math.max(2, Math.round((edgeZone - (rect.bottom - y)) / 4));
+                startAutoScroll();
+            } else {
+                autoScrollSpeed = 0;
             }
         });
-
-        var deselectAllBtn = document.createElement("button");
-        deselectAllBtn.textContent = "Deselect All";
-        deselectAllBtn.style.background = glass ? THEME_SURFACE_BG : "#333";
-        deselectAllBtn.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
-        deselectAllBtn.style.border = "none";
-        deselectAllBtn.style.borderRadius = "6px";
-        deselectAllBtn.style.padding = "8px 16px";
-        deselectAllBtn.style.cursor = "pointer";
-        deselectAllBtn.style.fontSize = "13px";
-        if (glass) deselectAllBtn.className = "ie-btn-secondary";
-        deselectAllBtn.onmouseenter = function() { this.style.background = glass ? THEME_SURFACE_BG_HEAVY : "#444"; };
-        deselectAllBtn.onmouseleave = function() { this.style.background = glass ? THEME_SURFACE_BG : "#333"; };
-        deselectAllBtn.addEventListener("click", function() {
-            for (var j = 0; j < checkboxes.length; j++) {
-                checkboxes[j].checked = false;
+        btnGridContainer.addEventListener("dragleave", function(e) {
+            var rect = btnGridContainer.getBoundingClientRect();
+            if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) {
+                stopAutoScroll();
             }
         });
+        btnGridContainer.addEventListener("drop", function() { stopAutoScroll(); });
+        btnGridContainer.addEventListener("dragend", function() { stopAutoScroll(); });
+
+        var btnGrid = document.createElement("div");
+        btnGrid.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:4px;";
+
+        // --- Insert-and-shift logic ---
+        function moveButtonToPosition(fromPos, toPos) {
+            if (fromPos === toPos) return;
+            var sorted = pendingLayout.slice().sort(function(a, b) { return a.position - b.position; });
+            var movedItem = null;
+            var movedIdx = -1;
+            for (var mi = 0; mi < sorted.length; mi++) {
+                if (sorted[mi].position === fromPos) { movedItem = sorted[mi]; movedIdx = mi; break; }
+            }
+            if (!movedItem) return;
+            sorted.splice(movedIdx, 1);
+            var insertIdx = 0;
+            for (var ii = 0; ii < sorted.length; ii++) {
+                if (sorted[ii].position < toPos) insertIdx = ii + 1;
+                else if (sorted[ii].position === toPos) { insertIdx = ii; break; }
+            }
+            if (toPos > fromPos && insertIdx > sorted.length) insertIdx = sorted.length;
+            sorted.splice(insertIdx, 0, movedItem);
+            for (var ri = 0; ri < sorted.length; ri++) {
+                for (var pi = 0; pi < pendingLayout.length; pi++) {
+                    if (pendingLayout[pi].id === sorted[ri].id) {
+                        pendingLayout[pi].position = ri;
+                        break;
+                    }
+                }
+            }
+        }
+
+        function renderBtnGrid() {
+            btnGrid.innerHTML = "";
+            var sorted = pendingLayout.slice().sort(function(a, b) { return a.position - b.position; });
+            for (var si = 0; si < sorted.length; si++) {
+                (function(siLocal) {
+                    var entry = sorted[siLocal];
+                    var def = defMap[entry.id];
+                    if (!def) return;
+
+                    var cell = document.createElement("div");
+                    cell.setAttribute("role", "gridcell");
+                    cell.setAttribute("aria-label", def.label + (entry.visible ? "" : " (hidden)"));
+                    cell.setAttribute("draggable", "true");
+                    cell.setAttribute("tabindex", "0");
+                    cell.dataset.pos = String(entry.position);
+                    cell.style.cssText = "display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:5px;cursor:grab;transition:background 0.15s ease,opacity 0.15s ease,box-shadow 0.15s ease;background:" + tc.cellBg + ";opacity:" + (entry.visible ? "1" : "0.4") + ";border:1px solid transparent;min-height:36px;user-select:none;";
+                    cell.onmouseover = function() { if (dragSrcPos === null) cell.style.background = tc.cellHover; };
+                    cell.onmouseout = function() { if (dragSrcPos === null) cell.style.background = tc.cellBg; };
+
+                    var posLabel = document.createElement("span");
+                    posLabel.textContent = String(entry.position + 1);
+                    posLabel.style.cssText = "color:rgba(255,255,255,0.35);font-size:10px;min-width:16px;text-align:center;flex-shrink:0;font-weight:600;";
+
+                    var nameLabel = document.createElement("span");
+                    nameLabel.textContent = def.label;
+                    nameLabel.style.cssText = "color:white;font-size:11px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" + (entry.visible ? "" : "text-decoration:line-through;color:rgba(255,255,255,0.45);");
+
+                    var toggleBtn = document.createElement("button");
+                    toggleBtn.textContent = entry.visible ? "\u2713" : "\u2715";
+                    toggleBtn.setAttribute("aria-label", (entry.visible ? "Hide " : "Show ") + def.label);
+                    toggleBtn.setAttribute("type", "button");
+                    toggleBtn.title = entry.visible ? "Hide" : "Show";
+                    var toggleBg = entry.visible ? "rgba(107,207,127,0.35)" : "rgba(255,100,100,0.3)";
+                    var toggleBorder = entry.visible ? "rgba(107,207,127,0.5)" : "rgba(255,100,100,0.5)";
+                    var toggleColor = entry.visible ? "#6bcf7f" : "#ff8a8a";
+                    toggleBtn.style.cssText = "background:" + toggleBg + ";border:1px solid " + toggleBorder + ";color:" + toggleColor + ";width:22px;height:22px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;flex-shrink:0;transition:all 0.2s ease;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;";
+                    toggleBtn.onclick = function(e) {
+                        e.stopPropagation();
+                        for (var ti = 0; ti < pendingLayout.length; ti++) {
+                            if (pendingLayout[ti].id === entry.id) {
+                                pendingLayout[ti].visible = !pendingLayout[ti].visible;
+                                break;
+                            }
+                        }
+                        renderBtnGrid();
+                        checkDirty();
+                    };
+
+                    // Drag events
+                    cell.addEventListener("dragstart", function(e) {
+                        dragSrcPos = entry.position;
+                        e.dataTransfer.effectAllowed = "move";
+                        e.dataTransfer.setData("text/plain", String(entry.position));
+                        setTimeout(function() { cell.style.opacity = "0.25"; cell.style.background = tc.cellFaded; }, 0);
+                    });
+                    cell.addEventListener("dragend", function() {
+                        cell.style.opacity = entry.visible ? "1" : "0.4";
+                        cell.style.background = tc.cellBg;
+                        cell.style.border = "1px solid transparent";
+                        dragSrcPos = null;
+                        stopAutoScroll();
+                    });
+                    cell.addEventListener("dragover", function(e) {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "move";
+                        if (dragSrcPos !== null && dragSrcPos !== entry.position) {
+                            cell.style.background = tc.cellDrag;
+                            cell.style.border = "1px solid " + tc.cellDragBorder;
+                        }
+                    });
+                    cell.addEventListener("dragleave", function() {
+                        cell.style.background = tc.cellBg;
+                        cell.style.border = "1px solid transparent";
+                    });
+                    cell.addEventListener("drop", function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        cell.style.background = tc.cellBg;
+                        cell.style.border = "1px solid transparent";
+                        var fromPos = parseInt(e.dataTransfer.getData("text/plain"), 10);
+                        if (isNaN(fromPos) || fromPos === entry.position) return;
+                        moveButtonToPosition(fromPos, entry.position);
+                        renderBtnGrid();
+                        checkDirty();
+                    });
+
+                    // Keyboard navigation (arrows: left/right/up/down in 2-col grid)
+                    cell.addEventListener("keydown", function(e) {
+                        var sorted2 = pendingLayout.slice().sort(function(a, b) { return a.position - b.position; });
+                        var curIdx = -1;
+                        for (var ci = 0; ci < sorted2.length; ci++) { if (sorted2[ci].id === entry.id) { curIdx = ci; break; } }
+                        var targetIdx = -1;
+                        if (e.key === "ArrowLeft" && curIdx > 0) { targetIdx = curIdx - 1; }
+                        else if (e.key === "ArrowRight" && curIdx < sorted2.length - 1) { targetIdx = curIdx + 1; }
+                        else if (e.key === "ArrowUp" && curIdx >= 2) { targetIdx = curIdx - 2; }
+                        else if (e.key === "ArrowDown" && curIdx + 2 < sorted2.length) { targetIdx = curIdx + 2; }
+                        if (targetIdx >= 0) {
+                            e.preventDefault();
+                            var swapEntry = sorted2[targetIdx];
+                            var curEntry = sorted2[curIdx];
+                            for (var sk = 0; sk < pendingLayout.length; sk++) {
+                                if (pendingLayout[sk].id === swapEntry.id) {
+                                    var tmpP = pendingLayout[sk].position;
+                                    pendingLayout[sk].position = curEntry.position;
+                                    for (var sk2 = 0; sk2 < pendingLayout.length; sk2++) {
+                                        if (pendingLayout[sk2].id === curEntry.id) { pendingLayout[sk2].position = tmpP; }
+                                    }
+                                    break;
+                                }
+                            }
+                            renderBtnGrid();
+                            checkDirty();
+                            var cells = btnGrid.querySelectorAll("[role='gridcell']");
+                            if (cells[targetIdx]) cells[targetIdx].focus();
+                        }
+                    });
+
+                    cell.appendChild(posLabel);
+                    cell.appendChild(nameLabel);
+                    cell.appendChild(toggleBtn);
+                    btnGrid.appendChild(cell);
+                })(si);
+            }
+        }
+        renderBtnGrid();
+        btnGridContainer.appendChild(btnGrid);
+        btnSection.appendChild(btnGridContainer);
+
+        // === FOOTER ===
+        var modalFooter = document.createElement("div");
+        modalFooter.style.cssText = "padding:12px 16px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid " + tc.sectionBorder + ";flex-shrink:0;";
+
+        var cancelBtn = document.createElement("button");
+        cancelBtn.textContent = "Cancel";
+        cancelBtn.setAttribute("type", "button");
+        cancelBtn.style.cssText = "background:" + tc.cancelBg + ";border:1px solid " + tc.cancelBorder + ";color:white;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;transition:all 0.3s ease;";
+        cancelBtn.onmouseover = function() { cancelBtn.style.background = tc.cancelHover; };
+        cancelBtn.onmouseout = function() { cancelBtn.style.background = tc.cancelBg; };
 
         var saveBtn = document.createElement("button");
         saveBtn.textContent = "Save & Refresh";
-        if (glass) saveBtn.className = "ie-btn-primary";
-        saveBtn.style.background = glass ? "" : "#5b43c7";
-        saveBtn.style.color = glass ? "" : "#fff";
-        saveBtn.style.border = "none";
-        saveBtn.style.borderRadius = "6px";
-        saveBtn.style.padding = "10px 20px";
-        saveBtn.style.cursor = "pointer";
-        saveBtn.style.fontSize = "14px";
-        saveBtn.style.fontWeight = "600";
-        if (!glass) {
-            saveBtn.onmouseenter = function() { this.style.background = "#4a35a6"; };
-            saveBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
+        saveBtn.setAttribute("type", "button");
+        saveBtn.disabled = true;
+        saveBtn.style.cssText = "background:rgba(40,167,69,0.6);border:1px solid rgba(40,167,69,0.8);color:white;padding:8px 18px;border-radius:8px;cursor:not-allowed;font-size:13px;font-weight:600;transition:all 0.3s ease;opacity:0.5;";
+
+        function updateSaveBtnState(enabled) {
+            saveBtn.disabled = !enabled;
+            if (enabled) {
+                saveBtn.style.cursor = "pointer";
+                saveBtn.style.opacity = "1";
+                saveBtn.style.background = "rgba(40,167,69,0.8)";
+            } else {
+                saveBtn.style.cursor = "not-allowed";
+                saveBtn.style.opacity = "0.5";
+                saveBtn.style.background = "rgba(40,167,69,0.6)";
+            }
         }
 
-        buttonRow.appendChild(selectAllBtn);
-        buttonRow.appendChild(deselectAllBtn);
-        buttonRow.appendChild(saveBtn);
-        container.appendChild(buttonRow);
-
-        var settingsPopup = createPopup({
-            title: "Settings",
-            content: container,
-            width: "360px",
-            height: "auto",
-            maxHeight: "80%"
-        });
-        var originalClose = settingsPopup.close;
-        settingsPopup.close = function() {
-            SETTINGS_POPUP_REF = null;
-            originalClose();
+        saveBtn.onmouseover = function() {
+            if (!saveBtn.disabled) saveBtn.style.background = "rgba(40,167,69,1)";
         };
-        saveBtn.addEventListener("click", function() {
-            var newVisibility = {};
-            for (var j = 0; j < checkboxes.length; j++) {
-                var cb = checkboxes[j];
-                newVisibility[cb.dataset.label] = cb.checked;
-            }
-            setButtonVisibility(newVisibility);
+        saveBtn.onmouseout = function() {
+            if (!saveBtn.disabled) saveBtn.style.background = "rgba(40,167,69,0.8)";
+            else saveBtn.style.background = "rgba(40,167,69,0.6)";
+        };
 
-            var newHotkey = hotkeyInput.value.trim();
-            if (newHotkey) {
-                setPanelHotkey(newHotkey);
-                log("Settings: Hotkey saved as " + newHotkey);
-            }
+        function checkDirty() {
+            cfgHasDirty = false;
+            if (pendingHotkey !== originalHotkey) cfgHasDirty = true;
+            if (pendingTheme !== originalTheme) cfgHasDirty = true;
+            if (JSON.stringify(pendingLayout) !== JSON.stringify(originalLayout)) cfgHasDirty = true;
+            updateSaveBtnState(cfgHasDirty);
+        }
 
-            log("Settings: Button visibility saved");
-            settingsPopup.close();
+        function closeModal() {
+            SETTINGS_MODAL_OPEN = false;
+            if (escHandler) {
+                document.removeEventListener("keydown", escHandler, true);
+            }
+            var modal = document.getElementById("clinspark-settings-modal");
+            if (modal && modal.parentNode) {
+                modal.parentNode.removeChild(modal);
+            }
+        }
+
+        modalClose.onclick = function() {
+            log("Settings: modal closed via X");
+            closeModal();
+        };
+
+        cancelBtn.onclick = function() {
+            log("Settings: modal cancelled");
+            closeModal();
+        };
+
+        saveBtn.onclick = function() {
+            if (saveBtn.disabled) return;
+            var hotkeyChanged = pendingHotkey !== originalHotkey;
+            var themeChanged = pendingTheme !== originalTheme;
+            var layoutChanged = JSON.stringify(pendingLayout) !== JSON.stringify(originalLayout);
+            closeModal();
+            if (hotkeyChanged) {
+                setPanelHotkey(pendingHotkey);
+                log("Settings: Hotkey saved as " + pendingHotkey);
+            }
+            if (themeChanged) {
+                try { localStorage.setItem(STORAGE_THEME_MODE, pendingTheme); } catch(e) {}
+                log("Settings: Theme saved as " + pendingTheme);
+            }
+            if (layoutChanged) {
+                saveButtonLayout(pendingLayout);
+                // Also sync old visibility map for backward compat
+                var newVis = {};
+                for (var vi = 0; vi < pendingLayout.length; vi++) {
+                    newVis[pendingLayout[vi].id] = pendingLayout[vi].visible;
+                }
+                setButtonVisibility(newVis);
+                log("Settings: Button layout saved");
+            }
+            log("Settings: Saved, refreshing");
             location.reload();
-        });
-        return settingsPopup;
+        };
+
+        var escHandler = function(e) {
+            if (e.key === "Escape" && SETTINGS_MODAL_OPEN) {
+                if (document.activeElement === hotkeyInput) {
+                    hotkeyInput.blur();
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+                e.preventDefault();
+                e.stopPropagation();
+                log("Settings: modal closed via Escape");
+                closeModal();
+            }
+        };
+        document.addEventListener("keydown", escHandler, true);
+
+        overlay.onclick = function(e) {
+            if (e.target === overlay) {
+                log("Settings: modal closed via overlay click");
+                closeModal();
+            }
+        };
+
+        // Assemble
+        modalBody.appendChild(hotkeySection);
+        modalBody.appendChild(displaySection);
+        modalBody.appendChild(btnSection);
+
+        modalFooter.appendChild(cancelBtn);
+        modalFooter.appendChild(saveBtn);
+
+        container.appendChild(modalHeader);
+        container.appendChild(modalBody);
+        container.appendChild(modalFooter);
+
+        overlay.id = "clinspark-settings-modal";
+        overlay.appendChild(container);
+        document.body.appendChild(overlay);
+
+        log("Settings: modal opened");
+        return null;
     }
 
     //==========================
@@ -24381,13 +24635,11 @@
         settingsBtn.style.justifyContent = "center";
         settingsBtn.addEventListener("click", function() {
             log("Settings: Button clicked");
-            if (SETTINGS_POPUP_REF) {
-                log("Settings: Closing existing popup");
-                SETTINGS_POPUP_REF.close();
-                SETTINGS_POPUP_REF = null;
-            } else {
-                SETTINGS_POPUP_REF = openSettingsPopup();
+            if (SETTINGS_MODAL_OPEN) {
+                log("Settings: Modal already open");
+                return;
             }
+            openSettingsPopup();
         });
 
         rightControls.appendChild(settingsBtn);
@@ -24736,10 +24988,15 @@
             { el: toggleLogsBtn, label: "Hide Logs" }
         ];
 
+        var effectiveLayout = getEffectiveButtonLayout();
+        var sortedLayout = effectiveLayout.slice().sort(function(a, b) { return a.position - b.position; });
+        var btnMap = {};
         for (var bi = 0; bi < panelButtons.length; bi++) {
-            var btnItem = panelButtons[bi];
-            if (isButtonVisible(btnItem.label)) {
-                btnRow.appendChild(btnItem.el);
+            btnMap[panelButtons[bi].label] = panelButtons[bi].el;
+        }
+        for (var li = 0; li < sortedLayout.length; li++) {
+            if (sortedLayout[li].visible && btnMap[sortedLayout[li].id]) {
+                btnRow.appendChild(btnMap[sortedLayout[li].id]);
             }
         }
 

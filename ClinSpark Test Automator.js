@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.9.3
+// @version 3.9.5
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -6833,6 +6833,37 @@
         var originalHotkey = pendingHotkey;
         var cfgHasDirty = false;
 
+        // --- Theme-aware color palette ---
+        var _g = (getThemeMode() === THEME_MODE_GLASS);
+        var tc = {
+            containerBg: _g ? "linear-gradient(135deg,#667eea 0%,#764ba2 100%)" : "#1a1a1a",
+            headerBg: _g ? "rgba(255,255,255,0.1)" : "#222",
+            headerBorder: _g ? "rgba(255,255,255,0.2)" : "#333",
+            sectionBorder: _g ? "rgba(255,255,255,0.15)" : "#2a2a2a",
+            closeBg: _g ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.1)",
+            textSec: _g ? "rgba(255,255,255,0.9)" : "#ccc",
+            textMuted: _g ? "rgba(255,255,255,0.5)" : "#777",
+            textHint: _g ? "rgba(255,255,255,0.45)" : "#666",
+            inputBg: _g ? "rgba(15,10,40,0.7)" : "#2a2a2a",
+            inputBorder: _g ? "rgba(255,255,255,0.3)" : "#444",
+            inputText: _g ? "#e0e0ff" : "#fff",
+            inputFocus: _g ? "rgba(255,255,255,0.6)" : "#5b43c7",
+            gridBg: _g ? "rgba(0,0,0,0.15)" : "rgba(0,0,0,0.3)",
+            cellBg: _g ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.04)",
+            cellHover: _g ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.08)",
+            cellDrag: _g ? "rgba(118,75,162,0.45)" : "rgba(91,67,199,0.3)",
+            cellDragBorder: _g ? "rgba(180,140,255,0.5)" : "rgba(91,67,199,0.5)",
+            cellFaded: _g ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.02)",
+            tBtnActiveBg: _g ? "rgba(255,255,255,0.25)" : "#5b43c7",
+            tBtnActiveBorder: _g ? "rgba(255,255,255,0.5)" : "rgba(91,67,199,0.8)",
+            tBtnInactiveBg: _g ? "rgba(0,0,0,0.15)" : "#333",
+            tBtnInactiveBorder: _g ? "rgba(255,255,255,0.2)" : "#444",
+            tBtnHover: _g ? "rgba(0,0,0,0.25)" : "#444",
+            cancelBg: _g ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.1)",
+            cancelBorder: _g ? "rgba(255,255,255,0.3)" : "#444",
+            cancelHover: _g ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.15)"
+        };
+
         // --- Overlay ---
         var overlay = document.createElement("div");
         overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:30000;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;";
@@ -6842,11 +6873,11 @@
         container.setAttribute("role", "dialog");
         container.setAttribute("aria-modal", "true");
         container.setAttribute("aria-labelledby", "cfg-modal-title");
-        container.style.cssText = "background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border-radius:12px;padding:0;width:520px;max-width:94%;box-shadow:0 15px 35px rgba(0,0,0,0.4);position:relative;display:flex;flex-direction:column;max-height:92vh;";
+        container.style.cssText = "background:" + tc.containerBg + ";border-radius:12px;padding:0;width:520px;max-width:94%;box-shadow:0 15px 35px rgba(0,0,0,0.4);position:relative;display:flex;flex-direction:column;max-height:92vh;";
 
         // --- Header ---
         var modalHeader = document.createElement("div");
-        modalHeader.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.1);border-radius:12px 12px 0 0;flex-shrink:0;";
+        modalHeader.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid " + tc.headerBorder + ";background:" + tc.headerBg + ";border-radius:12px 12px 0 0;flex-shrink:0;";
 
         var modalTitle = document.createElement("h3");
         modalTitle.id = "cfg-modal-title";
@@ -6857,9 +6888,9 @@
         modalClose.innerHTML = "\u2715";
         modalClose.setAttribute("aria-label", "Close settings");
         modalClose.setAttribute("type", "button");
-        modalClose.style.cssText = "background:rgba(255,255,255,0.2);border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all 0.3s ease;";
+        modalClose.style.cssText = "background:" + tc.closeBg + ";border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all 0.3s ease;";
         modalClose.onmouseover = function() { modalClose.style.background = "rgba(255,67,54,0.8)"; };
-        modalClose.onmouseout = function() { modalClose.style.background = "rgba(255,255,255,0.2)"; };
+        modalClose.onmouseout = function() { modalClose.style.background = tc.closeBg; };
 
         modalHeader.appendChild(modalTitle);
         modalHeader.appendChild(modalClose);
@@ -6872,7 +6903,7 @@
         var hotkeySection = document.createElement("div");
         var hotkeyTitle = document.createElement("div");
         hotkeyTitle.textContent = "Panel Toggle Hotkey";
-        hotkeyTitle.style.cssText = "color:rgba(255,255,255,0.9);font-size:13px;font-weight:600;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;";
+        hotkeyTitle.style.cssText = "color:" + tc.textSec + ";font-size:13px;font-weight:600;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;";
         hotkeySection.appendChild(hotkeyTitle);
 
         var hotkeyInput = document.createElement("input");
@@ -6881,14 +6912,14 @@
         hotkeyInput.value = pendingHotkey;
         hotkeyInput.setAttribute("aria-label", "Panel toggle hotkey");
         hotkeyInput.setAttribute("placeholder", "Click and press a key\u2026");
-        hotkeyInput.style.cssText = "width:100%;box-sizing:border-box;padding:10px 12px;background:rgba(15,10,40,0.7);border:2px solid rgba(255,255,255,0.3);border-radius:8px;color:#e0e0ff;font-size:14px;font-weight:500;outline:none;cursor:pointer;text-align:center;letter-spacing:0.5px;transition:border-color 0.3s ease;font-family:monospace;-webkit-text-fill-color:#e0e0ff;";
+        hotkeyInput.style.cssText = "width:100%;box-sizing:border-box;padding:10px 12px;background:" + tc.inputBg + " !important;border:2px solid " + tc.inputBorder + ";border-radius:8px;color:" + tc.inputText + " !important;font-size:14px;font-weight:500;outline:none;cursor:pointer;text-align:center;letter-spacing:0.5px;transition:border-color 0.3s ease;font-family:monospace;-webkit-text-fill-color:" + tc.inputText + " !important;opacity:1 !important;";
         hotkeyInput.onfocus = function() {
-            hotkeyInput.style.borderColor = "rgba(255,255,255,0.6)";
+            hotkeyInput.style.borderColor = tc.inputFocus;
             hotkeyInput.value = "";
             hotkeyInput.setAttribute("placeholder", "Press any key\u2026");
         };
         hotkeyInput.onblur = function() {
-            hotkeyInput.style.borderColor = "rgba(255,255,255,0.3)";
+            hotkeyInput.style.borderColor = tc.inputBorder;
             if (!pendingHotkey || pendingHotkey === originalHotkey) {
                 hotkeyInput.value = pendingHotkey || originalHotkey;
             }
@@ -6928,10 +6959,10 @@
 
         // === DISPLAY SECTION ===
         var displaySection = document.createElement("div");
-        displaySection.style.cssText = "margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.15);";
+        displaySection.style.cssText = "margin-top:18px;padding-top:14px;border-top:1px solid " + tc.sectionBorder + ";";
         var displayTitle = document.createElement("div");
         displayTitle.textContent = "Display";
-        displayTitle.style.cssText = "color:rgba(255,255,255,0.9);font-size:13px;font-weight:600;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;";
+        displayTitle.style.cssText = "color:" + tc.textSec + ";font-size:13px;font-weight:600;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;";
         displaySection.appendChild(displayTitle);
 
         // Theme row
@@ -6948,20 +6979,20 @@
                 themeBtn.setAttribute("type", "button");
                 themeBtn.dataset.themeValue = themeOpt.value;
                 var isActive = (pendingTheme === themeOpt.value);
-                themeBtn.style.cssText = "flex:1;padding:8px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:" + (isActive ? "600" : "400") + ";border:1px solid " + (isActive ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.2)") + ";background:" + (isActive ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.15)") + ";color:white;transition:all 0.2s ease;";
+                themeBtn.style.cssText = "flex:1;padding:8px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:" + (isActive ? "600" : "400") + ";border:1px solid " + (isActive ? tc.tBtnActiveBorder : tc.tBtnInactiveBorder) + ";background:" + (isActive ? tc.tBtnActiveBg : tc.tBtnInactiveBg) + ";color:white;transition:all 0.2s ease;";
                 themeBtn.onclick = function() {
                     pendingTheme = themeOpt.value;
                     var siblings = themeRow.querySelectorAll("button");
                     for (var si = 0; si < siblings.length; si++) {
                         var isA = siblings[si].dataset.themeValue === pendingTheme;
                         siblings[si].style.fontWeight = isA ? "600" : "400";
-                        siblings[si].style.border = "1px solid " + (isA ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.2)");
-                        siblings[si].style.background = isA ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.15)";
+                        siblings[si].style.border = "1px solid " + (isA ? tc.tBtnActiveBorder : tc.tBtnInactiveBorder);
+                        siblings[si].style.background = isA ? tc.tBtnActiveBg : tc.tBtnInactiveBg;
                     }
                     checkDirty();
                 };
-                themeBtn.onmouseover = function() { if (pendingTheme !== themeOpt.value) themeBtn.style.background = "rgba(0,0,0,0.25)"; };
-                themeBtn.onmouseout = function() { if (pendingTheme !== themeOpt.value) themeBtn.style.background = "rgba(0,0,0,0.15)"; };
+                themeBtn.onmouseover = function() { if (pendingTheme !== themeOpt.value) themeBtn.style.background = tc.tBtnHover; };
+                themeBtn.onmouseout = function() { if (pendingTheme !== themeOpt.value) themeBtn.style.background = tc.tBtnInactiveBg; };
                 themeRow.appendChild(themeBtn);
             })(themes[ti]);
         }
@@ -6969,23 +7000,23 @@
 
         var themeHint = document.createElement("div");
         themeHint.textContent = "Theme change will apply after Save & Refresh";
-        themeHint.style.cssText = "font-size:11px;color:rgba(255,255,255,0.5);font-style:italic;margin-bottom:6px;";
+        themeHint.style.cssText = "font-size:11px;color:" + tc.textMuted + ";font-style:italic;margin-bottom:6px;";
         displaySection.appendChild(themeHint);
 
         // === FEATURE BUTTONS SECTION (2-column grid) ===
         var btnSection = document.createElement("div");
-        btnSection.style.cssText = "margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.15);";
+        btnSection.style.cssText = "margin-top:18px;padding-top:14px;border-top:1px solid " + tc.sectionBorder + ";";
         var btnSectionTitle = document.createElement("div");
         btnSectionTitle.textContent = "Feature Buttons";
-        btnSectionTitle.style.cssText = "color:rgba(255,255,255,0.9);font-size:13px;font-weight:600;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;";
+        btnSectionTitle.style.cssText = "color:" + tc.textSec + ";font-size:13px;font-weight:600;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;";
         btnSection.appendChild(btnSectionTitle);
         var btnSectionHint = document.createElement("div");
         btnSectionHint.textContent = "Drag buttons to reorder. Dropped button inserts at that cell; others shift right.";
-        btnSectionHint.style.cssText = "font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:10px;font-style:italic;";
+        btnSectionHint.style.cssText = "font-size:11px;color:" + tc.textHint + ";margin-bottom:10px;font-style:italic;";
         btnSection.appendChild(btnSectionHint);
 
         var btnGridContainer = document.createElement("div");
-        btnGridContainer.style.cssText = "max-height:480px;overflow-y:auto;border-radius:6px;background:rgba(0,0,0,0.15);padding:6px;";
+        btnGridContainer.style.cssText = "max-height:480px;overflow-y:auto;border-radius:6px;background:" + tc.gridBg + ";padding:6px;";
         btnGridContainer.setAttribute("role", "grid");
         btnGridContainer.setAttribute("aria-label", "Feature button order and visibility");
         var defMap = buildPanelDefMap();
@@ -7085,9 +7116,9 @@
                     cell.setAttribute("draggable", "true");
                     cell.setAttribute("tabindex", "0");
                     cell.dataset.pos = String(entry.position);
-                    cell.style.cssText = "display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:5px;cursor:grab;transition:background 0.15s ease,opacity 0.15s ease,box-shadow 0.15s ease;background:rgba(255,255,255,0.07);opacity:" + (entry.visible ? "1" : "0.4") + ";border:1px solid transparent;min-height:36px;user-select:none;";
-                    cell.onmouseover = function() { if (dragSrcPos === null) cell.style.background = "rgba(255,255,255,0.14)"; };
-                    cell.onmouseout = function() { if (dragSrcPos === null) cell.style.background = "rgba(255,255,255,0.07)"; };
+                    cell.style.cssText = "display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:5px;cursor:grab;transition:background 0.15s ease,opacity 0.15s ease,box-shadow 0.15s ease;background:" + tc.cellBg + ";opacity:" + (entry.visible ? "1" : "0.4") + ";border:1px solid transparent;min-height:36px;user-select:none;";
+                    cell.onmouseover = function() { if (dragSrcPos === null) cell.style.background = tc.cellHover; };
+                    cell.onmouseout = function() { if (dragSrcPos === null) cell.style.background = tc.cellBg; };
 
                     var posLabel = document.createElement("span");
                     posLabel.textContent = String(entry.position + 1);
@@ -7123,11 +7154,11 @@
                         dragSrcPos = entry.position;
                         e.dataTransfer.effectAllowed = "move";
                         e.dataTransfer.setData("text/plain", String(entry.position));
-                        setTimeout(function() { cell.style.opacity = "0.25"; cell.style.background = "rgba(255,255,255,0.03)"; }, 0);
+                        setTimeout(function() { cell.style.opacity = "0.25"; cell.style.background = tc.cellFaded; }, 0);
                     });
                     cell.addEventListener("dragend", function() {
                         cell.style.opacity = entry.visible ? "1" : "0.4";
-                        cell.style.background = "rgba(255,255,255,0.07)";
+                        cell.style.background = tc.cellBg;
                         cell.style.border = "1px solid transparent";
                         dragSrcPos = null;
                         stopAutoScroll();
@@ -7136,18 +7167,18 @@
                         e.preventDefault();
                         e.dataTransfer.dropEffect = "move";
                         if (dragSrcPos !== null && dragSrcPos !== entry.position) {
-                            cell.style.background = "rgba(118,75,162,0.45)";
-                            cell.style.border = "1px solid rgba(180,140,255,0.5)";
+                            cell.style.background = tc.cellDrag;
+                            cell.style.border = "1px solid " + tc.cellDragBorder;
                         }
                     });
                     cell.addEventListener("dragleave", function() {
-                        cell.style.background = "rgba(255,255,255,0.07)";
+                        cell.style.background = tc.cellBg;
                         cell.style.border = "1px solid transparent";
                     });
                     cell.addEventListener("drop", function(e) {
                         e.preventDefault();
                         e.stopPropagation();
-                        cell.style.background = "rgba(255,255,255,0.07)";
+                        cell.style.background = tc.cellBg;
                         cell.style.border = "1px solid transparent";
                         var fromPos = parseInt(e.dataTransfer.getData("text/plain"), 10);
                         if (isNaN(fromPos) || fromPos === entry.position) return;
@@ -7201,14 +7232,14 @@
 
         // === FOOTER ===
         var modalFooter = document.createElement("div");
-        modalFooter.style.cssText = "padding:12px 16px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid rgba(255,255,255,0.15);flex-shrink:0;";
+        modalFooter.style.cssText = "padding:12px 16px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid " + tc.sectionBorder + ";flex-shrink:0;";
 
         var cancelBtn = document.createElement("button");
         cancelBtn.textContent = "Cancel";
         cancelBtn.setAttribute("type", "button");
-        cancelBtn.style.cssText = "background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:white;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;transition:all 0.3s ease;";
-        cancelBtn.onmouseover = function() { cancelBtn.style.background = "rgba(255,255,255,0.25)"; };
-        cancelBtn.onmouseout = function() { cancelBtn.style.background = "rgba(255,255,255,0.15)"; };
+        cancelBtn.style.cssText = "background:" + tc.cancelBg + ";border:1px solid " + tc.cancelBorder + ";color:white;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;transition:all 0.3s ease;";
+        cancelBtn.onmouseover = function() { cancelBtn.style.background = tc.cancelHover; };
+        cancelBtn.onmouseout = function() { cancelBtn.style.background = tc.cancelBg; };
 
         var saveBtn = document.createElement("button");
         saveBtn.textContent = "Save & Refresh";
