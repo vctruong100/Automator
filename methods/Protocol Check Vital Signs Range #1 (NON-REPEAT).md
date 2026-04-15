@@ -62,8 +62,7 @@ else {
 
 log();
 
-if (!sys || sys === null || !dia || dia == null || !hr || hr == null) return attachedItemCodeList[0]
-
+if (!sys || sys === null || !dia || dia == null || !hr || hr == null) return itemJson.item.codeListItems[4];
 // OOR
 if (
     sys > sys_max_range ||
@@ -72,17 +71,17 @@ if (
     dia < dia_min_range ||
     hr > hr_max_range ||
     hr < hr_min_range
-) return attachedItemCodeList[3]; // Out of Normal Range
+) return itemJson.item.codeListItems[1]; // Out of Protocol Range
 else if ( // IR
     sys <= sys_max_range &&
-    sys >= sys_min_range &&
+    sys >= sys_min_range && 
     dia <= dia_max_range &&
     dia >= dia_min_range &&
     hr <= hr_max_range &&
     hr >= hr_min_range
-) return attachedItemCodeList[4]; // Within Normal Range
+) return itemJson.item.codeListItems[0]; // Within Normal Range
 
-return attachedItemCodeList[0];
+return itemJson.item.codeListItems[4];
 
 function log() {
     logger("sys: " + sys);

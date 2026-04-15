@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.9.0
+// @version 3.9.1
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -1631,9 +1631,27 @@
         setEpochIndex(idx);
 
         if (idx >= queue.length) {
+            // All epochs done — ICF already ran after screening, so just finish
             clearEpochQueueState();
-            setRunMode("consent");
+            clearRunMode();
+            updateRunAllPopupStatus("Run All Complete");
+            log("All epochs processed; Run All complete");
+            try {
+                localStorage.removeItem(STORAGE_RUN_ALL_POPUP);
+                if (RUN_ALL_POPUP_REF && RUN_ALL_POPUP_REF.close) {
+                    RUN_ALL_POPUP_REF.close();
+                }
+                RUN_ALL_POPUP_REF = null;
+            } catch (e) {}
+            return;
+        }
+
+        // After screening epoch, run ICF Barcode before non-screening epochs
+        var prevEpoch = queue[idx - 1];
+        if (prevEpoch && isScreeningLabel(prevEpoch.name)) {
+            setRunMode("consentmid");
             updateRunAllPopupStatus("Running ICF Barcode");
+            log("Screening epoch done; routing to ICF Barcode before non-screening epochs");
             location.href = STUDY_SHOW_URL + "?autoconsent=1";
             return;
         }
@@ -24746,16 +24764,17 @@
                 advanceToNextEpoch();
                 return;
             }
+            // Individual screening epoch done; route to ICF Barcode
             clearContinueEpoch();
-            clearRunMode();
             setCohortGuard("done");
             clearSelectedVolunteerIds();
-            // Clear editDoneMap when program completely finishes
             try {
                 localStorage.removeItem("activityPlanState.cohortAdd.editDoneMap");
-                log("Cleared editDoneMap on program completion");
+                log("Cleared editDoneMap on screening completion");
             } catch (e) {}
-            log("Activation flow completed");
+            setRunMode("consent");
+            log("Screening activation done; routing to ICF Barcode");
+            location.href = STUDY_SHOW_URL + "?autoconsent=1";
             return;
         }
         log("Edit Prep: Opening Actions dropdown on cohort show");
@@ -27142,7 +27161,7 @@
         }
         var auto = getQueryParam("autoconsent");
         var mode = getRunMode();
-        var go = (mode === "consent" || mode === "allconsent") || (auto === "1" && mode && mode.length > 0);
+        var go = (mode === "consent" || mode === "allconsent" || mode === "consentmid") || (auto === "1" && mode && mode.length > 0);
         if (!go) {
             return;
         }
@@ -27347,7 +27366,7 @@
         }
         var auto = getQueryParam("autoconsent");
         var mode = getRunMode();
-        var go = (mode === "consent" || mode === "allconsent") || (auto === "1" && mode && mode.length > 0);
+        var go = (mode === "consent" || mode === "allconsent" || mode === "consentmid") || (auto === "1" && mode && mode.length > 0);
         if (!go) {
             return;
         }
@@ -27372,6 +27391,32 @@
                 return;
             }
             log("Consent already filled for targeted subject");
+            if (getRunMode() === "consentmid") {
+                log("ICF already filled mid-flow; resuming epoch queue");
+                clearConsentScanIndex();
+                setRunMode("all");
+                var queueF = getEpochQueue();
+                var idxF = getEpochIndex();
+                if (idxF < queueF.length) {
+                    var nextF = queueF[idxF];
+                    updateRunAllPopupStatus("Running Add Cohort Subjects (" + String(idxF + 1) + "/" + String(queueF.length) + ")");
+                    if (isEpochCompleted(nextF.href)) {
+                        advanceToNextEpoch();
+                    } else {
+                        location.href = location.origin + nextF.href + "?autoepoch=1";
+                    }
+                } else {
+                    clearEpochQueueState();
+                    clearRunMode();
+                    updateRunAllPopupStatus("Run All Complete");
+                    log("All epochs processed; Run All complete");
+                    try {
+                        localStorage.removeItem(STORAGE_RUN_ALL_POPUP);
+                        if (RUN_ALL_POPUP_REF && RUN_ALL_POPUP_REF.close) { RUN_ALL_POPUP_REF.close(); }
+                        RUN_ALL_POPUP_REF = null;
+                    } catch (e) {}
+                }
+            }
             return;
         }
         var ok = await collectConsentOnSubjectShow();
@@ -27380,6 +27425,37 @@
             return;
         }
         clearConsentScanIndex();
+        var wasMidMode = getRunMode() === "consentmid";
+        if (wasMidMode) {
+            // ICF Barcode done mid-flow; resume non-screening epochs
+            log("ICF Barcode collected mid-flow; resuming epoch queue");
+            setRunMode("all");
+            var queue = getEpochQueue();
+            var idx = getEpochIndex();
+            if (idx < queue.length) {
+                var next = queue[idx];
+                updateRunAllPopupStatus("Running Add Cohort Subjects (" + String(idx + 1) + "/" + String(queue.length) + ")");
+                if (isEpochCompleted(next.href)) {
+                    advanceToNextEpoch();
+                } else {
+                    location.href = location.origin + next.href + "?autoepoch=1";
+                }
+            } else {
+                // No more epochs
+                clearEpochQueueState();
+                clearRunMode();
+                updateRunAllPopupStatus("Run All Complete");
+                log("All epochs processed; Run All complete");
+                try {
+                    localStorage.removeItem(STORAGE_RUN_ALL_POPUP);
+                    if (RUN_ALL_POPUP_REF && RUN_ALL_POPUP_REF.close) {
+                        RUN_ALL_POPUP_REF.close();
+                    }
+                    RUN_ALL_POPUP_REF = null;
+                } catch (e) {}
+            }
+            return;
+        }
         var wasAllMode = getRunMode() === "consent" && localStorage.getItem(STORAGE_RUN_ALL_POPUP) === "1";
         clearRunMode();
         // If this was the final step of Run All, close the popup
@@ -28672,7 +28748,7 @@
         }
         var autoConsent = getQueryParam("autoconsent");
         var mode = getRunMode();
-        if ((mode === "consent" || mode === "allconsent") || (autoConsent === "1" && mode && mode.length > 0)) {
+        if ((mode === "consent" || mode === "allconsent" || mode === "consentmid") || (autoConsent === "1" && mode && mode.length > 0)) {
             var ok = await ensureIcPanelOpenAndPullBarcode();
             location.href = "/secure/study/subjects/list?autoconsent=1";
             return;
@@ -29710,7 +29786,7 @@
             var runMode = getRunMode();
 
             // Recreate Run All popup (also for consent phase which is part of Run All flow)
-            if (runMode === "all" || runMode === "consent") {
+            if (runMode === "all" || runMode === "consent" || runMode === "consentmid") {
                 var runAllPopupActive = localStorage.getItem(STORAGE_RUN_ALL_POPUP);
                 if (runAllPopupActive === "1" && (!RUN_ALL_POPUP_REF || !document.body.contains(RUN_ALL_POPUP_REF.element))) {
                     var popupContainer = document.createElement("div");

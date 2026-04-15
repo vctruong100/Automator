@@ -22,13 +22,6 @@ const tempItems = [
     "Repeat Temp:",
 ]
 
-const attachedItemCodeList = [
-    "⭕Pending Results",
-    "✅ Within Protocol Range",
-    "🛑 Out of protocol range, SF",
-    "❗Out of Normal Range",
-    "✅ Within Normal Range"
-]
 // Inclusive (Edit)
 var sys_min_range = 90;
 var sys_max_range = 140;
@@ -57,7 +50,7 @@ else {
 
 log();
 
-if (!sys || sys === null || !dia || dia == null || !hr || hr == null) return attachedItemCodeList[0]
+if (!sys || sys === null || !dia || dia == null || !hr || hr == null) return itemJson.item.codeListItems[4];
 // OOR
 if (
     sys > sys_max_range ||
@@ -66,7 +59,7 @@ if (
     dia < dia_min_range ||
     hr > hr_max_range ||
     hr < hr_min_range
-) return attachedItemCodeList[3]; // Out of Protocol Range
+) return itemJson.item.codeListItems[1]; // Out of Protocol Range
 else if ( // IR
     sys <= sys_max_range &&
     sys >= sys_min_range && 
@@ -74,9 +67,9 @@ else if ( // IR
     dia >= dia_min_range &&
     hr <= hr_max_range &&
     hr >= hr_min_range
-) return attachedItemCodeList[4]; // Within Normal Range
+) return itemJson.item.codeListItems[0]; // Within Normal Range
 
-return attachedItemCodeList[0];
+return itemJson.item.codeListItems[4];
 
 function log() {
     logger("sys: " + sys);
