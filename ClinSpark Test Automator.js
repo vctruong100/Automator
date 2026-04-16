@@ -433,23 +433,26 @@
             return false;
         }
         link.click();
+        log("IFL: clicked Import from Library link");
         var start = Date.now();
         while (Date.now() - start < IFL_MODAL_TIMEOUT) {
             var modalBody = document.querySelector(".modal-body");
-            var modalForm = document.querySelector('.modal-body form, .modal-body #modalInput');
+            var modalForm = document.querySelector(".modal-body form, .modal-body #modalInput");
             if (modalBody && modalForm) {
-                var study = document.getElementById(IFL_STUDY_SELECT_ID);
+                var studySel = document.getElementById(IFL_STUDY_SELECT_ID);
                 if (studySel) {
+                    log("IFL: modal opened successfully");
                     return true;
                 }
             }
             await sleep(IFL_SELECT_POLL_INTERVAL);
         }
+        log("IFL: timed out waiting for modal");
         return false;
     }
 
     async function ifl_closeImportModal() {
-        var closeBtn = document.querySelector(".modal.in .close .modal.show .close, .modal .btn-close");
+        var closeBtn = document.querySelector(".modal.in .close, .modal.show .close, .modal .btn-close");
         if (closeBtn) closeBtn.click();
         var start = Date.now();
         while (Date.now() - start < IFL_MODAL_CLOSE_TIMEOUT) {
@@ -460,9 +463,829 @@
         return false;
     }
 
-    async function ifl_closeImportModal() {
-        var closeBtn = document.querySelector(".modal.in .close, .modal.show .close, .modal .btn-close");
-        if 
+    function ifl_triggerChange(el) {
+        var evt = new Event("change", { bubbles: true });
+        el.dispatchEvent(evt);
+        // Also try triggering jQuery change if available
+        try {
+            if (typeof jQuery !== "undefined") jQuery(el).trigger("change");
+        } catch (e) {}
+    }
+
+    async function ifl_selectStudyOption(studySelect, optionValue) {
+        studySelect.value = optionValue;
+        ifl_triggerChange(studySelect);
+        log("IFL: selected study value=" + optionValue);
+    }
+
+    async function ifl_waitForFormOptions(timeoutMs) {
+        var start = Date.now();
+        var max = timeoutMs || IFL_FORM_POPULATE_TIMEOUT;
+        var lastCount = -1;
+        var stableCount = 0;
+        while (Date.now() - start < max) {
+            var formSel = document.getElementById(IFL_FORM_SELECT_ID);
+            if (formSel) {
+                var opts = formSel.querySelectorAll("option");
+                var realOpts = 0;
+                for (var oi = 0; oi < opts.length; oi++) {
+                    if (opts[oi].value && opts[oi].value !== "") realOpts++;
+                }
+                if (realOpts > 0) {
+                    if (realOpts === lastCount) {
+                        stableCount++;
+                        if (stableCount >= 3) return true;
+                    } else {
+                        stableCount = 0;
+                    }
+                    lastCount = realOpts;
+                }
+            }
+            await sleep(IFL_SELECT_POLL_INTERVAL);
+        }
+        // Return true even if stabilization not complete but options exist
+        var formSel2 = document.getElementById(IFL_FORM_SELECT_ID);
+        if (formSel2) {
+            var opts2 = formSel2.querySelectorAll("option");
+            for (var oi2 = 0; oi2 < opts2.length; oi2++) {
+                if (opts2[oi2].value && opts2[oi2].value !== "") return true;
+            }
+        }
+        return false;
+    }
+
+    function ifl_readFormOptions() {
+        var formSel = document.getElementById(IFL_FORM_SELECT_ID);
+        if (!formSel) return [];
+        var opts = formSel.querySelectorAll("option");
+        var results = [];
+        for (var i = 0; i < opts.length; i++) {
+            if (opts[i].value && opts[i].value !== "") {
+                results.push({ value: opts[i].value, text: opts[i].textContent.trim() });
+            }
+        }
+        return results;
+    }
+
+    async function ifl_collectAllStudiesAndForms() {
+        log("IFL: beginning data collection from modal");
+        var studySelect = document.getElementById(IFL_STUDY_SELECT_ID);
+        if (!studySelect) {
+            log("IFL: study select not found");
+            return null;
+        }
+        var studyOpts = studySelect.querySelectorAll("option");
+        var studies = [];
+        for (var si = 0; si < studyOpts.length; si++) {
+            if (studyOpts[si].value && studyOpts[si].value !== "") {
+                studies.push({ value: studyOpts[si].value, text: studyOpts[si].textContent.trim(), forms: [] });
+            }
+        }
+        log("IFL: found " + studies.length + " studies to scan");
+
+        for (var idx = 0; idx < studies.length; idx++) {
+            if (IFL_CANCELED) { log("IFL: collection canceled"); return null; }
+            var study = studies[idx];
+            log("IFL: scanning study " + (idx + 1) + "/" + studies.length + ": " + study.text);
+
+            // Re-get study select in case DOM refreshed
+            var ss = document.getElementById(IFL_STUDY_SELECT_ID);
+            if (!ss) { log("IFL: study select lost"); return null; }
+            await ifl_selectStudyOption(ss, study.value);
+            await sleep(300);
+
+            var populated = await ifl_waitForFormOptions(IFL_FORM_POPULATE_TIMEOUT);
+            if (populated) {
+                study.forms = ifl_readFormOptions();
+                log("IFL: study '" + study.text + "' has " + study.forms.length + " forms");
+            } else {
+                log("IFL: study '" + study.text + "' form populate timed out (0 forms)");
+                study.forms = [];
+            }
+        }
+
+        log("IFL: data collection complete — " + studies.length + " studies");
+        return studies;
+    }
+
+    // ---- Selection GUI ----
+
+    function ifl_buildSelectionGUI(studies, onConfirm) {
+        var glass = isGlassTheme();
+        if (glass) injectThemeStylesIfNeeded();
+
+        // State
+        var formItems = []; // { study, form, selected, newName, lockOnSave, originalName }
+        for (var si = 0; si < studies.length; si++) {
+            for (var fi = 0; fi < studies[si].forms.length; fi++) {
+                formItems.push({
+                    studyName: studies[si].text,
+                    studyValue: studies[si].value,
+                    formName: studies[si].forms[fi].text,
+                    formValue: studies[si].forms[fi].value,
+                    originalName: studies[si].forms[fi].text,
+                    newName: studies[si].forms[fi].text,
+                    selected: false,
+                    lockOnSave: true
+                });
+            }
+        }
+        var collapsed = {};
+        for (var ci = 0; ci < studies.length; ci++) collapsed[studies[ci].text] = true;
+        var showSelectedOnly = false;
+        var activeFormItem = null;
+
+        // Color palette
+        var tc = {
+            bg: glass ? "rgba(15,10,40,0.92)" : "#111",
+            headerBg: glass ? "rgba(255,255,255,0.08)" : "#222",
+            border: glass ? "rgba(255,255,255,0.2)" : "#333",
+            surface: glass ? "rgba(255,255,255,0.06)" : "#1a1a1a",
+            surfaceHover: glass ? "rgba(255,255,255,0.12)" : "#252525",
+            text: glass ? "#fff" : "#fff",
+            textMuted: glass ? "rgba(255,255,255,0.6)" : "#999",
+            accent: glass ? "#a78bfa" : "#5b43c7",
+            accentHover: glass ? "#c4b5fd" : "#4a37a0",
+            success: glass ? "#10b981" : "#28a745",
+            danger: "#ef4444",
+            renamed: glass ? "rgba(167,139,250,0.15)" : "rgba(91,67,199,0.15)",
+            inputBg: glass ? "rgba(15,10,40,0.7)" : "#2a2a2a",
+            inputBorder: glass ? "rgba(255,255,255,0.3)" : "#444"
+        };
+
+        // Overlay
+        var overlay = document.createElement("div");
+        overlay.id = "ifl-selection-overlay";
+        overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:30000;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;";
+
+        // Main container
+        var container = document.createElement("div");
+        container.style.cssText = "background:" + tc.bg + ";border:1px solid " + tc.border + ";border-radius:12px;width:960px;max-width:96%;height:80vh;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 15px 35px rgba(0,0,0,0.5);overflow:hidden;";
+
+        // Header
+        var header = document.createElement("div");
+        header.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid " + tc.border + ";background:" + tc.headerBg + ";flex-shrink:0;";
+        var hTitle = document.createElement("div");
+        hTitle.textContent = "Import from Library — Select Forms";
+        hTitle.style.cssText = "color:white;font-size:16px;font-weight:600;";
+        var hClose = document.createElement("button");
+        hClose.innerHTML = "\u2715";
+        hClose.style.cssText = "background:rgba(255,255,255,0.1);border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;";
+        hClose.onmouseover = function() { hClose.style.background = "rgba(255,67,54,0.8)"; };
+        hClose.onmouseout = function() { hClose.style.background = "rgba(255,255,255,0.1)"; };
+        header.appendChild(hTitle);
+        header.appendChild(hClose);
+
+        // Body — 3 panels
+        var body = document.createElement("div");
+        body.style.cssText = "display:flex;flex:1;overflow:hidden;min-height:0;";
+
+        // ---- LEFT PANEL (Study list) ----
+        var leftPanel = document.createElement("div");
+        leftPanel.style.cssText = "width:200px;min-width:160px;border-right:1px solid " + tc.border + ";display:flex;flex-direction:column;flex-shrink:0;";
+        var leftSearch = document.createElement("input");
+        leftSearch.type = "text";
+        leftSearch.placeholder = "Filter studies\u2026";
+        leftSearch.style.cssText = "margin:8px;padding:6px 10px;border:1px solid " + tc.inputBorder + ";border-radius:6px;background:" + tc.inputBg + " !important;color:" + tc.text + " !important;font-size:12px;outline:none;-webkit-text-fill-color:" + tc.text + " !important;";
+        var leftList = document.createElement("div");
+        leftList.style.cssText = "flex:1;overflow-y:auto;padding:0 4px 4px;";
+
+        leftPanel.appendChild(leftSearch);
+        leftPanel.appendChild(leftList);
+
+        // ---- MIDDLE PANEL (Forms grouped by study) ----
+        var midPanel = document.createElement("div");
+        midPanel.style.cssText = "flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;";
+        var midSearch = document.createElement("input");
+        midSearch.type = "text";
+        midSearch.placeholder = "Filter forms\u2026";
+        midSearch.style.cssText = "margin:8px;padding:6px 10px;border:1px solid " + tc.inputBorder + ";border-radius:6px;background:" + tc.inputBg + " !important;color:" + tc.text + " !important;font-size:12px;outline:none;-webkit-text-fill-color:" + tc.text + " !important;";
+        var midList = document.createElement("div");
+        midList.style.cssText = "flex:1;overflow-y:auto;padding:0 4px 4px;";
+
+        midPanel.appendChild(midSearch);
+        midPanel.appendChild(midList);
+
+        // ---- RIGHT PANEL (Detail) ----
+        var rightPanel = document.createElement("div");
+        rightPanel.style.cssText = "width:260px;min-width:220px;border-left:1px solid " + tc.border + ";display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;padding:12px;";
+        var rightPlaceholder = document.createElement("div");
+        rightPlaceholder.textContent = "Click a form row to view details";
+        rightPlaceholder.style.cssText = "color:" + tc.textMuted + ";font-size:12px;text-align:center;margin-top:40px;";
+        rightPanel.appendChild(rightPlaceholder);
+
+        body.appendChild(leftPanel);
+        body.appendChild(midPanel);
+        body.appendChild(rightPanel);
+
+        // ---- FOOTER ----
+        var footer = document.createElement("div");
+        footer.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-top:1px solid " + tc.border + ";background:" + tc.headerBg + ";flex-shrink:0;";
+        var footerLeft = document.createElement("div");
+        footerLeft.style.cssText = "display:flex;gap:8px;align-items:center;";
+        var showSelBtn = document.createElement("button");
+        showSelBtn.textContent = "Show Selected";
+        showSelBtn.style.cssText = "background:" + tc.surface + ";border:1px solid " + tc.border + ";color:white;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;";
+        showSelBtn.onmouseover = function() { showSelBtn.style.background = tc.surfaceHover; };
+        showSelBtn.onmouseout = function() { showSelBtn.style.background = showSelectedOnly ? tc.accent : tc.surface; };
+        var selCount = document.createElement("span");
+        selCount.style.cssText = "color:" + tc.textMuted + ";font-size:12px;";
+
+        footerLeft.appendChild(showSelBtn);
+        footerLeft.appendChild(selCount);
+
+        var confirmBtn = document.createElement("button");
+        confirmBtn.textContent = "Confirm";
+        confirmBtn.disabled = true;
+        confirmBtn.style.cssText = "background:rgba(40,167,69,0.6);border:1px solid rgba(40,167,69,0.8);color:white;padding:8px 24px;border-radius:8px;cursor:not-allowed;font-size:13px;font-weight:600;opacity:0.5;transition:all 0.2s;";
+
+        footer.appendChild(footerLeft);
+        footer.appendChild(confirmBtn);
+
+        // ---- Rendering functions ----
+
+        function getSelectedCount() {
+            var c = 0;
+            for (var i = 0; i < formItems.length; i++) { if (formItems[i].selected) c++; }
+            return c;
+        }
+
+        function updateConfirmState() {
+            var count = getSelectedCount();
+            selCount.textContent = count + " selected";
+            if (count > 0) {
+                confirmBtn.disabled = false;
+                confirmBtn.style.opacity = "1";
+                confirmBtn.style.cursor = "pointer";
+                confirmBtn.style.background = "rgba(40,167,69,0.8)";
+            } else {
+                confirmBtn.disabled = true;
+                confirmBtn.style.opacity = "0.5";
+                confirmBtn.style.cursor = "not-allowed";
+                confirmBtn.style.background = "rgba(40,167,69,0.6)";
+            }
+        }
+
+        function renderLeftPanel() {
+            leftList.innerHTML = "";
+            var filter = leftSearch.value.toLowerCase();
+            for (var si = 0; si < studies.length; si++) {
+                var sName = studies[si].text;
+                if (filter && sName.toLowerCase().indexOf(filter) === -1) continue;
+                var item = document.createElement("div");
+                item.textContent = sName;
+                item.style.cssText = "padding:6px 8px;border-radius:4px;cursor:pointer;font-size:12px;color:" + tc.text + ";white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px;";
+                item.title = sName;
+                item.onmouseover = (function(el) { return function() { el.style.background = tc.surfaceHover; }; })(item);
+                item.onmouseout = (function(el) { return function() { el.style.background = "transparent"; }; })(item);
+                item.onclick = (function(name) {
+                    return function() {
+                        // Collapse all, expand this one
+                        for (var k in collapsed) collapsed[k] = true;
+                        collapsed[name] = false;
+                        renderMidPanel();
+                        // Scroll to header
+                        var hdr = midList.querySelector('[data-study-header="' + CSS.escape(name) + '"]');
+                        if (hdr) hdr.scrollIntoView({ block: "start", behavior: "smooth" });
+                    };
+                })(sName);
+                leftList.appendChild(item);
+            }
+        }
+
+        function renderMidPanel() {
+            midList.innerHTML = "";
+            var filter = midSearch.value.toLowerCase();
+
+            for (var si = 0; si < studies.length; si++) {
+                var sName = studies[si].text;
+                var sItems = [];
+                for (var fi = 0; fi < formItems.length; fi++) {
+                    if (formItems[fi].studyName !== sName) continue;
+                    if (showSelectedOnly && !formItems[fi].selected) continue;
+                    var desc = formItems[fi].studyName + " - " + formItems[fi].formName;
+                    if (filter) {
+                        if (desc.toLowerCase().indexOf(filter) === -1 && sName.toLowerCase().indexOf(filter) === -1) continue;
+                    }
+                    sItems.push(formItems[fi]);
+                }
+                if (sItems.length === 0) continue;
+
+                // Sort alphabetically
+                sItems.sort(function(a, b) { return a.formName.localeCompare(b.formName); });
+
+                // Study header
+                var hdr = document.createElement("div");
+                hdr.setAttribute("data-study-header", sName);
+                var isCollapsed = !!collapsed[sName];
+                hdr.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:" + tc.surface + ";border-radius:6px;margin:4px 0 2px;cursor:pointer;user-select:none;";
+                var hdrLabel = document.createElement("span");
+                hdrLabel.textContent = sName + " (" + sItems.length + ")";
+                hdrLabel.style.cssText = "color:" + tc.text + ";font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;";
+                var hdrArrow = document.createElement("span");
+                hdrArrow.textContent = isCollapsed ? "\u25B6" : "\u25BC";
+                hdrArrow.style.cssText = "color:" + tc.textMuted + ";font-size:10px;flex-shrink:0;margin-left:8px;";
+                hdr.appendChild(hdrLabel);
+                hdr.appendChild(hdrArrow);
+                hdr.onclick = (function(name) {
+                    return function() {
+                        collapsed[name] = !collapsed[name];
+                        renderMidPanel();
+                    };
+                })(sName);
+                midList.appendChild(hdr);
+
+                if (isCollapsed) continue;
+
+                // Form rows
+                for (var ri = 0; ri < sItems.length; ri++) {
+                    (function(item) {
+                        var row = document.createElement("div");
+                        var isRenamed = item.newName !== item.originalName;
+                        var isActive = activeFormItem === item;
+                        row.style.cssText = "display:flex;align-items:center;gap:6px;padding:5px 10px 5px 20px;border-radius:4px;cursor:pointer;margin:1px 0;font-size:12px;background:" + (isRenamed ? tc.renamed : (isActive ? tc.surfaceHover : "transparent")) + ";transition:background 0.1s;";
+                        row.onmouseover = function() { if (!isActive) row.style.background = tc.surfaceHover; };
+                        row.onmouseout = function() { row.style.background = isRenamed ? tc.renamed : (isActive ? tc.surfaceHover : "transparent"); };
+
+                        var nameSpan = document.createElement("span");
+                        nameSpan.style.cssText = "flex:1;color:" + tc.text + ";overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+                        if (isRenamed) {
+                            nameSpan.textContent = item.studyName + " - " + item.originalName + " \u2192 " + item.newName;
+                        } else {
+                            nameSpan.textContent = item.studyName + " - " + item.formName;
+                        }
+                        nameSpan.title = nameSpan.textContent;
+
+                        var lockIcon = document.createElement("span");
+                        lockIcon.textContent = item.lockOnSave ? "\uD83D\uDD12" : "";
+                        lockIcon.style.cssText = "font-size:11px;flex-shrink:0;width:16px;text-align:center;";
+
+                        var cb = document.createElement("input");
+                        cb.type = "checkbox";
+                        cb.checked = item.selected;
+                        cb.style.cssText = "width:16px;height:16px;cursor:pointer;accent-color:" + tc.accent + ";flex-shrink:0;";
+                        cb.onclick = function(e) { e.stopPropagation(); };
+                        cb.onchange = function() {
+                            item.selected = cb.checked;
+                            updateConfirmState();
+                        };
+
+                        row.onclick = function() {
+                            activeFormItem = item;
+                            renderRightPanel();
+                            renderMidPanel();
+                        };
+
+                        row.appendChild(nameSpan);
+                        row.appendChild(lockIcon);
+                        row.appendChild(cb);
+                        midList.appendChild(row);
+                    })(sItems[ri]);
+                }
+            }
+        }
+
+        function renderRightPanel() {
+            rightPanel.innerHTML = "";
+            if (!activeFormItem) {
+                var ph = document.createElement("div");
+                ph.textContent = "Click a form row to view details";
+                ph.style.cssText = "color:" + tc.textMuted + ";font-size:12px;text-align:center;margin-top:40px;";
+                rightPanel.appendChild(ph);
+                return;
+            }
+            var item = activeFormItem;
+
+            var studyLabel = document.createElement("div");
+            studyLabel.textContent = item.studyName;
+            studyLabel.style.cssText = "color:" + tc.textMuted + ";font-size:11px;margin-bottom:2px;";
+
+            var formLabel = document.createElement("div");
+            formLabel.textContent = item.originalName;
+            formLabel.style.cssText = "color:" + tc.text + ";font-size:14px;font-weight:600;margin-bottom:16px;";
+
+            var nameFieldLabel = document.createElement("label");
+            nameFieldLabel.textContent = "New Form Name";
+            nameFieldLabel.style.cssText = "color:" + tc.textMuted + ";font-size:11px;display:block;margin-bottom:4px;";
+
+            var nameInput = document.createElement("input");
+            nameInput.type = "text";
+            nameInput.value = item.newName;
+            nameInput.style.cssText = "width:100%;box-sizing:border-box;padding:8px 10px;background:" + tc.inputBg + " !important;border:1px solid " + tc.inputBorder + ";border-radius:6px;color:" + tc.text + " !important;font-size:13px;outline:none;-webkit-text-fill-color:" + tc.text + " !important;";
+            nameInput.oninput = function() {
+                item.newName = nameInput.value;
+                renderMidPanel();
+            };
+
+            var lockRow = document.createElement("label");
+            lockRow.style.cssText = "display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer;";
+            var lockCb = document.createElement("input");
+            lockCb.type = "checkbox";
+            lockCb.checked = item.lockOnSave;
+            lockCb.style.cssText = "width:16px;height:16px;cursor:pointer;accent-color:" + tc.accent + ";";
+            lockCb.onchange = function() {
+                item.lockOnSave = lockCb.checked;
+                renderMidPanel();
+            };
+            var lockLabel = document.createElement("span");
+            lockLabel.textContent = "Lock on Save";
+            lockLabel.style.cssText = "color:" + tc.text + ";font-size:13px;";
+            lockRow.appendChild(lockCb);
+            lockRow.appendChild(lockLabel);
+
+            rightPanel.appendChild(studyLabel);
+            rightPanel.appendChild(formLabel);
+            rightPanel.appendChild(nameFieldLabel);
+            rightPanel.appendChild(nameInput);
+            rightPanel.appendChild(lockRow);
+        }
+
+        // Wire events
+        leftSearch.oninput = function() { renderLeftPanel(); };
+        midSearch.oninput = function() { renderMidPanel(); };
+        showSelBtn.onclick = function() {
+            showSelectedOnly = !showSelectedOnly;
+            showSelBtn.textContent = showSelectedOnly ? "Show All" : "Show Selected";
+            showSelBtn.style.background = showSelectedOnly ? tc.accent : tc.surface;
+            renderMidPanel();
+        };
+
+        hClose.onclick = function() {
+            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        };
+        overlay.onclick = function(e) {
+            if (e.target === overlay) {
+                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            }
+        };
+
+        confirmBtn.onclick = function() {
+            var selected = [];
+            for (var i = 0; i < formItems.length; i++) {
+                if (formItems[i].selected) selected.push(formItems[i]);
+            }
+            if (selected.length === 0) return;
+            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            onConfirm(selected);
+        };
+
+        // Escape key
+        var escHandler = function(e) {
+            if (e.key === "Escape") {
+                e.preventDefault();
+                e.stopPropagation();
+                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+                document.removeEventListener("keydown", escHandler, true);
+            }
+        };
+        document.addEventListener("keydown", escHandler, true);
+
+        // Assemble
+        container.appendChild(header);
+        container.appendChild(body);
+        container.appendChild(footer);
+        overlay.appendChild(container);
+        document.body.appendChild(overlay);
+
+        // Initial render
+        renderLeftPanel();
+        renderMidPanel();
+        renderRightPanel();
+        updateConfirmState();
+
+        log("IFL: selection GUI displayed");
+    }
+
+    // ---- Progress Panel ----
+
+    function ifl_buildProgressPanel(selectedItems, onCancel) {
+        var glass = isGlassTheme();
+        var tc = {
+            bg: glass ? "rgba(15,10,40,0.92)" : "#111",
+            headerBg: glass ? "rgba(255,255,255,0.08)" : "#222",
+            border: glass ? "rgba(255,255,255,0.2)" : "#333",
+            surface: glass ? "rgba(255,255,255,0.06)" : "#1a1a1a",
+            text: glass ? "#fff" : "#fff",
+            textMuted: glass ? "rgba(255,255,255,0.6)" : "#999"
+        };
+
+        var STATUS_PENDING = "Pending";
+        var STATUS_IN_PROGRESS = "In Progress";
+        var STATUS_COMPLETED = "Completed";
+        var STATUS_FAILED = "Failed";
+
+        var state = [];
+        for (var i = 0; i < selectedItems.length; i++) {
+            state.push({ item: selectedItems[i], status: STATUS_PENDING, error: null });
+        }
+
+        var startTime = Date.now();
+        var timerInterval = null;
+
+        var overlay = document.createElement("div");
+        overlay.id = "ifl-progress-overlay";
+        overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:30000;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;";
+
+        var container = document.createElement("div");
+        container.style.cssText = "background:" + tc.bg + ";border:1px solid " + tc.border + ";border-radius:12px;width:600px;max-width:94%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 15px 35px rgba(0,0,0,0.5);overflow:hidden;";
+
+        var header = document.createElement("div");
+        header.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid " + tc.border + ";background:" + tc.headerBg + ";flex-shrink:0;";
+        var hTitle = document.createElement("div");
+        hTitle.textContent = "Import Progress";
+        hTitle.style.cssText = "color:white;font-size:15px;font-weight:600;";
+        var cancelBtn = document.createElement("button");
+        cancelBtn.textContent = "Cancel";
+        cancelBtn.style.cssText = "background:rgba(239,68,68,0.3);border:1px solid rgba(239,68,68,0.5);color:#ff8a8a;padding:4px 14px;border-radius:6px;cursor:pointer;font-size:12px;";
+        cancelBtn.onclick = function() {
+            IFL_CANCELED = true;
+            cancelBtn.disabled = true;
+            cancelBtn.textContent = "Canceling\u2026";
+        };
+        header.appendChild(hTitle);
+        header.appendChild(cancelBtn);
+
+        var listDiv = document.createElement("div");
+        listDiv.style.cssText = "flex:1;overflow-y:auto;padding:8px 12px;";
+
+        var rows = [];
+        for (var ri = 0; ri < state.length; ri++) {
+            var row = document.createElement("div");
+            row.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:4px;margin:2px 0;font-size:12px;";
+            var statusBadge = document.createElement("span");
+            statusBadge.style.cssText = "min-width:80px;text-align:center;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;";
+            var label = document.createElement("span");
+            label.style.cssText = "flex:1;color:" + tc.text + ";overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+            label.textContent = state[ri].item.studyName + " — " + state[ri].item.originalName;
+            label.title = label.textContent;
+            row.appendChild(statusBadge);
+            row.appendChild(label);
+            listDiv.appendChild(row);
+            rows.push({ row: row, badge: statusBadge, label: label });
+        }
+
+        var summaryDiv = document.createElement("div");
+        summaryDiv.style.cssText = "padding:10px 16px;border-top:1px solid " + tc.border + ";background:" + tc.headerBg + ";flex-shrink:0;font-size:12px;color:" + tc.textMuted + ";display:flex;flex-wrap:wrap;gap:12px;";
+
+        container.appendChild(header);
+        container.appendChild(listDiv);
+        container.appendChild(summaryDiv);
+        overlay.appendChild(container);
+        document.body.appendChild(overlay);
+
+        function formatTime(ms) {
+            var s = Math.floor(ms / 1000);
+            var m = Math.floor(s / 60);
+            s = s % 60;
+            return m + "m " + s + "s";
+        }
+
+        function updateUI() {
+            var completed = 0, failed = 0, inProgress = 0, pending = 0;
+            for (var i = 0; i < state.length; i++) {
+                var s = state[i];
+                var badge = rows[i].badge;
+                if (s.status === STATUS_PENDING) {
+                    badge.textContent = "Pending";
+                    badge.style.background = "rgba(255,255,255,0.1)";
+                    badge.style.color = tc.textMuted;
+                    pending++;
+                } else if (s.status === STATUS_IN_PROGRESS) {
+                    badge.textContent = "In Progress";
+                    badge.style.background = "rgba(59,130,246,0.3)";
+                    badge.style.color = "#93c5fd";
+                    inProgress++;
+                } else if (s.status === STATUS_COMPLETED) {
+                    badge.textContent = "Completed";
+                    badge.style.background = "rgba(16,185,129,0.3)";
+                    badge.style.color = "#6ee7b7";
+                    completed++;
+                } else if (s.status === STATUS_FAILED) {
+                    badge.textContent = "Failed";
+                    badge.style.background = "rgba(239,68,68,0.3)";
+                    badge.style.color = "#fca5a5";
+                    failed++;
+                    if (s.error) rows[i].label.title = s.error;
+                }
+            }
+            var elapsed = Date.now() - startTime;
+            var avgPer = completed > 0 ? elapsed / completed : 0;
+            var remaining = avgPer > 0 ? avgPer * (pending + inProgress) : 0;
+            summaryDiv.innerHTML = "";
+            summaryDiv.textContent = "Total: " + state.length + "  |  Completed: " + completed + "  |  Failed: " + failed + "  |  In Progress: " + inProgress + "  |  Elapsed: " + formatTime(elapsed) + (remaining > 0 ? "  |  ETA: ~" + formatTime(remaining) : "");
+        }
+
+        timerInterval = setInterval(updateUI, 500);
+        updateUI();
+
+        function cleanup() {
+            if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+        }
+
+        function close() {
+            cleanup();
+            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        }
+
+        return {
+            state: state,
+            setStatus: function(index, status, error) {
+                if (index >= 0 && index < state.length) {
+                    state[index].status = status;
+                    if (error) state[index].error = error;
+                    updateUI();
+                }
+            },
+            close: close,
+            cleanup: cleanup,
+            overlay: overlay,
+            STATUS_PENDING: STATUS_PENDING,
+            STATUS_IN_PROGRESS: STATUS_IN_PROGRESS,
+            STATUS_COMPLETED: STATUS_COMPLETED,
+            STATUS_FAILED: STATUS_FAILED
+        };
+    }
+
+    // ---- Import processing loop ----
+
+    async function ifl_processImports(selectedItems) {
+        IFL_CANCELED = false;
+        log("IFL: starting import of " + selectedItems.length + " forms");
+
+        var progress = ifl_buildProgressPanel(selectedItems, function() { IFL_CANCELED = true; });
+
+        for (var idx = 0; idx < selectedItems.length; idx++) {
+            if (IFL_CANCELED) {
+                log("IFL: import canceled by user at index " + idx);
+                for (var ci = idx; ci < selectedItems.length; ci++) {
+                    progress.setStatus(ci, progress.STATUS_FAILED, "Canceled");
+                }
+                break;
+            }
+
+            var item = selectedItems[idx];
+            progress.setStatus(idx, progress.STATUS_IN_PROGRESS);
+            log("IFL: processing " + (idx + 1) + "/" + selectedItems.length + ": " + item.studyName + " / " + item.originalName);
+
+            try {
+                // Check if modal is open; if not, reopen it
+                var modalBody = document.querySelector(".modal-body");
+                var studySel = document.getElementById(IFL_STUDY_SELECT_ID);
+                if (!modalBody || !studySel) {
+                    log("IFL: modal not open, reopening");
+                    var opened = await ifl_openImportModal();
+                    if (!opened) throw new Error("Failed to open import modal");
+                }
+
+                // Select study
+                var ss = document.getElementById(IFL_STUDY_SELECT_ID);
+                if (!ss) throw new Error("Study select not found");
+                ss.value = item.studyValue;
+                ifl_triggerChange(ss);
+                await sleep(300);
+
+                // Wait for form dropdown
+                var populated = await ifl_waitForFormOptions(IFL_FORM_POPULATE_TIMEOUT);
+                if (!populated) throw new Error("Form dropdown did not populate");
+
+                // Select form
+                var fs = document.getElementById(IFL_FORM_SELECT_ID);
+                if (!fs) throw new Error("Form select not found");
+                var formFound = false;
+                var formOpts = fs.querySelectorAll("option");
+                for (var fo = 0; fo < formOpts.length; fo++) {
+                    if (formOpts[fo].value === item.formValue) {
+                        fs.value = item.formValue;
+                        formFound = true;
+                        break;
+                    }
+                }
+                if (!formFound) throw new Error("Form option not found: " + item.formValue);
+                ifl_triggerChange(fs);
+                await sleep(500);
+
+                // Handle Lock on Save checkbox
+                var lockCb = document.getElementById(IFL_LOCK_CHECKBOX_ID);
+                if (lockCb) {
+                    if (item.lockOnSave && !lockCb.checked) {
+                        lockCb.click();
+                    } else if (!item.lockOnSave && lockCb.checked) {
+                        lockCb.click();
+                    }
+                }
+
+                // Handle rename if needed
+                if (item.newName !== item.originalName) {
+                    var formGroups = document.querySelectorAll(".modal-body .form-group, .modal-body .control-group");
+                    var itemGroupsDiv = null;
+                    if (formGroups.length >= 4) {
+                        itemGroupsDiv = formGroups[3];
+                    }
+                    if (itemGroupsDiv) {
+                        var nameInput = itemGroupsDiv.querySelector('input[name*="formName"], input[id*="formName"], input[type="text"]');
+                        if (nameInput) {
+                            nameInput.value = item.newName;
+                            nameInput.dispatchEvent(new Event("input", { bubbles: true }));
+                            nameInput.dispatchEvent(new Event("change", { bubbles: true }));
+                            log("IFL: renamed form to '" + item.newName + "'");
+                        } else {
+                            log("IFL: warning — formName input not found in 4th form group");
+                        }
+                    } else {
+                        log("IFL: warning — 4th form group not found for rename");
+                    }
+                }
+
+                // Click Save
+                var saveBtn = document.getElementById(IFL_SAVE_BUTTON_ID);
+                if (!saveBtn) throw new Error("Save button not found");
+                saveBtn.click();
+                log("IFL: clicked Save");
+
+                // Wait for modal to close
+                var start = Date.now();
+                var closed = false;
+                while (Date.now() - start < IFL_MODAL_CLOSE_TIMEOUT) {
+                    var m = document.querySelector(".modal.in, .modal.show");
+                    if (!m || m.style.display === "none") { closed = true; break; }
+                    // Also check if modal body disappeared
+                    var mb = document.querySelector(".modal-body");
+                    if (!mb) { closed = true; break; }
+                    await sleep(150);
+                }
+                if (!closed) {
+                    log("IFL: warning — modal did not close in time, continuing");
+                }
+                await sleep(IFL_INTER_ITEM_DELAY);
+
+                progress.setStatus(idx, progress.STATUS_COMPLETED);
+                log("IFL: completed " + item.studyName + " / " + item.originalName);
+
+            } catch (err) {
+                var errMsg = err && err.message ? err.message : String(err);
+                log("IFL: FAILED " + item.studyName + " / " + item.originalName + " — " + errMsg);
+                progress.setStatus(idx, progress.STATUS_FAILED, errMsg);
+                // Try to close modal if stuck
+                await ifl_closeImportModal();
+                await sleep(500);
+            }
+        }
+
+        log("IFL: import loop finished");
+        // Keep progress panel open for user review; they can close it
+    }
+
+    // ---- Main entry point ----
+
+    async function runImportFromLibrary() {
+        log("IFL: Import from Library started");
+        IFL_CANCELED = false;
+
+        // Page check
+        if (!isOnImportFromLibraryPage()) {
+            createPopup({
+                title: "Import from Library",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">\u26A0\uFE0F Wrong Page</p><p>You must be on the Study Library Forms page to use this feature.</p><p style="margin-top:12px;font-size:12px;color:#ffffffff;word-wrap:break-word;word-break:break-all;">Required URL:<br>' + IFL_VALID_URLS[0] + '<br>or<br>' + IFL_VALID_URLS[1] + '</p></div>',
+                width: "450px",
+                height: "auto"
+            });
+            log("IFL: wrong page — " + location.href);
+            return;
+        }
+
+        // Open import modal
+        var modalOpened = await ifl_openImportModal();
+        if (!modalOpened) {
+            createPopup({
+                title: "Import from Library",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">\u26A0\uFE0F Error</p><p>Could not open the Import from Library modal. Make sure the link exists on this page.</p></div>',
+                width: "400px",
+                height: "auto"
+            });
+            return;
+        }
+
+        // Collect all studies & forms
+        var studies = await ifl_collectAllStudiesAndForms();
+        if (!studies || studies.length === 0) {
+            createPopup({
+                title: "Import from Library",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">\u26A0\uFE0F Error</p><p>No studies found in the Study Library dropdown.</p></div>',
+                width: "400px",
+                height: "auto"
+            });
+            await ifl_closeImportModal();
+            return;
+        }
+
+        // Close the modal before showing selection GUI
+        await ifl_closeImportModal();
+
+        // Show selection GUI
+        ifl_buildSelectionGUI(studies, function(selectedItems) {
+            // User confirmed selection — start import
+            ifl_processImports(selectedItems);
+        });
     }
     // ================================================================
     // Edit Study Events List — Feature Implementation
@@ -11371,7 +12194,6 @@
         var hasAnyForms = false;
         var missingEventCount = 0;
         var refActivitySegmentCount = 0;
-        var duplicateComboCount = 0;
         log("BPL: running validation");
         for (var si = 0; si < segments.length; si++) {
             var sv = segments[si].value;
@@ -11384,7 +12206,6 @@
             }
             hasAnyForms = true;
             var refCount = 0;
-            var seenCombos = {};
             for (var fi = 0; fi < fList.length; fi++) {
                 var fEntry = fList[fi];
                 var fk = sv + "|" + fEntry.value + "|" + fEntry.index;
@@ -11405,16 +12226,10 @@
                         studyEvents: []
                     };
                 }
+                var isExistingForm = fEntry.autoPopulated || fd.autoPopulated;
                 var evts = fd.studyEvents || [];
-                if (evts.length === 0) {
+                if (!isExistingForm && evts.length === 0) {
                     missingEventCount = missingEventCount + 1;
-                }
-                for (var ei = 0; ei < evts.length; ei++) {
-                    var comboKey = fEntry.value + "|" + evts[ei].value;
-                    if (seenCombos[comboKey]) {
-                        duplicateComboCount = duplicateComboCount + 1;
-                    }
-                    seenCombos[comboKey] = true;
                 }
                 if (fd.refActivity) {
                     refCount = refCount + 1;
@@ -11436,13 +12251,10 @@
             errors.push("Multiple Reference Activities found in " + refActivitySegmentCount + " segment" + (refActivitySegmentCount > 1 ? "s" : "") + ". Only one per Segment is allowed.");
             log("BPL: validation error - " + refActivitySegmentCount + " segments with multiple reference activities");
         }
-        if (duplicateComboCount > 0) {
-            errors.push("Duplicate form + study event combination found " + duplicateComboCount + " time" + (duplicateComboCount > 1 ? "s" : "") + " within the same segment.");
-            log("BPL: validation error - " + duplicateComboCount + " duplicate form+event combos");
-        }
         log("BPL: validation complete, " + errors.length + " error(s)");
         return errors;
     }
+
 
     function saveBPLSessionState(segmentFormMap, formDataStore, segmentCheckboxStates, formInstanceCounter) {
         try {
@@ -13286,22 +14098,7 @@
     }
 
     function createBPLMappedItemList(mappedItems, existingItems) {
-        log("BPL: checking " + mappedItems.length + " items for duplicates against " + existingItems.length + " existing");
-        for (var i = 0; i < mappedItems.length; i++) {
-            var item = mappedItems[i];
-            var key = normalizeSAText(item.segmentText) + " | " + normalizeSAText(item.eventText) + " | " + normalizeSAText(item.formText);
-            var isDuplicate = false;
-            for (var j = 0; j < existingItems.length; j++) {
-                if (normalizeSAText(existingItems[j]) === key) {
-                    isDuplicate = true;
-                    break;
-                }
-            }
-            if (isDuplicate) {
-                item.status = "Duplicate";
-                log("BPL: duplicate found - " + key);
-            }
-        }
+        log("BPL: " + mappedItems.length + " items ready (duplicate checking disabled)");
         return mappedItems;
     }
 
@@ -32691,6 +33488,25 @@
         findStudyEventsBtn.onmouseenter = () => { findStudyEventsBtn.style.background = "#58a1f5"; };
         findStudyEventsBtn.onmouseleave = () => { findStudyEventsBtn.style.background = "#4a90e2"; };
 
+        var importFromLibBtn = document.createElement("button");
+        importFromLibBtn.textContent = "Import from Library";
+        importFromLibBtn.style.background = "#38dae6";
+        importFromLibBtn.style.color = "#fff";
+        importFromLibBtn.style.border = "none";
+        importFromLibBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        importFromLibBtn.style.padding = scale(BUTTON_PADDING_PX);
+        importFromLibBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
+        importFromLibBtn.style.cursor = "pointer";
+        importFromLibBtn.style.fontWeight = "500";
+        importFromLibBtn.style.transition = "background 0.2s";
+        importFromLibBtn.onmouseenter = function() { this.style.background = "#2bb9c4"; };
+        importFromLibBtn.onmouseleave = function() { this.style.background = "#38dae6"; };
+        importFromLibBtn.addEventListener("click", async function() {
+            IFL_CANCELED = false;
+            log("Import from Library: button clicked");
+            await runImportFromLibrary();
+        });
+
         var clearMappingBtn = document.createElement("button");
         clearMappingBtn.textContent = "Clear Mapping";
         clearMappingBtn.style.background = "#38dae6";
@@ -32721,7 +33537,7 @@
 
         // Apply glassmorphism theme to all panel buttons if glass theme is active
         if (glass) {
-            var allPanelBtns = [runPlansBtn, runStudyBtn, runAddCohortBtn, runConsentBtn, runAllBtn, runNonScrnBtn, addExistingSubjectBtn, bplBtn, runBarcodeBtn, runFormBtn, parseMethodBtn, searchMethodsBtn, archiveUpdateFormsBtn, copyFormsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn, runLockSamplePathsBtn, importEligBtn, findFormBtn, editStudyEventsBtn, pullLabBarcodeBtn, findStudyEventsBtn, clearMappingBtn, collectAllBtn];
+            var allPanelBtns = [runPlansBtn, runStudyBtn, runAddCohortBtn, runConsentBtn, runAllBtn, runNonScrnBtn, addExistingSubjectBtn, bplBtn, importFromLibBtn, runBarcodeBtn, runFormBtn, parseMethodBtn, searchMethodsBtn, archiveUpdateFormsBtn, copyFormsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn, runLockSamplePathsBtn, importEligBtn, findFormBtn, editStudyEventsBtn, pullLabBarcodeBtn, findStudyEventsBtn, clearMappingBtn, collectAllBtn];
             for (var gi = 0; gi < allPanelBtns.length; gi++) {
                 var gb = allPanelBtns[gi];
                 gb.className = "ie-btn-primary";
@@ -32751,6 +33567,7 @@
             "Add Existing Subject": addExistingSubjectBtn,
             "Search Methods": searchMethodsBtn,
             "PLAP Builder": bplBtn,
+            "Import from Library": importFromLibBtn,
             "Run Form": runFormBtn,
             "Collect All": collectAllBtn,
             "Import I/E": importEligBtn,
