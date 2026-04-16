@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.3.8
+// @version     2.3.9
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -1422,16 +1422,20 @@
                         studyEvents: []
                     };
                 }
+                // Skip existing (auto-populated) forms from duplicate checking
+                var isExistingForm = fEntry.autoPopulated || fd.autoPopulated;
                 var evts = fd.studyEvents || [];
-                if (evts.length === 0) {
+                if (!isExistingForm && evts.length === 0) {
                     missingEventCount = missingEventCount + 1;
                 }
-                for (var ei = 0; ei < evts.length; ei++) {
-                    var comboKey = fEntry.value + "|" + evts[ei].value;
-                    if (seenCombos[comboKey]) {
-                        duplicateComboCount = duplicateComboCount + 1;
+                if (!isExistingForm) {
+                    for (var ei = 0; ei < evts.length; ei++) {
+                        var comboKey = fEntry.value + "|" + evts[ei].value;
+                        if (seenCombos[comboKey]) {
+                            duplicateComboCount = duplicateComboCount + 1;
+                        }
+                        seenCombos[comboKey] = true;
                     }
-                    seenCombos[comboKey] = true;
                 }
                 if (fd.refActivity) {
                     refCount = refCount + 1;
@@ -3331,21 +3335,16 @@
     }
 
     function createBPLMappedItemList(mappedItems, existingItems) {
-        log("BPL: checking " + mappedItems.length + " items for duplicates against " + existingItems.length + " existing");
+        log("BPL: checking " + mappedItems.length + " added items for duplicates among themselves (existing items ignored)");
+        var seenKeys = {};
         for (var i = 0; i < mappedItems.length; i++) {
             var item = mappedItems[i];
             var key = normalizeSAText(item.segmentText) + " | " + normalizeSAText(item.eventText) + " | " + normalizeSAText(item.formText);
-            var isDuplicate = false;
-            for (var j = 0; j < existingItems.length; j++) {
-                if (normalizeSAText(existingItems[j]) === key) {
-                    isDuplicate = true;
-                    break;
-                }
-            }
-            if (isDuplicate) {
+            if (seenKeys[key]) {
                 item.status = "Duplicate";
-                log("BPL: duplicate found - " + key);
+                log("BPL: duplicate among added items - " + key);
             }
+            seenKeys[key] = true;
         }
         return mappedItems;
     }
