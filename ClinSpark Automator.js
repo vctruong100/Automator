@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.3.9
+// @version     2.4.0
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -1388,7 +1388,6 @@
         var hasAnyForms = false;
         var missingEventCount = 0;
         var refActivitySegmentCount = 0;
-        var duplicateComboCount = 0;
         log("BPL: running validation");
         for (var si = 0; si < segments.length; si++) {
             var sv = segments[si].value;
@@ -1401,7 +1400,6 @@
             }
             hasAnyForms = true;
             var refCount = 0;
-            var seenCombos = {};
             for (var fi = 0; fi < fList.length; fi++) {
                 var fEntry = fList[fi];
                 var fk = sv + "|" + fEntry.value + "|" + fEntry.index;
@@ -1422,20 +1420,10 @@
                         studyEvents: []
                     };
                 }
-                // Skip existing (auto-populated) forms from duplicate checking
                 var isExistingForm = fEntry.autoPopulated || fd.autoPopulated;
                 var evts = fd.studyEvents || [];
                 if (!isExistingForm && evts.length === 0) {
                     missingEventCount = missingEventCount + 1;
-                }
-                if (!isExistingForm) {
-                    for (var ei = 0; ei < evts.length; ei++) {
-                        var comboKey = fEntry.value + "|" + evts[ei].value;
-                        if (seenCombos[comboKey]) {
-                            duplicateComboCount = duplicateComboCount + 1;
-                        }
-                        seenCombos[comboKey] = true;
-                    }
                 }
                 if (fd.refActivity) {
                     refCount = refCount + 1;
@@ -1456,10 +1444,6 @@
         if (refActivitySegmentCount > 0) {
             errors.push("Multiple Reference Activities found in " + refActivitySegmentCount + " segment" + (refActivitySegmentCount > 1 ? "s" : "") + ". Only one per Segment is allowed.");
             log("BPL: validation error - " + refActivitySegmentCount + " segments with multiple reference activities");
-        }
-        if (duplicateComboCount > 0) {
-            errors.push("Duplicate form + study event combination found " + duplicateComboCount + " time" + (duplicateComboCount > 1 ? "s" : "") + " within the same segment.");
-            log("BPL: validation error - " + duplicateComboCount + " duplicate form+event combos");
         }
         log("BPL: validation complete, " + errors.length + " error(s)");
         return errors;
@@ -3335,17 +3319,7 @@
     }
 
     function createBPLMappedItemList(mappedItems, existingItems) {
-        log("BPL: checking " + mappedItems.length + " added items for duplicates among themselves (existing items ignored)");
-        var seenKeys = {};
-        for (var i = 0; i < mappedItems.length; i++) {
-            var item = mappedItems[i];
-            var key = normalizeSAText(item.segmentText) + " | " + normalizeSAText(item.eventText) + " | " + normalizeSAText(item.formText);
-            if (seenKeys[key]) {
-                item.status = "Duplicate";
-                log("BPL: duplicate among added items - " + key);
-            }
-            seenKeys[key] = true;
-        }
+        log("BPL: " + mappedItems.length + " items ready (duplicate checking disabled)");
         return mappedItems;
     }
 

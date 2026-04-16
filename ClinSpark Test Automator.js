@@ -385,7 +385,85 @@
     var EDIT_SE_COLLECTED = null;   // [{name, href, originalName}]  — href is null for added rows
     var EDIT_SE_FINAL_ORDER = null; // [{name, href, status, reason}]
 
+    // Import from Library Feature
+    var IFL_FORM_LIST_PATH = "/secure/crfdesign/studylibrary/list/form";
+    var IFL_VALID_URLS = [
+        "https://cenexeltest.clinspark.com/secure/crfdesign/studylibrary/list/form",
+        "https://cenexel.clinspark.com/secure/crfdesign/studylibrary/list/form"
+    ];
+    var IFL_IMPORT_LINK_HREF = "/secure/crfdesign/studylibrary/savefromlibrary/form";
+    var IFL_STUDY_SELECT_ID = "studyMetaDataId";
+    var IFL_FORM_SELECT_ID = "formId";
+    var IFL_LOCK_CHECKBOX_ID = "lockOnSave";
+    var IFL_SAVE_BUTTON_ID = "actionButton";
+    var IFL_MODAL_TIMEOUT = 15000;
+    var IFL_SELECT_POLL_INTERVAL = 120;
+    var IFL_FORM_POPULATE_TIMEOUT = 10000;
+    var IFL_MODAL_CLOSE_TIMEOUT = 12000;
+    var IFL_INTER_ITEM_DELAY = 800;
+    var IFL_CANCELED = false;
+    
+    //=================================================================
+    // Import From Library Feature
+    //=================================================================
+    // This feature automates importing forms from the study library modal.
+    // It collects all studies and their forms, lets the user select/rename/configure,
+    // then processes each import sequentially.
 
+    function isOnImportFromLibraryPage() {
+        var href = location.href.split("?")[0].split('#')[0];
+        for (var i = 0; i < IFL_VALID_URLS.length; i++) {
+            if (href === IFL_VALID_URLS[i]) return true;
+        }
+        return false;
+    }
+
+    function ifl_findImportLink() {
+        var anchors = document.querySelectorAll('a[href*="' + IFL_IMPORT_LINK_HREF + '"]');
+        for (var i = 0; i < anchors.length; i++) {
+            if (anchors[i].offsetParent !== null) return anchors[i];
+        }
+        return anchors.length > 0 ? anchors[0] : null;
+    }
+
+    async function ifl_openImportModal() {
+        var link = ifl_findImportLink();
+        if (!link) {
+            log("IFL: Import from Library link not found on page");
+            return false;
+        }
+        link.click();
+        var start = Date.now();
+        while (Date.now() - start < IFL_MODAL_TIMEOUT) {
+            var modalBody = document.querySelector(".modal-body");
+            var modalForm = document.querySelector('.modal-body form, .modal-body #modalInput');
+            if (modalBody && modalForm) {
+                var study = document.getElementById(IFL_STUDY_SELECT_ID);
+                if (studySel) {
+                    return true;
+                }
+            }
+            await sleep(IFL_SELECT_POLL_INTERVAL);
+        }
+        return false;
+    }
+
+    async function ifl_closeImportModal() {
+        var closeBtn = document.querySelector(".modal.in .close .modal.show .close, .modal .btn-close");
+        if (closeBtn) closeBtn.click();
+        var start = Date.now();
+        while (Date.now() - start < IFL_MODAL_CLOSE_TIMEOUT) {
+            var m = document.querySelector(".modal.in, .modal.show");
+            if (!m || m.style.display === "none") return true;
+            await sleep(100);
+        }
+        return false;
+    }
+
+    async function ifl_closeImportModal() {
+        var closeBtn = document.querySelector(".modal.in .close, .modal.show .close, .modal .btn-close");
+        if 
+    }
     // ================================================================
     // Edit Study Events List — Feature Implementation
     // ================================================================
@@ -6697,6 +6775,7 @@
         { id: "Add Existing Subject", label: "Add Existing Subject" },
         { id: "Search Methods", label: "Search Methods" },
         { id: "PLAP Builder", label: "PLAP Builder" },
+        { id: "Import from Library", label: "Import from Library" },
         { id: "Run Form", label: "Run Form" },
         { id: "Collect All", label: "Collect All" },
         { id: "Import I/E", label: "Import I/E" },
