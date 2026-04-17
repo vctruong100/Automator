@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.9.5
+// @version 3.9.6
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -412,6 +412,10 @@
     var IFL_ITEMGROUPS_TIMEOUT = 8000;
     var IFL_SHOW_FORM_URL_PATTERN = /\/secure\/crfdesign\/studylibrary\/show\/form\//;
     var IFL_LIST_PAGE_URL = "https://" + location.host + "/secure/crfdesign/studylibrary/list/form";
+    var IFL_BG_TAB_LOAD_TIMEOUT = 20000;
+    var IFL_BG_TAB_LINK_TIMEOUT = 10000;
+    var iflBgTab = null;
+    var iflBgIframe = null;
 
     //=================================================================
     // Import From Library Feature
@@ -683,7 +687,217 @@
 
         return groups;
     }
-    
+
+    // ---- Background Tab helpers ----
+    // Instead of opening/closing the modal on the main tab each time,
+    // we open a background tab with the same page and keep its modal open.
+    // Item group loading operates on the bg tab's DOM — much faster.
+
+    function ifl_openBgTabWindow() {
+        if (iflBgIframe && iflBgIframe.parentNode && iflBgTab) return;
+        iflBgIframe = document.createElement("iframe");
+        iflBgIframe.id = "ifl_bg_iframe";
+        iflBgIframe.src = IFL_LIST_PAGE_URL;
+        iflBgIframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;opacity:0;pointer-events:none;";
+        document.body.appendChild(iflBgIframe);
+        iflBgTab = iflBgIframe.contentWindow;
+        if (!iflBgTab) {
+            log("IFL: failed to open background iframe");
+        } else {
+            log("IFL: opened background iframe (hidden)");
+        }
+    }
+
+    async function ifl_waitForBgTabReady() {
+        if (!iflBgTab || iflBgTab.closed) return false;
+
+        // Wait for page to fully load
+        var start = Date.now();
+        while (Date.now() - start < IFL_BG_TAB_LOAD_TIMEOUT) {
+            try {
+                var bgUrl = iflBgTab.document.location.href || "";
+                if (iflBgTab.document.readyState === "complete" && bgUrl.indexOf("about:blank") === -1) break;
+            } catch (e) { /* may throw during load */ }
+            await sleep(200);
+        }
+
+        // Find and click the import link in bg tab
+        var link = null;
+        var start2 = Date.now();
+        while (Date.now() - start2 < IFL_BG_TAB_LINK_TIMEOUT) {
+            try {
+                link = iflBgTab.document.querySelector('a[href*="' + IFL_IMPORT_LINK_HREF + '"]');
+                if (link) break;
+            } catch (e) {}
+            await sleep(200);
+        }
+        if (!link) {
+            log("IFL: bg tab import link not found");
+            return false;
+        }
+        link.click();
+        log("IFL: clicked import link in bg tab");
+
+        // Wait for modal to open in bg tab
+        var start3 = Date.now();
+        while (Date.now() - start3 < IFL_MODAL_TIMEOUT) {
+            try {
+                var bgDoc = iflBgTab.document;
+                var modalBody = bgDoc.querySelector(".modal-body");
+                var studySel = bgDoc.getElementById(IFL_STUDY_SELECT_ID);
+                if (modalBody && studySel) {
+                    log("IFL: bg tab modal ready");
+                    return true;
+                }
+            } catch (e) {}
+            await sleep(IFL_SELECT_POLL_INTERVAL);
+        }
+        log("IFL: bg tab modal timed out");
+        return false;
+    }
+
+    function ifl_closeBgTab() {
+        if (iflBgIframe) {
+            try { if (iflBgIframe.parentNode) iflBgIframe.parentNode.removeChild(iflBgIframe); } catch (e) {}
+            iflBgIframe = null;
+            log("IFL: removed background iframe");
+        }
+        iflBgTab = null;
+    }
+
+    async function ifl_syncModalToFormViaBgTab(item) {
+        // Fall back to main-tab sync if bg tab is not available
+        if (!iflBgTab || iflBgTab.closed) {
+            log("IFL: bg tab not available, falling back to main tab sync");
+            return await ifl_syncModalToForm(item);
+        }
+
+        var bgDoc;
+        try { bgDoc = iflBgTab.document; } catch (e) {
+            log("IFL: cannot access bg tab document — " + e);
+            return await ifl_syncModalToForm(item);
+        }
+
+        // Ensure modal is open in bg tab
+        var studySel = bgDoc.getElementById(IFL_STUDY_SELECT_ID);
+        if (!studySel) {
+            log("IFL: bg tab modal not open, attempting to reopen");
+            var link = bgDoc.querySelector('a[href*="' + IFL_IMPORT_LINK_HREF + '"]');
+            if (link) {
+                link.click();
+                var start = Date.now();
+                while (Date.now() - start < IFL_MODAL_TIMEOUT) {
+                    studySel = bgDoc.getElementById(IFL_STUDY_SELECT_ID);
+                    if (studySel) break;
+                    await sleep(IFL_SELECT_POLL_INTERVAL);
+                }
+            }
+            if (!studySel) {
+                log("IFL: bg tab modal failed to reopen, falling back");
+                return await ifl_syncModalToForm(item);
+            }
+        }
+
+        // Select study
+        studySel.value = item.studyValue;
+        var evt = new Event("change", { bubbles: true });
+        studySel.dispatchEvent(evt);
+        try { if (iflBgTab.jQuery) iflBgTab.jQuery(studySel).trigger("change"); } catch (e) {}
+        log("IFL: bg tab selected study value=" + item.studyValue);
+        await sleep(300);
+
+        // Wait for form options to populate
+        var start2 = Date.now();
+        var populated = false;
+        var lastCount = -1;
+        var stableCount = 0;
+        while (Date.now() - start2 < IFL_FORM_POPULATE_TIMEOUT) {
+            var formSel = bgDoc.getElementById(IFL_FORM_SELECT_ID);
+            if (formSel) {
+                var opts = formSel.querySelectorAll("option");
+                var realOpts = 0;
+                for (var oi = 0; oi < opts.length; oi++) {
+                    if (opts[oi].value && opts[oi].value !== "") realOpts++;
+                }
+                if (realOpts > 0) {
+                    if (realOpts === lastCount) {
+                        stableCount++;
+                        if (stableCount >= 2) { populated = true; break; }
+                    } else { stableCount = 0; }
+                    lastCount = realOpts;
+                }
+            }
+            await sleep(IFL_SELECT_POLL_INTERVAL);
+        }
+        if (!populated) {
+            var fs2 = bgDoc.getElementById(IFL_FORM_SELECT_ID);
+            if (fs2) {
+                var opts2 = fs2.querySelectorAll("option");
+                for (var oi2 = 0; oi2 < opts2.length; oi2++) {
+                    if (opts2[oi2].value && opts2[oi2].value !== "") { populated = true; break; }
+                }
+            }
+        }
+        if (!populated) { log("IFL: bg tab form dropdown did not populate"); return null; }
+
+        // Select form
+        var fs = bgDoc.getElementById(IFL_FORM_SELECT_ID);
+        if (!fs) return null;
+        fs.value = item.formValue;
+        var evt2 = new Event("change", { bubbles: true });
+        fs.dispatchEvent(evt2);
+        try { if (iflBgTab.jQuery) iflBgTab.jQuery(fs).trigger("change"); } catch (e) {}
+        await sleep(500);
+
+        // Wait for itemGroupsDiv to populate in bg tab
+        var start3 = Date.now();
+        var igDiv = null;
+        while (Date.now() - start3 < IFL_ITEMGROUPS_TIMEOUT) {
+            var div = bgDoc.getElementById("itemGroupsDiv");
+            if (div) {
+                var rows = div.querySelectorAll("tr");
+                if (rows.length > 1) { igDiv = div; break; }
+            }
+            await sleep(150);
+        }
+        if (!igDiv) {
+            log("IFL: bg tab itemGroupsDiv not populated");
+            return [];
+        }
+
+        // Collect item groups from bg tab DOM
+        var table = igDiv.querySelector("table");
+        if (!table) return [];
+        var groups = [];
+        var groupCbs = table.querySelectorAll('input[name^="itemGroupRef_include_"]');
+        for (var gi = 0; gi < groupCbs.length; gi++) {
+            var groupCb = groupCbs[gi];
+            var groupTr = groupCb.closest("tr");
+            if (!groupTr) continue;
+            var groupNameInput = groupTr.querySelector('input[type="text"]');
+            var groupName = groupNameInput ? (groupNameInput.value || groupNameInput.getAttribute("value") || "").trim() : "";
+            var group = { originalName: groupName, newName: groupName, included: groupCb.checked, items: [] };
+            var nextTr = groupTr.nextElementSibling;
+            if (nextTr) {
+                var nestedTable = nextTr.querySelector("table");
+                if (nestedTable) {
+                    var itemCbs = nestedTable.querySelectorAll('input[name^="itemRef_include_"]');
+                    for (var ii = 0; ii < itemCbs.length; ii++) {
+                        var itemCb = itemCbs[ii];
+                        var itemTr = itemCb.closest("tr");
+                        if (!itemTr) continue;
+                        var itemNameInput = itemTr.querySelector('input[type="text"]');
+                        var itemName = itemNameInput ? (itemNameInput.value || itemNameInput.getAttribute("value") || "").trim() : "";
+                        group.items.push({ originalName: itemName, newName: itemName, included: itemCb.checked });
+                    }
+                }
+            }
+            groups.push(group);
+        }
+        log("IFL: bg tab collected " + groups.length + " item groups with " + groups.reduce(function(s, g) { return s + g.items.length; }, 0) + " total items");
+        return groups;
+    }
+
     function ifl_applyItemGroupChanges(item) {
         var div = document.getElementById("itemGroupsDiv");
         if (!div) { log("IFL: applyItemGroupChanges — itemGroupsDiv not found"); return; }
@@ -862,7 +1076,8 @@
                 "#ifl-selection-overlay .ifl-row { font-size: 12px !important; }" +
                 "#ifl-selection-overlay .ifl-hdr { font-size: 12px !important; }" +
                 "#ifl-selection-overlay .ifl-cb { width: 16px !important; height: 16px !important; }" +
-                "#ifl-selection-overlay .ifl-search { font-size: 12px !important; }";
+                "#ifl-selection-overlay .ifl-search { font-size: 12px !important; }" +
+                "@keyframes ifl-spin { to { transform: rotate(360deg); } }";
             document.head.appendChild(styleTag);
         }
 
@@ -1225,6 +1440,23 @@
                             activeFormItem = fItem;
                             renderMidPanel();
                             renderRightPanel();
+                            // Auto-load item groups if not yet loaded
+                            if (fItem.itemGroups === null && !iflSyncBusy) {
+                                iflSyncBusy = true;
+                                log("IFL: auto-loading item groups for " + fItem.studyName + " / " + fItem.originalName);
+                                renderRightPanel();
+                                ifl_syncModalToFormViaBgTab(fItem).then(function(groups) {
+                                    iflSyncBusy = false;
+                                    fItem.itemGroups = (groups !== null) ? groups : [];
+                                    log("IFL: collected " + fItem.itemGroups.length + " item groups for " + fItem.originalName);
+                                    if (activeFormItem === fItem) renderRightPanel();
+                                }).catch(function(err) {
+                                    iflSyncBusy = false;
+                                    log("IFL: sync error — " + String(err));
+                                    fItem.itemGroups = [];
+                                    if (activeFormItem === fItem) renderRightPanel();
+                                });
+                            }
                         };
 
                         row.appendChild(nameSpan);
@@ -1244,11 +1476,12 @@
             secTitle.style.cssText = "color:" + tc.textMuted + ";font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;";
             section.appendChild(secTitle);
 
-            if (!item.itemGroups) {
-                var loading = document.createElement("div");
-                loading.textContent = "Loading item groups\u2026";
-                loading.style.cssText = "color:" + tc.textMuted + ";font-size:11px;font-style:italic;";
-                section.appendChild(loading);
+            if (item.itemGroups === null) {
+                // Loading in progress (auto-triggered on row selection)
+                var busyMsg = document.createElement("div");
+                busyMsg.style.cssText = "color:" + tc.textMuted + ";font-size:11px;font-style:italic;display:flex;align-items:center;gap:6px;";
+                busyMsg.innerHTML = '<span style="display:inline-block;width:12px;height:12px;border:2px solid ' + tc.accent + ';border-top-color:transparent;border-radius:50%;animation:ifl-spin 0.8s linear infinite;"></span> Loading item groups\u2026';
+                section.appendChild(busyMsg);
                 return section;
             }
             if (item.itemGroups.length === 0) {
@@ -1359,30 +1592,9 @@
             rightPanel.appendChild(nameInput);
             rightPanel.appendChild(lockRow);
 
-            // Item groups section
+            // Item groups section (opt-in loading via button, not auto-sync)
             var igSection = renderItemGroupsSection(item);
             rightPanel.appendChild(igSection);
-
-            // If item groups not loaded yet, sync modal and load them
-            if (item.itemGroups === null && !iflSyncBusy) {
-                iflSyncBusy = true;
-                log("IFL: syncing modal for " + item.studyName + " / " + item.originalName);
-                ifl_syncModalToForm(item).then(function(groups) {
-                    iflSyncBusy = false;
-                    if (groups !== null) {
-                        item.itemGroups = groups;
-                        log("IFL: collected " + groups.length + " item groups for " + item.originalName);
-                    } else {
-                        item.itemGroups = [];
-                    }
-                    if (activeFormItem === item) renderRightPanel();
-                }).catch(function(err) {
-                    iflSyncBusy = false;
-                    log("IFL: sync error — " + String(err));
-                    item.itemGroups = [];
-                    if (activeFormItem === item) renderRightPanel();
-                });
-            }
         }
 
         // Wire events
@@ -1396,12 +1608,14 @@
         };
 
         hClose.onclick = function() {
+            ifl_closeBgTab();
             document.removeEventListener("mousemove", onDragMove);
             document.removeEventListener("mouseup", onDragEnd);
             if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
         };
         overlay.onclick = function(e) {
             if (e.target === overlay) {
+                ifl_closeBgTab();
                 document.removeEventListener("mousemove", onDragMove);
                 document.removeEventListener("mouseup", onDragEnd);
                 if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
@@ -1414,6 +1628,7 @@
                 if (formItems[i].selected) selected.push(formItems[i]);
             }
             if (selected.length === 0) return;
+            ifl_closeBgTab();
             document.removeEventListener("mousemove", onDragMove);
             document.removeEventListener("mouseup", onDragEnd);
             if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
@@ -1424,6 +1639,7 @@
             if (e.key === "Escape") {
                 e.preventDefault();
                 e.stopPropagation();
+                ifl_closeBgTab();
                 document.removeEventListener("mousemove", onDragMove);
                 document.removeEventListener("mouseup", onDragEnd);
                 if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
@@ -1999,9 +2215,13 @@
             return;
         }
 
+        // Open background tab immediately (before first await to preserve user gesture for popup)
+        ifl_openBgTabWindow();
+
         // Open import modal
         var modalOpened = await ifl_openImportModal();
         if (!modalOpened) {
+            ifl_closeBgTab();
             createPopup({
                 title: "Import from Library",
                 content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">\u26A0\uFE0F Error</p><p>Could not open the Import from Library modal. Make sure the link exists on this page.</p></div>',
@@ -2011,9 +2231,35 @@
             return;
         }
 
-        // Collect all studies & forms
+        // Show "Collecting data" animation overlay
+        var collectingOverlay = document.createElement("div");
+        collectingOverlay.id = "ifl-collecting-overlay";
+        collectingOverlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:30000;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;";
+        var collectingPanel = document.createElement("div");
+        collectingPanel.style.cssText = "background:#111;border:1px solid #333;border-radius:12px;padding:32px 48px;box-shadow:0 15px 35px rgba(0,0,0,0.5);display:flex;flex-direction:column;align-items:center;gap:16px;";
+        var spinStyle = document.createElement("style");
+        spinStyle.textContent = "@keyframes ifl-spin { to { transform: rotate(360deg); } } @keyframes ifl-pulse { 0%,100% { opacity:0.6; } 50% { opacity:1; } }";
+        collectingPanel.appendChild(spinStyle);
+        var spinner = document.createElement("div");
+        spinner.style.cssText = "width:36px;height:36px;border:3px solid #5b43c7;border-top-color:transparent;border-radius:50%;animation:ifl-spin 0.8s linear infinite;";
+        var collectingTitle = document.createElement("div");
+        collectingTitle.textContent = "Collecting data";
+        collectingTitle.style.cssText = "color:#fff;font-size:16px;font-weight:600;";
+        var collectingMsg = document.createElement("div");
+        collectingMsg.textContent = "Scanning studies and forms\u2026";
+        collectingMsg.style.cssText = "color:#999;font-size:12px;animation:ifl-pulse 1.5s ease-in-out infinite;";
+        collectingPanel.appendChild(spinner);
+        collectingPanel.appendChild(collectingTitle);
+        collectingPanel.appendChild(collectingMsg);
+        collectingOverlay.appendChild(collectingPanel);
+        document.body.appendChild(collectingOverlay);
+
+        // Collect all studies & forms (main tab modal)
         var studies = await ifl_collectAllStudiesAndForms();
+
         if (!studies || studies.length === 0) {
+            if (collectingOverlay.parentNode) collectingOverlay.parentNode.removeChild(collectingOverlay);
+            ifl_closeBgTab();
             createPopup({
                 title: "Import from Library",
                 content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">\u26A0\uFE0F Error</p><p>No studies found in the Study Library dropdown.</p></div>',
@@ -2027,8 +2273,19 @@
         // Cache studies for potential resume
         ifl_saveStudiesCache(studies);
 
-        // Close the modal before showing selection GUI
+        // Close the main tab modal
         await ifl_closeImportModal();
+
+        // Wait for background tab to be ready with its modal open
+        // (overlay stays visible — user sees "Collecting data" while bg tab loads)
+        collectingMsg.textContent = "Preparing background worker\u2026";
+        var bgReady = await ifl_waitForBgTabReady();
+        if (!bgReady) {
+            log("IFL: bg tab not ready — item group loading will fall back to main tab");
+        }
+
+        // Remove "Collecting data" overlay right before showing selection GUI
+        if (collectingOverlay.parentNode) collectingOverlay.parentNode.removeChild(collectingOverlay);
 
         // Show selection GUI
         ifl_buildSelectionGUI(studies, function(selectedItems) {
@@ -20944,8 +21201,8 @@
         return pool;
     }
 
-    async function collectMappingsFromModal(existingCodeSet, progressCallback) {
-        log("ImportIE: collectMappingsFromModal start");
+    async function collectMappingsFromModal(existingCodeSet, progressCallback, selectedPlanValues) {
+        log("ImportIE: collectMappingsFromModal start" + (selectedPlanValues ? " filtered to " + String(selectedPlanValues.size) + " plans" : " (all plans)"));
         var mappings = [];
         var seenKeys = {};
         var totalSAProcessed = 0;
@@ -20976,6 +21233,11 @@
             var pVal = (planOpts[pi].value + "").trim();
             var pTxt = (planOpts[pi].textContent + "").trim().replace(/\s+/g, " ");
             if (pVal.length === 0) {
+                pi = pi + 1;
+                continue;
+            }
+            if (selectedPlanValues && !selectedPlanValues.has(pVal)) {
+                log("ImportIE: collectMappingsFromModal skipping unselected plan='" + String(pTxt) + "'");
                 pi = pi + 1;
                 continue;
             }
@@ -23672,6 +23934,163 @@
         log("ImportIE: executeSelectedMappings done successes=" + String(successes) + " failures=" + String(failures));
     }
 
+    function buildPlanSelectionGUI(planList) {
+        return new Promise(function(resolve) {
+            var container = document.createElement("div");
+            container.style.display = "flex";
+            container.style.flexDirection = "column";
+            container.style.gap = "12px";
+            container.style.padding = "12px 16px";
+            container.style.color = "#fff";
+            container.style.fontSize = "13px";
+
+            var infoRow = document.createElement("div");
+            infoRow.style.color = "#ccc";
+            infoRow.style.fontSize = "12px";
+            infoRow.style.lineHeight = "1.5";
+            infoRow.textContent = "Found " + String(planList.length) + " activity plan" + (planList.length !== 1 ? "s" : "") + ". Select which ones to scan for I/E mappings.";
+            container.appendChild(infoRow);
+
+            var btnRow = document.createElement("div");
+            btnRow.style.display = "flex";
+            btnRow.style.gap = "8px";
+            btnRow.style.alignItems = "center";
+
+            var selectAllBtn = document.createElement("button");
+            selectAllBtn.textContent = "Select All";
+            selectAllBtn.style.cssText = "background:#2980b9;color:#fff;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;";
+            selectAllBtn.addEventListener("mouseenter", function() { selectAllBtn.style.background = "#3498db"; });
+            selectAllBtn.addEventListener("mouseleave", function() { selectAllBtn.style.background = "#2980b9"; });
+
+            var deselectAllBtn = document.createElement("button");
+            deselectAllBtn.textContent = "Deselect All";
+            deselectAllBtn.style.cssText = "background:#444;color:#fff;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;";
+            deselectAllBtn.addEventListener("mouseenter", function() { deselectAllBtn.style.background = "#555"; });
+            deselectAllBtn.addEventListener("mouseleave", function() { deselectAllBtn.style.background = "#444"; });
+
+            var countLabel = document.createElement("span");
+            countLabel.style.cssText = "color:#888;font-size:11px;margin-left:auto;";
+
+            btnRow.appendChild(selectAllBtn);
+            btnRow.appendChild(deselectAllBtn);
+            btnRow.appendChild(countLabel);
+            container.appendChild(btnRow);
+
+            var listContainer = document.createElement("div");
+            listContainer.style.cssText = "max-height:400px;overflow-y:auto;border:1px solid #333;border-radius:4px;background:#1a1a1a;";
+
+            var checkboxes = [];
+
+            function updateCount() {
+                var checked = 0;
+                var ci = 0;
+                while (ci < checkboxes.length) {
+                    if (checkboxes[ci].checked) checked = checked + 1;
+                    ci = ci + 1;
+                }
+                countLabel.textContent = String(checked) + " of " + String(planList.length) + " selected";
+                confirmBtn.disabled = checked === 0;
+                confirmBtn.style.opacity = checked === 0 ? "0.5" : "1";
+                confirmBtn.style.cursor = checked === 0 ? "default" : "pointer";
+            }
+
+            var pli = 0;
+            while (pli < planList.length) {
+                (function(plan, idx) {
+                    var row = document.createElement("div");
+                    row.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid #2a2a2a;cursor:pointer;transition:background 0.1s;";
+                    row.addEventListener("mouseenter", function() { row.style.background = "#252525"; });
+                    row.addEventListener("mouseleave", function() { row.style.background = "transparent"; });
+
+                    var cb = document.createElement("input");
+                    cb.type = "checkbox";
+                    cb.checked = true;
+                    cb.style.cssText = "width:15px;height:15px;accent-color:#2980b9;flex-shrink:0;cursor:pointer;";
+                    cb.addEventListener("change", function() { updateCount(); });
+                    checkboxes.push(cb);
+
+                    var label = document.createElement("span");
+                    label.style.cssText = "flex:1;color:#ddd;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+                    label.textContent = plan.text;
+                    label.title = plan.text;
+
+                    row.addEventListener("click", function(e) {
+                        if (e.target !== cb) {
+                            cb.checked = !cb.checked;
+                            updateCount();
+                        }
+                    });
+
+                    row.appendChild(cb);
+                    row.appendChild(label);
+                    listContainer.appendChild(row);
+                })(planList[pli], pli);
+                pli = pli + 1;
+            }
+
+            container.appendChild(listContainer);
+
+            var confirmRow = document.createElement("div");
+            confirmRow.style.cssText = "display:flex;justify-content:flex-end;gap:8px;margin-top:4px;";
+
+            var cancelBtn = document.createElement("button");
+            cancelBtn.textContent = "Cancel";
+            cancelBtn.style.cssText = "background:#444;color:#fff;border:none;padding:6px 18px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;";
+            cancelBtn.addEventListener("mouseenter", function() { cancelBtn.style.background = "#555"; });
+            cancelBtn.addEventListener("mouseleave", function() { cancelBtn.style.background = "#444"; });
+
+            var confirmBtn = document.createElement("button");
+            confirmBtn.textContent = "Scan Selected Plans";
+            confirmBtn.style.cssText = "background:#27ae60;color:#fff;border:none;padding:6px 18px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;";
+            confirmBtn.addEventListener("mouseenter", function() { if (!confirmBtn.disabled) confirmBtn.style.background = "#2ecc71"; });
+            confirmBtn.addEventListener("mouseleave", function() { if (!confirmBtn.disabled) confirmBtn.style.background = "#27ae60"; });
+
+            confirmRow.appendChild(cancelBtn);
+            confirmRow.appendChild(confirmBtn);
+            container.appendChild(confirmRow);
+
+            var selPopup = createPopup({
+                title: "Import I/E - Select Activity Plans",
+                content: container,
+                width: "520px",
+                height: "auto",
+                maxHeight: "80%"
+            });
+
+            selectAllBtn.addEventListener("click", function() {
+                var ai = 0;
+                while (ai < checkboxes.length) { checkboxes[ai].checked = true; ai = ai + 1; }
+                updateCount();
+            });
+            deselectAllBtn.addEventListener("click", function() {
+                var di = 0;
+                while (di < checkboxes.length) { checkboxes[di].checked = false; di = di + 1; }
+                updateCount();
+            });
+
+            cancelBtn.addEventListener("click", function() {
+                selPopup.close();
+                resolve(null);
+            });
+
+            confirmBtn.addEventListener("click", function() {
+                var selected = new Set();
+                var fi = 0;
+                while (fi < planList.length) {
+                    if (checkboxes[fi].checked) {
+                        selected.add(planList[fi].value);
+                    }
+                    fi = fi + 1;
+                }
+                log("ImportIE: user selected " + String(selected.size) + " of " + String(planList.length) + " plans");
+                selPopup.close();
+                resolve(selected);
+            });
+
+            updateCount();
+        });
+    }
+
     function startImportEligibilityMapping() {
         log("ImportIE: startImportEligibilityMapping invoked");
 
@@ -23818,16 +24237,167 @@
                 }
                 await sleep(800);
 
-                log("ImportIE: step 3b - collecting eligibility item pool from modal");
-                stepRow.textContent = "Step 3b: Collecting Eligibility Items...";
+                log("ImportIE: step 3a - collecting activity plan names from dropdown");
+                stepRow.textContent = "Step 3a: Collecting Activity Plan names...";
+                var planSelPreview = document.querySelector("select#activityPlan");
+                if (!planSelPreview) {
+                    planSelPreview = await waitForElement("select#activityPlan", 8000);
+                }
+                if (!planSelPreview) {
+                    clearInterval(loadingInterval);
+                    loadingPopup.close();
+                    showWarningPopup("Import I/E - Error", "Activity Plan dropdown not found in modal.");
+                    log("ImportIE: planSel not found during preview, stopping");
+                    return;
+                }
+                await loadAllSelect2Options(planSelPreview, 15, 6000);
+                var previewOpts = planSelPreview.querySelectorAll("option");
+                var planList = [];
+                var ppi = 0;
+                while (ppi < previewOpts.length) {
+                    var ppVal = (previewOpts[ppi].value + "").trim();
+                    var ppTxt = (previewOpts[ppi].textContent + "").trim().replace(/\s+/g, " ");
+                    if (ppVal.length > 0) {
+                        planList.push({ value: ppVal, text: ppTxt });
+                    }
+                    ppi = ppi + 1;
+                }
+                log("ImportIE: collected " + String(planList.length) + " activity plan names");
+
+                log("ImportIE: closing modal before plan selection");
+                var closeModalBtn1 = document.querySelector("#ajaxModal .modal-content button.close");
+                if (closeModalBtn1) {
+                    closeModalBtn1.click();
+                    await waitForIEModalClose(5000);
+                }
+
+                clearInterval(loadingInterval);
+                loadingPopup.close();
+
+                if (planList.length === 0) {
+                    showWarningPopup("Import I/E - No Plans", "No activity plans were found in the modal dropdown.");
+                    log("ImportIE: no plans found, stopping");
+                    return;
+                }
+
+                log("ImportIE: showing plan selection GUI");
+                var selectedPlanValues = await buildPlanSelectionGUI(planList);
+                if (!selectedPlanValues) {
+                    log("ImportIE: user cancelled plan selection");
+                    return;
+                }
+                if (selectedPlanValues.size === 0) {
+                    log("ImportIE: no plans selected, stopping");
+                    return;
+                }
+                log("ImportIE: user selected " + String(selectedPlanValues.size) + " plans, resuming collection");
+
+                var loadingContainer2 = document.createElement("div");
+                loadingContainer2.style.display = "flex";
+                loadingContainer2.style.flexDirection = "column";
+                loadingContainer2.style.gap = "10px";
+                loadingContainer2.style.padding = "16px 20px";
+                loadingContainer2.style.color = "#fff";
+                loadingContainer2.style.fontSize = "13px";
+
+                var dotsRow2 = document.createElement("div");
+                dotsRow2.style.textAlign = "center";
+                dotsRow2.style.fontSize = "15px";
+                dotsRow2.style.fontWeight = "600";
+                dotsRow2.style.color = "#5bc0de";
+                dotsRow2.textContent = "Please wait. Collecting Data...";
+                loadingContainer2.appendChild(dotsRow2);
+
+                var stepRow2 = document.createElement("div");
+                stepRow2.style.textAlign = "center";
+                stepRow2.style.fontSize = "13px";
+                stepRow2.style.color = "#ccc";
+                stepRow2.style.minHeight = "18px";
+                stepRow2.textContent = "Reopening modal...";
+                loadingContainer2.appendChild(stepRow2);
+
+                var timerRow2 = document.createElement("div");
+                timerRow2.style.textAlign = "center";
+                timerRow2.style.fontSize = "12px";
+                timerRow2.style.color = "#888";
+                timerRow2.textContent = "Elapsed: 0s";
+                loadingContainer2.appendChild(timerRow2);
+
+                var stopBtnRow2 = document.createElement("div");
+                stopBtnRow2.style.textAlign = "center";
+                stopBtnRow2.style.marginTop = "4px";
+
+                var stopBtn2 = document.createElement("button");
+                stopBtn2.textContent = "Stop and Continue";
+                stopBtn2.style.padding = "6px 18px";
+                stopBtn2.style.fontSize = "12px";
+                stopBtn2.style.fontWeight = "600";
+                stopBtn2.style.background = "#e67e22";
+                stopBtn2.style.color = "#fff";
+                stopBtn2.style.border = "none";
+                stopBtn2.style.borderRadius = "4px";
+                stopBtn2.style.cursor = "pointer";
+                stopBtn2.style.transition = "background 0.15s";
+                stopBtn2.addEventListener("mouseenter", function () { stopBtn2.style.background = "#d35400"; });
+                stopBtn2.addEventListener("mouseleave", function () { stopBtn2.style.background = "#e67e22"; });
+                stopBtn2.addEventListener("click", function () {
+                    log("ImportIE: Stop and Continue clicked by user (phase 2)");
+                    IMPORT_IE_COLLECTION_STOPPED = true;
+                    stopBtn2.disabled = true;
+                    stopBtn2.textContent = "Stopping...";
+                    stopBtn2.style.background = "#555";
+                    stopBtn2.style.cursor = "default";
+                });
+                stopBtnRow2.appendChild(stopBtn2);
+                loadingContainer2.appendChild(stopBtnRow2);
+
+                var loadingPopup2 = createPopup({
+                    title: "Import I/E - Scanning (" + String(selectedPlanValues.size) + " plans)",
+                    content: loadingContainer2,
+                    width: "520px",
+                    height: "auto"
+                });
+
+                var dots2 = 1;
+                collectionStartTime = Date.now();
+                var loadingInterval2 = setInterval(function () {
+                    dots2 = dots2 + 1;
+                    if (dots2 > 3) dots2 = 1;
+                    var t2 = "Please wait. Collecting Data";
+                    var d2i = 0;
+                    while (d2i < dots2) { t2 = t2 + "."; d2i = d2i + 1; }
+                    dotsRow2.textContent = t2;
+                    timerRow2.textContent = "Elapsed: " + formatElapsedTime(Date.now() - collectionStartTime);
+                }, 400);
+
+                log("ImportIE: step 3b - reopening modal for full collection");
+                stepRow2.textContent = "Step 3b: Reopening modal...";
+                addBtn.click();
+                var modalOpened2 = await waitForIEModalOpen(IMPORT_IE_MODAL_TIMEOUT);
+                if (!modalOpened2) {
+                    log("ImportIE: modal did not open on second try, retrying");
+                    addBtn.click();
+                    modalOpened2 = await waitForIEModalOpen(IMPORT_IE_MODAL_TIMEOUT);
+                }
+                if (!modalOpened2) {
+                    clearInterval(loadingInterval2);
+                    loadingPopup2.close();
+                    showWarningPopup("Import I/E - Error", "The Eligibility Management modal did not reopen. Please try again.");
+                    log("ImportIE: modal failed to reopen, stopping");
+                    return;
+                }
+                await sleep(800);
+
+                log("ImportIE: step 3c - collecting eligibility item pool from modal");
+                stepRow2.textContent = "Step 3c: Collecting Eligibility Items...";
                 var eligibilityItemPool = await collectEligibilityItemPool();
                 log("ImportIE: eligibility item pool collected count=" + String(eligibilityItemPool.length));
 
-                log("ImportIE: step 4 - collecting mappings from modal");
-                stepRow.textContent = "Step 4: Scanning Activity Plans, Scheduled Activities, and Check Items...";
+                log("ImportIE: step 4 - collecting mappings from modal (filtered)");
+                stepRow2.textContent = "Step 4: Scanning selected Activity Plans...";
                 var rawMappings = await collectMappingsFromModal(existingCodeSet, function(progressMsg) {
-                    stepRow.textContent = "Step 4: " + progressMsg;
-                });
+                    stepRow2.textContent = "Step 4: " + progressMsg;
+                }, selectedPlanValues);
                 var collectionEndTime = Date.now();
                 var collectionDurationMs = collectionEndTime - collectionStartTime;
                 log("ImportIE: raw mappings collected count=" + String(rawMappings.length) + " collectionTime=" + formatElapsedTime(collectionDurationMs));
@@ -23846,11 +24416,11 @@
                     await waitForIEModalClose(5000);
                 }
 
-                clearInterval(loadingInterval);
-                loadingPopup.close();
+                clearInterval(loadingInterval2);
+                loadingPopup2.close();
 
                 if (mappings.length === 0) {
-                    showWarningPopup("Import I/E - No Mappings", "No INC/EXC check items were found across any Activity Plans and Scheduled Activities." + (IMPORT_IE_COLLECTION_STOPPED ? " (Collection was stopped early)" : ""));
+                    showWarningPopup("Import I/E - No Mappings", "No INC/EXC check items were found across the selected Activity Plans." + (IMPORT_IE_COLLECTION_STOPPED ? " (Collection was stopped early)" : ""));
                     log("ImportIE: no mappings found, stopping");
                     return;
                 }
