@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.4.0
+// @version     2.4.1
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -661,6 +661,9 @@
     var IFL_ITEMGROUPS_TIMEOUT = 8000;
     var IFL_SHOW_FORM_URL_PATTERN = /\/secure\/crfdesign\/studylibrary\/show\/form\//;
     var IFL_LIST_PAGE_URL = "https://" + location.host + "/secure/crfdesign/studylibrary/list/form";
+    var IFL_BG_TAB_LOAD_TIMEOUT = 20000;
+    var IFL_BG_TAB_LINK_TIMEOUT = 10000;
+    var iflBgTab = null;
 
     //=================================================================
     // Import From Library Feature
@@ -932,7 +935,212 @@
 
         return groups;
     }
-    
+
+    // ---- Background Tab helpers ----
+    // Instead of opening/closing the modal on the main tab each time,
+    // we open a background tab with the same page and keep its modal open.
+    // Item group loading operates on the bg tab's DOM — much faster.
+
+    function ifl_openBgTabWindow() {
+        if (iflBgTab && !iflBgTab.closed) return;
+        iflBgTab = window.open(IFL_LIST_PAGE_URL, "ifl_bg_worker");
+        if (!iflBgTab) {
+            log("IFL: failed to open background tab — popup may be blocked");
+        } else {
+            log("IFL: opened background tab window");
+            // Immediately refocus the main window so the user stays on this tab
+            window.focus();
+        }
+    }
+
+    async function ifl_waitForBgTabReady() {
+        if (!iflBgTab || iflBgTab.closed) return false;
+
+        // Wait for page to fully load
+        var start = Date.now();
+        while (Date.now() - start < IFL_BG_TAB_LOAD_TIMEOUT) {
+            try {
+                if (iflBgTab.document.readyState === "complete") break;
+            } catch (e) { /* may throw during load */ }
+            await sleep(200);
+        }
+
+        // Find and click the import link in bg tab
+        var link = null;
+        var start2 = Date.now();
+        while (Date.now() - start2 < IFL_BG_TAB_LINK_TIMEOUT) {
+            try {
+                link = iflBgTab.document.querySelector('a[href*="' + IFL_IMPORT_LINK_HREF + '"]');
+                if (link) break;
+            } catch (e) {}
+            await sleep(200);
+        }
+        if (!link) {
+            log("IFL: bg tab import link not found");
+            return false;
+        }
+        link.click();
+        log("IFL: clicked import link in bg tab");
+
+        // Wait for modal to open in bg tab
+        var start3 = Date.now();
+        while (Date.now() - start3 < IFL_MODAL_TIMEOUT) {
+            try {
+                var bgDoc = iflBgTab.document;
+                var modalBody = bgDoc.querySelector(".modal-body");
+                var studySel = bgDoc.getElementById(IFL_STUDY_SELECT_ID);
+                if (modalBody && studySel) {
+                    log("IFL: bg tab modal ready");
+                    return true;
+                }
+            } catch (e) {}
+            await sleep(IFL_SELECT_POLL_INTERVAL);
+        }
+        log("IFL: bg tab modal timed out");
+        return false;
+    }
+
+    function ifl_closeBgTab() {
+        if (iflBgTab && !iflBgTab.closed) {
+            try { iflBgTab.close(); } catch (e) {}
+            log("IFL: closed background tab");
+        }
+        iflBgTab = null;
+    }
+
+    async function ifl_syncModalToFormViaBgTab(item) {
+        // Fall back to main-tab sync if bg tab is not available
+        if (!iflBgTab || iflBgTab.closed) {
+            log("IFL: bg tab not available, falling back to main tab sync");
+            return await ifl_syncModalToForm(item);
+        }
+
+        var bgDoc;
+        try { bgDoc = iflBgTab.document; } catch (e) {
+            log("IFL: cannot access bg tab document — " + e);
+            return await ifl_syncModalToForm(item);
+        }
+
+        // Ensure modal is open in bg tab
+        var studySel = bgDoc.getElementById(IFL_STUDY_SELECT_ID);
+        if (!studySel) {
+            log("IFL: bg tab modal not open, attempting to reopen");
+            var link = bgDoc.querySelector('a[href*="' + IFL_IMPORT_LINK_HREF + '"]');
+            if (link) {
+                link.click();
+                var start = Date.now();
+                while (Date.now() - start < IFL_MODAL_TIMEOUT) {
+                    studySel = bgDoc.getElementById(IFL_STUDY_SELECT_ID);
+                    if (studySel) break;
+                    await sleep(IFL_SELECT_POLL_INTERVAL);
+                }
+            }
+            if (!studySel) {
+                log("IFL: bg tab modal failed to reopen, falling back");
+                return await ifl_syncModalToForm(item);
+            }
+        }
+
+        // Select study
+        studySel.value = item.studyValue;
+        var evt = new Event("change", { bubbles: true });
+        studySel.dispatchEvent(evt);
+        try { if (iflBgTab.jQuery) iflBgTab.jQuery(studySel).trigger("change"); } catch (e) {}
+        log("IFL: bg tab selected study value=" + item.studyValue);
+        await sleep(300);
+
+        // Wait for form options to populate
+        var start2 = Date.now();
+        var populated = false;
+        var lastCount = -1;
+        var stableCount = 0;
+        while (Date.now() - start2 < IFL_FORM_POPULATE_TIMEOUT) {
+            var formSel = bgDoc.getElementById(IFL_FORM_SELECT_ID);
+            if (formSel) {
+                var opts = formSel.querySelectorAll("option");
+                var realOpts = 0;
+                for (var oi = 0; oi < opts.length; oi++) {
+                    if (opts[oi].value && opts[oi].value !== "") realOpts++;
+                }
+                if (realOpts > 0) {
+                    if (realOpts === lastCount) {
+                        stableCount++;
+                        if (stableCount >= 2) { populated = true; break; }
+                    } else { stableCount = 0; }
+                    lastCount = realOpts;
+                }
+            }
+            await sleep(IFL_SELECT_POLL_INTERVAL);
+        }
+        if (!populated) {
+            var fs2 = bgDoc.getElementById(IFL_FORM_SELECT_ID);
+            if (fs2) {
+                var opts2 = fs2.querySelectorAll("option");
+                for (var oi2 = 0; oi2 < opts2.length; oi2++) {
+                    if (opts2[oi2].value && opts2[oi2].value !== "") { populated = true; break; }
+                }
+            }
+        }
+        if (!populated) { log("IFL: bg tab form dropdown did not populate"); return null; }
+
+        // Select form
+        var fs = bgDoc.getElementById(IFL_FORM_SELECT_ID);
+        if (!fs) return null;
+        fs.value = item.formValue;
+        var evt2 = new Event("change", { bubbles: true });
+        fs.dispatchEvent(evt2);
+        try { if (iflBgTab.jQuery) iflBgTab.jQuery(fs).trigger("change"); } catch (e) {}
+        await sleep(500);
+
+        // Wait for itemGroupsDiv to populate in bg tab
+        var start3 = Date.now();
+        var igDiv = null;
+        while (Date.now() - start3 < IFL_ITEMGROUPS_TIMEOUT) {
+            var div = bgDoc.getElementById("itemGroupsDiv");
+            if (div) {
+                var rows = div.querySelectorAll("tr");
+                if (rows.length > 1) { igDiv = div; break; }
+            }
+            await sleep(150);
+        }
+        if (!igDiv) {
+            log("IFL: bg tab itemGroupsDiv not populated");
+            return [];
+        }
+
+        // Collect item groups from bg tab DOM
+        var table = igDiv.querySelector("table");
+        if (!table) return [];
+        var groups = [];
+        var groupCbs = table.querySelectorAll('input[name^="itemGroupRef_include_"]');
+        for (var gi = 0; gi < groupCbs.length; gi++) {
+            var groupCb = groupCbs[gi];
+            var groupTr = groupCb.closest("tr");
+            if (!groupTr) continue;
+            var groupNameInput = groupTr.querySelector('input[type="text"]');
+            var groupName = groupNameInput ? (groupNameInput.value || groupNameInput.getAttribute("value") || "").trim() : "";
+            var group = { originalName: groupName, newName: groupName, included: groupCb.checked, items: [] };
+            var nextTr = groupTr.nextElementSibling;
+            if (nextTr) {
+                var nestedTable = nextTr.querySelector("table");
+                if (nestedTable) {
+                    var itemCbs = nestedTable.querySelectorAll('input[name^="itemRef_include_"]');
+                    for (var ii = 0; ii < itemCbs.length; ii++) {
+                        var itemCb = itemCbs[ii];
+                        var itemTr = itemCb.closest("tr");
+                        if (!itemTr) continue;
+                        var itemNameInput = itemTr.querySelector('input[type="text"]');
+                        var itemName = itemNameInput ? (itemNameInput.value || itemNameInput.getAttribute("value") || "").trim() : "";
+                        group.items.push({ originalName: itemName, newName: itemName, included: itemCb.checked });
+                    }
+                }
+            }
+            groups.push(group);
+        }
+        log("IFL: bg tab collected " + groups.length + " item groups with " + groups.reduce(function(s, g) { return s + g.items.length; }, 0) + " total items");
+        return groups;
+    }
+
     function ifl_applyItemGroupChanges(item) {
         var div = document.getElementById("itemGroupsDiv");
         if (!div) { log("IFL: applyItemGroupChanges — itemGroupsDiv not found"); return; }
@@ -1111,7 +1319,8 @@
                 "#ifl-selection-overlay .ifl-row { font-size: 12px !important; }" +
                 "#ifl-selection-overlay .ifl-hdr { font-size: 12px !important; }" +
                 "#ifl-selection-overlay .ifl-cb { width: 16px !important; height: 16px !important; }" +
-                "#ifl-selection-overlay .ifl-search { font-size: 12px !important; }";
+                "#ifl-selection-overlay .ifl-search { font-size: 12px !important; }" +
+                "@keyframes ifl-spin { to { transform: rotate(360deg); } }";
             document.head.appendChild(styleTag);
         }
 
@@ -1474,6 +1683,23 @@
                             activeFormItem = fItem;
                             renderMidPanel();
                             renderRightPanel();
+                            // Auto-load item groups if not yet loaded
+                            if (fItem.itemGroups === null && !iflSyncBusy) {
+                                iflSyncBusy = true;
+                                log("IFL: auto-loading item groups for " + fItem.studyName + " / " + fItem.originalName);
+                                renderRightPanel();
+                                ifl_syncModalToFormViaBgTab(fItem).then(function(groups) {
+                                    iflSyncBusy = false;
+                                    fItem.itemGroups = (groups !== null) ? groups : [];
+                                    log("IFL: collected " + fItem.itemGroups.length + " item groups for " + fItem.originalName);
+                                    if (activeFormItem === fItem) renderRightPanel();
+                                }).catch(function(err) {
+                                    iflSyncBusy = false;
+                                    log("IFL: sync error — " + String(err));
+                                    fItem.itemGroups = [];
+                                    if (activeFormItem === fItem) renderRightPanel();
+                                });
+                            }
                         };
 
                         row.appendChild(nameSpan);
@@ -1493,11 +1719,12 @@
             secTitle.style.cssText = "color:" + tc.textMuted + ";font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;";
             section.appendChild(secTitle);
 
-            if (!item.itemGroups) {
-                var loading = document.createElement("div");
-                loading.textContent = "Loading item groups\u2026";
-                loading.style.cssText = "color:" + tc.textMuted + ";font-size:11px;font-style:italic;";
-                section.appendChild(loading);
+            if (item.itemGroups === null) {
+                // Loading in progress (auto-triggered on row selection)
+                var busyMsg = document.createElement("div");
+                busyMsg.style.cssText = "color:" + tc.textMuted + ";font-size:11px;font-style:italic;display:flex;align-items:center;gap:6px;";
+                busyMsg.innerHTML = '<span style="display:inline-block;width:12px;height:12px;border:2px solid ' + tc.accent + ';border-top-color:transparent;border-radius:50%;animation:ifl-spin 0.8s linear infinite;"></span> Loading item groups\u2026';
+                section.appendChild(busyMsg);
                 return section;
             }
             if (item.itemGroups.length === 0) {
@@ -1608,30 +1835,9 @@
             rightPanel.appendChild(nameInput);
             rightPanel.appendChild(lockRow);
 
-            // Item groups section
+            // Item groups section (opt-in loading via button, not auto-sync)
             var igSection = renderItemGroupsSection(item);
             rightPanel.appendChild(igSection);
-
-            // If item groups not loaded yet, sync modal and load them
-            if (item.itemGroups === null && !iflSyncBusy) {
-                iflSyncBusy = true;
-                log("IFL: syncing modal for " + item.studyName + " / " + item.originalName);
-                ifl_syncModalToForm(item).then(function(groups) {
-                    iflSyncBusy = false;
-                    if (groups !== null) {
-                        item.itemGroups = groups;
-                        log("IFL: collected " + groups.length + " item groups for " + item.originalName);
-                    } else {
-                        item.itemGroups = [];
-                    }
-                    if (activeFormItem === item) renderRightPanel();
-                }).catch(function(err) {
-                    iflSyncBusy = false;
-                    log("IFL: sync error — " + String(err));
-                    item.itemGroups = [];
-                    if (activeFormItem === item) renderRightPanel();
-                });
-            }
         }
 
         // Wire events
@@ -1645,12 +1851,14 @@
         };
 
         hClose.onclick = function() {
+            ifl_closeBgTab();
             document.removeEventListener("mousemove", onDragMove);
             document.removeEventListener("mouseup", onDragEnd);
             if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
         };
         overlay.onclick = function(e) {
             if (e.target === overlay) {
+                ifl_closeBgTab();
                 document.removeEventListener("mousemove", onDragMove);
                 document.removeEventListener("mouseup", onDragEnd);
                 if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
@@ -1663,6 +1871,7 @@
                 if (formItems[i].selected) selected.push(formItems[i]);
             }
             if (selected.length === 0) return;
+            ifl_closeBgTab();
             document.removeEventListener("mousemove", onDragMove);
             document.removeEventListener("mouseup", onDragEnd);
             if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
@@ -1673,6 +1882,7 @@
             if (e.key === "Escape") {
                 e.preventDefault();
                 e.stopPropagation();
+                ifl_closeBgTab();
                 document.removeEventListener("mousemove", onDragMove);
                 document.removeEventListener("mouseup", onDragEnd);
                 if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
@@ -2248,9 +2458,13 @@
             return;
         }
 
+        // Open background tab immediately (before first await to preserve user gesture for popup)
+        ifl_openBgTabWindow();
+
         // Open import modal
         var modalOpened = await ifl_openImportModal();
         if (!modalOpened) {
+            ifl_closeBgTab();
             createPopup({
                 title: "Import from Library",
                 content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">\u26A0\uFE0F Error</p><p>Could not open the Import from Library modal. Make sure the link exists on this page.</p></div>',
@@ -2260,9 +2474,35 @@
             return;
         }
 
-        // Collect all studies & forms
+        // Show "Collecting data" animation overlay
+        var collectingOverlay = document.createElement("div");
+        collectingOverlay.id = "ifl-collecting-overlay";
+        collectingOverlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:30000;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;";
+        var collectingPanel = document.createElement("div");
+        collectingPanel.style.cssText = "background:#111;border:1px solid #333;border-radius:12px;padding:32px 48px;box-shadow:0 15px 35px rgba(0,0,0,0.5);display:flex;flex-direction:column;align-items:center;gap:16px;";
+        var spinStyle = document.createElement("style");
+        spinStyle.textContent = "@keyframes ifl-spin { to { transform: rotate(360deg); } } @keyframes ifl-pulse { 0%,100% { opacity:0.6; } 50% { opacity:1; } }";
+        collectingPanel.appendChild(spinStyle);
+        var spinner = document.createElement("div");
+        spinner.style.cssText = "width:36px;height:36px;border:3px solid #5b43c7;border-top-color:transparent;border-radius:50%;animation:ifl-spin 0.8s linear infinite;";
+        var collectingTitle = document.createElement("div");
+        collectingTitle.textContent = "Collecting data";
+        collectingTitle.style.cssText = "color:#fff;font-size:16px;font-weight:600;";
+        var collectingMsg = document.createElement("div");
+        collectingMsg.textContent = "Scanning studies and forms\u2026";
+        collectingMsg.style.cssText = "color:#999;font-size:12px;animation:ifl-pulse 1.5s ease-in-out infinite;";
+        collectingPanel.appendChild(spinner);
+        collectingPanel.appendChild(collectingTitle);
+        collectingPanel.appendChild(collectingMsg);
+        collectingOverlay.appendChild(collectingPanel);
+        document.body.appendChild(collectingOverlay);
+
+        // Collect all studies & forms (main tab modal)
         var studies = await ifl_collectAllStudiesAndForms();
+
         if (!studies || studies.length === 0) {
+            if (collectingOverlay.parentNode) collectingOverlay.parentNode.removeChild(collectingOverlay);
+            ifl_closeBgTab();
             createPopup({
                 title: "Import from Library",
                 content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">\u26A0\uFE0F Error</p><p>No studies found in the Study Library dropdown.</p></div>',
@@ -2276,8 +2516,19 @@
         // Cache studies for potential resume
         ifl_saveStudiesCache(studies);
 
-        // Close the modal before showing selection GUI
+        // Close the main tab modal
         await ifl_closeImportModal();
+
+        // Wait for background tab to be ready with its modal open
+        // (overlay stays visible — user sees "Collecting data" while bg tab loads)
+        collectingMsg.textContent = "Preparing background worker\u2026";
+        var bgReady = await ifl_waitForBgTabReady();
+        if (!bgReady) {
+            log("IFL: bg tab not ready — item group loading will fall back to main tab");
+        }
+
+        // Remove "Collecting data" overlay right before showing selection GUI
+        if (collectingOverlay.parentNode) collectingOverlay.parentNode.removeChild(collectingOverlay);
 
         // Show selection GUI
         ifl_buildSelectionGUI(studies, function(selectedItems) {
