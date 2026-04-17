@@ -634,6 +634,1657 @@
     }
 
     
+    // Import from Library Feature
+    var IFL_FORM_LIST_PATH = "/secure/crfdesign/studylibrary/list/form";
+    var IFL_VALID_URLS = [
+        "https://cenexeltest.clinspark.com/secure/crfdesign/studylibrary/list/form",
+        "https://cenexel.clinspark.com/secure/crfdesign/studylibrary/list/form"
+    ];
+    var IFL_IMPORT_LINK_HREF = "/secure/crfdesign/studylibrary/savefromlibrary/form";
+    var IFL_STUDY_SELECT_ID = "studyMetaDataId";
+    var IFL_FORM_SELECT_ID = "formId";
+    var IFL_LOCK_CHECKBOX_ID = "lockOnSave";
+    var IFL_SAVE_BUTTON_ID = "actionButton";
+    var IFL_MODAL_TIMEOUT = 15000;
+    var IFL_SELECT_POLL_INTERVAL = 80;
+    var IFL_FORM_POPULATE_TIMEOUT = 10000;
+    var IFL_MODAL_CLOSE_TIMEOUT = 12000;
+    var IFL_INTER_ITEM_DELAY = 800;
+    var IFL_CANCELED = false;
+    var IFL_STORAGE_IMPORT_STATE = "ifl.importState";
+    var IFL_STORAGE_STUDIES_CACHE = "ifl.studiesCache";
+    var IFL_STORAGE_FULLSCREEN = "ifl.fullscreen";
+    var IFL_STORAGE_DIVIDERS = "ifl.dividerWidths";
+    var IFL_MIN_PANEL_WIDTH = 120;
+    var IFL_MAX_PANEL_WIDTH_RATIO = 0.6;
+    var IFL_DIVIDER_WIDTH = 6;
+    var IFL_ITEMGROUPS_TIMEOUT = 8000;
+    var IFL_SHOW_FORM_URL_PATTERN = /\/secure\/crfdesign\/studylibrary\/show\/form\//;
+    var IFL_LIST_PAGE_URL = "https://" + location.host + "/secure/crfdesign/studylibrary/list/form";
+
+    //=================================================================
+    // Import From Library Feature
+    //=================================================================
+    // This feature automates importing forms from the study library modal.
+    // It collects all studies and their forms, lets the user select/rename/configure,
+    // then processes each import sequentially.
+
+    function isOnImportFromLibraryPage() {
+        var href = location.href.split("?")[0].split('#')[0];
+        for (var i = 0; i < IFL_VALID_URLS.length; i++) {
+            if (href === IFL_VALID_URLS[i]) return true;
+        }
+        return false;
+    }
+
+    function ifl_findImportLink() {
+        var anchors = document.querySelectorAll('a[href*="' + IFL_IMPORT_LINK_HREF + '"]');
+        for (var i = 0; i < anchors.length; i++) {
+            if (anchors[i].offsetParent !== null) return anchors[i];
+        }
+        return anchors.length > 0 ? anchors[0] : null;
+    }
+
+    async function ifl_openImportModal() {
+        var link = ifl_findImportLink();
+        if (!link) {
+            log("IFL: Import from Library link not found on page");
+            return false;
+        }
+        link.click();
+        log("IFL: clicked Import from Library link");
+        var start = Date.now();
+        while (Date.now() - start < IFL_MODAL_TIMEOUT) {
+            var modalBody = document.querySelector(".modal-body");
+            var modalForm = document.querySelector(".modal-body form, .modal-body #modalInput");
+            if (modalBody && modalForm) {
+                var studySel = document.getElementById(IFL_STUDY_SELECT_ID);
+                if (studySel) {
+                    log("IFL: modal opened successfully");
+                    return true;
+                }
+            }
+            await sleep(IFL_SELECT_POLL_INTERVAL);
+        }
+        log("IFL: timed out waiting for modal");
+        return false;
+    }
+
+    async function ifl_closeImportModal() {
+        var closeBtn = document.querySelector(".modal.in .close, .modal.show .close, .modal .btn-close");
+        if (closeBtn) closeBtn.click();
+        var start = Date.now();
+        while (Date.now() - start < IFL_MODAL_CLOSE_TIMEOUT) {
+            var m = document.querySelector(".modal.in, .modal.show");
+            if (!m || m.style.display === "none") return true;
+            await sleep(100);
+        }
+        return false;
+    }
+
+    function ifl_triggerChange(el) {
+        var evt = new Event("change", { bubbles: true });
+        el.dispatchEvent(evt);
+        // Also try triggering jQuery change if available
+        try {
+            if (typeof jQuery !== "undefined") jQuery(el).trigger("change");
+        } catch (e) {}
+    }
+
+    async function ifl_selectStudyOption(studySelect, optionValue) {
+        studySelect.value = optionValue;
+        ifl_triggerChange(studySelect);
+        log("IFL: selected study value=" + optionValue);
+    }
+
+    async function ifl_waitForFormOptions(timeoutMs) {
+        var start = Date.now();
+        var max = timeoutMs || IFL_FORM_POPULATE_TIMEOUT;
+        var lastCount = -1;
+        var stableCount = 0;
+        while (Date.now() - start < max) {
+            var formSel = document.getElementById(IFL_FORM_SELECT_ID);
+            if (formSel) {
+                var opts = formSel.querySelectorAll("option");
+                var realOpts = 0;
+                for (var oi = 0; oi < opts.length; oi++) {
+                    if (opts[oi].value && opts[oi].value !== "") realOpts++;
+                }
+                if (realOpts > 0) {
+                    if (realOpts === lastCount) {
+                        stableCount++;
+                        if (stableCount >= 2) return true;
+                    } else {
+                        stableCount = 0;
+                    }
+                    lastCount = realOpts;
+                }
+            }
+            await sleep(IFL_SELECT_POLL_INTERVAL);
+        }
+        // Return true even if stabilization not complete but options exist
+        var formSel2 = document.getElementById(IFL_FORM_SELECT_ID);
+        if (formSel2) {
+            var opts2 = formSel2.querySelectorAll("option");
+            for (var oi2 = 0; oi2 < opts2.length; oi2++) {
+                if (opts2[oi2].value && opts2[oi2].value !== "") return true;
+            }
+        }
+        return false;
+    }
+
+    function ifl_readFormOptions() {
+        var formSel = document.getElementById(IFL_FORM_SELECT_ID);
+        if (!formSel) return [];
+        var opts = formSel.querySelectorAll("option");
+        var results = [];
+        for (var i = 0; i < opts.length; i++) {
+            if (opts[i].value && opts[i].value !== "") {
+                results.push({ value: opts[i].value, text: opts[i].textContent.trim() });
+            }
+        }
+        return results;
+    }
+    
+    // ---- IFL Persistence helpers ----
+    function ifl_saveImportState(obj) {
+        try {localStorage.setItem(IFL_STORAGE_IMPORT_STATE, JSON.stringify(obj)); } catch(e) {}
+    }
+
+    function ifl_loadImportState() {
+        try {
+            var raw = localStorage.getItem(IFL_STORAGE_IMPORT_STATE);
+            if (raw) return JSON.parse(raw);
+        } catch (e) {}
+        return null;
+    }
+
+    function ifl_clearImportState() {
+        try { localStorage.removeItem(IFL_STORAGE_IMPORT_STATE); } catch (e) {}
+        try { localStorage.removeItem(IFL_STORAGE_STUDIES_CACHE); } catch (e) {}
+    }
+
+    function ifl_saveStudiesCache(studies) {
+        try {localStorage.setItem(IFL_STORAGE_STUDIES_CACHE, JSON.stringify(studies)); } catch (e) {}
+    }
+
+    function ifl_loadStudiesCache() {
+        try {
+            var raw = localStorage.getItem(IFL_STORAGE_STUDIES_CACHE);
+            if (raw) return JSON.parse(raw);
+        } catch (e) {}
+        return null;
+    }
+
+    // ---- IFL itemGroupsDiv helpers ----
+    
+    async function ifl_waitForItemGroupsDiv(timeoutMs) {
+        var start = Date.now();
+        var max = timeoutMs || IFL_ITEMGROUPS_TIMEOUT;
+        while (Date.now() - start < max) {
+            var div = document.getElementById("itemGroupsDiv");
+            if (div) {
+                var rows = div.querySelectorAll("tr");
+                if (rows.length > 1) return div;
+            }
+            await sleep(150);
+        }
+        return null;
+    }
+
+    function ifl_getInputValue(inp) {
+        return (inp.value || inp.getAttribute("value") || "").trim();
+    }
+
+    function ifl_collectItemGroups() {
+        var div = document.getElementById("itemGroupsDiv");
+        if (!div) return [];
+        var table = div.querySelector("table");
+        if (!table) return [];
+        var groups = [];
+
+        // Find all group checkboxes by their name pattern (itemGroupRef_include_*)
+        var groupCbs = table.querySelectorAll('input[name^="itemGroupRef_include_"]');
+
+        for (var gi = 0; gi < groupCbs.length; gi++) {
+            var groupCb = groupCbs[gi];
+            var groupTr = groupCb.closest("tr");
+            if (!groupTr) continue;
+
+            // Group name input is the text input in the same row
+            var groupNameInput = groupTr.querySelector('input[type="text"]');
+            var groupName = groupNameInput ? ifl_getInputValue(groupNameInput) : "";
+
+            var group = {
+                originalName: groupName,
+                newName: groupName,
+                included: groupCb.checked,
+                items: []
+            };
+
+            // Items are in a nested table inside the next sibling <tr>
+            var nextTr = groupTr.nextElementSibling;
+            if (nextTr) {
+                var nestedTable = nextTr.querySelector("table");
+                if (nestedTable) {
+                    var itemCbs = nestedTable.querySelectorAll('input[name^="itemRef_include_"]');
+                    for (var ii = 0; ii < itemCbs.length; ii++) {
+                        var itemCb = itemCbs[ii];
+                        var itemTr = itemCb.closest("tr");
+                        if (!itemTr) continue;
+                        var itemNameInput = itemTr.querySelector('input[type="text"]');
+                        var itemName = itemNameInput ? ifl_getInputValue(itemNameInput) : "";
+                        group.items.push({
+                            originalName: itemName,
+                            newName: itemName,
+                            included: itemCb.checked
+                        });
+                    }
+                }
+            }
+
+            groups.push(group);
+        }
+        log("IFL: collected " + groups.length + " item groups with " + groups.reduce(function(s, g) { return s + g.items.length; }, 0) + " total items");
+        return groups;
+    }
+    
+    async function ifl_syncModalToForm(item) {
+        // Open modal if not open
+        var modalBody = document.querySelector(".modal-body");
+        var studySel = document.getElementById(IFL_STUDY_SELECT_ID);
+        if (!modalBody || !studySel) {
+            log("IFL: sync — modal not open, opening");
+            var opened = await ifl_openImportModal();
+            if (!opened) { log("IFL: sync — failed to open modal"); return null; }
+        }
+    
+        // Select study
+        var ss = document.getElementById(IFL_STUDY_SELECT_ID);
+        if (!ss) return null;
+        ss.value = item.studyValue;
+        ifl_triggerChange(ss);
+        await sleep(300);
+    
+        // Wait for form dropdown
+        var populated = await ifl_waitForFormOptions(IFL_FORM_POPULATE_TIMEOUT);
+        if (!populated) { log("IFL: sync — form dropdown did not populate"); return null; }
+    
+        // Select form
+        var fs = document.getElementById(IFL_FORM_SELECT_ID);
+        if (!fs) return null;
+        fs.value = item.formValue;
+        ifl_triggerChange(fs);
+        await sleep(500);
+    
+        // Wait for itemGroupsDiv to populate so we can apply changes
+        var igDiv = await ifl_waitForItemGroupsDiv(IFL_ITEMGROUPS_TIMEOUT);
+        if (!igDiv) {
+            log("IFL: sync — itemGroupsDiv not populated");
+            await ifl_closeImportModal();
+            return [];
+        }
+    
+        var groups = ifl_collectItemGroups();
+
+        // Close modal after collecting — Bootstrap focus trap blocks inputs outside
+        await ifl_closeImportModal();
+
+        return groups;
+    }
+    
+    function ifl_applyItemGroupChanges(item) {
+        var div = document.getElementById("itemGroupsDiv");
+        if (!div) { log("IFL: applyItemGroupChanges — itemGroupsDiv not found"); return; }
+        var table = div.querySelector("table");
+        if (!table) return;
+        var itemGroupsData = item.itemGroups || [];
+
+        // Find all group checkboxes by their name pattern
+        var groupCbs = table.querySelectorAll('input[name^="itemGroupRef_include_"]');
+
+        for (var gi = 0; gi < groupCbs.length && gi < itemGroupsData.length; gi++) {
+            var groupCb = groupCbs[gi];
+            var gData = itemGroupsData[gi];
+            var groupTr = groupCb.closest("tr");
+            if (!groupTr) continue;
+
+            // Rename group if changed
+            if (gData.newName !== gData.originalName) {
+                var gInput = groupTr.querySelector('input[type="text"]');
+                if (gInput) {
+                    gInput.value = gData.newName;
+                    gInput.dispatchEvent(new Event("input", { bubbles: true }));
+                    gInput.dispatchEvent(new Event("change", { bubbles: true }));
+                    log("IFL: renamed item group '" + gData.originalName + "' -> '" + gData.newName + "'");
+                }
+            }
+
+            // Handle group include/uncheck
+            if (!gData.included && groupCb.checked) {
+                groupCb.click();
+                log("IFL: unchecked item group '" + gData.originalName + "'");
+            } else if (gData.included && !groupCb.checked) {
+                groupCb.click();
+                log("IFL: checked item group '" + gData.originalName + "'");
+            }
+
+            // Process items in nested table (next sibling <tr>)
+            var nextTr = groupTr.nextElementSibling;
+            if (nextTr && gData.items) {
+                var nestedTable = nextTr.querySelector("table");
+                if (nestedTable) {
+                    var itemCbs = nestedTable.querySelectorAll('input[name^="itemRef_include_"]');
+                    for (var ii = 0; ii < itemCbs.length && ii < gData.items.length; ii++) {
+                        var itemCb = itemCbs[ii];
+                        var iData = gData.items[ii];
+                        var itemTr = itemCb.closest("tr");
+                        if (!itemTr) continue;
+
+                        // Rename item if changed
+                        if (iData.newName !== iData.originalName) {
+                            var iInput = itemTr.querySelector('input[type="text"]');
+                            if (iInput) {
+                                iInput.value = iData.newName;
+                                iInput.dispatchEvent(new Event("input", { bubbles: true }));
+                                iInput.dispatchEvent(new Event("change", { bubbles: true }));
+                                log("IFL: renamed item '" + iData.originalName + "' -> '" + iData.newName + "'");
+                            }
+                        }
+
+                        // Only toggle item checkbox if group is still included
+                        if (gData.included) {
+                            if (!iData.included && itemCb.checked) {
+                                itemCb.click();
+                                log("IFL: unchecked item '" + iData.originalName + "'");
+                            } else if (iData.included && !itemCb.checked) {
+                                itemCb.click();
+                                log("IFL: checked item '" + iData.originalName + "'");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    async function ifl_collectAllStudiesAndForms() {
+        log("IFL: beginning data collection from modal");
+        var studySelect = document.getElementById(IFL_STUDY_SELECT_ID);
+        if (!studySelect) {
+            log("IFL: study select not found");
+            return null;
+        }
+        var studyOpts = studySelect.querySelectorAll("option");
+        var studies = [];
+        for (var si = 0; si < studyOpts.length; si++) {
+            if (studyOpts[si].value && studyOpts[si].value !== "") {
+                studies.push({ value: studyOpts[si].value, text: studyOpts[si].textContent.trim(), forms: [] });
+            }
+        }
+        log("IFL: found " + studies.length + " studies to scan");
+
+        for (var idx = 0; idx < studies.length; idx++) {
+            if (IFL_CANCELED) { log("IFL: collection canceled"); return null; }
+            var study = studies[idx];
+            log("IFL: scanning study " + (idx + 1) + "/" + studies.length + ": " + study.text);
+
+            // Re-get study select in case DOM refreshed
+            var ss = document.getElementById(IFL_STUDY_SELECT_ID);
+            if (!ss) { log("IFL: study select lost"); return null; }
+            await ifl_selectStudyOption(ss, study.value);
+            await sleep(100);
+
+            var populated = await ifl_waitForFormOptions(IFL_FORM_POPULATE_TIMEOUT);
+            if (populated) {
+                study.forms = ifl_readFormOptions();
+                log("IFL: study '" + study.text + "' has " + study.forms.length + " forms");
+            } else {
+                log("IFL: study '" + study.text + "' form populate timed out (0 forms)");
+                study.forms = [];
+            }
+        }
+
+        log("IFL: data collection complete — " + studies.length + " studies");
+        return studies;
+    }
+
+    // ---- Selection GUI ----
+
+    function ifl_buildSelectionGUI(studies, onConfirm) {
+        var glass = isGlassTheme();
+        if (glass) injectThemeStylesIfNeeded();
+
+        // State
+        var formItems = [];
+        for (var si = 0; si < studies.length; si++) {
+            for (var fi = 0; fi < studies[si].forms.length; fi++) {
+                formItems.push({
+                    studyName: studies[si].text,
+                    studyValue: studies[si].value,
+                    formName: studies[si].forms[fi].text,
+                    formValue: studies[si].forms[fi].value,
+                    originalName: studies[si].forms[fi].text,
+                    newName: studies[si].forms[fi].text,
+                    selected: false,
+                    lockOnSave: true,
+                    itemGroups: null
+                });
+            }
+        }
+        var collapsed = {};
+        for (var ci = 0; ci < studies.length; ci++) collapsed[studies[ci].text] = true;
+        var showSelectedOnly = false;
+        var activeFormItem = null;
+        var isFullscreen = false;
+        var savedContainerStyle = "";
+        var iflSyncBusy = false;
+
+        // Color palette
+        var tc = {
+            bg: glass ? "rgba(15,10,40,0.92)" : "#111",
+            headerBg: glass ? "rgba(255,255,255,0.08)" : "#222",
+            border: glass ? "rgba(255,255,255,0.2)" : "#333",
+            surface: glass ? "rgba(255,255,255,0.06)" : "#1a1a1a",
+            surfaceHover: glass ? "rgba(255,255,255,0.12)" : "#252525",
+            text: glass ? "#fff" : "#fff",
+            textMuted: glass ? "rgba(255,255,255,0.6)" : "#999",
+            accent: glass ? "#a78bfa" : "#5b43c7",
+            accentHover: glass ? "#c4b5fd" : "#4a37a0",
+            success: glass ? "#10b981" : "#28a745",
+            danger: "#ef4444",
+            renamed: glass ? "rgba(167,139,250,0.15)" : "rgba(91,67,199,0.15)",
+            inputBg: glass ? "rgba(15,10,40,0.7)" : "#2a2a2a",
+            inputBorder: glass ? "rgba(255,255,255,0.3)" : "#444"
+        };
+
+        // Inject scoped CSS to protect from Bootstrap modal CSS bleed
+        var styleId = "ifl-selection-scoped-css";
+        if (!document.getElementById(styleId)) {
+            var styleTag = document.createElement("style");
+            styleTag.id = styleId;
+            styleTag.textContent =
+                "#ifl-selection-overlay, #ifl-selection-overlay * { box-sizing: border-box !important; }" +
+                "#ifl-selection-overlay input[type='checkbox'] { accent-color: " + tc.accent + " !important; width: auto !important; height: auto !important; }" +
+                "#ifl-selection-overlay input[type='text'] { background: " + tc.inputBg + " !important; color: " + tc.text + " !important; -webkit-text-fill-color: " + tc.text + " !important; border-color: " + tc.inputBorder + " !important; }" +
+                "#ifl-selection-overlay span, #ifl-selection-overlay div { font-family: 'Segoe UI',Tahoma,Geneva,Verdana,sans-serif !important; }" +
+                "#ifl-selection-overlay .ifl-row { font-size: 12px !important; }" +
+                "#ifl-selection-overlay .ifl-hdr { font-size: 12px !important; }" +
+                "#ifl-selection-overlay .ifl-cb { width: 16px !important; height: 16px !important; }" +
+                "#ifl-selection-overlay .ifl-search { font-size: 12px !important; }";
+            document.head.appendChild(styleTag);
+        }
+
+        // Overlay
+        var overlay = document.createElement("div");
+        overlay.id = "ifl-selection-overlay";
+        overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:30000;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;";
+
+        // Main container
+        var container = document.createElement("div");
+        container.style.cssText = "background:" + tc.bg + ";border:1px solid " + tc.border + ";border-radius:12px;width:960px;max-width:96%;height:80vh;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 15px 35px rgba(0,0,0,0.5);overflow:hidden;position:relative;";
+
+        // Header
+        var header = document.createElement("div");
+        header.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid " + tc.border + ";background:" + tc.headerBg + ";flex-shrink:0;cursor:grab;user-select:none;";
+        var hTitle = document.createElement("div");
+        hTitle.textContent = "Import from Library \u2014 Select Forms";
+        hTitle.style.cssText = "color:white;font-size:16px;font-weight:600;flex:1;";
+        var hBtnGroup = document.createElement("div");
+        hBtnGroup.style.cssText = "display:flex;gap:6px;align-items:center;";
+
+        // Fullscreen toggle button
+        var hFullscreen = document.createElement("button");
+        hFullscreen.innerHTML = "\u26F6";
+        hFullscreen.title = "Toggle fullscreen";
+        hFullscreen.style.cssText = "background:rgba(255,255,255,0.1);border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;";
+        hFullscreen.onmouseover = function() { hFullscreen.style.background = "rgba(255,255,255,0.25)"; };
+        hFullscreen.onmouseout = function() { hFullscreen.style.background = "rgba(255,255,255,0.1)"; };
+
+        var hClose = document.createElement("button");
+        hClose.innerHTML = "\u2715";
+        hClose.style.cssText = "background:rgba(255,255,255,0.1);border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;";
+        hClose.onmouseover = function() { hClose.style.background = "rgba(255,67,54,0.8)"; };
+        hClose.onmouseout = function() { hClose.style.background = "rgba(255,255,255,0.1)"; };
+
+        hBtnGroup.appendChild(hFullscreen);
+        hBtnGroup.appendChild(hClose);
+        header.appendChild(hTitle);
+        header.appendChild(hBtnGroup);
+
+        // ---- Fullscreen toggle logic ----
+        function applyFullscreen() {
+            if (isFullscreen) {
+                container.style.width = "100vw";
+                container.style.maxWidth = "100vw";
+                container.style.height = "100vh";
+                container.style.maxHeight = "100vh";
+                container.style.borderRadius = "0";
+                container.style.top = "0";
+                container.style.left = "0";
+                container.style.position = "fixed";
+                header.style.cursor = "default";
+                hFullscreen.innerHTML = "\u2750";
+                hFullscreen.title = "Exit fullscreen";
+            } else {
+                container.style.cssText = savedContainerStyle;
+                header.style.cursor = "grab";
+                hFullscreen.innerHTML = "\u26F6";
+                hFullscreen.title = "Toggle fullscreen";
+            }
+        }
+
+        hFullscreen.onclick = function() {
+            if (!isFullscreen) {
+                savedContainerStyle = container.style.cssText;
+            }
+            isFullscreen = !isFullscreen;
+            applyFullscreen();
+            try { localStorage.setItem(IFL_STORAGE_FULLSCREEN, isFullscreen ? "1" : "0"); } catch (e) {}
+        };
+
+        // ---- Header dragging (non-fullscreen only) ----
+        var dragState = { active: false, startX: 0, startY: 0, origLeft: 0, origTop: 0 };
+
+        function onDragStart(e) {
+            if (isFullscreen) return;
+            if (e.target.tagName === "BUTTON" || e.target.tagName === "INPUT") return;
+            dragState.active = true;
+            var rect = container.getBoundingClientRect();
+            dragState.startX = e.clientX;
+            dragState.startY = e.clientY;
+            dragState.origLeft = rect.left;
+            dragState.origTop = rect.top;
+            container.style.position = "fixed";
+            container.style.margin = "0";
+            header.style.cursor = "grabbing";
+            e.preventDefault();
+        }
+
+        function onDragMove(e) {
+            if (!dragState.active) return;
+            var dx = e.clientX - dragState.startX;
+            var dy = e.clientY - dragState.startY;
+            container.style.left = (dragState.origLeft + dx) + "px";
+            container.style.top = (dragState.origTop + dy) + "px";
+            container.style.right = "auto";
+            container.style.bottom = "auto";
+            container.style.transform = "none";
+            overlay.style.alignItems = "flex-start";
+            overlay.style.justifyContent = "flex-start";
+        }
+
+        function onDragEnd() {
+            if (dragState.active) {
+                dragState.active = false;
+                if (!isFullscreen) header.style.cursor = "grab";
+            }
+        }
+
+        header.addEventListener("mousedown", onDragStart);
+        document.addEventListener("mousemove", onDragMove);
+        document.addEventListener("mouseup", onDragEnd);
+
+        // Body — 3 panels with dividers
+        var body = document.createElement("div");
+        body.style.cssText = "display:flex;flex:1;overflow:hidden;min-height:0;";
+
+        // ---- LEFT PANEL (Study list) ----
+        var leftPanel = document.createElement("div");
+        leftPanel.style.cssText = "width:200px;min-width:" + IFL_MIN_PANEL_WIDTH + "px;display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;";
+        var leftSearch = document.createElement("input");
+        leftSearch.type = "text";
+        leftSearch.placeholder = "Filter studies\u2026";
+        leftSearch.style.cssText = "margin:8px;padding:6px 10px;border:1px solid " + tc.inputBorder + ";border-radius:6px;background:" + tc.inputBg + " !important;color:" + tc.text + " !important;font-size:12px;outline:none;-webkit-text-fill-color:" + tc.text + " !important;";
+        var leftList = document.createElement("div");
+        leftList.style.cssText = "flex:1;overflow-y:auto;padding:0 4px 4px;";
+        leftPanel.appendChild(leftSearch);
+        leftPanel.appendChild(leftList);
+
+        // ---- Divider 1 (left | mid) ----
+        var divider1 = document.createElement("div");
+        divider1.style.cssText = "width:" + IFL_DIVIDER_WIDTH + "px;cursor:col-resize;background:" + tc.border + ";flex-shrink:0;transition:background 0.15s;";
+        divider1.onmouseover = function() { divider1.style.background = tc.accent; };
+        divider1.onmouseout = function() { divider1.style.background = tc.border; };
+
+        // ---- MIDDLE PANEL (Forms grouped by study) ----
+        var midPanel = document.createElement("div");
+        midPanel.style.cssText = "flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:" + IFL_MIN_PANEL_WIDTH + "px;";
+        var midSearch = document.createElement("input");
+        midSearch.type = "text";
+        midSearch.className = "ifl-search";
+        midSearch.placeholder = "Filter forms\u2026";
+        midSearch.style.cssText = "margin:8px;padding:6px 10px;border:1px solid " + tc.inputBorder + ";border-radius:6px;background:" + tc.inputBg + " !important;color:" + tc.text + " !important;font-size:12px;outline:none;-webkit-text-fill-color:" + tc.text + " !important;";
+        var midList = document.createElement("div");
+        midList.style.cssText = "flex:1;overflow-y:auto;padding:0 4px 4px;";
+        midPanel.appendChild(midSearch);
+        midPanel.appendChild(midList);
+
+        // ---- Divider 2 (mid | right) ----
+        var divider2 = document.createElement("div");
+        divider2.style.cssText = "width:" + IFL_DIVIDER_WIDTH + "px;cursor:col-resize;background:" + tc.border + ";flex-shrink:0;transition:background 0.15s;";
+        divider2.onmouseover = function() { divider2.style.background = tc.accent; };
+        divider2.onmouseout = function() { divider2.style.background = tc.border; };
+
+        // ---- RIGHT PANEL (Detail) ----
+        var rightPanel = document.createElement("div");
+        rightPanel.style.cssText = "width:280px;min-width:" + IFL_MIN_PANEL_WIDTH + "px;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;padding:12px;";
+        var rightPlaceholder = document.createElement("div");
+        rightPlaceholder.textContent = "Click a form row to view details";
+        rightPlaceholder.style.cssText = "color:" + tc.textMuted + ";font-size:12px;text-align:center;margin-top:40px;";
+        rightPanel.appendChild(rightPlaceholder);
+
+        body.appendChild(leftPanel);
+        body.appendChild(divider1);
+        body.appendChild(midPanel);
+        body.appendChild(divider2);
+        body.appendChild(rightPanel);
+
+        // ---- Divider drag logic ----
+        function setupDividerDrag(divider, panelBefore, panelAfter, isLeftDivider) {
+            var divDrag = { active: false, startX: 0, startWBefore: 0, startWAfter: 0 };
+            divider.addEventListener("mousedown", function(e) {
+                divDrag.active = true;
+                divDrag.startX = e.clientX;
+                divDrag.startWBefore = panelBefore.getBoundingClientRect().width;
+                divDrag.startWAfter = panelAfter.getBoundingClientRect().width;
+                document.body.style.cursor = "col-resize";
+                document.body.style.userSelect = "none";
+                e.preventDefault();
+            });
+            document.addEventListener("mousemove", function(e) {
+                if (!divDrag.active) return;
+                var dx = e.clientX - divDrag.startX;
+                var totalW = divDrag.startWBefore + divDrag.startWAfter;
+                var maxW = totalW * IFL_MAX_PANEL_WIDTH_RATIO;
+                var newBefore = Math.max(IFL_MIN_PANEL_WIDTH, Math.min(maxW, divDrag.startWBefore + dx));
+                var newAfter = totalW - newBefore;
+                if (newAfter < IFL_MIN_PANEL_WIDTH) {
+                    newAfter = IFL_MIN_PANEL_WIDTH;
+                    newBefore = totalW - newAfter;
+                }
+                panelBefore.style.width = newBefore + "px";
+                if (isLeftDivider) {
+                    panelAfter.style.flex = "1";
+                } else {
+                    panelAfter.style.width = newAfter + "px";
+                }
+            });
+            document.addEventListener("mouseup", function() {
+                if (divDrag.active) {
+                    divDrag.active = false;
+                    document.body.style.cursor = "";
+                    document.body.style.userSelect = "";
+                    try {
+                        localStorage.setItem(IFL_STORAGE_DIVIDERS, JSON.stringify({
+                            left: leftPanel.getBoundingClientRect().width,
+                            right: rightPanel.getBoundingClientRect().width
+                        }));
+                    } catch (e) {}
+                }
+            });
+        }
+
+        setupDividerDrag(divider1, leftPanel, midPanel, true);
+        setupDividerDrag(divider2, midPanel, rightPanel, false);
+
+        // ---- FOOTER ----
+        var footer = document.createElement("div");
+        footer.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-top:1px solid " + tc.border + ";background:" + tc.headerBg + ";flex-shrink:0;";
+        var footerLeft = document.createElement("div");
+        footerLeft.style.cssText = "display:flex;gap:8px;align-items:center;";
+        var showSelBtn = document.createElement("button");
+        showSelBtn.textContent = "Show Selected";
+        showSelBtn.style.cssText = "background:" + tc.surface + ";border:1px solid " + tc.border + ";color:white;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;";
+        showSelBtn.onmouseover = function() { showSelBtn.style.background = tc.surfaceHover; };
+        showSelBtn.onmouseout = function() { showSelBtn.style.background = showSelectedOnly ? tc.accent : tc.surface; };
+        var selCount = document.createElement("span");
+        selCount.style.cssText = "color:" + tc.textMuted + ";font-size:12px;";
+        footerLeft.appendChild(showSelBtn);
+        footerLeft.appendChild(selCount);
+
+        var confirmBtn = document.createElement("button");
+        confirmBtn.textContent = "Confirm";
+        confirmBtn.disabled = true;
+        confirmBtn.style.cssText = "background:rgba(40,167,69,0.6);border:1px solid rgba(40,167,69,0.8);color:white;padding:8px 24px;border-radius:8px;cursor:not-allowed;font-size:13px;font-weight:600;opacity:0.5;transition:all 0.2s;";
+        footer.appendChild(footerLeft);
+        footer.appendChild(confirmBtn);
+
+        // ---- Rendering functions ----
+
+        function getSelectedCount() {
+            var c = 0;
+            for (var i = 0; i < formItems.length; i++) { if (formItems[i].selected) c++; }
+            return c;
+        }
+
+        function updateConfirmState() {
+            var count = getSelectedCount();
+            selCount.textContent = count + " selected";
+            if (count > 0) {
+                confirmBtn.disabled = false;
+                confirmBtn.style.opacity = "1";
+                confirmBtn.style.cursor = "pointer";
+                confirmBtn.style.background = "rgba(40,167,69,0.8)";
+            } else {
+                confirmBtn.disabled = true;
+                confirmBtn.style.opacity = "0.5";
+                confirmBtn.style.cursor = "not-allowed";
+                confirmBtn.style.background = "rgba(40,167,69,0.6)";
+            }
+        }
+
+        function renderLeftPanel() {
+            leftList.innerHTML = "";
+            var filter = leftSearch.value.toLowerCase();
+            for (var si2 = 0; si2 < studies.length; si2++) {
+                var sName = studies[si2].text;
+                if (filter && sName.toLowerCase().indexOf(filter) === -1) continue;
+                var item = document.createElement("div");
+                item.textContent = sName;
+                item.style.cssText = "padding:6px 8px;border-radius:4px;cursor:pointer;font-size:12px;color:" + tc.text + ";white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px;";
+                item.title = sName;
+                item.onmouseover = (function(el) { return function() { el.style.background = tc.surfaceHover; }; })(item);
+                item.onmouseout = (function(el) { return function() { el.style.background = "transparent"; }; })(item);
+                item.onclick = (function(name) {
+                    return function() {
+                        for (var k in collapsed) collapsed[k] = true;
+                        collapsed[name] = false;
+                        renderMidPanel();
+                        var hdr = midList.querySelector('[data-study-header="' + CSS.escape(name) + '"]');
+                        if (hdr) hdr.scrollIntoView({ block: "start", behavior: "smooth" });
+                    };
+                })(sName);
+                leftList.appendChild(item);
+            }
+        }
+
+        function renderMidPanel() {
+            midList.innerHTML = "";
+            var filter = midSearch.value.toLowerCase();
+            for (var si3 = 0; si3 < studies.length; si3++) {
+                var sName = studies[si3].text;
+                var sItems = [];
+                for (var fi2 = 0; fi2 < formItems.length; fi2++) {
+                    if (formItems[fi2].studyName !== sName) continue;
+                    if (showSelectedOnly && !formItems[fi2].selected) continue;
+                    var desc = formItems[fi2].studyName + " - " + formItems[fi2].formName;
+                    if (filter) {
+                        if (desc.toLowerCase().indexOf(filter) === -1 && sName.toLowerCase().indexOf(filter) === -1) continue;
+                    }
+                    sItems.push(formItems[fi2]);
+                }
+                if (sItems.length === 0) continue;
+                sItems.sort(function(a, b) { return a.formName.localeCompare(b.formName); });
+
+                var hdr = document.createElement("div");
+                hdr.setAttribute("data-study-header", sName);
+                var isCollapsed = !!collapsed[sName];
+                hdr.className = "ifl-hdr";
+                hdr.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:" + tc.surface + ";border-radius:6px;margin:4px 0 2px;cursor:pointer;user-select:none;";
+                var hdrLabel = document.createElement("span");
+                hdrLabel.textContent = sName + " (" + sItems.length + ")";
+                hdrLabel.style.cssText = "color:" + tc.text + ";font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;";
+                var hdrArrow = document.createElement("span");
+                hdrArrow.textContent = isCollapsed ? "\u25B6" : "\u25BC";
+                hdrArrow.style.cssText = "color:" + tc.textMuted + ";font-size:10px;flex-shrink:0;margin-left:8px;";
+                hdr.appendChild(hdrLabel);
+                hdr.appendChild(hdrArrow);
+                hdr.onclick = (function(name) {
+                    return function() { collapsed[name] = !collapsed[name]; renderMidPanel(); };
+                })(sName);
+                midList.appendChild(hdr);
+                if (isCollapsed) continue;
+
+                for (var ri = 0; ri < sItems.length; ri++) {
+                    (function(fItem) {
+                        var row = document.createElement("div");
+                        var isRenamed = fItem.newName !== fItem.originalName;
+                        var isActive = activeFormItem === fItem;
+                        row.className = "ifl-row";
+                        row.style.cssText = "display:flex;align-items:center;gap:6px;padding:5px 10px 5px 20px;border-radius:4px;cursor:pointer;margin:1px 0;font-size:12px;background:" + (isRenamed ? tc.renamed : (isActive ? tc.surfaceHover : "transparent")) + ";transition:background 0.1s;";
+                        row.onmouseover = function() { if (!isActive) row.style.background = tc.surfaceHover; };
+                        row.onmouseout = function() { row.style.background = isRenamed ? tc.renamed : (isActive ? tc.surfaceHover : "transparent"); };
+
+                        var nameSpan = document.createElement("span");
+                        nameSpan.style.cssText = "flex:1;color:" + tc.text + ";overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+                        if (isRenamed) {
+                            nameSpan.textContent = fItem.studyName + " - " + fItem.originalName + " \u2192 " + fItem.newName;
+                        } else {
+                            nameSpan.textContent = fItem.studyName + " - " + fItem.formName;
+                        }
+                        nameSpan.title = nameSpan.textContent;
+
+                        var lockIcon = document.createElement("span");
+                        lockIcon.textContent = fItem.lockOnSave ? "\uD83D\uDD12" : "";
+                        lockIcon.style.cssText = "font-size:11px;flex-shrink:0;width:16px;text-align:center;";
+
+                        var cb = document.createElement("input");
+                        cb.type = "checkbox";
+                        cb.checked = fItem.selected;
+                        cb.className = "ifl-cb";
+                        cb.style.cssText = "width:16px;height:16px;cursor:pointer;accent-color:" + tc.accent + ";flex-shrink:0;";
+                        cb.onclick = function(e) { e.stopPropagation(); };
+                        cb.onchange = function() {
+                            fItem.selected = cb.checked;
+                            updateConfirmState();
+                        };
+
+                        row.onclick = function() {
+                            activeFormItem = fItem;
+                            renderMidPanel();
+                            renderRightPanel();
+                        };
+
+                        row.appendChild(nameSpan);
+                        row.appendChild(lockIcon);
+                        row.appendChild(cb);
+                        midList.appendChild(row);
+                    })(sItems[ri]);
+                }
+            }
+        }
+
+        function renderItemGroupsSection(item) {
+            var section = document.createElement("div");
+            section.style.cssText = "margin-top:16px;border-top:1px solid " + tc.border + ";padding-top:12px;";
+            var secTitle = document.createElement("div");
+            secTitle.textContent = "Item Groups & Items";
+            secTitle.style.cssText = "color:" + tc.textMuted + ";font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;";
+            section.appendChild(secTitle);
+
+            if (!item.itemGroups) {
+                var loading = document.createElement("div");
+                loading.textContent = "Loading item groups\u2026";
+                loading.style.cssText = "color:" + tc.textMuted + ";font-size:11px;font-style:italic;";
+                section.appendChild(loading);
+                return section;
+            }
+            if (item.itemGroups.length === 0) {
+                var empty = document.createElement("div");
+                empty.textContent = "No item groups found.";
+                empty.style.cssText = "color:" + tc.textMuted + ";font-size:11px;";
+                section.appendChild(empty);
+                return section;
+            }
+
+            for (var gi = 0; gi < item.itemGroups.length; gi++) {
+                (function(gIdx) {
+                    var g = item.itemGroups[gIdx];
+                    var gRow = document.createElement("div");
+                    gRow.style.cssText = "display:flex;align-items:center;gap:6px;margin-top:6px;padding:4px 0;";
+                    var gCb = document.createElement("input");
+                    gCb.type = "checkbox";
+                    gCb.checked = g.included;
+                    gCb.style.cssText = "width:14px;height:14px;accent-color:" + tc.accent + ";flex-shrink:0;";
+                    gCb.onchange = function() {
+                        g.included = gCb.checked;
+                    };
+                    var gInput = document.createElement("input");
+                    gInput.type = "text";
+                    gInput.value = g.newName;
+                    gInput.style.cssText = "flex:1;padding:4px 6px;background:" + tc.inputBg + " !important;border:1px solid " + tc.inputBorder + ";border-radius:4px;color:" + tc.text + " !important;font-size:12px;font-weight:600;outline:none;-webkit-text-fill-color:" + tc.text + " !important;";
+                    gInput.oninput = function() { g.newName = gInput.value; };
+                    gRow.appendChild(gCb);
+                    gRow.appendChild(gInput);
+                    section.appendChild(gRow);
+
+                    for (var ii = 0; ii < g.items.length; ii++) {
+                        (function(iIdx) {
+                            var itm = g.items[iIdx];
+                            var iRow = document.createElement("div");
+                            iRow.style.cssText = "display:flex;align-items:center;gap:6px;margin-left:20px;padding:2px 0;";
+                            var iCb = document.createElement("input");
+                            iCb.type = "checkbox";
+                            iCb.checked = itm.included;
+                            iCb.style.cssText = "width:13px;height:13px;accent-color:" + tc.accent + ";flex-shrink:0;";
+                            iCb.onchange = function() { itm.included = iCb.checked; };
+                            var iInput = document.createElement("input");
+                            iInput.type = "text";
+                            iInput.value = itm.newName;
+                            iInput.style.cssText = "flex:1;padding:3px 6px;background:" + tc.inputBg + " !important;border:1px solid " + tc.inputBorder + ";border-radius:4px;color:" + tc.text + " !important;font-size:11px;outline:none;-webkit-text-fill-color:" + tc.text + " !important;";
+                            iInput.oninput = function() { itm.newName = iInput.value; };
+                            iRow.appendChild(iCb);
+                            iRow.appendChild(iInput);
+                            section.appendChild(iRow);
+                        })(ii);
+                    }
+                })(gi);
+            }
+            return section;
+        }
+
+        function renderRightPanel() {
+            rightPanel.innerHTML = "";
+            if (!activeFormItem) {
+                var ph = document.createElement("div");
+                ph.textContent = "Click a form row to view details";
+                ph.style.cssText = "color:" + tc.textMuted + ";font-size:12px;text-align:center;margin-top:40px;";
+                rightPanel.appendChild(ph);
+                return;
+            }
+            var item = activeFormItem;
+
+            var studyLabel = document.createElement("div");
+            studyLabel.textContent = item.studyName;
+            studyLabel.style.cssText = "color:" + tc.textMuted + ";font-size:11px;margin-bottom:2px;";
+
+            var formLabel = document.createElement("div");
+            formLabel.textContent = item.originalName;
+            formLabel.style.cssText = "color:" + tc.text + ";font-size:14px;font-weight:600;margin-bottom:16px;";
+
+            var nameFieldLabel = document.createElement("label");
+            nameFieldLabel.textContent = "New Form Name";
+            nameFieldLabel.style.cssText = "color:" + tc.textMuted + ";font-size:11px;display:block;margin-bottom:4px;";
+
+            var nameInput = document.createElement("input");
+            nameInput.type = "text";
+            nameInput.value = item.newName;
+            nameInput.style.cssText = "width:100%;box-sizing:border-box;padding:8px 10px;background:" + tc.inputBg + " !important;border:1px solid " + tc.inputBorder + ";border-radius:6px;color:" + tc.text + " !important;font-size:13px;outline:none;-webkit-text-fill-color:" + tc.text + " !important;";
+            nameInput.oninput = function() {
+                item.newName = nameInput.value;
+                renderMidPanel();
+            };
+
+            var lockRow = document.createElement("label");
+            lockRow.style.cssText = "display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer;";
+            var lockCb = document.createElement("input");
+            lockCb.type = "checkbox";
+            lockCb.checked = item.lockOnSave;
+            lockCb.style.cssText = "width:16px;height:16px;cursor:pointer;accent-color:" + tc.accent + ";";
+            lockCb.onchange = function() {
+                item.lockOnSave = lockCb.checked;
+                renderMidPanel();
+            };
+            var lockLabel = document.createElement("span");
+            lockLabel.textContent = "Lock on Save";
+            lockLabel.style.cssText = "color:" + tc.text + ";font-size:13px;";
+            lockRow.appendChild(lockCb);
+            lockRow.appendChild(lockLabel);
+
+            rightPanel.appendChild(studyLabel);
+            rightPanel.appendChild(formLabel);
+            rightPanel.appendChild(nameFieldLabel);
+            rightPanel.appendChild(nameInput);
+            rightPanel.appendChild(lockRow);
+
+            // Item groups section
+            var igSection = renderItemGroupsSection(item);
+            rightPanel.appendChild(igSection);
+
+            // If item groups not loaded yet, sync modal and load them
+            if (item.itemGroups === null && !iflSyncBusy) {
+                iflSyncBusy = true;
+                log("IFL: syncing modal for " + item.studyName + " / " + item.originalName);
+                ifl_syncModalToForm(item).then(function(groups) {
+                    iflSyncBusy = false;
+                    if (groups !== null) {
+                        item.itemGroups = groups;
+                        log("IFL: collected " + groups.length + " item groups for " + item.originalName);
+                    } else {
+                        item.itemGroups = [];
+                    }
+                    if (activeFormItem === item) renderRightPanel();
+                }).catch(function(err) {
+                    iflSyncBusy = false;
+                    log("IFL: sync error — " + String(err));
+                    item.itemGroups = [];
+                    if (activeFormItem === item) renderRightPanel();
+                });
+            }
+        }
+
+        // Wire events
+        leftSearch.oninput = function() { renderLeftPanel(); };
+        midSearch.oninput = function() { renderMidPanel(); };
+        showSelBtn.onclick = function() {
+            showSelectedOnly = !showSelectedOnly;
+            showSelBtn.textContent = showSelectedOnly ? "Show All" : "Show Selected";
+            showSelBtn.style.background = showSelectedOnly ? tc.accent : tc.surface;
+            renderMidPanel();
+        };
+
+        hClose.onclick = function() {
+            document.removeEventListener("mousemove", onDragMove);
+            document.removeEventListener("mouseup", onDragEnd);
+            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        };
+        overlay.onclick = function(e) {
+            if (e.target === overlay) {
+                document.removeEventListener("mousemove", onDragMove);
+                document.removeEventListener("mouseup", onDragEnd);
+                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            }
+        };
+
+        confirmBtn.onclick = function() {
+            var selected = [];
+            for (var i = 0; i < formItems.length; i++) {
+                if (formItems[i].selected) selected.push(formItems[i]);
+            }
+            if (selected.length === 0) return;
+            document.removeEventListener("mousemove", onDragMove);
+            document.removeEventListener("mouseup", onDragEnd);
+            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            onConfirm(selected);
+        };
+
+        var escHandler = function(e) {
+            if (e.key === "Escape") {
+                e.preventDefault();
+                e.stopPropagation();
+                document.removeEventListener("mousemove", onDragMove);
+                document.removeEventListener("mouseup", onDragEnd);
+                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+                document.removeEventListener("keydown", escHandler, true);
+            }
+        };
+        document.addEventListener("keydown", escHandler, true);
+
+        // Assemble
+        container.appendChild(header);
+        container.appendChild(body);
+        container.appendChild(footer);
+        overlay.appendChild(container);
+        document.body.appendChild(overlay);
+
+        // ---- Restore persisted fullscreen state ----
+        try {
+            if (localStorage.getItem(IFL_STORAGE_FULLSCREEN) === "1") {
+                savedContainerStyle = container.style.cssText;
+                isFullscreen = true;
+                applyFullscreen();
+            }
+        } catch (e) {}
+
+        // ---- Restore persisted divider widths ----
+        try {
+            var savedDividers = JSON.parse(localStorage.getItem(IFL_STORAGE_DIVIDERS));
+            if (savedDividers) {
+                if (savedDividers.left >= IFL_MIN_PANEL_WIDTH) {
+                    leftPanel.style.width = savedDividers.left + "px";
+                }
+                if (savedDividers.right >= IFL_MIN_PANEL_WIDTH) {
+                    rightPanel.style.width = savedDividers.right + "px";
+                }
+            }
+        } catch (e) {}
+
+        // Initial render
+        renderLeftPanel();
+        renderMidPanel();
+        renderRightPanel();
+        updateConfirmState();
+
+        log("IFL: selection GUI displayed");
+    }
+
+    // ---- Progress Panel ----
+
+    function ifl_buildProgressPanel(selectedItems, existingStatuses) {
+        var glass = isGlassTheme();
+        var tc = {
+            bg: glass ? "rgba(15,10,40,0.96)" : "#111",
+            headerBg: glass ? "rgba(255,255,255,0.08)" : "#222",
+            border: glass ? "rgba(255,255,255,0.2)" : "#333",
+            surface: glass ? "rgba(255,255,255,0.06)" : "#1a1a1a",
+            text: glass ? "#fff" : "#fff",
+            textMuted: glass ? "rgba(255,255,255,0.6)" : "#999"
+        };
+
+        var STATUS_PENDING = "Pending";
+        var STATUS_IN_PROGRESS = "In Progress";
+        var STATUS_COMPLETED = "Completed";
+        var STATUS_FAILED = "Failed";
+
+        var state = [];
+        for (var i = 0; i < selectedItems.length; i++) {
+            var initStatus = STATUS_PENDING;
+            var initError = null;
+            if (existingStatuses && existingStatuses[i]) {
+                initStatus = existingStatuses[i].status || STATUS_PENDING;
+                initError = existingStatuses[i].error || null;
+                // If was "In Progress" before refresh, reset to Pending for re-processing
+                if (initStatus === STATUS_IN_PROGRESS) initStatus = STATUS_PENDING;
+            }
+            state.push({ item: selectedItems[i], status: initStatus, error: initError });
+        }
+
+        var savedState = ifl_loadImportState();
+        var startTime = (savedState && savedState.startTime) ? savedState.startTime : Date.now();
+        var timerInterval = null;
+
+        // Remove existing panel if any
+        var existingPanel = document.getElementById("ifl-progress-panel");
+        if (existingPanel) existingPanel.remove();
+
+        // Fixed-position panel (bottom-right, no fullscreen overlay)
+        var panel = document.createElement("div");
+        panel.id = "ifl-progress-panel";
+        panel.style.cssText = "position:fixed;bottom:20px;right:20px;width:480px;max-height:420px;z-index:30000;display:flex;flex-direction:column;background:" + tc.bg + ";border:1px solid " + tc.border + ";border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.6);overflow:hidden;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;";
+
+        // Header (draggable)
+        var header = document.createElement("div");
+        header.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid " + tc.border + ";background:" + tc.headerBg + ";flex-shrink:0;cursor:grab;user-select:none;";
+        var hTitle = document.createElement("div");
+        hTitle.textContent = "Import Progress";
+        hTitle.style.cssText = "color:white;font-size:14px;font-weight:600;flex:1;";
+        var hBtnGroup = document.createElement("div");
+        hBtnGroup.style.cssText = "display:flex;gap:6px;align-items:center;";
+
+        var cancelBtn = document.createElement("button");
+        cancelBtn.textContent = "Cancel";
+        cancelBtn.style.cssText = "background:rgba(239,68,68,0.3);border:1px solid rgba(239,68,68,0.5);color:#ff8a8a;padding:3px 12px;border-radius:6px;cursor:pointer;font-size:11px;";
+        cancelBtn.onclick = function() {
+            IFL_CANCELED = true;
+            cancelBtn.disabled = true;
+            cancelBtn.textContent = "Canceling\u2026";
+        };
+
+        var closeBtn = document.createElement("button");
+        closeBtn.innerHTML = "\u2715";
+        closeBtn.title = "Close panel";
+        closeBtn.style.cssText = "background:rgba(255,255,255,0.1);border:none;color:white;width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;";
+        closeBtn.onmouseover = function() { closeBtn.style.background = "rgba(255,67,54,0.8)"; };
+        closeBtn.onmouseout = function() { closeBtn.style.background = "rgba(255,255,255,0.1)"; };
+        closeBtn.onclick = function() { close(); };
+
+        hBtnGroup.appendChild(cancelBtn);
+        hBtnGroup.appendChild(closeBtn);
+        header.appendChild(hTitle);
+        header.appendChild(hBtnGroup);
+
+        // Header dragging
+        var dragState = { active: false, startX: 0, startY: 0, origLeft: 0, origTop: 0 };
+
+        function onDragStart(e) {
+            if (e.target.tagName === "BUTTON" || e.target.tagName === "INPUT") return;
+            dragState.active = true;
+            var rect = panel.getBoundingClientRect();
+            dragState.startX = e.clientX;
+            dragState.startY = e.clientY;
+            dragState.origLeft = rect.left;
+            dragState.origTop = rect.top;
+            // Switch from bottom/right positioning to top/left for dragging
+            panel.style.bottom = "auto";
+            panel.style.right = "auto";
+            panel.style.left = rect.left + "px";
+            panel.style.top = rect.top + "px";
+            header.style.cursor = "grabbing";
+            e.preventDefault();
+        }
+
+        function onDragMove(e) {
+            if (!dragState.active) return;
+            var dx = e.clientX - dragState.startX;
+            var dy = e.clientY - dragState.startY;
+            panel.style.left = (dragState.origLeft + dx) + "px";
+            panel.style.top = (dragState.origTop + dy) + "px";
+        }
+
+        function onDragEnd() {
+            if (dragState.active) {
+                dragState.active = false;
+                header.style.cursor = "grab";
+            }
+        }
+
+        header.addEventListener("mousedown", onDragStart);
+        document.addEventListener("mousemove", onDragMove);
+        document.addEventListener("mouseup", onDragEnd);
+
+        var listDiv = document.createElement("div");
+        listDiv.style.cssText = "flex:1;overflow-y:auto;padding:6px 10px;";
+
+        var rows = [];
+        for (var ri = 0; ri < state.length; ri++) {
+            var row = document.createElement("div");
+            row.style.cssText = "display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:4px;margin:1px 0;font-size:11px;";
+            var statusBadge = document.createElement("span");
+            statusBadge.style.cssText = "min-width:72px;text-align:center;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;";
+            var label = document.createElement("span");
+            label.style.cssText = "flex:1;color:" + tc.text + ";overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+            var displayName = (state[ri].item.newName && state[ri].item.newName !== state[ri].item.originalName) ? state[ri].item.newName : state[ri].item.originalName;
+            label.textContent = state[ri].item.studyName + " \u2014 " + displayName;
+            label.title = label.textContent;
+            row.appendChild(statusBadge);
+            row.appendChild(label);
+            listDiv.appendChild(row);
+            rows.push({ row: row, badge: statusBadge, label: label });
+        }
+
+        var summaryDiv = document.createElement("div");
+        summaryDiv.style.cssText = "padding:8px 14px;border-top:1px solid " + tc.border + ";background:" + tc.headerBg + ";flex-shrink:0;font-size:11px;color:" + tc.textMuted + ";";
+
+        panel.appendChild(header);
+        panel.appendChild(listDiv);
+        panel.appendChild(summaryDiv);
+        document.body.appendChild(panel);
+
+        function formatTime(ms) {
+            var s = Math.floor(ms / 1000);
+            var m = Math.floor(s / 60);
+            s = s % 60;
+            return m + "m " + s + "s";
+        }
+
+        function updateUI() {
+            var completed = 0, failed = 0, inProgress = 0, pending = 0;
+            for (var ui = 0; ui < state.length; ui++) {
+                var s = state[ui];
+                var badge = rows[ui].badge;
+                if (s.status === STATUS_PENDING) {
+                    badge.textContent = "Pending";
+                    badge.style.background = "rgba(255,255,255,0.1)";
+                    badge.style.color = tc.textMuted;
+                    pending++;
+                } else if (s.status === STATUS_IN_PROGRESS) {
+                    badge.textContent = "In Progress";
+                    badge.style.background = "rgba(59,130,246,0.3)";
+                    badge.style.color = "#93c5fd";
+                    inProgress++;
+                } else if (s.status === STATUS_COMPLETED) {
+                    badge.textContent = "Completed";
+                    badge.style.background = "rgba(16,185,129,0.3)";
+                    badge.style.color = "#6ee7b7";
+                    completed++;
+                } else if (s.status === STATUS_FAILED) {
+                    badge.textContent = "Failed";
+                    badge.style.background = "rgba(239,68,68,0.3)";
+                    badge.style.color = "#fca5a5";
+                    failed++;
+                    if (s.error) rows[ui].label.title = s.error;
+                }
+            }
+            var elapsed = Date.now() - startTime;
+            var avgPer = completed > 0 ? elapsed / completed : 0;
+            var remaining = avgPer > 0 ? avgPer * (pending + inProgress) : 0;
+            summaryDiv.textContent = "Total: " + state.length + " | Done: " + completed + " | Failed: " + failed + " | Elapsed: " + formatTime(elapsed) + (remaining > 0 ? " | ETA: ~" + formatTime(remaining) : "");
+        }
+
+        timerInterval = setInterval(updateUI, 500);
+        updateUI();
+
+        function cleanupListeners() {
+            document.removeEventListener("mousemove", onDragMove);
+            document.removeEventListener("mouseup", onDragEnd);
+        }
+
+        function cleanup() {
+            if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+        }
+
+        function close() {
+            cleanup();
+            cleanupListeners();
+            if (panel.parentNode) panel.parentNode.removeChild(panel);
+        }
+
+        return {
+            state: state,
+            startTime: startTime,
+            setStatus: function(index, status, error) {
+                if (index >= 0 && index < state.length) {
+                    state[index].status = status;
+                    if (error) state[index].error = error;
+                    updateUI();
+                }
+            },
+            close: close,
+            cleanup: cleanup,
+            panel: panel,
+            STATUS_PENDING: STATUS_PENDING,
+            STATUS_IN_PROGRESS: STATUS_IN_PROGRESS,
+            STATUS_COMPLETED: STATUS_COMPLETED,
+            STATUS_FAILED: STATUS_FAILED
+        };
+    }
+
+    // ---- Persist/restore helpers for import state ----
+
+    function ifl_persistProgress(progress, selectedItems, startIdx) {
+        var statuses = [];
+        for (var i = 0; i < progress.state.length; i++) {
+            statuses.push({ status: progress.state[i].status, error: progress.state[i].error });
+        }
+        ifl_saveImportState({
+            items: selectedItems,
+            statuses: statuses,
+            currentIndex: startIdx,
+            startTime: progress.startTime,
+            active: true
+        });
+    }
+
+    // ---- Import processing loop ----
+
+    async function ifl_processImports(selectedItems, resumeIndex, existingStatuses) {
+        IFL_CANCELED = false;
+        var startIdx = resumeIndex || 0;
+        log("IFL: starting import of " + selectedItems.length + " forms from index " + startIdx);
+
+        var progress = ifl_buildProgressPanel(selectedItems, existingStatuses);
+
+        // Persist initial state
+        ifl_persistProgress(progress, selectedItems, startIdx);
+
+        for (var idx = startIdx; idx < selectedItems.length; idx++) {
+            if (IFL_CANCELED) {
+                log("IFL: import canceled by user at index " + idx);
+                for (var ci = idx; ci < selectedItems.length; ci++) {
+                    progress.setStatus(ci, progress.STATUS_FAILED, "Canceled");
+                }
+                ifl_persistProgress(progress, selectedItems, idx);
+                break;
+            }
+
+            var item = selectedItems[idx];
+            progress.setStatus(idx, progress.STATUS_IN_PROGRESS);
+            ifl_persistProgress(progress, selectedItems, idx);
+            log("IFL: processing " + (idx + 1) + "/" + selectedItems.length + ": " + item.studyName + " / " + item.originalName);
+
+            try {
+                // Check if modal is open; if not, reopen it
+                var modalBody = document.querySelector(".modal-body");
+                var studySel = document.getElementById(IFL_STUDY_SELECT_ID);
+                if (!modalBody || !studySel) {
+                    log("IFL: modal not open, reopening");
+                    var opened = await ifl_openImportModal();
+                    if (!opened) throw new Error("Failed to open import modal");
+                }
+
+                // Select study
+                var ss = document.getElementById(IFL_STUDY_SELECT_ID);
+                if (!ss) throw new Error("Study select not found");
+                ss.value = item.studyValue;
+                ifl_triggerChange(ss);
+                await sleep(300);
+
+                // Wait for form dropdown
+                var populated = await ifl_waitForFormOptions(IFL_FORM_POPULATE_TIMEOUT);
+                if (!populated) throw new Error("Form dropdown did not populate");
+
+                // Select form
+                var fs = document.getElementById(IFL_FORM_SELECT_ID);
+                if (!fs) throw new Error("Form select not found");
+                var formFound = false;
+                var formOpts = fs.querySelectorAll("option");
+                for (var fo = 0; fo < formOpts.length; fo++) {
+                    if (formOpts[fo].value === item.formValue) {
+                        fs.value = item.formValue;
+                        formFound = true;
+                        break;
+                    }
+                }
+                if (!formFound) throw new Error("Form option not found: " + item.formValue);
+                ifl_triggerChange(fs);
+                await sleep(500);
+
+                // Wait for itemGroupsDiv to populate so we can apply changes
+                var igDiv = await ifl_waitForItemGroupsDiv(IFL_ITEMGROUPS_TIMEOUT);
+
+                // Handle Lock on Save checkbox
+                var lockCb = document.getElementById(IFL_LOCK_CHECKBOX_ID);
+                if (lockCb) {
+                    if (item.lockOnSave && !lockCb.checked) {
+                        lockCb.click();
+                    } else if (!item.lockOnSave && lockCb.checked) {
+                        lockCb.click();
+                    }
+                }
+
+                // Handle rename if needed
+                if (item.newName !== item.originalName) {
+                    var formGroups = document.querySelectorAll(".modal-body .form-group, .modal-body .control-group");
+                    var fgDiv = null;
+                    if (formGroups.length >= 4) {
+                        fgDiv = formGroups[3];
+                    }
+                    if (fgDiv) {
+                        var nameInput = fgDiv.querySelector('input[name*="formName"], input[id*="formName"], input[type="text"]');
+                        if (nameInput) {
+                            nameInput.value = item.newName;
+                            nameInput.dispatchEvent(new Event("input", { bubbles: true }));
+                            nameInput.dispatchEvent(new Event("change", { bubbles: true }));
+                            log("IFL: renamed form to '" + item.newName + "'");
+                        } else {
+                            log("IFL: warning — formName input not found in 4th form group");
+                        }
+                    } else {
+                        log("IFL: warning — 4th form group not found for rename");
+                    }
+                }
+
+                // Apply item group and item changes
+                if (item.itemGroups && item.itemGroups.length > 0 && igDiv) {
+                    ifl_applyItemGroupChanges(item);
+                }
+
+                // Click Save — page may refresh after this
+                var saveBtn = document.getElementById(IFL_SAVE_BUTTON_ID);
+                if (!saveBtn) throw new Error("Save button not found");
+
+                // Persist as IN_PROGRESS with next index (in case page redirects after save)
+                ifl_persistProgress(progress, selectedItems, idx + 1);
+
+                var saveAttempts = 0;
+                var maxSaveAttempts = 2;
+                var saveFailed = false;
+
+                while (saveAttempts < maxSaveAttempts) {
+                    saveAttempts++;
+                    saveBtn = document.getElementById(IFL_SAVE_BUTTON_ID);
+                    if (!saveBtn) throw new Error("Save button not found");
+                    saveBtn.click();
+                    log("IFL: clicked Save (attempt " + saveAttempts + ")");
+
+                    // Wait for modal to close or error alert
+                    var start = Date.now();
+                    var closed = false;
+                    var errorDetected = false;
+                    while (Date.now() - start < IFL_MODAL_CLOSE_TIMEOUT) {
+                        // Check for error alert in modal
+                        var alertEl = document.querySelector(".modal-body .alert-danger, .modal .alert-danger");
+                        if (alertEl) {
+                            var alertText = alertEl.textContent || "";
+                            log("IFL: error alert detected: " + alertText.trim().substring(0, 120));
+                            // Dismiss the alert
+                            var dismissBtn = alertEl.querySelector("button.close, [data-dismiss='alert']");
+                            if (dismissBtn) dismissBtn.click();
+                            errorDetected = true;
+                            break;
+                        }
+                        var m = document.querySelector(".modal.in, .modal.show");
+                        if (!m || m.style.display === "none") { closed = true; break; }
+                        var mb = document.querySelector(".modal-body");
+                        if (!mb) { closed = true; break; }
+                        await sleep(150);
+                    }
+
+                    if (closed) break; // Save succeeded
+
+                    if (errorDetected && saveAttempts < maxSaveAttempts) {
+                        log("IFL: retrying — re-selecting study/form before next save attempt");
+                        await sleep(300);
+                        // Re-select study
+                        var rss = document.getElementById(IFL_STUDY_SELECT_ID);
+                        if (rss) { rss.value = item.studyValue; ifl_triggerChange(rss); }
+                        await sleep(300);
+                        var rePop = await ifl_waitForFormOptions(IFL_FORM_POPULATE_TIMEOUT);
+                        if (!rePop) { saveFailed = true; break; }
+                        // Re-select form
+                        var rfs = document.getElementById(IFL_FORM_SELECT_ID);
+                        if (rfs) { rfs.value = item.formValue; ifl_triggerChange(rfs); }
+                        await sleep(500);
+                        await ifl_waitForItemGroupsDiv(IFL_ITEMGROUPS_TIMEOUT);
+                        // Re-apply item group changes
+                        if (item.itemGroups && item.itemGroups.length > 0) {
+                            ifl_applyItemGroupChanges(item);
+                        }
+                        // Re-apply rename
+                        if (item.newName !== item.originalName) {
+                            var rfg = document.querySelectorAll(".modal-body .form-group, .modal-body .control-group");
+                            if (rfg.length >= 4) {
+                                var rni = rfg[3].querySelector('input[name*="formName"], input[id*="formName"], input[type="text"]');
+                                if (rni) {
+                                    rni.value = item.newName;
+                                    rni.dispatchEvent(new Event("input", { bubbles: true }));
+                                    rni.dispatchEvent(new Event("change", { bubbles: true }));
+                                }
+                            }
+                        }
+                        // Re-apply lock
+                        var rlc = document.getElementById(IFL_LOCK_CHECKBOX_ID);
+                        if (rlc) {
+                            if (item.lockOnSave && !rlc.checked) rlc.click();
+                            else if (!item.lockOnSave && rlc.checked) rlc.click();
+                        }
+                        continue; // Retry save
+                    }
+
+                    // Error on last attempt or timeout
+                    saveFailed = true;
+                    break;
+                }
+
+                if (saveFailed) {
+                    throw new Error("Save failed after " + saveAttempts + " attempt(s) — modal error or timeout");
+                }
+
+                // Save succeeded — mark as completed
+                progress.setStatus(idx, progress.STATUS_COMPLETED);
+                ifl_persistProgress(progress, selectedItems, idx + 1);
+
+                // Detect redirect to form show page and navigate back to list page
+                if (IFL_SHOW_FORM_URL_PATTERN.test(location.href)) {
+                    log("IFL: detected redirect to form show page, navigating back to list page");
+                    location.href = IFL_LIST_PAGE_URL;
+                    // Page will reload; import resumes via ifl_resumeImport
+                    return;
+                }
+
+                await sleep(IFL_INTER_ITEM_DELAY);
+
+                log("IFL: completed " + item.studyName + " / " + item.originalName);
+
+            } catch (err) {
+                var errMsg = err && err.message ? err.message : String(err);
+                log("IFL: FAILED " + item.studyName + " / " + item.originalName + " \u2014 " + errMsg);
+                progress.setStatus(idx, progress.STATUS_FAILED, errMsg);
+                ifl_persistProgress(progress, selectedItems, idx + 1);
+                await ifl_closeImportModal();
+                await sleep(500);
+            }
+        }
+
+        log("IFL: import loop finished");
+        // Mark as no longer active
+        ifl_clearImportState();
+    }
+
+    // ---- Resume after page refresh ----
+
+    function ifl_resumeImport() {
+        var saved = ifl_loadImportState();
+        if (!saved || !saved.active || !saved.items || saved.items.length === 0) return;
+
+        // If we're on a form show page (redirect after save), go back to list page
+        if (!isOnImportFromLibraryPage()) {
+            if (IFL_SHOW_FORM_URL_PATTERN.test(location.href)) {
+                log("IFL: resume — on form show page, redirecting to list page");
+                location.href = IFL_LIST_PAGE_URL;
+            }
+            return;
+        }
+        // Re-read saved state (already loaded above)
+        if (!saved || !saved.active || !saved.items || saved.items.length === 0) return;
+
+        var nextIdx = saved.currentIndex || 0;
+
+        // Items before nextIdx that are still IN_PROGRESS were mid-save when redirect
+        // occurred — redirect means save succeeded, so mark them Completed
+        if (saved.statuses) {
+            for (var pi = 0; pi < nextIdx; pi++) {
+                if (saved.statuses[pi] && saved.statuses[pi].status === "In Progress") {
+                    saved.statuses[pi].status = "Completed";
+                    log("IFL: resume — marking index " + pi + " as Completed (redirect after save)");
+                }
+            }
+        }
+
+        // Check if all are already done
+        var allDone = true;
+        for (var i = nextIdx; i < saved.items.length; i++) {
+            var st = saved.statuses && saved.statuses[i] ? saved.statuses[i].status : "Pending";
+            if (st !== "Completed" && st !== "Failed") { allDone = false; break; }
+        }
+        if (allDone && nextIdx >= saved.items.length) {
+            log("IFL: resume — all items already processed, showing final progress");
+            // Build progress panel so user can see final results
+            ifl_buildProgressPanel(saved.items, saved.statuses);
+            ifl_clearImportState();
+            return;
+        }
+
+        log("IFL: resuming import from index " + nextIdx + " of " + saved.items.length);
+        ifl_processImports(saved.items, nextIdx, saved.statuses);
+    }
+
+    // ---- Main entry point ----
+
+    async function runImportFromLibrary() {
+        log("IFL: Import from Library started");
+        IFL_CANCELED = false;
+
+        // Page check
+        if (!isOnImportFromLibraryPage()) {
+            createPopup({
+                title: "Import from Library",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">\u26A0\uFE0F Wrong Page</p><p>You must be on the Study Library Forms page to use this feature.</p><p style="margin-top:12px;font-size:12px;color:#ffffffff;word-wrap:break-word;word-break:break-all;">Required URL:<br>' + IFL_VALID_URLS[0] + '<br>or<br>' + IFL_VALID_URLS[1] + '</p></div>',
+                width: "450px",
+                height: "auto"
+            });
+            log("IFL: wrong page \u2014 " + location.href);
+            return;
+        }
+
+        // Open import modal
+        var modalOpened = await ifl_openImportModal();
+        if (!modalOpened) {
+            createPopup({
+                title: "Import from Library",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">\u26A0\uFE0F Error</p><p>Could not open the Import from Library modal. Make sure the link exists on this page.</p></div>',
+                width: "400px",
+                height: "auto"
+            });
+            return;
+        }
+
+        // Collect all studies & forms
+        var studies = await ifl_collectAllStudiesAndForms();
+        if (!studies || studies.length === 0) {
+            createPopup({
+                title: "Import from Library",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">\u26A0\uFE0F Error</p><p>No studies found in the Study Library dropdown.</p></div>',
+                width: "400px",
+                height: "auto"
+            });
+            await ifl_closeImportModal();
+            return;
+        }
+
+        // Cache studies for potential resume
+        ifl_saveStudiesCache(studies);
+
+        // Close the modal before showing selection GUI
+        await ifl_closeImportModal();
+
+        // Show selection GUI
+        ifl_buildSelectionGUI(studies, function(selectedItems) {
+            ifl_processImports(selectedItems, 0, null);
+        });
+    }
+
     //==========================
     // PLAP Builder FEATURE
     //==========================
@@ -8972,6 +10623,7 @@
         { id: "Pull Barcode", label: "Pull Barcode" },
         { id: "Pull Lab Barcode", label: "Pull Lab Barcode" },
         { id: "PLAP Builder", label: "PLAP Builder" },
+        { id: "Import From Library", label: "Import From Library"},
         { id: "Archive/Update Forms", label: "Archive/Update Forms" },
         { id: "Copy Activity Forms", label: "Copy Activity Forms" },
         { id: "Search Methods", label: "Search Methods" },
@@ -24691,6 +26343,25 @@
         findStudyEventsBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         findStudyEventsBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
+        var importFromLibBtn = document.createElement("button");
+        importFromLibBtn.textContent = "Import From Library";
+        importFromLibBtn.style.background = "#38dae6";
+        importFromLibBtn.style.color = "#fff";
+        importFromLibBtn.style.border = "none";
+        importFromLibBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        importFromLibBtn.style.padding = scale(BUTTON_PADDING_PX);
+        importFromLibBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
+        importFromLibBtn.style.cursor = "pointer";
+        importFromLibBtn.style.fontWeight = "500";
+        importFromLibBtn.style.transition = "background 0.2s";
+        importFromLibBtn.onmouseenter = function() { this.style.background = "#2bb9c4"; };
+        importFromLibBtn.onmouseleave = function() { this.style.background = "#38dae6"; };
+        importFromLibBtn.addEventListener("click", async function() {
+            IFL_CANCELED = false;
+            log("Import from Library: button clicked");
+            await runImportFromLibrary();
+        });
+
         var openEligBtn = document.createElement("button");
         openEligBtn.textContent = "Cohort Eligibility";
         openEligBtn.style.background = "#4a90e2";
@@ -24921,7 +26592,7 @@
 
         // Apply glassmorphism theme to all panel buttons if glass theme is active
         if (glass) {
-            var allPanelBtns = [runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, bplBtn, importEligBtn, findAeBtn, findFormBtn, findStudyEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, editStudyEventsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn];
+            var allPanelBtns = [runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, importFromLibBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, bplBtn, importEligBtn, findAeBtn, findFormBtn, findStudyEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, editStudyEventsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn];
             for (var gi = 0; gi < allPanelBtns.length; gi++) {
                 var gb = allPanelBtns[gi];
                 gb.className = "ie-btn-primary";
@@ -24943,6 +26614,7 @@
             { el: pullLabBarcodeBtn, label: "Pull Lab Barcode" },
             // { el: saBuilderBtn, label: "Scheduled Activities Builder" },
             { el: bplBtn, label: "PLAP Builder" },
+            { el: importFromLibBtn, label: "Import From Library" },
             { el: archiveUpdateFormsBtn, label: "Archive/Update Forms" },
             { el: copyFormsBtn, label: "Copy Activity Forms"},
             { el: searchMethodsBtn, label: "Search Methods" },

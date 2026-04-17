@@ -397,12 +397,22 @@
     var IFL_LOCK_CHECKBOX_ID = "lockOnSave";
     var IFL_SAVE_BUTTON_ID = "actionButton";
     var IFL_MODAL_TIMEOUT = 15000;
-    var IFL_SELECT_POLL_INTERVAL = 120;
+    var IFL_SELECT_POLL_INTERVAL = 80;
     var IFL_FORM_POPULATE_TIMEOUT = 10000;
     var IFL_MODAL_CLOSE_TIMEOUT = 12000;
     var IFL_INTER_ITEM_DELAY = 800;
     var IFL_CANCELED = false;
-    
+    var IFL_STORAGE_IMPORT_STATE = "ifl.importState";
+    var IFL_STORAGE_STUDIES_CACHE = "ifl.studiesCache";
+    var IFL_STORAGE_FULLSCREEN = "ifl.fullscreen";
+    var IFL_STORAGE_DIVIDERS = "ifl.dividerWidths";
+    var IFL_MIN_PANEL_WIDTH = 120;
+    var IFL_MAX_PANEL_WIDTH_RATIO = 0.6;
+    var IFL_DIVIDER_WIDTH = 6;
+    var IFL_ITEMGROUPS_TIMEOUT = 8000;
+    var IFL_SHOW_FORM_URL_PATTERN = /\/secure\/crfdesign\/studylibrary\/show\/form\//;
+    var IFL_LIST_PAGE_URL = "https://" + location.host + "/secure/crfdesign/studylibrary/list/form";
+
     //=================================================================
     // Import From Library Feature
     //=================================================================
@@ -494,7 +504,7 @@
                 if (realOpts > 0) {
                     if (realOpts === lastCount) {
                         stableCount++;
-                        if (stableCount >= 3) return true;
+                        if (stableCount >= 2) return true;
                     } else {
                         stableCount = 0;
                     }
@@ -526,6 +536,228 @@
         }
         return results;
     }
+    
+    // ---- IFL Persistence helpers ----
+    function ifl_saveImportState(obj) {
+        try {localStorage.setItem(IFL_STORAGE_IMPORT_STATE, JSON.stringify(obj)); } catch(e) {}
+    }
+
+    function ifl_loadImportState() {
+        try {
+            var raw = localStorage.getItem(IFL_STORAGE_IMPORT_STATE);
+            if (raw) return JSON.parse(raw);
+        } catch (e) {}
+        return null;
+    }
+
+    function ifl_clearImportState() {
+        try { localStorage.removeItem(IFL_STORAGE_IMPORT_STATE); } catch (e) {}
+        try { localStorage.removeItem(IFL_STORAGE_STUDIES_CACHE); } catch (e) {}
+    }
+
+    function ifl_saveStudiesCache(studies) {
+        try {localStorage.setItem(IFL_STORAGE_STUDIES_CACHE, JSON.stringify(studies)); } catch (e) {}
+    }
+
+    function ifl_loadStudiesCache() {
+        try {
+            var raw = localStorage.getItem(IFL_STORAGE_STUDIES_CACHE);
+            if (raw) return JSON.parse(raw);
+        } catch (e) {}
+        return null;
+    }
+
+    // ---- IFL itemGroupsDiv helpers ----
+    
+    async function ifl_waitForItemGroupsDiv(timeoutMs) {
+        var start = Date.now();
+        var max = timeoutMs || IFL_ITEMGROUPS_TIMEOUT;
+        while (Date.now() - start < max) {
+            var div = document.getElementById("itemGroupsDiv");
+            if (div) {
+                var rows = div.querySelectorAll("tr");
+                if (rows.length > 1) return div;
+            }
+            await sleep(150);
+        }
+        return null;
+    }
+
+    function ifl_getInputValue(inp) {
+        return (inp.value || inp.getAttribute("value") || "").trim();
+    }
+
+    function ifl_collectItemGroups() {
+        var div = document.getElementById("itemGroupsDiv");
+        if (!div) return [];
+        var table = div.querySelector("table");
+        if (!table) return [];
+        var groups = [];
+
+        // Find all group checkboxes by their name pattern (itemGroupRef_include_*)
+        var groupCbs = table.querySelectorAll('input[name^="itemGroupRef_include_"]');
+
+        for (var gi = 0; gi < groupCbs.length; gi++) {
+            var groupCb = groupCbs[gi];
+            var groupTr = groupCb.closest("tr");
+            if (!groupTr) continue;
+
+            // Group name input is the text input in the same row
+            var groupNameInput = groupTr.querySelector('input[type="text"]');
+            var groupName = groupNameInput ? ifl_getInputValue(groupNameInput) : "";
+
+            var group = {
+                originalName: groupName,
+                newName: groupName,
+                included: groupCb.checked,
+                items: []
+            };
+
+            // Items are in a nested table inside the next sibling <tr>
+            var nextTr = groupTr.nextElementSibling;
+            if (nextTr) {
+                var nestedTable = nextTr.querySelector("table");
+                if (nestedTable) {
+                    var itemCbs = nestedTable.querySelectorAll('input[name^="itemRef_include_"]');
+                    for (var ii = 0; ii < itemCbs.length; ii++) {
+                        var itemCb = itemCbs[ii];
+                        var itemTr = itemCb.closest("tr");
+                        if (!itemTr) continue;
+                        var itemNameInput = itemTr.querySelector('input[type="text"]');
+                        var itemName = itemNameInput ? ifl_getInputValue(itemNameInput) : "";
+                        group.items.push({
+                            originalName: itemName,
+                            newName: itemName,
+                            included: itemCb.checked
+                        });
+                    }
+                }
+            }
+
+            groups.push(group);
+        }
+        log("IFL: collected " + groups.length + " item groups with " + groups.reduce(function(s, g) { return s + g.items.length; }, 0) + " total items");
+        return groups;
+    }
+    
+    async function ifl_syncModalToForm(item) {
+        // Open modal if not open
+        var modalBody = document.querySelector(".modal-body");
+        var studySel = document.getElementById(IFL_STUDY_SELECT_ID);
+        if (!modalBody || !studySel) {
+            log("IFL: sync — modal not open, opening");
+            var opened = await ifl_openImportModal();
+            if (!opened) { log("IFL: sync — failed to open modal"); return null; }
+        }
+    
+        // Select study
+        var ss = document.getElementById(IFL_STUDY_SELECT_ID);
+        if (!ss) return null;
+        ss.value = item.studyValue;
+        ifl_triggerChange(ss);
+        await sleep(300);
+    
+        // Wait for form dropdown
+        var populated = await ifl_waitForFormOptions(IFL_FORM_POPULATE_TIMEOUT);
+        if (!populated) { log("IFL: sync — form dropdown did not populate"); return null; }
+    
+        // Select form
+        var fs = document.getElementById(IFL_FORM_SELECT_ID);
+        if (!fs) return null;
+        fs.value = item.formValue;
+        ifl_triggerChange(fs);
+        await sleep(500);
+    
+        // Wait for itemGroupsDiv to populate so we can apply changes
+        var igDiv = await ifl_waitForItemGroupsDiv(IFL_ITEMGROUPS_TIMEOUT);
+        if (!igDiv) {
+            log("IFL: sync — itemGroupsDiv not populated");
+            await ifl_closeImportModal();
+            return [];
+        }
+    
+        var groups = ifl_collectItemGroups();
+
+        // Close modal after collecting — Bootstrap focus trap blocks inputs outside
+        await ifl_closeImportModal();
+
+        return groups;
+    }
+    
+    function ifl_applyItemGroupChanges(item) {
+        var div = document.getElementById("itemGroupsDiv");
+        if (!div) { log("IFL: applyItemGroupChanges — itemGroupsDiv not found"); return; }
+        var table = div.querySelector("table");
+        if (!table) return;
+        var itemGroupsData = item.itemGroups || [];
+
+        // Find all group checkboxes by their name pattern
+        var groupCbs = table.querySelectorAll('input[name^="itemGroupRef_include_"]');
+
+        for (var gi = 0; gi < groupCbs.length && gi < itemGroupsData.length; gi++) {
+            var groupCb = groupCbs[gi];
+            var gData = itemGroupsData[gi];
+            var groupTr = groupCb.closest("tr");
+            if (!groupTr) continue;
+
+            // Rename group if changed
+            if (gData.newName !== gData.originalName) {
+                var gInput = groupTr.querySelector('input[type="text"]');
+                if (gInput) {
+                    gInput.value = gData.newName;
+                    gInput.dispatchEvent(new Event("input", { bubbles: true }));
+                    gInput.dispatchEvent(new Event("change", { bubbles: true }));
+                    log("IFL: renamed item group '" + gData.originalName + "' -> '" + gData.newName + "'");
+                }
+            }
+
+            // Handle group include/uncheck
+            if (!gData.included && groupCb.checked) {
+                groupCb.click();
+                log("IFL: unchecked item group '" + gData.originalName + "'");
+            } else if (gData.included && !groupCb.checked) {
+                groupCb.click();
+                log("IFL: checked item group '" + gData.originalName + "'");
+            }
+
+            // Process items in nested table (next sibling <tr>)
+            var nextTr = groupTr.nextElementSibling;
+            if (nextTr && gData.items) {
+                var nestedTable = nextTr.querySelector("table");
+                if (nestedTable) {
+                    var itemCbs = nestedTable.querySelectorAll('input[name^="itemRef_include_"]');
+                    for (var ii = 0; ii < itemCbs.length && ii < gData.items.length; ii++) {
+                        var itemCb = itemCbs[ii];
+                        var iData = gData.items[ii];
+                        var itemTr = itemCb.closest("tr");
+                        if (!itemTr) continue;
+
+                        // Rename item if changed
+                        if (iData.newName !== iData.originalName) {
+                            var iInput = itemTr.querySelector('input[type="text"]');
+                            if (iInput) {
+                                iInput.value = iData.newName;
+                                iInput.dispatchEvent(new Event("input", { bubbles: true }));
+                                iInput.dispatchEvent(new Event("change", { bubbles: true }));
+                                log("IFL: renamed item '" + iData.originalName + "' -> '" + iData.newName + "'");
+                            }
+                        }
+
+                        // Only toggle item checkbox if group is still included
+                        if (gData.included) {
+                            if (!iData.included && itemCb.checked) {
+                                itemCb.click();
+                                log("IFL: unchecked item '" + iData.originalName + "'");
+                            } else if (iData.included && !itemCb.checked) {
+                                itemCb.click();
+                                log("IFL: checked item '" + iData.originalName + "'");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     async function ifl_collectAllStudiesAndForms() {
         log("IFL: beginning data collection from modal");
@@ -552,7 +784,7 @@
             var ss = document.getElementById(IFL_STUDY_SELECT_ID);
             if (!ss) { log("IFL: study select lost"); return null; }
             await ifl_selectStudyOption(ss, study.value);
-            await sleep(300);
+            await sleep(100);
 
             var populated = await ifl_waitForFormOptions(IFL_FORM_POPULATE_TIMEOUT);
             if (populated) {
@@ -575,7 +807,7 @@
         if (glass) injectThemeStylesIfNeeded();
 
         // State
-        var formItems = []; // { study, form, selected, newName, lockOnSave, originalName }
+        var formItems = [];
         for (var si = 0; si < studies.length; si++) {
             for (var fi = 0; fi < studies[si].forms.length; fi++) {
                 formItems.push({
@@ -586,7 +818,8 @@
                     originalName: studies[si].forms[fi].text,
                     newName: studies[si].forms[fi].text,
                     selected: false,
-                    lockOnSave: true
+                    lockOnSave: true,
+                    itemGroups: null
                 });
             }
         }
@@ -594,6 +827,9 @@
         for (var ci = 0; ci < studies.length; ci++) collapsed[studies[ci].text] = true;
         var showSelectedOnly = false;
         var activeFormItem = null;
+        var isFullscreen = false;
+        var savedContainerStyle = "";
+        var iflSyncBusy = false;
 
         // Color palette
         var tc = {
@@ -613,6 +849,23 @@
             inputBorder: glass ? "rgba(255,255,255,0.3)" : "#444"
         };
 
+        // Inject scoped CSS to protect from Bootstrap modal CSS bleed
+        var styleId = "ifl-selection-scoped-css";
+        if (!document.getElementById(styleId)) {
+            var styleTag = document.createElement("style");
+            styleTag.id = styleId;
+            styleTag.textContent =
+                "#ifl-selection-overlay, #ifl-selection-overlay * { box-sizing: border-box !important; }" +
+                "#ifl-selection-overlay input[type='checkbox'] { accent-color: " + tc.accent + " !important; width: auto !important; height: auto !important; }" +
+                "#ifl-selection-overlay input[type='text'] { background: " + tc.inputBg + " !important; color: " + tc.text + " !important; -webkit-text-fill-color: " + tc.text + " !important; border-color: " + tc.inputBorder + " !important; }" +
+                "#ifl-selection-overlay span, #ifl-selection-overlay div { font-family: 'Segoe UI',Tahoma,Geneva,Verdana,sans-serif !important; }" +
+                "#ifl-selection-overlay .ifl-row { font-size: 12px !important; }" +
+                "#ifl-selection-overlay .ifl-hdr { font-size: 12px !important; }" +
+                "#ifl-selection-overlay .ifl-cb { width: 16px !important; height: 16px !important; }" +
+                "#ifl-selection-overlay .ifl-search { font-size: 12px !important; }";
+            document.head.appendChild(styleTag);
+        }
+
         // Overlay
         var overlay = document.createElement("div");
         overlay.id = "ifl-selection-overlay";
@@ -620,63 +873,211 @@
 
         // Main container
         var container = document.createElement("div");
-        container.style.cssText = "background:" + tc.bg + ";border:1px solid " + tc.border + ";border-radius:12px;width:960px;max-width:96%;height:80vh;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 15px 35px rgba(0,0,0,0.5);overflow:hidden;";
+        container.style.cssText = "background:" + tc.bg + ";border:1px solid " + tc.border + ";border-radius:12px;width:960px;max-width:96%;height:80vh;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 15px 35px rgba(0,0,0,0.5);overflow:hidden;position:relative;";
 
         // Header
         var header = document.createElement("div");
-        header.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid " + tc.border + ";background:" + tc.headerBg + ";flex-shrink:0;";
+        header.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid " + tc.border + ";background:" + tc.headerBg + ";flex-shrink:0;cursor:grab;user-select:none;";
         var hTitle = document.createElement("div");
-        hTitle.textContent = "Import from Library — Select Forms";
-        hTitle.style.cssText = "color:white;font-size:16px;font-weight:600;";
+        hTitle.textContent = "Import from Library \u2014 Select Forms";
+        hTitle.style.cssText = "color:white;font-size:16px;font-weight:600;flex:1;";
+        var hBtnGroup = document.createElement("div");
+        hBtnGroup.style.cssText = "display:flex;gap:6px;align-items:center;";
+
+        // Fullscreen toggle button
+        var hFullscreen = document.createElement("button");
+        hFullscreen.innerHTML = "\u26F6";
+        hFullscreen.title = "Toggle fullscreen";
+        hFullscreen.style.cssText = "background:rgba(255,255,255,0.1);border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;";
+        hFullscreen.onmouseover = function() { hFullscreen.style.background = "rgba(255,255,255,0.25)"; };
+        hFullscreen.onmouseout = function() { hFullscreen.style.background = "rgba(255,255,255,0.1)"; };
+
         var hClose = document.createElement("button");
         hClose.innerHTML = "\u2715";
         hClose.style.cssText = "background:rgba(255,255,255,0.1);border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;";
         hClose.onmouseover = function() { hClose.style.background = "rgba(255,67,54,0.8)"; };
         hClose.onmouseout = function() { hClose.style.background = "rgba(255,255,255,0.1)"; };
-        header.appendChild(hTitle);
-        header.appendChild(hClose);
 
-        // Body — 3 panels
+        hBtnGroup.appendChild(hFullscreen);
+        hBtnGroup.appendChild(hClose);
+        header.appendChild(hTitle);
+        header.appendChild(hBtnGroup);
+
+        // ---- Fullscreen toggle logic ----
+        function applyFullscreen() {
+            if (isFullscreen) {
+                container.style.width = "100vw";
+                container.style.maxWidth = "100vw";
+                container.style.height = "100vh";
+                container.style.maxHeight = "100vh";
+                container.style.borderRadius = "0";
+                container.style.top = "0";
+                container.style.left = "0";
+                container.style.position = "fixed";
+                header.style.cursor = "default";
+                hFullscreen.innerHTML = "\u2750";
+                hFullscreen.title = "Exit fullscreen";
+            } else {
+                container.style.cssText = savedContainerStyle;
+                header.style.cursor = "grab";
+                hFullscreen.innerHTML = "\u26F6";
+                hFullscreen.title = "Toggle fullscreen";
+            }
+        }
+
+        hFullscreen.onclick = function() {
+            if (!isFullscreen) {
+                savedContainerStyle = container.style.cssText;
+            }
+            isFullscreen = !isFullscreen;
+            applyFullscreen();
+            try { localStorage.setItem(IFL_STORAGE_FULLSCREEN, isFullscreen ? "1" : "0"); } catch (e) {}
+        };
+
+        // ---- Header dragging (non-fullscreen only) ----
+        var dragState = { active: false, startX: 0, startY: 0, origLeft: 0, origTop: 0 };
+
+        function onDragStart(e) {
+            if (isFullscreen) return;
+            if (e.target.tagName === "BUTTON" || e.target.tagName === "INPUT") return;
+            dragState.active = true;
+            var rect = container.getBoundingClientRect();
+            dragState.startX = e.clientX;
+            dragState.startY = e.clientY;
+            dragState.origLeft = rect.left;
+            dragState.origTop = rect.top;
+            container.style.position = "fixed";
+            container.style.margin = "0";
+            header.style.cursor = "grabbing";
+            e.preventDefault();
+        }
+
+        function onDragMove(e) {
+            if (!dragState.active) return;
+            var dx = e.clientX - dragState.startX;
+            var dy = e.clientY - dragState.startY;
+            container.style.left = (dragState.origLeft + dx) + "px";
+            container.style.top = (dragState.origTop + dy) + "px";
+            container.style.right = "auto";
+            container.style.bottom = "auto";
+            container.style.transform = "none";
+            overlay.style.alignItems = "flex-start";
+            overlay.style.justifyContent = "flex-start";
+        }
+
+        function onDragEnd() {
+            if (dragState.active) {
+                dragState.active = false;
+                if (!isFullscreen) header.style.cursor = "grab";
+            }
+        }
+
+        header.addEventListener("mousedown", onDragStart);
+        document.addEventListener("mousemove", onDragMove);
+        document.addEventListener("mouseup", onDragEnd);
+
+        // Body — 3 panels with dividers
         var body = document.createElement("div");
         body.style.cssText = "display:flex;flex:1;overflow:hidden;min-height:0;";
 
         // ---- LEFT PANEL (Study list) ----
         var leftPanel = document.createElement("div");
-        leftPanel.style.cssText = "width:200px;min-width:160px;border-right:1px solid " + tc.border + ";display:flex;flex-direction:column;flex-shrink:0;";
+        leftPanel.style.cssText = "width:200px;min-width:" + IFL_MIN_PANEL_WIDTH + "px;display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;";
         var leftSearch = document.createElement("input");
         leftSearch.type = "text";
         leftSearch.placeholder = "Filter studies\u2026";
         leftSearch.style.cssText = "margin:8px;padding:6px 10px;border:1px solid " + tc.inputBorder + ";border-radius:6px;background:" + tc.inputBg + " !important;color:" + tc.text + " !important;font-size:12px;outline:none;-webkit-text-fill-color:" + tc.text + " !important;";
         var leftList = document.createElement("div");
         leftList.style.cssText = "flex:1;overflow-y:auto;padding:0 4px 4px;";
-
         leftPanel.appendChild(leftSearch);
         leftPanel.appendChild(leftList);
 
+        // ---- Divider 1 (left | mid) ----
+        var divider1 = document.createElement("div");
+        divider1.style.cssText = "width:" + IFL_DIVIDER_WIDTH + "px;cursor:col-resize;background:" + tc.border + ";flex-shrink:0;transition:background 0.15s;";
+        divider1.onmouseover = function() { divider1.style.background = tc.accent; };
+        divider1.onmouseout = function() { divider1.style.background = tc.border; };
+
         // ---- MIDDLE PANEL (Forms grouped by study) ----
         var midPanel = document.createElement("div");
-        midPanel.style.cssText = "flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;";
+        midPanel.style.cssText = "flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:" + IFL_MIN_PANEL_WIDTH + "px;";
         var midSearch = document.createElement("input");
         midSearch.type = "text";
+        midSearch.className = "ifl-search";
         midSearch.placeholder = "Filter forms\u2026";
         midSearch.style.cssText = "margin:8px;padding:6px 10px;border:1px solid " + tc.inputBorder + ";border-radius:6px;background:" + tc.inputBg + " !important;color:" + tc.text + " !important;font-size:12px;outline:none;-webkit-text-fill-color:" + tc.text + " !important;";
         var midList = document.createElement("div");
         midList.style.cssText = "flex:1;overflow-y:auto;padding:0 4px 4px;";
-
         midPanel.appendChild(midSearch);
         midPanel.appendChild(midList);
 
+        // ---- Divider 2 (mid | right) ----
+        var divider2 = document.createElement("div");
+        divider2.style.cssText = "width:" + IFL_DIVIDER_WIDTH + "px;cursor:col-resize;background:" + tc.border + ";flex-shrink:0;transition:background 0.15s;";
+        divider2.onmouseover = function() { divider2.style.background = tc.accent; };
+        divider2.onmouseout = function() { divider2.style.background = tc.border; };
+
         // ---- RIGHT PANEL (Detail) ----
         var rightPanel = document.createElement("div");
-        rightPanel.style.cssText = "width:260px;min-width:220px;border-left:1px solid " + tc.border + ";display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;padding:12px;";
+        rightPanel.style.cssText = "width:280px;min-width:" + IFL_MIN_PANEL_WIDTH + "px;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;padding:12px;";
         var rightPlaceholder = document.createElement("div");
         rightPlaceholder.textContent = "Click a form row to view details";
         rightPlaceholder.style.cssText = "color:" + tc.textMuted + ";font-size:12px;text-align:center;margin-top:40px;";
         rightPanel.appendChild(rightPlaceholder);
 
         body.appendChild(leftPanel);
+        body.appendChild(divider1);
         body.appendChild(midPanel);
+        body.appendChild(divider2);
         body.appendChild(rightPanel);
+
+        // ---- Divider drag logic ----
+        function setupDividerDrag(divider, panelBefore, panelAfter, isLeftDivider) {
+            var divDrag = { active: false, startX: 0, startWBefore: 0, startWAfter: 0 };
+            divider.addEventListener("mousedown", function(e) {
+                divDrag.active = true;
+                divDrag.startX = e.clientX;
+                divDrag.startWBefore = panelBefore.getBoundingClientRect().width;
+                divDrag.startWAfter = panelAfter.getBoundingClientRect().width;
+                document.body.style.cursor = "col-resize";
+                document.body.style.userSelect = "none";
+                e.preventDefault();
+            });
+            document.addEventListener("mousemove", function(e) {
+                if (!divDrag.active) return;
+                var dx = e.clientX - divDrag.startX;
+                var totalW = divDrag.startWBefore + divDrag.startWAfter;
+                var maxW = totalW * IFL_MAX_PANEL_WIDTH_RATIO;
+                var newBefore = Math.max(IFL_MIN_PANEL_WIDTH, Math.min(maxW, divDrag.startWBefore + dx));
+                var newAfter = totalW - newBefore;
+                if (newAfter < IFL_MIN_PANEL_WIDTH) {
+                    newAfter = IFL_MIN_PANEL_WIDTH;
+                    newBefore = totalW - newAfter;
+                }
+                panelBefore.style.width = newBefore + "px";
+                if (isLeftDivider) {
+                    panelAfter.style.flex = "1";
+                } else {
+                    panelAfter.style.width = newAfter + "px";
+                }
+            });
+            document.addEventListener("mouseup", function() {
+                if (divDrag.active) {
+                    divDrag.active = false;
+                    document.body.style.cursor = "";
+                    document.body.style.userSelect = "";
+                    try {
+                        localStorage.setItem(IFL_STORAGE_DIVIDERS, JSON.stringify({
+                            left: leftPanel.getBoundingClientRect().width,
+                            right: rightPanel.getBoundingClientRect().width
+                        }));
+                    } catch (e) {}
+                }
+            });
+        }
+
+        setupDividerDrag(divider1, leftPanel, midPanel, true);
+        setupDividerDrag(divider2, midPanel, rightPanel, false);
 
         // ---- FOOTER ----
         var footer = document.createElement("div");
@@ -690,7 +1091,6 @@
         showSelBtn.onmouseout = function() { showSelBtn.style.background = showSelectedOnly ? tc.accent : tc.surface; };
         var selCount = document.createElement("span");
         selCount.style.cssText = "color:" + tc.textMuted + ";font-size:12px;";
-
         footerLeft.appendChild(showSelBtn);
         footerLeft.appendChild(selCount);
 
@@ -698,7 +1098,6 @@
         confirmBtn.textContent = "Confirm";
         confirmBtn.disabled = true;
         confirmBtn.style.cssText = "background:rgba(40,167,69,0.6);border:1px solid rgba(40,167,69,0.8);color:white;padding:8px 24px;border-radius:8px;cursor:not-allowed;font-size:13px;font-weight:600;opacity:0.5;transition:all 0.2s;";
-
         footer.appendChild(footerLeft);
         footer.appendChild(confirmBtn);
 
@@ -729,8 +1128,8 @@
         function renderLeftPanel() {
             leftList.innerHTML = "";
             var filter = leftSearch.value.toLowerCase();
-            for (var si = 0; si < studies.length; si++) {
-                var sName = studies[si].text;
+            for (var si2 = 0; si2 < studies.length; si2++) {
+                var sName = studies[si2].text;
                 if (filter && sName.toLowerCase().indexOf(filter) === -1) continue;
                 var item = document.createElement("div");
                 item.textContent = sName;
@@ -740,11 +1139,9 @@
                 item.onmouseout = (function(el) { return function() { el.style.background = "transparent"; }; })(item);
                 item.onclick = (function(name) {
                     return function() {
-                        // Collapse all, expand this one
                         for (var k in collapsed) collapsed[k] = true;
                         collapsed[name] = false;
                         renderMidPanel();
-                        // Scroll to header
                         var hdr = midList.querySelector('[data-study-header="' + CSS.escape(name) + '"]');
                         if (hdr) hdr.scrollIntoView({ block: "start", behavior: "smooth" });
                     };
@@ -756,28 +1153,25 @@
         function renderMidPanel() {
             midList.innerHTML = "";
             var filter = midSearch.value.toLowerCase();
-
-            for (var si = 0; si < studies.length; si++) {
-                var sName = studies[si].text;
+            for (var si3 = 0; si3 < studies.length; si3++) {
+                var sName = studies[si3].text;
                 var sItems = [];
-                for (var fi = 0; fi < formItems.length; fi++) {
-                    if (formItems[fi].studyName !== sName) continue;
-                    if (showSelectedOnly && !formItems[fi].selected) continue;
-                    var desc = formItems[fi].studyName + " - " + formItems[fi].formName;
+                for (var fi2 = 0; fi2 < formItems.length; fi2++) {
+                    if (formItems[fi2].studyName !== sName) continue;
+                    if (showSelectedOnly && !formItems[fi2].selected) continue;
+                    var desc = formItems[fi2].studyName + " - " + formItems[fi2].formName;
                     if (filter) {
                         if (desc.toLowerCase().indexOf(filter) === -1 && sName.toLowerCase().indexOf(filter) === -1) continue;
                     }
-                    sItems.push(formItems[fi]);
+                    sItems.push(formItems[fi2]);
                 }
                 if (sItems.length === 0) continue;
-
-                // Sort alphabetically
                 sItems.sort(function(a, b) { return a.formName.localeCompare(b.formName); });
 
-                // Study header
                 var hdr = document.createElement("div");
                 hdr.setAttribute("data-study-header", sName);
                 var isCollapsed = !!collapsed[sName];
+                hdr.className = "ifl-hdr";
                 hdr.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:" + tc.surface + ";border-radius:6px;margin:4px 0 2px;cursor:pointer;user-select:none;";
                 var hdrLabel = document.createElement("span");
                 hdrLabel.textContent = sName + " (" + sItems.length + ")";
@@ -788,21 +1182,17 @@
                 hdr.appendChild(hdrLabel);
                 hdr.appendChild(hdrArrow);
                 hdr.onclick = (function(name) {
-                    return function() {
-                        collapsed[name] = !collapsed[name];
-                        renderMidPanel();
-                    };
+                    return function() { collapsed[name] = !collapsed[name]; renderMidPanel(); };
                 })(sName);
                 midList.appendChild(hdr);
-
                 if (isCollapsed) continue;
 
-                // Form rows
                 for (var ri = 0; ri < sItems.length; ri++) {
-                    (function(item) {
+                    (function(fItem) {
                         var row = document.createElement("div");
-                        var isRenamed = item.newName !== item.originalName;
-                        var isActive = activeFormItem === item;
+                        var isRenamed = fItem.newName !== fItem.originalName;
+                        var isActive = activeFormItem === fItem;
+                        row.className = "ifl-row";
                         row.style.cssText = "display:flex;align-items:center;gap:6px;padding:5px 10px 5px 20px;border-radius:4px;cursor:pointer;margin:1px 0;font-size:12px;background:" + (isRenamed ? tc.renamed : (isActive ? tc.surfaceHover : "transparent")) + ";transition:background 0.1s;";
                         row.onmouseover = function() { if (!isActive) row.style.background = tc.surfaceHover; };
                         row.onmouseout = function() { row.style.background = isRenamed ? tc.renamed : (isActive ? tc.surfaceHover : "transparent"); };
@@ -810,30 +1200,31 @@
                         var nameSpan = document.createElement("span");
                         nameSpan.style.cssText = "flex:1;color:" + tc.text + ";overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
                         if (isRenamed) {
-                            nameSpan.textContent = item.studyName + " - " + item.originalName + " \u2192 " + item.newName;
+                            nameSpan.textContent = fItem.studyName + " - " + fItem.originalName + " \u2192 " + fItem.newName;
                         } else {
-                            nameSpan.textContent = item.studyName + " - " + item.formName;
+                            nameSpan.textContent = fItem.studyName + " - " + fItem.formName;
                         }
                         nameSpan.title = nameSpan.textContent;
 
                         var lockIcon = document.createElement("span");
-                        lockIcon.textContent = item.lockOnSave ? "\uD83D\uDD12" : "";
+                        lockIcon.textContent = fItem.lockOnSave ? "\uD83D\uDD12" : "";
                         lockIcon.style.cssText = "font-size:11px;flex-shrink:0;width:16px;text-align:center;";
 
                         var cb = document.createElement("input");
                         cb.type = "checkbox";
-                        cb.checked = item.selected;
+                        cb.checked = fItem.selected;
+                        cb.className = "ifl-cb";
                         cb.style.cssText = "width:16px;height:16px;cursor:pointer;accent-color:" + tc.accent + ";flex-shrink:0;";
                         cb.onclick = function(e) { e.stopPropagation(); };
                         cb.onchange = function() {
-                            item.selected = cb.checked;
+                            fItem.selected = cb.checked;
                             updateConfirmState();
                         };
 
                         row.onclick = function() {
-                            activeFormItem = item;
-                            renderRightPanel();
+                            activeFormItem = fItem;
                             renderMidPanel();
+                            renderRightPanel();
                         };
 
                         row.appendChild(nameSpan);
@@ -843,6 +1234,75 @@
                     })(sItems[ri]);
                 }
             }
+        }
+
+        function renderItemGroupsSection(item) {
+            var section = document.createElement("div");
+            section.style.cssText = "margin-top:16px;border-top:1px solid " + tc.border + ";padding-top:12px;";
+            var secTitle = document.createElement("div");
+            secTitle.textContent = "Item Groups & Items";
+            secTitle.style.cssText = "color:" + tc.textMuted + ";font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;";
+            section.appendChild(secTitle);
+
+            if (!item.itemGroups) {
+                var loading = document.createElement("div");
+                loading.textContent = "Loading item groups\u2026";
+                loading.style.cssText = "color:" + tc.textMuted + ";font-size:11px;font-style:italic;";
+                section.appendChild(loading);
+                return section;
+            }
+            if (item.itemGroups.length === 0) {
+                var empty = document.createElement("div");
+                empty.textContent = "No item groups found.";
+                empty.style.cssText = "color:" + tc.textMuted + ";font-size:11px;";
+                section.appendChild(empty);
+                return section;
+            }
+
+            for (var gi = 0; gi < item.itemGroups.length; gi++) {
+                (function(gIdx) {
+                    var g = item.itemGroups[gIdx];
+                    var gRow = document.createElement("div");
+                    gRow.style.cssText = "display:flex;align-items:center;gap:6px;margin-top:6px;padding:4px 0;";
+                    var gCb = document.createElement("input");
+                    gCb.type = "checkbox";
+                    gCb.checked = g.included;
+                    gCb.style.cssText = "width:14px;height:14px;accent-color:" + tc.accent + ";flex-shrink:0;";
+                    gCb.onchange = function() {
+                        g.included = gCb.checked;
+                    };
+                    var gInput = document.createElement("input");
+                    gInput.type = "text";
+                    gInput.value = g.newName;
+                    gInput.style.cssText = "flex:1;padding:4px 6px;background:" + tc.inputBg + " !important;border:1px solid " + tc.inputBorder + ";border-radius:4px;color:" + tc.text + " !important;font-size:12px;font-weight:600;outline:none;-webkit-text-fill-color:" + tc.text + " !important;";
+                    gInput.oninput = function() { g.newName = gInput.value; };
+                    gRow.appendChild(gCb);
+                    gRow.appendChild(gInput);
+                    section.appendChild(gRow);
+
+                    for (var ii = 0; ii < g.items.length; ii++) {
+                        (function(iIdx) {
+                            var itm = g.items[iIdx];
+                            var iRow = document.createElement("div");
+                            iRow.style.cssText = "display:flex;align-items:center;gap:6px;margin-left:20px;padding:2px 0;";
+                            var iCb = document.createElement("input");
+                            iCb.type = "checkbox";
+                            iCb.checked = itm.included;
+                            iCb.style.cssText = "width:13px;height:13px;accent-color:" + tc.accent + ";flex-shrink:0;";
+                            iCb.onchange = function() { itm.included = iCb.checked; };
+                            var iInput = document.createElement("input");
+                            iInput.type = "text";
+                            iInput.value = itm.newName;
+                            iInput.style.cssText = "flex:1;padding:3px 6px;background:" + tc.inputBg + " !important;border:1px solid " + tc.inputBorder + ";border-radius:4px;color:" + tc.text + " !important;font-size:11px;outline:none;-webkit-text-fill-color:" + tc.text + " !important;";
+                            iInput.oninput = function() { itm.newName = iInput.value; };
+                            iRow.appendChild(iCb);
+                            iRow.appendChild(iInput);
+                            section.appendChild(iRow);
+                        })(ii);
+                    }
+                })(gi);
+            }
+            return section;
         }
 
         function renderRightPanel() {
@@ -898,6 +1358,31 @@
             rightPanel.appendChild(nameFieldLabel);
             rightPanel.appendChild(nameInput);
             rightPanel.appendChild(lockRow);
+
+            // Item groups section
+            var igSection = renderItemGroupsSection(item);
+            rightPanel.appendChild(igSection);
+
+            // If item groups not loaded yet, sync modal and load them
+            if (item.itemGroups === null && !iflSyncBusy) {
+                iflSyncBusy = true;
+                log("IFL: syncing modal for " + item.studyName + " / " + item.originalName);
+                ifl_syncModalToForm(item).then(function(groups) {
+                    iflSyncBusy = false;
+                    if (groups !== null) {
+                        item.itemGroups = groups;
+                        log("IFL: collected " + groups.length + " item groups for " + item.originalName);
+                    } else {
+                        item.itemGroups = [];
+                    }
+                    if (activeFormItem === item) renderRightPanel();
+                }).catch(function(err) {
+                    iflSyncBusy = false;
+                    log("IFL: sync error — " + String(err));
+                    item.itemGroups = [];
+                    if (activeFormItem === item) renderRightPanel();
+                });
+            }
         }
 
         // Wire events
@@ -911,10 +1396,14 @@
         };
 
         hClose.onclick = function() {
+            document.removeEventListener("mousemove", onDragMove);
+            document.removeEventListener("mouseup", onDragEnd);
             if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
         };
         overlay.onclick = function(e) {
             if (e.target === overlay) {
+                document.removeEventListener("mousemove", onDragMove);
+                document.removeEventListener("mouseup", onDragEnd);
                 if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
             }
         };
@@ -925,15 +1414,18 @@
                 if (formItems[i].selected) selected.push(formItems[i]);
             }
             if (selected.length === 0) return;
+            document.removeEventListener("mousemove", onDragMove);
+            document.removeEventListener("mouseup", onDragEnd);
             if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
             onConfirm(selected);
         };
 
-        // Escape key
         var escHandler = function(e) {
             if (e.key === "Escape") {
                 e.preventDefault();
                 e.stopPropagation();
+                document.removeEventListener("mousemove", onDragMove);
+                document.removeEventListener("mouseup", onDragEnd);
                 if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
                 document.removeEventListener("keydown", escHandler, true);
             }
@@ -947,6 +1439,28 @@
         overlay.appendChild(container);
         document.body.appendChild(overlay);
 
+        // ---- Restore persisted fullscreen state ----
+        try {
+            if (localStorage.getItem(IFL_STORAGE_FULLSCREEN) === "1") {
+                savedContainerStyle = container.style.cssText;
+                isFullscreen = true;
+                applyFullscreen();
+            }
+        } catch (e) {}
+
+        // ---- Restore persisted divider widths ----
+        try {
+            var savedDividers = JSON.parse(localStorage.getItem(IFL_STORAGE_DIVIDERS));
+            if (savedDividers) {
+                if (savedDividers.left >= IFL_MIN_PANEL_WIDTH) {
+                    leftPanel.style.width = savedDividers.left + "px";
+                }
+                if (savedDividers.right >= IFL_MIN_PANEL_WIDTH) {
+                    rightPanel.style.width = savedDividers.right + "px";
+                }
+            }
+        } catch (e) {}
+
         // Initial render
         renderLeftPanel();
         renderMidPanel();
@@ -958,10 +1472,10 @@
 
     // ---- Progress Panel ----
 
-    function ifl_buildProgressPanel(selectedItems, onCancel) {
+    function ifl_buildProgressPanel(selectedItems, existingStatuses) {
         var glass = isGlassTheme();
         var tc = {
-            bg: glass ? "rgba(15,10,40,0.92)" : "#111",
+            bg: glass ? "rgba(15,10,40,0.96)" : "#111",
             headerBg: glass ? "rgba(255,255,255,0.08)" : "#222",
             border: glass ? "rgba(255,255,255,0.2)" : "#333",
             surface: glass ? "rgba(255,255,255,0.06)" : "#1a1a1a",
@@ -976,47 +1490,113 @@
 
         var state = [];
         for (var i = 0; i < selectedItems.length; i++) {
-            state.push({ item: selectedItems[i], status: STATUS_PENDING, error: null });
+            var initStatus = STATUS_PENDING;
+            var initError = null;
+            if (existingStatuses && existingStatuses[i]) {
+                initStatus = existingStatuses[i].status || STATUS_PENDING;
+                initError = existingStatuses[i].error || null;
+                // If was "In Progress" before refresh, reset to Pending for re-processing
+                if (initStatus === STATUS_IN_PROGRESS) initStatus = STATUS_PENDING;
+            }
+            state.push({ item: selectedItems[i], status: initStatus, error: initError });
         }
 
-        var startTime = Date.now();
+        var savedState = ifl_loadImportState();
+        var startTime = (savedState && savedState.startTime) ? savedState.startTime : Date.now();
         var timerInterval = null;
 
-        var overlay = document.createElement("div");
-        overlay.id = "ifl-progress-overlay";
-        overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:30000;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;";
+        // Remove existing panel if any
+        var existingPanel = document.getElementById("ifl-progress-panel");
+        if (existingPanel) existingPanel.remove();
 
-        var container = document.createElement("div");
-        container.style.cssText = "background:" + tc.bg + ";border:1px solid " + tc.border + ";border-radius:12px;width:600px;max-width:94%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 15px 35px rgba(0,0,0,0.5);overflow:hidden;";
+        // Fixed-position panel (bottom-right, no fullscreen overlay)
+        var panel = document.createElement("div");
+        panel.id = "ifl-progress-panel";
+        panel.style.cssText = "position:fixed;bottom:20px;right:20px;width:480px;max-height:420px;z-index:30000;display:flex;flex-direction:column;background:" + tc.bg + ";border:1px solid " + tc.border + ";border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.6);overflow:hidden;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;";
 
+        // Header (draggable)
         var header = document.createElement("div");
-        header.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid " + tc.border + ";background:" + tc.headerBg + ";flex-shrink:0;";
+        header.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid " + tc.border + ";background:" + tc.headerBg + ";flex-shrink:0;cursor:grab;user-select:none;";
         var hTitle = document.createElement("div");
         hTitle.textContent = "Import Progress";
-        hTitle.style.cssText = "color:white;font-size:15px;font-weight:600;";
+        hTitle.style.cssText = "color:white;font-size:14px;font-weight:600;flex:1;";
+        var hBtnGroup = document.createElement("div");
+        hBtnGroup.style.cssText = "display:flex;gap:6px;align-items:center;";
+
         var cancelBtn = document.createElement("button");
         cancelBtn.textContent = "Cancel";
-        cancelBtn.style.cssText = "background:rgba(239,68,68,0.3);border:1px solid rgba(239,68,68,0.5);color:#ff8a8a;padding:4px 14px;border-radius:6px;cursor:pointer;font-size:12px;";
+        cancelBtn.style.cssText = "background:rgba(239,68,68,0.3);border:1px solid rgba(239,68,68,0.5);color:#ff8a8a;padding:3px 12px;border-radius:6px;cursor:pointer;font-size:11px;";
         cancelBtn.onclick = function() {
             IFL_CANCELED = true;
             cancelBtn.disabled = true;
             cancelBtn.textContent = "Canceling\u2026";
         };
+
+        var closeBtn = document.createElement("button");
+        closeBtn.innerHTML = "\u2715";
+        closeBtn.title = "Close panel";
+        closeBtn.style.cssText = "background:rgba(255,255,255,0.1);border:none;color:white;width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;";
+        closeBtn.onmouseover = function() { closeBtn.style.background = "rgba(255,67,54,0.8)"; };
+        closeBtn.onmouseout = function() { closeBtn.style.background = "rgba(255,255,255,0.1)"; };
+        closeBtn.onclick = function() { close(); };
+
+        hBtnGroup.appendChild(cancelBtn);
+        hBtnGroup.appendChild(closeBtn);
         header.appendChild(hTitle);
-        header.appendChild(cancelBtn);
+        header.appendChild(hBtnGroup);
+
+        // Header dragging
+        var dragState = { active: false, startX: 0, startY: 0, origLeft: 0, origTop: 0 };
+
+        function onDragStart(e) {
+            if (e.target.tagName === "BUTTON" || e.target.tagName === "INPUT") return;
+            dragState.active = true;
+            var rect = panel.getBoundingClientRect();
+            dragState.startX = e.clientX;
+            dragState.startY = e.clientY;
+            dragState.origLeft = rect.left;
+            dragState.origTop = rect.top;
+            // Switch from bottom/right positioning to top/left for dragging
+            panel.style.bottom = "auto";
+            panel.style.right = "auto";
+            panel.style.left = rect.left + "px";
+            panel.style.top = rect.top + "px";
+            header.style.cursor = "grabbing";
+            e.preventDefault();
+        }
+
+        function onDragMove(e) {
+            if (!dragState.active) return;
+            var dx = e.clientX - dragState.startX;
+            var dy = e.clientY - dragState.startY;
+            panel.style.left = (dragState.origLeft + dx) + "px";
+            panel.style.top = (dragState.origTop + dy) + "px";
+        }
+
+        function onDragEnd() {
+            if (dragState.active) {
+                dragState.active = false;
+                header.style.cursor = "grab";
+            }
+        }
+
+        header.addEventListener("mousedown", onDragStart);
+        document.addEventListener("mousemove", onDragMove);
+        document.addEventListener("mouseup", onDragEnd);
 
         var listDiv = document.createElement("div");
-        listDiv.style.cssText = "flex:1;overflow-y:auto;padding:8px 12px;";
+        listDiv.style.cssText = "flex:1;overflow-y:auto;padding:6px 10px;";
 
         var rows = [];
         for (var ri = 0; ri < state.length; ri++) {
             var row = document.createElement("div");
-            row.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:4px;margin:2px 0;font-size:12px;";
+            row.style.cssText = "display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:4px;margin:1px 0;font-size:11px;";
             var statusBadge = document.createElement("span");
-            statusBadge.style.cssText = "min-width:80px;text-align:center;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;";
+            statusBadge.style.cssText = "min-width:72px;text-align:center;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;";
             var label = document.createElement("span");
             label.style.cssText = "flex:1;color:" + tc.text + ";overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
-            label.textContent = state[ri].item.studyName + " — " + state[ri].item.originalName;
+            var displayName = (state[ri].item.newName && state[ri].item.newName !== state[ri].item.originalName) ? state[ri].item.newName : state[ri].item.originalName;
+            label.textContent = state[ri].item.studyName + " \u2014 " + displayName;
             label.title = label.textContent;
             row.appendChild(statusBadge);
             row.appendChild(label);
@@ -1025,13 +1605,12 @@
         }
 
         var summaryDiv = document.createElement("div");
-        summaryDiv.style.cssText = "padding:10px 16px;border-top:1px solid " + tc.border + ";background:" + tc.headerBg + ";flex-shrink:0;font-size:12px;color:" + tc.textMuted + ";display:flex;flex-wrap:wrap;gap:12px;";
+        summaryDiv.style.cssText = "padding:8px 14px;border-top:1px solid " + tc.border + ";background:" + tc.headerBg + ";flex-shrink:0;font-size:11px;color:" + tc.textMuted + ";";
 
-        container.appendChild(header);
-        container.appendChild(listDiv);
-        container.appendChild(summaryDiv);
-        overlay.appendChild(container);
-        document.body.appendChild(overlay);
+        panel.appendChild(header);
+        panel.appendChild(listDiv);
+        panel.appendChild(summaryDiv);
+        document.body.appendChild(panel);
 
         function formatTime(ms) {
             var s = Math.floor(ms / 1000);
@@ -1042,9 +1621,9 @@
 
         function updateUI() {
             var completed = 0, failed = 0, inProgress = 0, pending = 0;
-            for (var i = 0; i < state.length; i++) {
-                var s = state[i];
-                var badge = rows[i].badge;
+            for (var ui = 0; ui < state.length; ui++) {
+                var s = state[ui];
+                var badge = rows[ui].badge;
                 if (s.status === STATUS_PENDING) {
                     badge.textContent = "Pending";
                     badge.style.background = "rgba(255,255,255,0.1)";
@@ -1065,18 +1644,22 @@
                     badge.style.background = "rgba(239,68,68,0.3)";
                     badge.style.color = "#fca5a5";
                     failed++;
-                    if (s.error) rows[i].label.title = s.error;
+                    if (s.error) rows[ui].label.title = s.error;
                 }
             }
             var elapsed = Date.now() - startTime;
             var avgPer = completed > 0 ? elapsed / completed : 0;
             var remaining = avgPer > 0 ? avgPer * (pending + inProgress) : 0;
-            summaryDiv.innerHTML = "";
-            summaryDiv.textContent = "Total: " + state.length + "  |  Completed: " + completed + "  |  Failed: " + failed + "  |  In Progress: " + inProgress + "  |  Elapsed: " + formatTime(elapsed) + (remaining > 0 ? "  |  ETA: ~" + formatTime(remaining) : "");
+            summaryDiv.textContent = "Total: " + state.length + " | Done: " + completed + " | Failed: " + failed + " | Elapsed: " + formatTime(elapsed) + (remaining > 0 ? " | ETA: ~" + formatTime(remaining) : "");
         }
 
         timerInterval = setInterval(updateUI, 500);
         updateUI();
+
+        function cleanupListeners() {
+            document.removeEventListener("mousemove", onDragMove);
+            document.removeEventListener("mouseup", onDragEnd);
+        }
 
         function cleanup() {
             if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
@@ -1084,11 +1667,13 @@
 
         function close() {
             cleanup();
-            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            cleanupListeners();
+            if (panel.parentNode) panel.parentNode.removeChild(panel);
         }
 
         return {
             state: state,
+            startTime: startTime,
             setStatus: function(index, status, error) {
                 if (index >= 0 && index < state.length) {
                     state[index].status = status;
@@ -1098,7 +1683,7 @@
             },
             close: close,
             cleanup: cleanup,
-            overlay: overlay,
+            panel: panel,
             STATUS_PENDING: STATUS_PENDING,
             STATUS_IN_PROGRESS: STATUS_IN_PROGRESS,
             STATUS_COMPLETED: STATUS_COMPLETED,
@@ -1106,25 +1691,47 @@
         };
     }
 
+    // ---- Persist/restore helpers for import state ----
+
+    function ifl_persistProgress(progress, selectedItems, startIdx) {
+        var statuses = [];
+        for (var i = 0; i < progress.state.length; i++) {
+            statuses.push({ status: progress.state[i].status, error: progress.state[i].error });
+        }
+        ifl_saveImportState({
+            items: selectedItems,
+            statuses: statuses,
+            currentIndex: startIdx,
+            startTime: progress.startTime,
+            active: true
+        });
+    }
+
     // ---- Import processing loop ----
 
-    async function ifl_processImports(selectedItems) {
+    async function ifl_processImports(selectedItems, resumeIndex, existingStatuses) {
         IFL_CANCELED = false;
-        log("IFL: starting import of " + selectedItems.length + " forms");
+        var startIdx = resumeIndex || 0;
+        log("IFL: starting import of " + selectedItems.length + " forms from index " + startIdx);
 
-        var progress = ifl_buildProgressPanel(selectedItems, function() { IFL_CANCELED = true; });
+        var progress = ifl_buildProgressPanel(selectedItems, existingStatuses);
 
-        for (var idx = 0; idx < selectedItems.length; idx++) {
+        // Persist initial state
+        ifl_persistProgress(progress, selectedItems, startIdx);
+
+        for (var idx = startIdx; idx < selectedItems.length; idx++) {
             if (IFL_CANCELED) {
                 log("IFL: import canceled by user at index " + idx);
                 for (var ci = idx; ci < selectedItems.length; ci++) {
                     progress.setStatus(ci, progress.STATUS_FAILED, "Canceled");
                 }
+                ifl_persistProgress(progress, selectedItems, idx);
                 break;
             }
 
             var item = selectedItems[idx];
             progress.setStatus(idx, progress.STATUS_IN_PROGRESS);
+            ifl_persistProgress(progress, selectedItems, idx);
             log("IFL: processing " + (idx + 1) + "/" + selectedItems.length + ": " + item.studyName + " / " + item.originalName);
 
             try {
@@ -1164,6 +1771,9 @@
                 ifl_triggerChange(fs);
                 await sleep(500);
 
+                // Wait for itemGroupsDiv to populate so we can apply changes
+                var igDiv = await ifl_waitForItemGroupsDiv(IFL_ITEMGROUPS_TIMEOUT);
+
                 // Handle Lock on Save checkbox
                 var lockCb = document.getElementById(IFL_LOCK_CHECKBOX_ID);
                 if (lockCb) {
@@ -1177,12 +1787,12 @@
                 // Handle rename if needed
                 if (item.newName !== item.originalName) {
                     var formGroups = document.querySelectorAll(".modal-body .form-group, .modal-body .control-group");
-                    var itemGroupsDiv = null;
+                    var fgDiv = null;
                     if (formGroups.length >= 4) {
-                        itemGroupsDiv = formGroups[3];
+                        fgDiv = formGroups[3];
                     }
-                    if (itemGroupsDiv) {
-                        var nameInput = itemGroupsDiv.querySelector('input[name*="formName"], input[id*="formName"], input[type="text"]');
+                    if (fgDiv) {
+                        var nameInput = fgDiv.querySelector('input[name*="formName"], input[id*="formName"], input[type="text"]');
                         if (nameInput) {
                             nameInput.value = item.newName;
                             nameInput.dispatchEvent(new Event("input", { bubbles: true }));
@@ -1196,43 +1806,179 @@
                     }
                 }
 
-                // Click Save
+                // Apply item group and item changes
+                if (item.itemGroups && item.itemGroups.length > 0 && igDiv) {
+                    ifl_applyItemGroupChanges(item);
+                }
+
+                // Click Save — page may refresh after this
                 var saveBtn = document.getElementById(IFL_SAVE_BUTTON_ID);
                 if (!saveBtn) throw new Error("Save button not found");
-                saveBtn.click();
-                log("IFL: clicked Save");
 
-                // Wait for modal to close
-                var start = Date.now();
-                var closed = false;
-                while (Date.now() - start < IFL_MODAL_CLOSE_TIMEOUT) {
-                    var m = document.querySelector(".modal.in, .modal.show");
-                    if (!m || m.style.display === "none") { closed = true; break; }
-                    // Also check if modal body disappeared
-                    var mb = document.querySelector(".modal-body");
-                    if (!mb) { closed = true; break; }
-                    await sleep(150);
+                // Persist as IN_PROGRESS with next index (in case page redirects after save)
+                ifl_persistProgress(progress, selectedItems, idx + 1);
+
+                var saveAttempts = 0;
+                var maxSaveAttempts = 2;
+                var saveFailed = false;
+
+                while (saveAttempts < maxSaveAttempts) {
+                    saveAttempts++;
+                    saveBtn = document.getElementById(IFL_SAVE_BUTTON_ID);
+                    if (!saveBtn) throw new Error("Save button not found");
+                    saveBtn.click();
+                    log("IFL: clicked Save (attempt " + saveAttempts + ")");
+
+                    // Wait for modal to close or error alert
+                    var start = Date.now();
+                    var closed = false;
+                    var errorDetected = false;
+                    while (Date.now() - start < IFL_MODAL_CLOSE_TIMEOUT) {
+                        // Check for error alert in modal
+                        var alertEl = document.querySelector(".modal-body .alert-danger, .modal .alert-danger");
+                        if (alertEl) {
+                            var alertText = alertEl.textContent || "";
+                            log("IFL: error alert detected: " + alertText.trim().substring(0, 120));
+                            // Dismiss the alert
+                            var dismissBtn = alertEl.querySelector("button.close, [data-dismiss='alert']");
+                            if (dismissBtn) dismissBtn.click();
+                            errorDetected = true;
+                            break;
+                        }
+                        var m = document.querySelector(".modal.in, .modal.show");
+                        if (!m || m.style.display === "none") { closed = true; break; }
+                        var mb = document.querySelector(".modal-body");
+                        if (!mb) { closed = true; break; }
+                        await sleep(150);
+                    }
+
+                    if (closed) break; // Save succeeded
+
+                    if (errorDetected && saveAttempts < maxSaveAttempts) {
+                        log("IFL: retrying — re-selecting study/form before next save attempt");
+                        await sleep(300);
+                        // Re-select study
+                        var rss = document.getElementById(IFL_STUDY_SELECT_ID);
+                        if (rss) { rss.value = item.studyValue; ifl_triggerChange(rss); }
+                        await sleep(300);
+                        var rePop = await ifl_waitForFormOptions(IFL_FORM_POPULATE_TIMEOUT);
+                        if (!rePop) { saveFailed = true; break; }
+                        // Re-select form
+                        var rfs = document.getElementById(IFL_FORM_SELECT_ID);
+                        if (rfs) { rfs.value = item.formValue; ifl_triggerChange(rfs); }
+                        await sleep(500);
+                        await ifl_waitForItemGroupsDiv(IFL_ITEMGROUPS_TIMEOUT);
+                        // Re-apply item group changes
+                        if (item.itemGroups && item.itemGroups.length > 0) {
+                            ifl_applyItemGroupChanges(item);
+                        }
+                        // Re-apply rename
+                        if (item.newName !== item.originalName) {
+                            var rfg = document.querySelectorAll(".modal-body .form-group, .modal-body .control-group");
+                            if (rfg.length >= 4) {
+                                var rni = rfg[3].querySelector('input[name*="formName"], input[id*="formName"], input[type="text"]');
+                                if (rni) {
+                                    rni.value = item.newName;
+                                    rni.dispatchEvent(new Event("input", { bubbles: true }));
+                                    rni.dispatchEvent(new Event("change", { bubbles: true }));
+                                }
+                            }
+                        }
+                        // Re-apply lock
+                        var rlc = document.getElementById(IFL_LOCK_CHECKBOX_ID);
+                        if (rlc) {
+                            if (item.lockOnSave && !rlc.checked) rlc.click();
+                            else if (!item.lockOnSave && rlc.checked) rlc.click();
+                        }
+                        continue; // Retry save
+                    }
+
+                    // Error on last attempt or timeout
+                    saveFailed = true;
+                    break;
                 }
-                if (!closed) {
-                    log("IFL: warning — modal did not close in time, continuing");
+
+                if (saveFailed) {
+                    throw new Error("Save failed after " + saveAttempts + " attempt(s) — modal error or timeout");
                 }
+
+                // Save succeeded — mark as completed
+                progress.setStatus(idx, progress.STATUS_COMPLETED);
+                ifl_persistProgress(progress, selectedItems, idx + 1);
+
+                // Detect redirect to form show page and navigate back to list page
+                if (IFL_SHOW_FORM_URL_PATTERN.test(location.href)) {
+                    log("IFL: detected redirect to form show page, navigating back to list page");
+                    location.href = IFL_LIST_PAGE_URL;
+                    // Page will reload; import resumes via ifl_resumeImport
+                    return;
+                }
+
                 await sleep(IFL_INTER_ITEM_DELAY);
 
-                progress.setStatus(idx, progress.STATUS_COMPLETED);
                 log("IFL: completed " + item.studyName + " / " + item.originalName);
 
             } catch (err) {
                 var errMsg = err && err.message ? err.message : String(err);
-                log("IFL: FAILED " + item.studyName + " / " + item.originalName + " — " + errMsg);
+                log("IFL: FAILED " + item.studyName + " / " + item.originalName + " \u2014 " + errMsg);
                 progress.setStatus(idx, progress.STATUS_FAILED, errMsg);
-                // Try to close modal if stuck
+                ifl_persistProgress(progress, selectedItems, idx + 1);
                 await ifl_closeImportModal();
                 await sleep(500);
             }
         }
 
         log("IFL: import loop finished");
-        // Keep progress panel open for user review; they can close it
+        // Mark as no longer active
+        ifl_clearImportState();
+    }
+
+    // ---- Resume after page refresh ----
+
+    function ifl_resumeImport() {
+        var saved = ifl_loadImportState();
+        if (!saved || !saved.active || !saved.items || saved.items.length === 0) return;
+
+        // If we're on a form show page (redirect after save), go back to list page
+        if (!isOnImportFromLibraryPage()) {
+            if (IFL_SHOW_FORM_URL_PATTERN.test(location.href)) {
+                log("IFL: resume — on form show page, redirecting to list page");
+                location.href = IFL_LIST_PAGE_URL;
+            }
+            return;
+        }
+        // Re-read saved state (already loaded above)
+        if (!saved || !saved.active || !saved.items || saved.items.length === 0) return;
+
+        var nextIdx = saved.currentIndex || 0;
+
+        // Items before nextIdx that are still IN_PROGRESS were mid-save when redirect
+        // occurred — redirect means save succeeded, so mark them Completed
+        if (saved.statuses) {
+            for (var pi = 0; pi < nextIdx; pi++) {
+                if (saved.statuses[pi] && saved.statuses[pi].status === "In Progress") {
+                    saved.statuses[pi].status = "Completed";
+                    log("IFL: resume — marking index " + pi + " as Completed (redirect after save)");
+                }
+            }
+        }
+
+        // Check if all are already done
+        var allDone = true;
+        for (var i = nextIdx; i < saved.items.length; i++) {
+            var st = saved.statuses && saved.statuses[i] ? saved.statuses[i].status : "Pending";
+            if (st !== "Completed" && st !== "Failed") { allDone = false; break; }
+        }
+        if (allDone && nextIdx >= saved.items.length) {
+            log("IFL: resume — all items already processed, showing final progress");
+            // Build progress panel so user can see final results
+            ifl_buildProgressPanel(saved.items, saved.statuses);
+            ifl_clearImportState();
+            return;
+        }
+
+        log("IFL: resuming import from index " + nextIdx + " of " + saved.items.length);
+        ifl_processImports(saved.items, nextIdx, saved.statuses);
     }
 
     // ---- Main entry point ----
@@ -1249,7 +1995,7 @@
                 width: "450px",
                 height: "auto"
             });
-            log("IFL: wrong page — " + location.href);
+            log("IFL: wrong page \u2014 " + location.href);
             return;
         }
 
@@ -1278,15 +2024,18 @@
             return;
         }
 
+        // Cache studies for potential resume
+        ifl_saveStudiesCache(studies);
+
         // Close the modal before showing selection GUI
         await ifl_closeImportModal();
 
         // Show selection GUI
         ifl_buildSelectionGUI(studies, function(selectedItems) {
-            // User confirmed selection — start import
-            ifl_processImports(selectedItems);
+            ifl_processImports(selectedItems, 0, null);
         });
     }
+    
     // ================================================================
     // Edit Study Events List — Feature Implementation
     // ================================================================
@@ -34579,6 +35328,7 @@
         };
         bindPanelHotkeyOnce();
         editSE_resumeAfterReload();
+        ifl_resumeImport();
 
         // Recreate popups if needed
         recreatePopupsIfNeeded();
