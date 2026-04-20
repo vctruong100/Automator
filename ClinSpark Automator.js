@@ -634,6 +634,39 @@
     }
 
     
+    // Standardized "Collecting Data" overlay used by all features
+    function createCollectingOverlay(title, message) {
+        var overlay = document.createElement("div");
+        overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:30000;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;";
+        var panel = document.createElement("div");
+        panel.style.cssText = "background:#111;border:1px solid #333;border-radius:12px;padding:32px 48px;box-shadow:0 15px 35px rgba(0,0,0,0.5);display:flex;flex-direction:column;align-items:center;gap:16px;min-width:320px;";
+        var spinStyle = document.createElement("style");
+        spinStyle.textContent = "@keyframes cda-spin { to { transform: rotate(360deg); } } @keyframes cda-pulse { 0%,100% { opacity:0.6; } 50% { opacity:1; } }";
+        panel.appendChild(spinStyle);
+        var spinner = document.createElement("div");
+        spinner.style.cssText = "width:36px;height:36px;border:3px solid #5b43c7;border-top-color:transparent;border-radius:50%;animation:cda-spin 0.8s linear infinite;";
+        panel.appendChild(spinner);
+        var titleEl = document.createElement("div");
+        titleEl.textContent = title || "Collecting data";
+        titleEl.style.cssText = "color:#fff;font-size:16px;font-weight:600;";
+        panel.appendChild(titleEl);
+        var messageEl = document.createElement("div");
+        messageEl.textContent = message || "";
+        messageEl.style.cssText = "color:#999;font-size:12px;animation:cda-pulse 1.5s ease-in-out infinite;";
+        panel.appendChild(messageEl);
+        overlay.appendChild(panel);
+        document.body.appendChild(overlay);
+        return {
+            overlay: overlay,
+            panel: panel,
+            titleEl: titleEl,
+            messageEl: messageEl,
+            setTitle: function(t) { titleEl.textContent = t; },
+            setMessage: function(m) { messageEl.textContent = m; },
+            close: function() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+        };
+    }
+
     // Import from Library Feature
     var IFL_FORM_LIST_PATH = "/secure/crfdesign/studylibrary/list/form";
     var IFL_VALID_URLS = [
@@ -2481,33 +2514,13 @@
         }
 
         // Show "Collecting data" animation overlay
-        var collectingOverlay = document.createElement("div");
-        collectingOverlay.id = "ifl-collecting-overlay";
-        collectingOverlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:30000;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;";
-        var collectingPanel = document.createElement("div");
-        collectingPanel.style.cssText = "background:#111;border:1px solid #333;border-radius:12px;padding:32px 48px;box-shadow:0 15px 35px rgba(0,0,0,0.5);display:flex;flex-direction:column;align-items:center;gap:16px;";
-        var spinStyle = document.createElement("style");
-        spinStyle.textContent = "@keyframes ifl-spin { to { transform: rotate(360deg); } } @keyframes ifl-pulse { 0%,100% { opacity:0.6; } 50% { opacity:1; } }";
-        collectingPanel.appendChild(spinStyle);
-        var spinner = document.createElement("div");
-        spinner.style.cssText = "width:36px;height:36px;border:3px solid #5b43c7;border-top-color:transparent;border-radius:50%;animation:ifl-spin 0.8s linear infinite;";
-        var collectingTitle = document.createElement("div");
-        collectingTitle.textContent = "Collecting data";
-        collectingTitle.style.cssText = "color:#fff;font-size:16px;font-weight:600;";
-        var collectingMsg = document.createElement("div");
-        collectingMsg.textContent = "Scanning studies and forms\u2026";
-        collectingMsg.style.cssText = "color:#999;font-size:12px;animation:ifl-pulse 1.5s ease-in-out infinite;";
-        collectingPanel.appendChild(spinner);
-        collectingPanel.appendChild(collectingTitle);
-        collectingPanel.appendChild(collectingMsg);
-        collectingOverlay.appendChild(collectingPanel);
-        document.body.appendChild(collectingOverlay);
+        var collecting = createCollectingOverlay("Collecting data", "Scanning studies and forms\u2026");
 
         // Collect all studies & forms (main tab modal)
         var studies = await ifl_collectAllStudiesAndForms();
 
         if (!studies || studies.length === 0) {
-            if (collectingOverlay.parentNode) collectingOverlay.parentNode.removeChild(collectingOverlay);
+            collecting.close();
             ifl_closeBgTab();
             createPopup({
                 title: "Import from Library",
@@ -2527,14 +2540,14 @@
 
         // Wait for background tab to be ready with its modal open
         // (overlay stays visible — user sees "Collecting data" while bg tab loads)
-        collectingMsg.textContent = "Preparing background worker\u2026";
+        collecting.setMessage("Preparing background worker\u2026");
         var bgReady = await ifl_waitForBgTabReady();
         if (!bgReady) {
             log("IFL: bg tab not ready — item group loading will fall back to main tab");
         }
 
         // Remove "Collecting data" overlay right before showing selection GUI
-        if (collectingOverlay.parentNode) collectingOverlay.parentNode.removeChild(collectingOverlay);
+        collecting.close();
 
         // Show selection GUI
         ifl_buildSelectionGUI(studies, function(selectedItems) {
@@ -5756,31 +5769,7 @@
             return;
         }
 
-        var loadingContent = document.createElement("div");
-        loadingContent.style.cssText = "text-align:center;padding:30px;";
-        loadingContent.innerHTML = '<div style="font-size:16px;margin-bottom:16px;">Collecting data...</div><div id="bplLoadingDots" style="color:#9df;">Loading.</div>';
-
-        var loadingPopup = createPopup({
-            title: "PLAP Builder",
-            content: loadingContent,
-            width: "350px",
-            height: "auto"
-        });
-
-        var dots = 1;
-        var loadingInterval = setInterval(function() {
-            var el = document.getElementById("bplLoadingDots");
-            if (!el || BPL_CANCELLED) {
-                clearInterval(loadingInterval);
-                return;
-            }
-            dots = (dots % 3) + 1;
-            var text = "Loading";
-            for (var i = 0; i < dots; i++) {
-                text = text + ".";
-            }
-            el.textContent = text;
-        }, 500);
+        var collecting = createCollectingOverlay("Collecting data", "Scanning activity plans\u2026");
 
         var enhancedScan = scanExistingBPLTableEnhanced();
         var existingItems = enhancedScan.existingKeys || [];
@@ -5797,8 +5786,7 @@
         log("BPL: Example Reference Time = " + exampleRefTime);
 
         if (BPL_CANCELLED) {
-            clearInterval(loadingInterval);
-            loadingPopup.close();
+            collecting.close();
             log("BPL: cancelled during example ref time collection");
             return;
         }
@@ -5810,15 +5798,13 @@
         log("BPL: segment offsets collected - " + Object.keys(segOffsets).length + " segments");
 
         if (BPL_CANCELLED) {
-            clearInterval(loadingInterval);
-            loadingPopup.close();
+            collecting.close();
             log("BPL: cancelled during segment offset collection");
             return;
         }
 
         if (isAddSaButtonDisabled()) {
-            clearInterval(loadingInterval);
-            loadingPopup.close();
+            collecting.close();
             createPopup({
                 title: "PLAP Builder",
                 content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;font-size:16px;margin-bottom:16px;">\u26A0\uFE0F Add Button Disabled</p><p>The Add button is currently disabled. This activity plan may no longer be in design mode.</p></div>',
@@ -5830,8 +5816,7 @@
         }
 
         if (!clickAddSaButton()) {
-            clearInterval(loadingInterval);
-            loadingPopup.close();
+            collecting.close();
             createPopup({
                 title: "PLAP Builder",
                 content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;">Failed to find or click the Add button.</p></div>',
@@ -5844,8 +5829,7 @@
 
         var modal = await waitForSAModal(10000);
         if (!modal) {
-            clearInterval(loadingInterval);
-            loadingPopup.close();
+            collecting.close();
             createPopup({
                 title: "PLAP Builder",
                 content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;">Modal did not appear within timeout.</p></div>',
@@ -5873,8 +5857,7 @@
         }
         await sleep(500);
 
-        clearInterval(loadingInterval);
-        loadingPopup.close();
+        collecting.close();
 
         if (BPL_CANCELLED) {
             log("PLAP Builder: cancelled during data collection");
@@ -6579,17 +6562,11 @@
             return;
         }
 
-        // Show loading popup
-        var loadingPopup = createPopup({
-            title: "Copy Forms to Study Events",
-            content: '<div style="text-align:center;padding:30px;"><div class="copy-forms-spinner" style="width:40px;height:40px;border:4px solid #333;border-top:4px solid #17a2b8;border-radius:50%;margin:0 auto 16px;animation:copyFormsSpin 1s linear infinite;"></div><div style="font-size:16px;margin-bottom:8px;">Collecting data...</div><div id="copyFormsLoadingMsg" style="font-size:13px;color:#888;">Scanning table...</div></div><style>@keyframes copyFormsSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>',
-            width: "350px",
-            height: "auto"
-        });
+        // Show loading overlay
+        var collecting = createCollectingOverlay("Collecting data", "Scanning table\u2026");
 
         function updateLoadingMsg(msg) {
-            var el = document.getElementById("copyFormsLoadingMsg");
-            if (el) el.textContent = msg;
+            collecting.setMessage(msg);
         }
 
         // Step 1: Scan table and build maps
@@ -6599,7 +6576,7 @@
 
         var rows = scanSATableForArchiveUpdate();
         if (rows.length === 0) {
-            loadingPopup.close();
+            collecting.close();
             createPopup({
                 title: "Copy Forms - Error",
                 content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">No rows found in the Scheduled Activities table.</div>',
@@ -6620,7 +6597,7 @@
 
         log("Copy Forms: clicking Add button...");
         if (!clickAddSaButton()) {
-            loadingPopup.close();
+            collecting.close();
             return;
         }
 
@@ -6634,7 +6611,7 @@
         }
 
         if (!modal) {
-            loadingPopup.close();
+            collecting.close();
             createPopup({
                 title: "Copy Forms - Error",
                 content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">Modal did not appear within timeout.</div>',
@@ -6661,7 +6638,7 @@
         }
         await sleep(500);
 
-        loadingPopup.close();
+        collecting.close();
 
         if (studyEvents.length === 0) {
             createPopup({
@@ -8561,26 +8538,13 @@
             return;
         }
 
-        // Show loading popup while collecting target forms from Add modal
-        var loadingPopup = createPopup({
-            title: "Archive/Update Forms",
-            content: '<div style="text-align:center;padding:30px;"><div style="font-size:16px;margin-bottom:12px;">Collecting available forms...</div><div id="archiveUpdateLoadingDots" style="font-size:24px;">.</div></div>',
-            width: "350px",
-            height: "auto"
-        });
-        var loadingInterval = setInterval(function() {
-            var dots = document.getElementById("archiveUpdateLoadingDots");
-            if (dots) {
-                var d = dots.textContent;
-                dots.textContent = d.length >= 3 ? "." : d + ".";
-            }
-        }, 400);
+        // Show loading overlay while collecting target forms from Add modal
+        var collecting = createCollectingOverlay("Collecting available forms", "Opening modal\u2026");
 
         // Click Add button to open modal
         log("Archive/Update Forms: clicking Add button to collect forms...");
         if (!clickAddSaButton()) {
-            clearInterval(loadingInterval);
-            loadingPopup.close();
+            collecting.close();
             createPopup({
                 title: "Archive/Update Forms - Error",
                 content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">Could not click the Add button.</div>',
@@ -8593,8 +8557,7 @@
         // Wait for modal to appear
         var modal = await waitForSAModal(10000);
         if (!modal) {
-            clearInterval(loadingInterval);
-            loadingPopup.close();
+            collecting.close();
             createPopup({
                 title: "Archive/Update Forms - Error",
                 content: '<div style="text-align:center;padding:20px;color:#ff6b6b;">Modal did not appear within timeout.</div>',
@@ -8621,8 +8584,7 @@
         }
         await sleep(500);
 
-        clearInterval(loadingInterval);
-        loadingPopup.close();
+        collecting.close();
 
         if (targetFormsArray.length === 0) {
             createPopup({
@@ -15021,31 +14983,8 @@
             return;
         }
 
-        // Show loading popup
-        var loadingContent = document.createElement("div");
-        loadingContent.style.cssText = "text-align:center;padding:30px;";
-        loadingContent.innerHTML = '<div style="font-size:16px;margin-bottom:16px;">Collecting data...</div><div id="saBuilderLoadingDots" style="color:#9df;">Loading.</div>';
-
-        var loadingPopup = createPopup({
-            title: "Scheduled Activities Builder",
-            content: loadingContent,
-            width: "350px",
-            height: "auto",
-        });
-
-        // Animate loading
-        var dots = 1;
-        var loadingInterval = setInterval(function() {
-            var el = document.getElementById("saBuilderLoadingDots");
-            if (!el || SA_BUILDER_CANCELLED) {
-                clearInterval(loadingInterval);
-                return;
-            }
-            dots = (dots % 3) + 1;
-            var text = "Loading";
-            for (var i = 0; i < dots; i++) text += ".";
-            el.textContent = text;
-        }, 500);
+        // Show loading overlay
+        var collecting = createCollectingOverlay("Collecting data", "Scanning table…");
 
         // Scan existing table
         var existingItems = scanExistingSATable();
@@ -15055,8 +14994,7 @@
 
         // Check if Add button is disabled
         if (isAddSaButtonDisabled()) {
-            clearInterval(loadingInterval);
-            loadingPopup.close();
+            collecting.close();
             createPopup({
                 title: "Scheduled Activities Builder",
                 content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;font-size:16px;margin-bottom:16px;">⚠️ Add Button Disabled</p><p>The Add button is currently disabled. This activity plan may no longer be in design mode.</p></div>',
@@ -15069,8 +15007,7 @@
 
         // Click Add button to open modal
         if (!clickAddSaButton()) {
-            clearInterval(loadingInterval);
-            loadingPopup.close();
+            collecting.close();
             createPopup({
                 title: "Scheduled Activities Builder",
                 content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;">Failed to find or click the Add button.</p></div>',
@@ -15083,8 +15020,7 @@
         // Wait for modal
         var modal = await waitForSAModal(10000);
         if (!modal) {
-            clearInterval(loadingInterval);
-            loadingPopup.close();
+            collecting.close();
             createPopup({
                 title: "Scheduled Activities Builder",
                 content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;">Modal did not appear within timeout.</p></div>',
@@ -15114,8 +15050,7 @@
         }
         await sleep(500);
 
-        clearInterval(loadingInterval);
-        loadingPopup.close();
+        collecting.close();
 
         if (SA_BUILDER_CANCELLED) {
             log("SA Builder: cancelled during data collection");

@@ -14,6 +14,7 @@ const difference = 5; // in minutes
 // Adjust ("A" or "B") below on what method to use.
 
 var methodType = "B";
+var errorMsg = "Out of Window. Note Deviation."
 
 // ======== Don't modify ========
 var isRepeat = containsValue(getItemGroupName(formJson), "repeat");
@@ -62,7 +63,7 @@ if (differenceInMins >= difference) {
     return true;
 }
 
-customErrorMessage("Out of Window. Collected time must be " + difference + " minutes from prior collection: " + formatDateTimeByType(startTime));
+customErrorMessage(errorMsg);
 return false;
 
 
