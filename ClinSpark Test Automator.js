@@ -94,6 +94,7 @@
     var STORAGE_EPOCH_SOURCE_FLAGS = "activityPlanState.epochSourceFlags";  
     var STORAGE_LINKED_SOURCE_COUNTER = "activityPlanState.linkedSourceCounter"; 
     var STORAGE_PRIMARY_LINKED_SUBJECT_NUMBER = "activityPlanState.primaryLinkedSubjectNumber"; 
+    var STORAGE_USED_ACTIVITY_PLANS = "activityPlanState.usedActivityPlans";
 
     const STORAGE_PANEL_HIDDEN = "activityPlanState.panel.hidden";
     const STORAGE_PANEL_HOTKEY = "activityPlanState.panel.hotkey";
@@ -3696,6 +3697,35 @@
         } catch (e) {}
     }
 
+    function getUsedActivityPlans() {
+        var raw = null;
+        try {
+            raw = localStorage.getItem(STORAGE_USED_ACTIVITY_PLANS);
+        } catch (e) {}
+        if (!raw) return [];
+        try {
+            return JSON.parse(raw);
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function addUsedActivityPlan(planValue) {
+        var used = getUsedActivityPlans();
+        if (used.indexOf(planValue) === -1) {
+            used.push(planValue);
+        }
+        try {
+            localStorage.setItem(STORAGE_USED_ACTIVITY_PLANS, JSON.stringify(used));
+        } catch (e) {}
+    }
+
+    function clearUsedActivityPlans() {
+        try {
+            localStorage.removeItem(STORAGE_USED_ACTIVITY_PLANS);
+        } catch (e) {}
+    }
+
     function getStoredSubjectNumber() {
         var raw = null;
         try {
@@ -3733,6 +3763,7 @@
             localStorage.removeItem(STORAGE_EPOCH_SOURCE_FLAGS);
             localStorage.removeItem(STORAGE_LINKED_SOURCE_COUNTER);
             localStorage.removeItem(STORAGE_PRIMARY_LINKED_SUBJECT_NUMBER);
+            localStorage.removeItem(STORAGE_USED_ACTIVITY_PLANS);
         } catch (e) {}
         log("Cleared all epoch queue state");
     }
@@ -26893,40 +26924,36 @@
             var modal = await waitForSelector("#ajaxModal, .modal", 5000);
             if (!modal) { log("Non-scrn: Modal not found"); return; }
         
-            // Activity Plan selection (index-based for linked sources)
+            // Activity Plan selection — skip plans already used by other non-screening epochs
             var planSel = await waitForSelector('select#activityPlan', 5000);
             if (planSel) {
                 var opts = planSel.querySelectorAll("option");
+                var usedPlans = getUsedActivityPlans();
                 var chosen = null;
                 var optIdx = 0;
-                var validIdx = 0;
                 while (optIdx < opts.length) {
                     var val = (opts[optIdx].value + "").trim();
-                    if (val.length > 0) {
-                        if (hasLinkedSource && validIdx === activityPlanIndex) {
-                            chosen = opts[optIdx];
-                            break;
-                        } else if (!hasLinkedSource && validIdx === 0) {
-                            chosen = opts[optIdx];
-                            break;
-                        }
-                        validIdx++;
+                    if (val.length > 0 && usedPlans.indexOf(val) === -1) {
+                        chosen = opts[optIdx];
+                        break;
                     }
                     optIdx++;
                 }
                 if (!chosen) {
-                    // Fallback: pick first valid option
-                    var fb = 0;
-                    while (fb < opts.length) {
-                        if ((opts[fb].value + "").trim().length > 0) { chosen = opts[fb]; break; }
-                        fb++;
-                    }
+                    // No unused activity plan available — close modal and skip to next epoch
+                    log("Non-scrn: No unused activity plan available for epoch=" + epochName + "; skipping");
+                    var closeBtn = modal.querySelector('button.close, [data-dismiss="modal"]');
+                    if (closeBtn) { closeBtn.click(); }
+                    await sleep(500);
+                    setCohortGuard("done");
+                    markEpochCompleted(epochQueue[epochIdx].href);
+                    advanceToNextEpoch();
+                    return;
                 }
-                if (chosen) {
-                    planSel.value = chosen.value;
-                    planSel.dispatchEvent(new Event("change", { bubbles: true }));
-                    log("Non-scrn: ActivityPlan chosen index=" + String(activityPlanIndex) + " value=" + String(chosen.value));
-                }
+                planSel.value = chosen.value;
+                planSel.dispatchEvent(new Event("change", { bubbles: true }));
+                addUsedActivityPlan(chosen.value);
+                log("Non-scrn: ActivityPlan chosen value=" + String(chosen.value) + " (used=" + String(usedPlans.length + 1) + ")");
             }
         
             // Search type — use Existing Cohort Assignments for non-screening (same subject)
@@ -31244,6 +31271,7 @@
         setEpochQueue(epochQueue);
         setEpochIndex(0);
         setLinkedSourceCounter(0);
+        clearUsedActivityPlans();
 
         var mode = getRunMode();
         if (mode === "all") {
