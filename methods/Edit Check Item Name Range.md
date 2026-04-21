@@ -1,5 +1,5 @@
 const errorMsg = "OOR, Repeat"; // Custom Error Message
-const RepeatErrorMsg = "OOR, SF"; // Custom Repeat Error Message
+const RepeatErrorMsg = "OOR, INVESTIGATOR ASSESS"; // Custom Repeat Error Message
 
 // =======================
 var item = itemJson.item;
@@ -201,6 +201,7 @@ function parseRange(input) {
 
     return null;
 }
+
 function parseMultiRange(input) {
     logger("parseMultiRange input: " + input);
 
@@ -208,91 +209,48 @@ function parseMultiRange(input) {
 
     var result = {};
 
-    var firstParen = input.indexOf("(");
-    if (firstParen === -1) return null;
+    var match = input.match(/\((.*)\)/);
+    if (!match) return null;
 
-    var depth = 0;
-    var content = "";
-    var closed = false;
-
-    for (var i = firstParen; i < input.length; i++) {
-        var c = input.charAt(i);
-
-        if (c === "(") {
-            if (depth > 0) content += c;
-            depth++;
-        } else if (c === ")") {
-            depth--;
-            if (depth === 0) {
-                closed = true;
-                break;
-            }
-            content += c;
-        } else {
-            if (depth > 0) content += c;
-        }
-    }
-
-    if (!closed) {
-        content = input.substring(firstParen + 1);
-    }
-
-    content = content.trim();
-    if (!content) return null;
+    var content = match[1].toLowerCase();
 
     content = content
         .replace(/&nbsp;/gi, " ")
         .replace(/≤/g, "<=")
         .replace(/≥/g, ">=")
-        .replace(/p\s*:/gi, "")
-        .replace(/i\s*:/gi, "");
+        .replace(/–/g, "-")
+        .replace(/to/gi, "-")
+        .replace(/\s+/g, " ")
+        .trim();
 
-    var parts = [];
-    var buffer = "";
-    var innerDepth = 0;
+    var parts = content.split(/[,|;/\-]+/);
 
-    for (var j = 0; j < content.length; j++) {
-        var ch = content.charAt(j);
-
-        if (ch === "(") innerDepth++;
-        if (ch === ")") innerDepth--;
-
-        if (ch === "," && innerDepth === 0) {
-            parts.push(buffer);
-            buffer = "";
-        } else {
-            buffer += ch;
-        }
-    }
-    if (buffer) parts.push(buffer);
-
-    for (var k = 0; k < parts.length; k++) {
-        var part = parts[k].trim();
+    for (var i = 0; i < parts.length; i++) {
+        var part = parts[i].trim();
         if (!part) continue;
 
-        var label = "default";
+        var label = null;
 
-        if (/female/i.test(part)) label = "female";
-        else if (/male/i.test(part)) label = "male";
+        if (/\b(female|f)\b/.test(part)) label = "female";
+        else if (/\b(male|m)\b/.test(part)) label = "male";
 
-        var cleanPart = part
-            .replace(/\(([^)]*)\)/g, "")
-            .replace(/\[(.*?)\]/g, "")
-            .replace(/\bmale\b/gi, "")
-            .replace(/\bfemale\b/gi, "")
-            .trim();
+        var rangeMatch = part.match(/(<=|>=|<|>)?\s*-?[\d.]+(\s*-\s*-?[\d.]+)?/);
 
+        if (!rangeMatch) continue;
 
-        if (!cleanPart) continue;
+        var rule = rangeMatch[0];
 
-        var fakeInput = "(" + cleanPart + ")";
-        var range = parseRange(fakeInput);
+        var parsed = parseRange("(" + rule + ")");
 
-        if (range) {
-            result[label] = range;
+        if (!parsed) continue;
+
+        if (label) {
+            result[label] = parsed;
+        } else {
+            result.default = parsed;
         }
     }
 
     logger("Final parsed ranges: " + JSON.stringify(result));
-    return result;
+    return Object.keys(result).length ? result : null;
 }
