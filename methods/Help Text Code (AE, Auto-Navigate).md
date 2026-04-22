@@ -22,6 +22,38 @@ Button Redirect to Image Page (use direct link):
   }
 </style>
  
+Buttons Side-by-side:
+<div class="btn-container">
+  <a href="https://i.ibb.co/qY54pqkF/image-9.png" target="_blank" class="img-link-btn">
+    View Glucose Monitoring Process
+  </a>
+
+  <a href="https://i.ibb.co/4wJ2ScHn/image-10.png" target="_blank" class="img-link-btn">
+    Click to View Symptoms
+  </a>
+</div>
+
+<style>
+.btn-container {
+  display: flex;
+  gap: 15px; }
+
+.img-link-btn {
+  display: inline-block;
+  padding: 10px 20px;
+  background-color: #4CAF50;
+  color: white;
+  text-decoration: none;
+  border-radius: 4px;
+  font-family: sans-serif;
+  font-size: 14px;
+}
+
+.img-link-btn:hover {
+  background-color: #45a049;
+}
+</style>
+
 Direct image on Form (use direct link):
 <img 
   src="https://i.ibb.co/FbnX6XvJ/image-6.png" 
@@ -33,6 +65,28 @@ Multiple images side-by-side:
   <img src="https://i.ibb.co/Hfg7GQjw/image-5.png" style="width: 100%; max-width: 200px;">
   <img src="https://i.ibb.co/8gZMtwLH/image-1.jpg" style="width: 100%; max-width: 200px;">
 </div>
+
+No button. Just custom link:
+<a href="https://i.ibb.co/4wJ2ScHn/image-10.png" 
+  target="_blank" 
+  class="img-link-btn">
+  Click to View Symptoms
+</a>
+<style>
+  .img-link-btn {
+   display: inline-block;
+   padding: 10px 20px;
+   background-color: #4CAF50;
+   color: white;
+   text-decoration: none;
+   border-radius: 4px;
+   font-family: sans-serif;
+   font-size: 14px;
+  }
+  .img-link-btn:hover {
+   background-color: #45a049;
+  }
+</style>
 
 Auto-navigate to AEs:
 Copy and paste the code below:
