@@ -13129,23 +13129,46 @@
         };
     }
 
+    async function waitForBPLSelectOptions(selectId, timeoutMs) {
+        var maxWait = timeoutMs || 30000;
+        var start = Date.now();
+        var pollInterval = 500;
+        while (Date.now() - start < maxWait) {
+            var sel = document.getElementById(selectId);
+            if (sel) {
+                var opts = sel.querySelectorAll("option");
+                var realCount = 0;
+                for (var i = 0; i < opts.length; i++) {
+                    if ((opts[i].value || "").trim()) realCount++;
+                }
+                if (realCount > 0) {
+                    log("BPL: waitForBPLSelectOptions(" + selectId + ") found " + realCount + " options in " + (Date.now() - start) + "ms");
+                    return true;
+                }
+            }
+            await sleep(pollInterval);
+        }
+        log("BPL: waitForBPLSelectOptions(" + selectId + ") timed out after " + maxWait + "ms");
+        return false;
+    }
+
     async function collectBPLModalDropdownData() {
         log("BPL: collecting dropdown data from modal");
 
         await openSelect2Dropdown("s2id_segment");
-        await sleep(300);
+        await waitForBPLSelectOptions("segment");
         await closeSelect2Dropdown();
         var segments = collectSelectOptions("segment");
         log("BPL: collected " + segments.length + " segments");
 
         await openSelect2Dropdown("s2id_studyEvent");
-        await sleep(300);
+        await waitForBPLSelectOptions("studyEvent");
         await closeSelect2Dropdown();
         var studyEvents = collectSelectOptions("studyEvent");
         log("BPL: collected " + studyEvents.length + " study events");
 
         await openSelect2Dropdown("s2id_form");
-        await sleep(300);
+        await waitForBPLSelectOptions("form");
         await closeSelect2Dropdown();
         var forms = collectSelectOptions("form");
         log("BPL: collected " + forms.length + " forms");
