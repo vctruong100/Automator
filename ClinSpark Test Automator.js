@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.9.7
+// @version 3.9.8
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -7108,19 +7108,6 @@
             progressContent.setItemStatus(i, "Processing...", "#17a2b8");
 
             try {
-                // Re-scan to get fresh row reference
-                var freshRows = scanSATableForArchiveUpdate();
-                var segKey = occ.segmentValue || normalizeText(occ.segmentText);
-                var evKey = occ.eventValue || normalizeText(occ.eventText);
-
-                // Check if target already exists for this segment/event
-                if (checkTargetFormExists(freshRows, segKey, evKey, targetFormValue)) {
-                    log("Archive/Update Forms: target form already exists for " + occ.segmentText + " → " + occ.eventText + "; skipping");
-                    progressContent.setItemStatus(i, "Skipped (exists)", "#ffc107");
-                    skipCount++;
-                    continue;
-                }
-
                 // Find the occurrence row
                 var row = findRowInDOM(occ.segmentText, occ.eventText, occ.formText);
                 if (!row) {
@@ -7215,41 +7202,88 @@
                 // Step 3: Archive the source occurrence
                 await sleep(500);
                 row = findRowInDOM(occ.segmentText, occ.eventText, occ.formText);
-                if (row) {
-                    await clickRowActionDropdown(row);
-                    var archiveLink = row.querySelector('a[href*="archivescheduledactivity"]');
-                    if (archiveLink) {
-                        // Check if it's Un-Archive (already archived)
-                        var archiveLinkText = (archiveLink.textContent || "").toLowerCase();
-                        if (archiveLinkText.indexOf("un-archive") !== -1) {
-                            log("Archive/Update Forms: row already archived for " + occ.rowKey + "; skipping archive step");
-                        } else {
-                            archiveLink.click();
-                            var archiveModal = await waitForSAModal(10000);
-                            if (archiveModal) {
-                                // Set reason for change
-                                var reasonEl = document.getElementById("reasonForChange");
-                                if (reasonEl) {
-                                    reasonEl.value = archiveReason || "Old version";
-                                    reasonEl.dispatchEvent(new Event("change", { bubbles: true }));
-                                }
-                                // Click Save
-                                var saveBtn = document.getElementById("actionButton");
-                                if (saveBtn) {
-                                    saveBtn.click();
-                                    var closed = await waitForSAModalClose(10000);
-                                    if (!closed) {
-                                        log("Archive/Update Forms: archive modal did not close for " + occ.rowKey);
-                                        progressContent.setItemStatus(i, "Error (archive)", "#dc3545");
-                                        errorCount++;
-                                        continue;
-                                    }
-                                }
-                                await sleep(1000);
+                if (!row) {
+                    log("Archive/Update Forms: could not find row for archiving " + occ.rowKey);
+                    progressContent.setItemStatus(i, "Error (row not found)", "#dc3545");
+                    errorCount++;
+                    continue;
+                }
+
+                await clickRowActionDropdown(row);
+
+                // Poll for archive or delete link to appear in dropdown
+                var archiveLink = null;
+                var deleteLink = null;
+                var actionPollStart = Date.now();
+                while (Date.now() - actionPollStart < 10000) {
+                    archiveLink = row.querySelector('a[href*="archivescheduledactivity"]');
+                    if (archiveLink) break;
+                    deleteLink = row.querySelector('a[onclick*="deleteScheduledActivity"]');
+                    if (deleteLink) break;
+                    await sleep(500);
+                }
+
+                if (!archiveLink && !deleteLink) {
+                    log("Archive/Update Forms: no archive or delete link found for " + occ.rowKey);
+                    progressContent.setItemStatus(i, "Error (no archive/delete link)", "#dc3545");
+                    errorCount++;
+                    continue;
+                }
+
+                if (!archiveLink) {
+                    // No archive button (activity plan not locked) - fall back to Delete
+                    log("Archive/Update Forms: using delete for " + occ.rowKey);
+                    deleteLink.click();
+                    // Wait for bootbox confirm dialog and click OK
+                    var confirmBtn = null;
+                    var confirmPollStart = Date.now();
+                    while (Date.now() - confirmPollStart < 10000) {
+                        confirmBtn = document.querySelector('button[data-bb-handler="confirm"]');
+                        if (confirmBtn) break;
+                        await sleep(500);
+                    }
+                    if (!confirmBtn) {
+                        log("Archive/Update Forms: confirm dialog did not appear for delete " + occ.rowKey);
+                        progressContent.setItemStatus(i, "Error (delete confirm)", "#dc3545");
+                        errorCount++;
+                        continue;
+                    }
+                    confirmBtn.click();
+                    log("Archive/Update Forms: deleted " + occ.rowKey);
+                    await sleep(1000);
+                } else {
+                    // Check if it's Un-Archive (already archived)
+                    var archiveLinkText = (archiveLink.textContent || "").toLowerCase();
+                    if (archiveLinkText.indexOf("un-archive") !== -1) {
+                        log("Archive/Update Forms: row already archived for " + occ.rowKey + "; skipping archive step");
+                    } else {
+                        archiveLink.click();
+                        var archiveModal = await waitForSAModal(10000);
+                        if (!archiveModal) {
+                            log("Archive/Update Forms: archive modal did not open for " + occ.rowKey);
+                            progressContent.setItemStatus(i, "Error (archive modal)", "#dc3545");
+                            errorCount++;
+                            continue;
+                        }
+                        // Set reason for change
+                        var reasonEl = document.getElementById("reasonForChange");
+                        if (reasonEl) {
+                            reasonEl.value = archiveReason || "Old version";
+                            reasonEl.dispatchEvent(new Event("change", { bubbles: true }));
+                        }
+                        // Click Save
+                        var saveBtn = document.getElementById("actionButton");
+                        if (saveBtn) {
+                            saveBtn.click();
+                            var closed = await waitForSAModalClose(10000);
+                            if (!closed) {
+                                log("Archive/Update Forms: archive modal did not close for " + occ.rowKey);
+                                progressContent.setItemStatus(i, "Error (archive)", "#dc3545");
+                                errorCount++;
+                                continue;
                             }
                         }
-                    } else {
-                        log("Archive/Update Forms: archive link not found for " + occ.rowKey);
+                        await sleep(1000);
                     }
                 }
 
