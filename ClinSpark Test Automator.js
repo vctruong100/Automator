@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.9.8
+// @version 3.9.9
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -34942,31 +34942,11 @@
             "Hide Logs": toggleLogsBtn
         };
 
-        // Render buttons in layout order with blank spacers for hidden ones
         var effectiveLayout = getEffectiveButtonLayout();
-        var layoutByPos = {};
-        for (var li = 0; li < effectiveLayout.length; li++) {
-            layoutByPos[effectiveLayout[li].position] = effectiveLayout[li];
-        }
-        var maxLayoutPos = 0;
-        for (var lj = 0; lj < effectiveLayout.length; lj++) {
-            if (effectiveLayout[lj].position > maxLayoutPos) maxLayoutPos = effectiveLayout[lj].position;
-        }
-        // Find last visible position to avoid trailing spacers
-        var lastVisiblePos = -1;
-        for (var lp = maxLayoutPos; lp >= 0; lp--) {
-            var ev = layoutByPos[lp];
-            if (ev && ev.visible && panelButtonMap[ev.id]) { lastVisiblePos = lp; break; }
-        }
-        for (var pos = 0; pos <= lastVisiblePos; pos++) {
-            var layoutEntry = layoutByPos[pos];
-            if (layoutEntry && layoutEntry.visible && panelButtonMap[layoutEntry.id]) {
-                btnRow.appendChild(panelButtonMap[layoutEntry.id]);
-            } else {
-                // Blank spacer for hidden or missing buttons
-                var spacer = document.createElement("div");
-                spacer.style.cssText = "visibility:hidden;min-height:" + scale(BUTTON_PADDING_PX * 2 + PANEL_FONT_SIZE_PX) + ";";
-                btnRow.appendChild(spacer);
+        var sortedLayout = effectiveLayout.slice().sort(function(a, b) { return a.position - b.position; });
+        for (var li = 0; li < sortedLayout.length; li++) {
+            if (sortedLayout[li].visible && panelButtonMap[sortedLayout[li].id]) {
+                btnRow.appendChild(panelButtonMap[sortedLayout[li].id]);
             }
         }
 
