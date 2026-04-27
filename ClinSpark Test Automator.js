@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 3.9.9
+// @version 4.0.0
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -18117,8 +18117,9 @@
 
 
     // Main "Collect All" feature that combines Run Barcode (if needed) + Run Form (IR) for each first row repeatedly.
-    async function runCollectAll() {
-        log("CollectAll: start requested");
+    async function runCollectAll(formValueMode) {
+        if (!formValueMode) { formValueMode = "randomIr"; }
+        log("CollectAll: start requested, mode=" + String(formValueMode));
 
         // Clear any previous data and reset cancellation flag
         clearCollectAllData();
@@ -18373,9 +18374,9 @@
                 }
             }
 
-            log("CollectAll: launching Run Form (IR) for formId=" + String(pickedFormId));
+            log("CollectAll: launching Run Form (" + String(formValueMode) + ") for formId=" + String(pickedFormId));
             RUN_FORM_V2_START_TS = Date.now();
-            setFormValueMode("ir");
+            setFormValueMode(formValueMode);
             await runFormAutomationV2();
 
             var closeSpan = await waitForSelector("span[data-dismiss='modal']", 8000);
@@ -35657,9 +35658,15 @@
             setFormValueMode(selectedMode);
             runFormAutomationV2();
         });
-        collectAllBtn.addEventListener("click", function () {
+        collectAllBtn.addEventListener("click", async function () {
             log("CollectAll: button clicked");
-            runCollectAll();
+            var selectedMode = await showRunFormOptionPanel();
+            if (!selectedMode) {
+                log("CollectAll: cancelled by user (no mode selected)");
+                return;
+            }
+            log("CollectAll: mode=" + selectedMode);
+            runCollectAll(selectedMode);
         });
         collapseBtn.addEventListener("click", function () {
             var collapsed = getPanelCollapsed();
