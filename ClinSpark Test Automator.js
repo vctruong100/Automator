@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 4.0.0
+// @version 4.0.1
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -3572,18 +3572,13 @@
         setEpochIndex(idx);
 
         if (idx >= queue.length) {
-            // All epochs done — ICF already ran after screening, so just finish
-            clearEpochQueueState();
-            clearRunMode();
-            updateRunAllPopupStatus("Run All Complete");
-            log("All epochs processed; Run All complete");
-            try {
-                localStorage.removeItem(STORAGE_RUN_ALL_POPUP);
-                if (RUN_ALL_POPUP_REF && RUN_ALL_POPUP_REF.close) {
-                    RUN_ALL_POPUP_REF.close();
-                }
-                RUN_ALL_POPUP_REF = null;
-            } catch (e) {}
+            // All epochs done — route to ICF Barcode as final step.
+            // The ICF handler gracefully skips if consent is already filled
+            // and handles the "all done" cleanup when no more epochs remain.
+            setRunMode("consentmid");
+            updateRunAllPopupStatus("Running ICF Barcode");
+            log("All epochs processed; routing to ICF Barcode as final step");
+            location.href = STUDY_SHOW_URL + "?autoconsent=1";
             return;
         }
 
