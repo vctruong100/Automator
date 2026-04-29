@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.4.5
+// @version     2.4.6
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -2844,6 +2844,7 @@
     // This feature automates importing forms from the study library modal.
     // It collects all studies and their forms, lets the user select/rename/configure,
     // then processes each import sequentially.
+    //=================================================================
 
     function isOnImportFromLibraryPage() {
         var href = location.href.split("?")[0].split('#')[0];
@@ -3459,7 +3460,7 @@
             }
         }
         var collapsed = {};
-        for (var ci = 0; ci < studies.length; ci++) collapsed[studies[ci].text] = true;
+        for (var ci = 0; ci < studies.length; ci++) collapsed[studies[ci].value] = true;
         var showSelectedOnly = false;
         var activeFormItem = null;
         var isFullscreen = false;
@@ -3766,6 +3767,7 @@
             var filter = leftSearch.value.toLowerCase();
             for (var si2 = 0; si2 < studies.length; si2++) {
                 var sName = studies[si2].text;
+                var sVal = studies[si2].value;
                 if (filter && sName.toLowerCase().indexOf(filter) === -1) continue;
                 var item = document.createElement("div");
                 item.textContent = sName;
@@ -3773,15 +3775,15 @@
                 item.title = sName;
                 item.onmouseover = (function(el) { return function() { el.style.background = tc.surfaceHover; }; })(item);
                 item.onmouseout = (function(el) { return function() { el.style.background = "transparent"; }; })(item);
-                item.onclick = (function(name) {
+                item.onclick = (function(val) {
                     return function() {
                         for (var k in collapsed) collapsed[k] = true;
-                        collapsed[name] = false;
+                        collapsed[val] = false;
                         renderMidPanel();
-                        var hdr = midList.querySelector('[data-study-header="' + CSS.escape(name) + '"]');
+                        var hdr = midList.querySelector('[data-study-value="' + CSS.escape(val) + '"]');
                         if (hdr) hdr.scrollIntoView({ block: "start", behavior: "smooth" });
                     };
-                })(sName);
+                })(sVal);
                 leftList.appendChild(item);
             }
         }
@@ -3791,9 +3793,10 @@
             var filter = midSearch.value.toLowerCase();
             for (var si3 = 0; si3 < studies.length; si3++) {
                 var sName = studies[si3].text;
+                var sVal = studies[si3].value;
                 var sItems = [];
                 for (var fi2 = 0; fi2 < formItems.length; fi2++) {
-                    if (formItems[fi2].studyName !== sName) continue;
+                    if (formItems[fi2].studyValue !== sVal) continue;
                     if (showSelectedOnly && !formItems[fi2].selected) continue;
                     var desc = formItems[fi2].studyName + " - " + formItems[fi2].formName;
                     if (filter) {
@@ -3806,7 +3809,8 @@
 
                 var hdr = document.createElement("div");
                 hdr.setAttribute("data-study-header", sName);
-                var isCollapsed = !!collapsed[sName];
+                hdr.setAttribute("data-study-value", sVal);
+                var isCollapsed = !!collapsed[sVal];
                 hdr.className = "ifl-hdr";
                 hdr.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:" + tc.surface + ";border-radius:6px;margin:4px 0 2px;cursor:pointer;user-select:none;";
                 var hdrLabel = document.createElement("span");
@@ -3817,9 +3821,9 @@
                 hdrArrow.style.cssText = "color:" + tc.textMuted + ";font-size:10px;flex-shrink:0;margin-left:8px;";
                 hdr.appendChild(hdrLabel);
                 hdr.appendChild(hdrArrow);
-                hdr.onclick = (function(name) {
-                    return function() { collapsed[name] = !collapsed[name]; renderMidPanel(); };
-                })(sName);
+                hdr.onclick = (function(val) {
+                    return function() { collapsed[val] = !collapsed[val]; renderMidPanel(); };
+                })(sVal);
                 midList.appendChild(hdr);
                 if (isCollapsed) continue;
 
@@ -3843,8 +3847,19 @@
                         nameSpan.title = nameSpan.textContent;
 
                         var lockIcon = document.createElement("span");
-                        lockIcon.textContent = fItem.lockOnSave ? "\uD83D\uDD12" : "";
-                        lockIcon.style.cssText = "font-size:11px;flex-shrink:0;width:16px;text-align:center;";
+                        lockIcon.textContent = fItem.lockOnSave ? "\uD83D\uDD12" : "\uD83D\uDD13";
+                        lockIcon.style.cssText = "font-size:11px;flex-shrink:0;width:16px;text-align:center;cursor:pointer;user-select:none;" + (fItem.lockOnSave ? "opacity:1;" : "opacity:0.4;");
+                        lockIcon.title = fItem.lockOnSave ? "Locked - double-click to unlock" : "Unlocked - double-click to lock";
+                        lockIcon.addEventListener("dblclick", (function(fi2, iconE1) {
+                            return function(e) {
+                                e.stopPropagation();
+                                fi2.lockOnSave = !fi2.lockOnSave;
+                                iconE1.textContent = fi2.lockOnSave ? "\uD83D\uDD12" :  "\uD83D\uDD13";
+                                iconE1.style.opacity = fi2.lockOnSave ? "1" : "0.4";
+                                iconE1.title = fi2.lockOnSave ? "Locked - double click to unlock" : "Unlocked - double-clock to lock";
+                                log("IFL: lock toggled");
+                            };
+                        })(fItem, lockIcon)); 
 
                         var cb = document.createElement("input");
                         cb.type = "checkbox";
