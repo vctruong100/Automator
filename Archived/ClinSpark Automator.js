@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.4.5
+// @version     2.4.4
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -282,6 +282,390 @@
     var PULL_LAB_BARCODE_SUMMARY_EL = null;
     var PULL_LAB_BARCODE_STATUS_MAP = {};
 
+    // Theme Mode
+    var STORAGE_THEME_MODE = "activityPlanState.themeMode";
+    var THEME_MODE_BLACK = "black";
+    var THEME_MODE_GLASS = "glass";
+
+    // Glassmorphism Theme Variables (from Test Automator 2)
+    var THEME_GRADIENT_START = "#667eea";
+    var THEME_GRADIENT_END = "#764ba2";
+    var THEME_GRADIENT_BG = "linear-gradient(135deg, #667eea 0%, #764ba2 100%)";
+    var THEME_SURFACE_BG = "rgba(15,10,40,0.55)";
+    var THEME_SURFACE_BG_HEAVY = "rgba(15,10,40,0.7)";
+    var THEME_SURFACE_BORDER = "rgba(255,255,255,0.25)";
+    var THEME_SURFACE_INNER_BORDER = "rgba(255,255,255,0.35)";
+    var THEME_BLUR_PX = 16;
+    var THEME_TEXT_PRIMARY = "#ffffff";
+    var THEME_TEXT_MUTED = "rgba(255,255,255,0.75)";
+    var THEME_TEXT_INVERSE = "#0f1020";
+    var THEME_ACCENT = "#a78bfa";
+    var THEME_ACCENT_HOVER = "#c4b5fd";
+    var THEME_DANGER = "#ef4444";
+    var THEME_DANGER_DARK = "#b91c1c";
+    var THEME_WARNING = "#f59e0b";
+    var THEME_WARNING_DARK = "#d97706";
+    var THEME_SUCCESS = "#10b981";
+    var THEME_SUCCESS_DARK = "#059669";
+    var THEME_DISABLED_OPACITY = 0.5;
+    var THEME_SELECT_OPTION_BG = "#2d1b69";
+    var THEME_SHADOW = "0 8px 30px rgba(0,0,0,0.3)";
+    var THEME_RADIUS = 14;
+    var THEME_OUTLINE_FOCUS = "0 0 0 3px rgba(199,210,254,0.6)";
+    var THEME_SCROLLBAR_TRACK = "rgba(255,255,255,0.12)";
+    var THEME_SCROLLBAR_THUMB = "rgba(255,255,255,0.35)";
+    var THEME_STYLE_TAG_ID = "ieThemeStyles";
+    var THEME_SCOPE_CLASS = "ie-theme-scope";
+    var THEME_Z_BASE = 999999;
+    var THEME_Z_OVERLAY = 1000000;
+    var THEME_Z_TOAST = 1000001;
+
+    function getThemeMode() {
+        try {
+            var saved = localStorage.getItem(STORAGE_THEME_MODE);
+            if (saved === THEME_MODE_GLASS) return THEME_MODE_GLASS;
+        } catch (e) {}
+        return THEME_MODE_BLACK;
+    }
+
+    function setThemeMode(mode) {
+        try {
+            localStorage.setItem(STORAGE_THEME_MODE, mode);
+        } catch (e) {}
+    }
+
+    function isGlassTheme() {
+        return getThemeMode() === THEME_MODE_GLASS;
+    }
+
+    // Glassmorphism Theme Style Injection (from Test Automator 2)
+    function injectThemeStylesIfNeeded() {
+        if (!isGlassTheme()) return;
+        var existing = document.getElementById(THEME_STYLE_TAG_ID);
+        if (existing) return;
+        var style = document.createElement("style");
+        style.id = THEME_STYLE_TAG_ID;
+        style.textContent = [
+            "." + THEME_SCOPE_CLASS + " {",
+            "  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;",
+            "  color: " + THEME_TEXT_PRIMARY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-theme-backdrop {",
+            "  position: fixed; top:0; left:0; width:100%; height:100%;",
+            "  background: linear-gradient(135deg, " + THEME_GRADIENT_START + " 0%, " + THEME_GRADIENT_END + " 100%);",
+            "  z-index: " + (THEME_Z_BASE - 1) + ";",
+            "  pointer-events: none;",
+            "}",
+            "." + THEME_SCOPE_CLASS + ".ie-glass-panel,",
+            "." + THEME_SCOPE_CLASS + " .ie-glass-panel {",
+            "  background: " + THEME_GRADIENT_BG + ";",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  box-shadow: inset 0 0 0 1px " + THEME_SURFACE_INNER_BORDER + ", " + THEME_SHADOW + ";",
+            "  border-radius: " + THEME_RADIUS + "px;",
+            "  color: " + THEME_TEXT_PRIMARY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + ".ie-glass-panel-header,",
+            "." + THEME_SCOPE_CLASS + " .ie-glass-panel-header {",
+            "  background: linear-gradient(135deg, " + THEME_GRADIENT_START + " 0%, " + THEME_GRADIENT_END + " 100%);",
+            "  border-bottom: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  color: " + THEME_TEXT_PRIMARY + ";",
+            "  cursor: move; user-select: none;",
+            "}",
+            "." + THEME_SCOPE_CLASS + ".ie-glass-panel-header-danger,",
+            "." + THEME_SCOPE_CLASS + " .ie-glass-panel-header-danger {",
+            "  background: linear-gradient(135deg, " + THEME_DANGER + " 0%, " + THEME_DANGER_DARK + " 100%);",
+            "  border-bottom: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  color: " + THEME_TEXT_PRIMARY + ";",
+            "  cursor: move; user-select: none;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-primary {",
+            "  background: linear-gradient(135deg, " + THEME_GRADIENT_START + " 0%, " + THEME_GRADIENT_END + " 100%);",
+            "  color: " + THEME_TEXT_PRIMARY + "; border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 600;",
+            "  font-size: 14px; transition: opacity 0.2s, box-shadow 0.2s;",
+            "  box-shadow: " + THEME_SHADOW + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-primary:hover {",
+            "  opacity: 0.9; box-shadow: 0 0 0 2px " + THEME_ACCENT_HOVER + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-primary:focus-visible {",
+            "  box-shadow: " + THEME_OUTLINE_FOCUS + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-primary:disabled {",
+            "  opacity: " + THEME_DISABLED_OPACITY + "; cursor: default;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-secondary {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  color: " + THEME_TEXT_PRIMARY + "; border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 500;",
+            "  font-size: 13px; transition: background-color 0.2s, box-shadow 0.2s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-secondary:hover {",
+            "  background-color: " + THEME_SURFACE_BG_HEAVY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-secondary:disabled {",
+            "  opacity: " + THEME_DISABLED_OPACITY + "; cursor: default;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-secondary:focus-visible {",
+            "  box-shadow: " + THEME_OUTLINE_FOCUS + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-danger {",
+            "  background: linear-gradient(135deg, " + THEME_DANGER + " 0%, " + THEME_DANGER_DARK + " 100%);",
+            "  color: " + THEME_TEXT_PRIMARY + "; border: 1px solid rgba(239,68,68,0.4);",
+            "  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 600;",
+            "  font-size: 14px; transition: opacity 0.2s, box-shadow 0.2s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-danger:hover {",
+            "  opacity: 0.9;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-danger:focus-visible {",
+            "  box-shadow: " + THEME_OUTLINE_FOCUS + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-success {",
+            "  background: linear-gradient(135deg, " + THEME_SUCCESS + " 0%, " + THEME_SUCCESS_DARK + " 100%);",
+            "  color: " + THEME_TEXT_PRIMARY + "; border: 1px solid rgba(16,185,129,0.4);",
+            "  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 600;",
+            "  font-size: 14px; transition: opacity 0.2s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-success:hover { opacity: 0.9; }",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-success:disabled {",
+            "  opacity: " + THEME_DISABLED_OPACITY + "; cursor: default;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-warning {",
+            "  background: linear-gradient(135deg, " + THEME_WARNING + " 0%, " + THEME_WARNING_DARK + " 100%);",
+            "  color: " + THEME_TEXT_INVERSE + "; border: 1px solid rgba(245,158,11,0.4);",
+            "  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 600;",
+            "  font-size: 14px; transition: opacity 0.2s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-warning:hover { opacity: 0.9; }",
+            "." + THEME_SCOPE_CLASS + " .ie-btn-warning:disabled {",
+            "  opacity: " + THEME_DISABLED_OPACITY + "; cursor: default;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-input {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; padding: 10px 12px; color: " + THEME_TEXT_PRIMARY + ";",
+            "  font-size: 14px; outline: none; transition: border-color 0.2s, box-shadow 0.2s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-input:focus {",
+            "  border-color: " + THEME_ACCENT + "; box-shadow: " + THEME_OUTLINE_FOCUS + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-input::placeholder { color: " + THEME_TEXT_MUTED + "; }",
+            "." + THEME_SCOPE_CLASS + " .ie-select {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; padding: 8px 12px; color: " + THEME_TEXT_PRIMARY + ";",
+            "  font-size: 14px; cursor: pointer; outline: none;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-select:focus {",
+            "  border-color: " + THEME_ACCENT + "; box-shadow: " + THEME_OUTLINE_FOCUS + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-select option {",
+            "  background: " + THEME_SELECT_OPTION_BG + "; color: " + THEME_TEXT_PRIMARY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-checkbox-row {",
+            "  display: flex; align-items: center; gap: 10px;",
+            "  padding: 8px 12px; background-color: " + THEME_SURFACE_BG + ";",
+            "  border-radius: 8px; cursor: pointer; transition: background-color 0.15s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-checkbox-row:hover {",
+            "  background-color: " + THEME_SURFACE_BG_HEAVY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " input[type='checkbox'] {",
+            "  accent-color: " + THEME_ACCENT + "; cursor: pointer;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " input[type='range'] {",
+            "  accent-color: " + THEME_ACCENT + "; cursor: pointer;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-pill-success {",
+            "  background: rgba(16,185,129,0.25); color: " + THEME_SUCCESS + ";",
+            "  padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-pill-danger {",
+            "  background: rgba(239,68,68,0.25); color: " + THEME_DANGER + ";",
+            "  padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-pill-warning {",
+            "  background: rgba(245,158,11,0.25); color: " + THEME_WARNING + ";",
+            "  padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-pill-muted {",
+            "  background: " + THEME_SURFACE_BG + "; color: " + THEME_TEXT_MUTED + ";",
+            "  padding: 2px 10px; border-radius: 10px; font-size: 11px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-pill-accent {",
+            "  background: rgba(167,139,250,0.25); color: " + THEME_ACCENT + ";",
+            "  padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-pill-info {",
+            "  background: rgba(102,126,234,0.25); color: " + THEME_GRADIENT_START + ";",
+            "  padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-progress-track {",
+            "  width: 100%; height: 8px; background: " + THEME_SURFACE_BG + ";",
+            "  border-radius: 4px; overflow: hidden;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-progress-fill {",
+            "  height: 100%; transition: width 0.3s;",
+            "  background: linear-gradient(135deg, " + THEME_GRADIENT_START + " 0%, " + THEME_GRADIENT_END + " 100%);",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-spinner {",
+            "  width: 40px; height: 40px;",
+            "  border: 4px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-top: 4px solid " + THEME_ACCENT + ";",
+            "  border-radius: 50%; margin: 0 auto 16px;",
+            "  animation: ieThemeSpin 1s linear infinite;",
+            "}",
+            "@keyframes ieThemeSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }",
+            "@media (prefers-reduced-motion: reduce) {",
+            "  ." + THEME_SCOPE_CLASS + " .ie-spinner { animation: none; }",
+            "  ." + THEME_SCOPE_CLASS + " * { transition-duration: 0s !important; animation-duration: 0s !important; }",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-list-item {",
+            "  display: flex; align-items: center; gap: 10px;",
+            "  padding: 10px; margin-bottom: 6px;",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; background-color: " + THEME_SURFACE_BG + ";",
+            "  cursor: pointer; transition: background-color 0.2s, border-color 0.2s;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-list-item:hover {",
+            "  background-color: " + THEME_SURFACE_BG_HEAVY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-list-item.ie-selected {",
+            "  background-color: rgba(167,139,250,0.2); border-color: " + THEME_ACCENT + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-list-item.ie-selected-success {",
+            "  background-color: rgba(16,185,129,0.15); border-color: " + THEME_SUCCESS + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-list-item.ie-selected-danger {",
+            "  background-color: rgba(239,68,68,0.15); border-color: " + THEME_DANGER + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-section-header {",
+            "  font-weight: 600; font-size: 14px; color: " + THEME_ACCENT + ";",
+            "  padding: 8px; background-color: " + THEME_SURFACE_BG + ";",
+            "  border-radius: " + THEME_RADIUS + "px " + THEME_RADIUS + "px 0 0;",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + "; border-bottom: none;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-section-body {",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 0 0 " + THEME_RADIUS + "px " + THEME_RADIUS + "px;",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-count-badge {",
+            "  font-size: 11px; color: " + THEME_TEXT_MUTED + ";",
+            "  background: " + THEME_SURFACE_BG + "; padding: 2px 8px;",
+            "  border-radius: 10px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-radio-indicator {",
+            "  width: 18px; height: 18px; border: 2px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 50%; flex-shrink: 0; display: flex;",
+            "  align-items: center; justify-content: center;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-sub-surface {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-status-area {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; padding: 6px; font-size: 13px;",
+            "  white-space: pre-wrap; color: " + THEME_TEXT_PRIMARY + ";",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-log-box {",
+            "  background-color: rgba(0,0,0,0.25);",
+            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
+            "  border-radius: 8px; padding: 6px; font-size: 12px;",
+            "  color: " + THEME_TEXT_MUTED + "; white-space: pre-wrap;",
+            "  word-break: break-word; overflow-wrap: anywhere;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-resize-handle {",
+            "  position: absolute; width: 12px; height: 12px;",
+            "  right: 6px; bottom: 6px; cursor: se-resize;",
+            "  background: " + THEME_SURFACE_BORDER + "; border-radius: 2px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-error-text {",
+            "  color: " + THEME_DANGER + "; text-align: center; font-size: 14px; min-height: 20px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-muted-text {",
+            "  color: " + THEME_TEXT_MUTED + "; font-size: 13px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-selection-info {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  border-radius: 8px; padding: 10px; font-size: 13px;",
+            "  color: " + THEME_TEXT_MUTED + "; text-align: center;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " .ie-summary-box {",
+            "  background-color: " + THEME_SURFACE_BG + ";",
+            "  border-radius: 8px; padding: 12px; text-align: center;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " ::-webkit-scrollbar { width: 8px; height: 8px; }",
+            "." + THEME_SCOPE_CLASS + " ::-webkit-scrollbar-track {",
+            "  background: " + THEME_SCROLLBAR_TRACK + "; border-radius: 4px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " ::-webkit-scrollbar-thumb {",
+            "  background: " + THEME_SCROLLBAR_THUMB + "; border-radius: 4px;",
+            "}",
+            "." + THEME_SCOPE_CLASS + " ::-webkit-scrollbar-thumb:hover {",
+            "  background: rgba(255,255,255,0.5);",
+            "}",
+            ""
+        ].join("\n");
+        document.head.appendChild(style);
+    }
+
+    function removeThemeStyles() {
+        var existing = document.getElementById(THEME_STYLE_TAG_ID);
+        if (existing) existing.remove();
+    }
+
+    function applyThemeToUiRoots() {
+        if (!isGlassTheme()) return;
+        var panel = document.getElementById(PANEL_ID);
+        if (panel && !panel.classList.contains(THEME_SCOPE_CLASS)) {
+            panel.classList.add(THEME_SCOPE_CLASS);
+        }
+        var popups = document.querySelectorAll("[id^='clinsparkPopup_']");
+        for (var i = 0; i < popups.length; i++) {
+            if (!popups[i].classList.contains(THEME_SCOPE_CLASS)) {
+                popups[i].classList.add(THEME_SCOPE_CLASS);
+            }
+        }
+    }
+
+    
+    // Standardized "Collecting Data" overlay used by all features
+    function createCollectingOverlay(title, message) {
+        var overlay = document.createElement("div");
+        overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:30000;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;";
+        var panel = document.createElement("div");
+        panel.style.cssText = "background:#111;border:1px solid #333;border-radius:12px;padding:32px 48px;box-shadow:0 15px 35px rgba(0,0,0,0.5);display:flex;flex-direction:column;align-items:center;gap:16px;min-width:320px;";
+        var spinStyle = document.createElement("style");
+        spinStyle.textContent = "@keyframes cda-spin { to { transform: rotate(360deg); } } @keyframes cda-pulse { 0%,100% { opacity:0.6; } 50% { opacity:1; } }";
+        panel.appendChild(spinStyle);
+        var spinner = document.createElement("div");
+        spinner.style.cssText = "width:36px;height:36px;border:3px solid #5b43c7;border-top-color:transparent;border-radius:50%;animation:cda-spin 0.8s linear infinite;";
+        panel.appendChild(spinner);
+        var titleEl = document.createElement("div");
+        titleEl.textContent = title || "Collecting data";
+        titleEl.style.cssText = "color:#fff;font-size:16px;font-weight:600;";
+        panel.appendChild(titleEl);
+        var messageEl = document.createElement("div");
+        messageEl.textContent = message || "";
+        messageEl.style.cssText = "color:#999;font-size:12px;animation:cda-pulse 1.5s ease-in-out infinite;";
+        panel.appendChild(messageEl);
+        overlay.appendChild(panel);
+        document.body.appendChild(overlay);
+        return {
+            overlay: overlay,
+            panel: panel,
+            titleEl: titleEl,
+            messageEl: messageEl,
+            setTitle: function(t) { titleEl.textContent = t; },
+            setMessage: function(m) { messageEl.textContent = m; },
+            close: function() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+        };
+    }
 
     //==========================
     // SET VISIBILITY CONDITION FEATURE
@@ -989,7 +1373,7 @@
                             var tag = document.createElement("span");
                             tag.textContent = mapping.form;
                             tag.title = mapping.segment + " - " + mapping.studyEvent + " - " + mapping.form;
-                            tag.style.cssText = "display:inline-block;padding:1px 4px;background:#3a3a5a;border-radius:3px;font-size:9px;color:#ccc;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;flex:1;min-width:0;";
+                            tag.style.cssText = "display:inline-flex;align-items:center;gap:2px;padding:1px 4px;background:#3a3a5a;border-radius:3px;font-size:9px;color:#ccc;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;";
                             tag.addEventListener("click", (function(gIdx) {
                                 return function(e) {
                                     e.stopPropagation();
@@ -1000,13 +1384,10 @@
                                     loadFormAttributesForDropbox(gIdx);
                                 };
                             })(globalIdx));
-                            // X remove button - appended to dropbox directly so it's always visible
+                            // X remove button
                             var removeTag = document.createElement("span");
                             removeTag.textContent = "\u00D7";
-                            removeTag.title = "Remove form from dropbox";
-                            removeTag.style.cssText = "cursor:pointer;color:#ff6b6b;font-weight:bold;font-size:13px;flex-shrink:0;padding:0 2px;line-height:1;";
-                            removeTag.addEventListener("mouseenter", function() { this.style.color = "#ff4444"; });
-                            removeTag.addEventListener("mouseleave", function() { this.style.color = "#ff6b6b"; });
+                            removeTag.style.cssText = "cursor:pointer;color:#ff6b6b;font-weight:bold;font-size:11px;margin-left:2px;flex-shrink:0;";
                             removeTag.addEventListener("click", (function(gIdx) {
                                 return function(e) {
                                     e.stopPropagation();
@@ -1021,8 +1402,8 @@
                                     updateConfirmState();
                                 };
                             })(globalIdx));
+                            tag.appendChild(removeTag);
                             dropbox.appendChild(tag);
-                            dropbox.appendChild(removeTag);
                             // Highlight if selected
                             if (selectedDropboxIdx === globalIdx) {
                                 dropbox.style.borderColor = "#7a7aff";
@@ -2420,392 +2801,6 @@
         });
     }
 
-    //=======================================================================================================
-    // Theme Mode
-    var STORAGE_THEME_MODE = "activityPlanState.themeMode";
-    var THEME_MODE_BLACK = "black";
-    var THEME_MODE_GLASS = "glass";
-
-    // Glassmorphism Theme Variables (from Test Automator 2)
-    var THEME_GRADIENT_START = "#667eea";
-    var THEME_GRADIENT_END = "#764ba2";
-    var THEME_GRADIENT_BG = "linear-gradient(135deg, #667eea 0%, #764ba2 100%)";
-    var THEME_SURFACE_BG = "rgba(15,10,40,0.55)";
-    var THEME_SURFACE_BG_HEAVY = "rgba(15,10,40,0.7)";
-    var THEME_SURFACE_BORDER = "rgba(255,255,255,0.25)";
-    var THEME_SURFACE_INNER_BORDER = "rgba(255,255,255,0.35)";
-    var THEME_BLUR_PX = 16;
-    var THEME_TEXT_PRIMARY = "#ffffff";
-    var THEME_TEXT_MUTED = "rgba(255,255,255,0.75)";
-    var THEME_TEXT_INVERSE = "#0f1020";
-    var THEME_ACCENT = "#a78bfa";
-    var THEME_ACCENT_HOVER = "#c4b5fd";
-    var THEME_DANGER = "#ef4444";
-    var THEME_DANGER_DARK = "#b91c1c";
-    var THEME_WARNING = "#f59e0b";
-    var THEME_WARNING_DARK = "#d97706";
-    var THEME_SUCCESS = "#10b981";
-    var THEME_SUCCESS_DARK = "#059669";
-    var THEME_DISABLED_OPACITY = 0.5;
-    var THEME_SELECT_OPTION_BG = "#2d1b69";
-    var THEME_SHADOW = "0 8px 30px rgba(0,0,0,0.3)";
-    var THEME_RADIUS = 14;
-    var THEME_OUTLINE_FOCUS = "0 0 0 3px rgba(199,210,254,0.6)";
-    var THEME_SCROLLBAR_TRACK = "rgba(255,255,255,0.12)";
-    var THEME_SCROLLBAR_THUMB = "rgba(255,255,255,0.35)";
-    var THEME_STYLE_TAG_ID = "ieThemeStyles";
-    var THEME_SCOPE_CLASS = "ie-theme-scope";
-    var THEME_Z_BASE = 999999;
-    var THEME_Z_OVERLAY = 1000000;
-    var THEME_Z_TOAST = 1000001;
-
-    function getThemeMode() {
-        try {
-            var saved = localStorage.getItem(STORAGE_THEME_MODE);
-            if (saved === THEME_MODE_GLASS) return THEME_MODE_GLASS;
-        } catch (e) {}
-        return THEME_MODE_BLACK;
-    }
-
-    function setThemeMode(mode) {
-        try {
-            localStorage.setItem(STORAGE_THEME_MODE, mode);
-        } catch (e) {}
-    }
-
-    function isGlassTheme() {
-        return getThemeMode() === THEME_MODE_GLASS;
-    }
-
-    // Glassmorphism Theme Style Injection (from Test Automator 2)
-    function injectThemeStylesIfNeeded() {
-        if (!isGlassTheme()) return;
-        var existing = document.getElementById(THEME_STYLE_TAG_ID);
-        if (existing) return;
-        var style = document.createElement("style");
-        style.id = THEME_STYLE_TAG_ID;
-        style.textContent = [
-            "." + THEME_SCOPE_CLASS + " {",
-            "  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;",
-            "  color: " + THEME_TEXT_PRIMARY + ";",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-theme-backdrop {",
-            "  position: fixed; top:0; left:0; width:100%; height:100%;",
-            "  background: linear-gradient(135deg, " + THEME_GRADIENT_START + " 0%, " + THEME_GRADIENT_END + " 100%);",
-            "  z-index: " + (THEME_Z_BASE - 1) + ";",
-            "  pointer-events: none;",
-            "}",
-            "." + THEME_SCOPE_CLASS + ".ie-glass-panel,",
-            "." + THEME_SCOPE_CLASS + " .ie-glass-panel {",
-            "  background: " + THEME_GRADIENT_BG + ";",
-            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
-            "  box-shadow: inset 0 0 0 1px " + THEME_SURFACE_INNER_BORDER + ", " + THEME_SHADOW + ";",
-            "  border-radius: " + THEME_RADIUS + "px;",
-            "  color: " + THEME_TEXT_PRIMARY + ";",
-            "}",
-            "." + THEME_SCOPE_CLASS + ".ie-glass-panel-header,",
-            "." + THEME_SCOPE_CLASS + " .ie-glass-panel-header {",
-            "  background: linear-gradient(135deg, " + THEME_GRADIENT_START + " 0%, " + THEME_GRADIENT_END + " 100%);",
-            "  border-bottom: 1px solid " + THEME_SURFACE_BORDER + ";",
-            "  color: " + THEME_TEXT_PRIMARY + ";",
-            "  cursor: move; user-select: none;",
-            "}",
-            "." + THEME_SCOPE_CLASS + ".ie-glass-panel-header-danger,",
-            "." + THEME_SCOPE_CLASS + " .ie-glass-panel-header-danger {",
-            "  background: linear-gradient(135deg, " + THEME_DANGER + " 0%, " + THEME_DANGER_DARK + " 100%);",
-            "  border-bottom: 1px solid " + THEME_SURFACE_BORDER + ";",
-            "  color: " + THEME_TEXT_PRIMARY + ";",
-            "  cursor: move; user-select: none;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-btn-primary {",
-            "  background: linear-gradient(135deg, " + THEME_GRADIENT_START + " 0%, " + THEME_GRADIENT_END + " 100%);",
-            "  color: " + THEME_TEXT_PRIMARY + "; border: 1px solid " + THEME_SURFACE_BORDER + ";",
-            "  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 600;",
-            "  font-size: 14px; transition: opacity 0.2s, box-shadow 0.2s;",
-            "  box-shadow: " + THEME_SHADOW + ";",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-btn-primary:hover {",
-            "  opacity: 0.9; box-shadow: 0 0 0 2px " + THEME_ACCENT_HOVER + ";",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-btn-primary:focus-visible {",
-            "  box-shadow: " + THEME_OUTLINE_FOCUS + ";",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-btn-primary:disabled {",
-            "  opacity: " + THEME_DISABLED_OPACITY + "; cursor: default;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-btn-secondary {",
-            "  background-color: " + THEME_SURFACE_BG + ";",
-            "  color: " + THEME_TEXT_PRIMARY + "; border: 1px solid " + THEME_SURFACE_BORDER + ";",
-            "  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 500;",
-            "  font-size: 13px; transition: background-color 0.2s, box-shadow 0.2s;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-btn-secondary:hover {",
-            "  background-color: " + THEME_SURFACE_BG_HEAVY + ";",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-btn-secondary:disabled {",
-            "  opacity: " + THEME_DISABLED_OPACITY + "; cursor: default;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-btn-secondary:focus-visible {",
-            "  box-shadow: " + THEME_OUTLINE_FOCUS + ";",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-btn-danger {",
-            "  background: linear-gradient(135deg, " + THEME_DANGER + " 0%, " + THEME_DANGER_DARK + " 100%);",
-            "  color: " + THEME_TEXT_PRIMARY + "; border: 1px solid rgba(239,68,68,0.4);",
-            "  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 600;",
-            "  font-size: 14px; transition: opacity 0.2s, box-shadow 0.2s;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-btn-danger:hover {",
-            "  opacity: 0.9;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-btn-danger:focus-visible {",
-            "  box-shadow: " + THEME_OUTLINE_FOCUS + ";",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-btn-success {",
-            "  background: linear-gradient(135deg, " + THEME_SUCCESS + " 0%, " + THEME_SUCCESS_DARK + " 100%);",
-            "  color: " + THEME_TEXT_PRIMARY + "; border: 1px solid rgba(16,185,129,0.4);",
-            "  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 600;",
-            "  font-size: 14px; transition: opacity 0.2s;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-btn-success:hover { opacity: 0.9; }",
-            "." + THEME_SCOPE_CLASS + " .ie-btn-success:disabled {",
-            "  opacity: " + THEME_DISABLED_OPACITY + "; cursor: default;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-btn-warning {",
-            "  background: linear-gradient(135deg, " + THEME_WARNING + " 0%, " + THEME_WARNING_DARK + " 100%);",
-            "  color: " + THEME_TEXT_INVERSE + "; border: 1px solid rgba(245,158,11,0.4);",
-            "  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 600;",
-            "  font-size: 14px; transition: opacity 0.2s;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-btn-warning:hover { opacity: 0.9; }",
-            "." + THEME_SCOPE_CLASS + " .ie-btn-warning:disabled {",
-            "  opacity: " + THEME_DISABLED_OPACITY + "; cursor: default;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-input {",
-            "  background-color: " + THEME_SURFACE_BG + ";",
-            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
-            "  border-radius: 8px; padding: 10px 12px; color: " + THEME_TEXT_PRIMARY + ";",
-            "  font-size: 14px; outline: none; transition: border-color 0.2s, box-shadow 0.2s;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-input:focus {",
-            "  border-color: " + THEME_ACCENT + "; box-shadow: " + THEME_OUTLINE_FOCUS + ";",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-input::placeholder { color: " + THEME_TEXT_MUTED + "; }",
-            "." + THEME_SCOPE_CLASS + " .ie-select {",
-            "  background-color: " + THEME_SURFACE_BG + ";",
-            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
-            "  border-radius: 8px; padding: 8px 12px; color: " + THEME_TEXT_PRIMARY + ";",
-            "  font-size: 14px; cursor: pointer; outline: none;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-select:focus {",
-            "  border-color: " + THEME_ACCENT + "; box-shadow: " + THEME_OUTLINE_FOCUS + ";",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-select option {",
-            "  background: " + THEME_SELECT_OPTION_BG + "; color: " + THEME_TEXT_PRIMARY + ";",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-checkbox-row {",
-            "  display: flex; align-items: center; gap: 10px;",
-            "  padding: 8px 12px; background-color: " + THEME_SURFACE_BG + ";",
-            "  border-radius: 8px; cursor: pointer; transition: background-color 0.15s;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-checkbox-row:hover {",
-            "  background-color: " + THEME_SURFACE_BG_HEAVY + ";",
-            "}",
-            "." + THEME_SCOPE_CLASS + " input[type='checkbox'] {",
-            "  accent-color: " + THEME_ACCENT + "; cursor: pointer;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " input[type='range'] {",
-            "  accent-color: " + THEME_ACCENT + "; cursor: pointer;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-pill-success {",
-            "  background: rgba(16,185,129,0.25); color: " + THEME_SUCCESS + ";",
-            "  padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-pill-danger {",
-            "  background: rgba(239,68,68,0.25); color: " + THEME_DANGER + ";",
-            "  padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-pill-warning {",
-            "  background: rgba(245,158,11,0.25); color: " + THEME_WARNING + ";",
-            "  padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-pill-muted {",
-            "  background: " + THEME_SURFACE_BG + "; color: " + THEME_TEXT_MUTED + ";",
-            "  padding: 2px 10px; border-radius: 10px; font-size: 11px;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-pill-accent {",
-            "  background: rgba(167,139,250,0.25); color: " + THEME_ACCENT + ";",
-            "  padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-pill-info {",
-            "  background: rgba(102,126,234,0.25); color: " + THEME_GRADIENT_START + ";",
-            "  padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-progress-track {",
-            "  width: 100%; height: 8px; background: " + THEME_SURFACE_BG + ";",
-            "  border-radius: 4px; overflow: hidden;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-progress-fill {",
-            "  height: 100%; transition: width 0.3s;",
-            "  background: linear-gradient(135deg, " + THEME_GRADIENT_START + " 0%, " + THEME_GRADIENT_END + " 100%);",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-spinner {",
-            "  width: 40px; height: 40px;",
-            "  border: 4px solid " + THEME_SURFACE_BORDER + ";",
-            "  border-top: 4px solid " + THEME_ACCENT + ";",
-            "  border-radius: 50%; margin: 0 auto 16px;",
-            "  animation: ieThemeSpin 1s linear infinite;",
-            "}",
-            "@keyframes ieThemeSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }",
-            "@media (prefers-reduced-motion: reduce) {",
-            "  ." + THEME_SCOPE_CLASS + " .ie-spinner { animation: none; }",
-            "  ." + THEME_SCOPE_CLASS + " * { transition-duration: 0s !important; animation-duration: 0s !important; }",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-list-item {",
-            "  display: flex; align-items: center; gap: 10px;",
-            "  padding: 10px; margin-bottom: 6px;",
-            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
-            "  border-radius: 8px; background-color: " + THEME_SURFACE_BG + ";",
-            "  cursor: pointer; transition: background-color 0.2s, border-color 0.2s;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-list-item:hover {",
-            "  background-color: " + THEME_SURFACE_BG_HEAVY + ";",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-list-item.ie-selected {",
-            "  background-color: rgba(167,139,250,0.2); border-color: " + THEME_ACCENT + ";",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-list-item.ie-selected-success {",
-            "  background-color: rgba(16,185,129,0.15); border-color: " + THEME_SUCCESS + ";",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-list-item.ie-selected-danger {",
-            "  background-color: rgba(239,68,68,0.15); border-color: " + THEME_DANGER + ";",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-section-header {",
-            "  font-weight: 600; font-size: 14px; color: " + THEME_ACCENT + ";",
-            "  padding: 8px; background-color: " + THEME_SURFACE_BG + ";",
-            "  border-radius: " + THEME_RADIUS + "px " + THEME_RADIUS + "px 0 0;",
-            "  border: 1px solid " + THEME_SURFACE_BORDER + "; border-bottom: none;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-section-body {",
-            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
-            "  border-radius: 0 0 " + THEME_RADIUS + "px " + THEME_RADIUS + "px;",
-            "  background-color: " + THEME_SURFACE_BG + ";",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-count-badge {",
-            "  font-size: 11px; color: " + THEME_TEXT_MUTED + ";",
-            "  background: " + THEME_SURFACE_BG + "; padding: 2px 8px;",
-            "  border-radius: 10px;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-radio-indicator {",
-            "  width: 18px; height: 18px; border: 2px solid " + THEME_SURFACE_BORDER + ";",
-            "  border-radius: 50%; flex-shrink: 0; display: flex;",
-            "  align-items: center; justify-content: center;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-sub-surface {",
-            "  background-color: " + THEME_SURFACE_BG + ";",
-            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
-            "  border-radius: 8px;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-status-area {",
-            "  background-color: " + THEME_SURFACE_BG + ";",
-            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
-            "  border-radius: 8px; padding: 6px; font-size: 13px;",
-            "  white-space: pre-wrap; color: " + THEME_TEXT_PRIMARY + ";",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-log-box {",
-            "  background-color: rgba(0,0,0,0.25);",
-            "  border: 1px solid " + THEME_SURFACE_BORDER + ";",
-            "  border-radius: 8px; padding: 6px; font-size: 12px;",
-            "  color: " + THEME_TEXT_MUTED + "; white-space: pre-wrap;",
-            "  word-break: break-word; overflow-wrap: anywhere;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-resize-handle {",
-            "  position: absolute; width: 12px; height: 12px;",
-            "  right: 6px; bottom: 6px; cursor: se-resize;",
-            "  background: " + THEME_SURFACE_BORDER + "; border-radius: 2px;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-error-text {",
-            "  color: " + THEME_DANGER + "; text-align: center; font-size: 14px; min-height: 20px;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-muted-text {",
-            "  color: " + THEME_TEXT_MUTED + "; font-size: 13px;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-selection-info {",
-            "  background-color: " + THEME_SURFACE_BG + ";",
-            "  border-radius: 8px; padding: 10px; font-size: 13px;",
-            "  color: " + THEME_TEXT_MUTED + "; text-align: center;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " .ie-summary-box {",
-            "  background-color: " + THEME_SURFACE_BG + ";",
-            "  border-radius: 8px; padding: 12px; text-align: center;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " ::-webkit-scrollbar { width: 8px; height: 8px; }",
-            "." + THEME_SCOPE_CLASS + " ::-webkit-scrollbar-track {",
-            "  background: " + THEME_SCROLLBAR_TRACK + "; border-radius: 4px;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " ::-webkit-scrollbar-thumb {",
-            "  background: " + THEME_SCROLLBAR_THUMB + "; border-radius: 4px;",
-            "}",
-            "." + THEME_SCOPE_CLASS + " ::-webkit-scrollbar-thumb:hover {",
-            "  background: rgba(255,255,255,0.5);",
-            "}",
-            ""
-        ].join("\n");
-        document.head.appendChild(style);
-    }
-
-    function removeThemeStyles() {
-        var existing = document.getElementById(THEME_STYLE_TAG_ID);
-        if (existing) existing.remove();
-    }
-
-    function applyThemeToUiRoots() {
-        if (!isGlassTheme()) return;
-        var panel = document.getElementById(PANEL_ID);
-        if (panel && !panel.classList.contains(THEME_SCOPE_CLASS)) {
-            panel.classList.add(THEME_SCOPE_CLASS);
-        }
-        var popups = document.querySelectorAll("[id^='clinsparkPopup_']");
-        for (var i = 0; i < popups.length; i++) {
-            if (!popups[i].classList.contains(THEME_SCOPE_CLASS)) {
-                popups[i].classList.add(THEME_SCOPE_CLASS);
-            }
-        }
-    }
-
-    
-    // Standardized "Collecting Data" overlay used by all features
-    function createCollectingOverlay(title, message) {
-        var overlay = document.createElement("div");
-        overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:30000;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;";
-        var panel = document.createElement("div");
-        panel.style.cssText = "background:#111;border:1px solid #333;border-radius:12px;padding:32px 48px;box-shadow:0 15px 35px rgba(0,0,0,0.5);display:flex;flex-direction:column;align-items:center;gap:16px;min-width:320px;";
-        var spinStyle = document.createElement("style");
-        spinStyle.textContent = "@keyframes cda-spin { to { transform: rotate(360deg); } } @keyframes cda-pulse { 0%,100% { opacity:0.6; } 50% { opacity:1; } }";
-        panel.appendChild(spinStyle);
-        var spinner = document.createElement("div");
-        spinner.style.cssText = "width:36px;height:36px;border:3px solid #5b43c7;border-top-color:transparent;border-radius:50%;animation:cda-spin 0.8s linear infinite;";
-        panel.appendChild(spinner);
-        var titleEl = document.createElement("div");
-        titleEl.textContent = title || "Collecting data";
-        titleEl.style.cssText = "color:#fff;font-size:16px;font-weight:600;";
-        panel.appendChild(titleEl);
-        var messageEl = document.createElement("div");
-        messageEl.textContent = message || "";
-        messageEl.style.cssText = "color:#999;font-size:12px;animation:cda-pulse 1.5s ease-in-out infinite;";
-        panel.appendChild(messageEl);
-        overlay.appendChild(panel);
-        document.body.appendChild(overlay);
-        return {
-            overlay: overlay,
-            panel: panel,
-            titleEl: titleEl,
-            messageEl: messageEl,
-            setTitle: function(t) { titleEl.textContent = t; },
-            setMessage: function(m) { messageEl.textContent = m; },
-            close: function() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
-        };
-    }
-
     // Import from Library Feature
     var IFL_FORM_LIST_PATH = "/secure/crfdesign/studylibrary/list/form";
     var IFL_VALID_URLS = [
@@ -2844,6 +2839,7 @@
     // This feature automates importing forms from the study library modal.
     // It collects all studies and their forms, lets the user select/rename/configure,
     // then processes each import sequentially.
+    //=================================================================
 
     function isOnImportFromLibraryPage() {
         var href = location.href.split("?")[0].split('#')[0];
@@ -3459,7 +3455,7 @@
             }
         }
         var collapsed = {};
-        for (var ci = 0; ci < studies.length; ci++) collapsed[studies[ci].text] = true;
+        for (var ci = 0; ci < studies.length; ci++) collapsed[studies[ci].value] = true;
         var showSelectedOnly = false;
         var activeFormItem = null;
         var isFullscreen = false;
@@ -3766,6 +3762,7 @@
             var filter = leftSearch.value.toLowerCase();
             for (var si2 = 0; si2 < studies.length; si2++) {
                 var sName = studies[si2].text;
+                var sVal = studies[si2].value;
                 if (filter && sName.toLowerCase().indexOf(filter) === -1) continue;
                 var item = document.createElement("div");
                 item.textContent = sName;
@@ -3773,15 +3770,15 @@
                 item.title = sName;
                 item.onmouseover = (function(el) { return function() { el.style.background = tc.surfaceHover; }; })(item);
                 item.onmouseout = (function(el) { return function() { el.style.background = "transparent"; }; })(item);
-                item.onclick = (function(name) {
+                item.onclick = (function(val) {
                     return function() {
                         for (var k in collapsed) collapsed[k] = true;
-                        collapsed[name] = false;
+                        collapsed[val] = false;
                         renderMidPanel();
-                        var hdr = midList.querySelector('[data-study-header="' + CSS.escape(name) + '"]');
+                        var hdr = midList.querySelector('[data-study-value="' + CSS.escape(val) + '"]');
                         if (hdr) hdr.scrollIntoView({ block: "start", behavior: "smooth" });
                     };
-                })(sName);
+                })(sVal);
                 leftList.appendChild(item);
             }
         }
@@ -3791,9 +3788,10 @@
             var filter = midSearch.value.toLowerCase();
             for (var si3 = 0; si3 < studies.length; si3++) {
                 var sName = studies[si3].text;
+                var sVal = studies[si3].value;
                 var sItems = [];
                 for (var fi2 = 0; fi2 < formItems.length; fi2++) {
-                    if (formItems[fi2].studyName !== sName) continue;
+                    if (formItems[fi2].studyValue !== sVal) continue;
                     if (showSelectedOnly && !formItems[fi2].selected) continue;
                     var desc = formItems[fi2].studyName + " - " + formItems[fi2].formName;
                     if (filter) {
@@ -3806,7 +3804,8 @@
 
                 var hdr = document.createElement("div");
                 hdr.setAttribute("data-study-header", sName);
-                var isCollapsed = !!collapsed[sName];
+                hdr.setAttribute("data-study-value", sVal);
+                var isCollapsed = !!collapsed[sVal];
                 hdr.className = "ifl-hdr";
                 hdr.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:" + tc.surface + ";border-radius:6px;margin:4px 0 2px;cursor:pointer;user-select:none;";
                 var hdrLabel = document.createElement("span");
@@ -3817,9 +3816,9 @@
                 hdrArrow.style.cssText = "color:" + tc.textMuted + ";font-size:10px;flex-shrink:0;margin-left:8px;";
                 hdr.appendChild(hdrLabel);
                 hdr.appendChild(hdrArrow);
-                hdr.onclick = (function(name) {
-                    return function() { collapsed[name] = !collapsed[name]; renderMidPanel(); };
-                })(sName);
+                hdr.onclick = (function(val) {
+                    return function() { collapsed[val] = !collapsed[val]; renderMidPanel(); };
+                })(sVal);
                 midList.appendChild(hdr);
                 if (isCollapsed) continue;
 
@@ -3843,8 +3842,19 @@
                         nameSpan.title = nameSpan.textContent;
 
                         var lockIcon = document.createElement("span");
-                        lockIcon.textContent = fItem.lockOnSave ? "\uD83D\uDD12" : "";
-                        lockIcon.style.cssText = "font-size:11px;flex-shrink:0;width:16px;text-align:center;";
+                        lockIcon.textContent = fItem.lockOnSave ? "\uD83D\uDD12" : "\uD83D\uDD13";
+                        lockIcon.style.cssText = "font-size:11px;flex-shrink:0;width:20px;text-align:center;cursor:pointer;user-select:none;" + (fItem.lockOnSave ? "opacity:1;" : "opacity:0.4;");
+                        lockIcon.title = fItem.lockOnSave ? "Locked — double-click to unlock" : "Unlocked — double-click to lock";
+                        lockIcon.addEventListener("dblclick", (function(fi2, iconEl) {
+                            return function(e) {
+                                e.stopPropagation();
+                                fi2.lockOnSave = !fi2.lockOnSave;
+                                iconEl.textContent = fi2.lockOnSave ? "\uD83D\uDD12" : "\uD83D\uDD13";
+                                iconEl.style.opacity = fi2.lockOnSave ? "1" : "0.4";
+                                iconEl.title = fi2.lockOnSave ? "Locked — double-click to unlock" : "Unlocked — double-click to lock";
+                                log("IFL: lock toggled to " + (fi2.lockOnSave ? "locked" : "unlocked") + " for " + fi2.formName);
+                            };
+                        })(fItem, lockIcon));
 
                         var cb = document.createElement("input");
                         cb.type = "checkbox";
@@ -4653,13 +4663,33 @@
         }
 
         // Show "Collecting data" animation overlay
-        var collecting = createCollectingOverlay("Collecting data", "Scanning studies and forms\u2026");
+        var collectingOverlay = document.createElement("div");
+        collectingOverlay.id = "ifl-collecting-overlay";
+        collectingOverlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:30000;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;";
+        var collectingPanel = document.createElement("div");
+        collectingPanel.style.cssText = "background:#111;border:1px solid #333;border-radius:12px;padding:32px 48px;box-shadow:0 15px 35px rgba(0,0,0,0.5);display:flex;flex-direction:column;align-items:center;gap:16px;";
+        var spinStyle = document.createElement("style");
+        spinStyle.textContent = "@keyframes ifl-spin { to { transform: rotate(360deg); } } @keyframes ifl-pulse { 0%,100% { opacity:0.6; } 50% { opacity:1; } }";
+        collectingPanel.appendChild(spinStyle);
+        var spinner = document.createElement("div");
+        spinner.style.cssText = "width:36px;height:36px;border:3px solid #5b43c7;border-top-color:transparent;border-radius:50%;animation:ifl-spin 0.8s linear infinite;";
+        var collectingTitle = document.createElement("div");
+        collectingTitle.textContent = "Collecting data";
+        collectingTitle.style.cssText = "color:#fff;font-size:16px;font-weight:600;";
+        var collectingMsg = document.createElement("div");
+        collectingMsg.textContent = "Scanning studies and forms\u2026";
+        collectingMsg.style.cssText = "color:#999;font-size:12px;animation:ifl-pulse 1.5s ease-in-out infinite;";
+        collectingPanel.appendChild(spinner);
+        collectingPanel.appendChild(collectingTitle);
+        collectingPanel.appendChild(collectingMsg);
+        collectingOverlay.appendChild(collectingPanel);
+        document.body.appendChild(collectingOverlay);
 
         // Collect all studies & forms (main tab modal)
         var studies = await ifl_collectAllStudiesAndForms();
 
         if (!studies || studies.length === 0) {
-            collecting.close();
+            if (collectingOverlay.parentNode) collectingOverlay.parentNode.removeChild(collectingOverlay);
             ifl_closeBgTab();
             createPopup({
                 title: "Import from Library",
@@ -4679,14 +4709,14 @@
 
         // Wait for background tab to be ready with its modal open
         // (overlay stays visible — user sees "Collecting data" while bg tab loads)
-        collecting.setMessage("Preparing background worker\u2026");
+        collectingMsg.textContent = "Preparing background worker\u2026";
         var bgReady = await ifl_waitForBgTabReady();
         if (!bgReady) {
             log("IFL: bg tab not ready — item group loading will fall back to main tab");
         }
 
         // Remove "Collecting data" overlay right before showing selection GUI
-        collecting.close();
+        if (collectingOverlay.parentNode) collectingOverlay.parentNode.removeChild(collectingOverlay);
 
         // Show selection GUI
         ifl_buildSelectionGUI(studies, function(selectedItems) {
@@ -4928,7 +4958,7 @@
                 visibilityAlreadySet: statusResult.visibilityAlreadySet,
                 autoPopulated: true
             });
-            log("BPL: enhanced scan row " + i + " - " + key + " timepoint='" + timepointRaw + "' hidden=" + statusResult.hidden + " preRef=" + timepointParsed.preReference + " refAct=" + timepointParsed.refActivity);
+            log("BPL: enhanced scan row " + i + " - " + key + " timepoint='" + timepointRaw + "' hidden=" + statusResult.hidden + " visMustSet=" + statusResult.visibilityMustBeSet + " visAlreadySet=" + statusResult.visibilityAlreadySet + " preRef=" + timepointParsed.preReference + " refAct=" + timepointParsed.refActivity);
         }
         log("BPL: enhanced scan complete - " + result.saTableItems.length + " items collected, " + skippedArchived + " archived skipped");
         return result;
@@ -5239,7 +5269,7 @@
         return segmentOffsets;
     }
 
-    function bplMergeSaTableWithSession(saTableItems, restoredState, segments, segmentOffsets, forms, studyEvents) {
+    function bplMergeSaTableWithSession(saTableItems, restoredState, segments, segmentOffsets) {
         var mergedSegmentFormMap = {};
         var mergedFormDataStore = {};
         var formInstanceCounter = 0;
@@ -5310,34 +5340,6 @@
             var matchedFormText = saItem.form;
             var matchedEvVal = null;
             var matchedEvText = saItem.studyEvent;
-            if (forms && forms.length > 0) {
-                var saFormNorm = normalizeSAText(saItem.form).toLowerCase();
-                for (var fmi = 0; fmi < forms.length; fmi++) {
-                    if (normalizeSAText(forms[fmi].text).toLowerCase() === saFormNorm) {
-                        matchedFormVal = forms[fmi].value;
-                        matchedFormText = forms[fmi].text;
-                        break;
-                    }
-                }
-                if (matchedFormVal) {
-                    log("BPL: merge - resolved form '" + saItem.form + "' to dropdown value '" + matchedFormVal + "'");
-                } else {
-                    log("BPL: merge - form '" + saItem.form + "' not found in dropdown options, using text as value");
-                }
-            }
-            if (studyEvents && studyEvents.length > 0) {
-                var saEvNorm = normalizeSAText(saItem.studyEvent).toLowerCase();
-                for (var evi = 0; evi < studyEvents.length; evi++) {
-                    if (normalizeSAText(studyEvents[evi].text).toLowerCase() === saEvNorm) {
-                        matchedEvVal = studyEvents[evi].value;
-                        matchedEvText = studyEvents[evi].text;
-                        break;
-                    }
-                }
-                if (matchedEvVal) {
-                    log("BPL: merge - resolved studyEvent '" + saItem.studyEvent + "' to dropdown value '" + matchedEvVal + "'");
-                }
-            }
             var segRefDateTime = "N/A";
             if (segmentOffsets && segmentOffsets[saItem.segment]) {
                 segRefDateTime = segmentOffsets[saItem.segment].referenceDateTime || "N/A";
@@ -5851,7 +5853,7 @@
         var saTableItems = (saTableData && saTableData.saTableItems) ? saTableData.saTableItems : [];
         if (saTableItems.length > 0) {
             log("BPL: merging " + saTableItems.length + " SA table items with session state");
-            var mergeResult = bplMergeSaTableWithSession(saTableItems, restoredState, segments, segmentOffsets || {}, forms, studyEvents);
+            var mergeResult = bplMergeSaTableWithSession(saTableItems, restoredState, segments, segmentOffsets || {});
             for (var mSeg in mergeResult.segmentFormMap) {
                 if (mergeResult.segmentFormMap.hasOwnProperty(mSeg)) {
                     if (segmentFormMap.hasOwnProperty(mSeg)) {
@@ -7084,7 +7086,7 @@
                         var etStr2 = fData2.exampleTime || "N/A";
                         var timeRefLabel = document.createElement("span");
                         timeRefLabel.textContent = tpStr2 + "   |   " + etStr2;
-                        timeRefLabel.style.cssText = "font-size:12px;color:#ffffffff;white-space:pre;flex-shrink:0;min-width:0;overflow:hidden;text-overflow:ellipsis;max-width:220px;";
+                        timeRefLabel.style.cssText = "font-size:12px;color:#ffffffff;white-space:pre;flex-shrink:0;min-width:0;overflow:hidden;text-overflow:ellipsis;max-width:220px;";                        timeRefLabel.title = tpStr2 + segIndexLabel + "  |  " + etStr2;
                         var iconsStr = bplBuildStatusIcons(fData2);
                         var iconsLabel = document.createElement("span");
                         iconsLabel.textContent = iconsStr;
@@ -7645,38 +7647,14 @@
             return false;
         }
 
-        var resolvedValue = value;
-
-        // Try direct value match first
         select.value = value;
-        if (select.value !== value) {
-            // Direct value match failed - fall back to text-based matching
-            log("PLAP Builder: direct value match failed for '" + value + "' in " + selectId + ", trying text match");
-            var opts = select.querySelectorAll("option");
-            var normalizedTarget = normalizeSAText(value).toLowerCase();
-            var matched = false;
-            for (var i = 0; i < opts.length; i++) {
-                var optText = normalizeSAText(opts[i].textContent).toLowerCase();
-                if (optText === normalizedTarget) {
-                    resolvedValue = opts[i].value;
-                    select.value = resolvedValue;
-                    matched = true;
-                    log("PLAP Builder: text match found - '" + opts[i].textContent.trim() + "' (value: " + resolvedValue + ")");
-                    break;
-                }
-            }
-            if (!matched) {
-                log("PLAP Builder: no matching option found for '" + value + "' in " + selectId);
-                return false;
-            }
-        }
 
         var evt = new Event("change", { bubbles: true });
         select.dispatchEvent(evt);
 
         try {
             if (window.jQuery && window.jQuery.fn.select2) {
-                window.jQuery("#" + selectId).val(resolvedValue).trigger("change");
+                window.jQuery("#" + selectId).trigger("change");
             }
         } catch (e) {}
 
@@ -7687,7 +7665,7 @@
             return false;
         }
 
-        log("PLAP Builder: selected value " + resolvedValue + " in " + selectId);
+        log("PLAP Builder: selected value " + value + " in " + selectId);
         return true;
     }
 
@@ -13109,12 +13087,12 @@
         { id: "Find Adverse Event", label: "Find Adverse Event" },
         { id: "Find Form", label: "Find Form" },
         { id: "Find Study Events", label: "Find Study Events" },
-        { id: "Set Visibility Condition", label: "Set Visibility Condition" },
         { id: "Item Method Forms", label: "Item Method Forms" },
         { id: "Cohort Eligibility", label: "Cohort Eligibility" },
         { id: "Subject Eligibility", label: "Subject Eligibility" },
         { id: "Parse Study Event", label: "Parse Study Event" },
         { id: "Edit Study Events List", label: "Edit Study Events List" },
+        { id: "Set Visibility Condition", label: "Set Visibility Condition"},
         { id: "Pause", label: "Pause" },
         { id: "Clear Logs", label: "Clear Logs" },
         { id: "Hide Logs", label: "Hide Logs" }
@@ -29244,7 +29222,7 @@
             APS_ParseDeviation();
         });
 
-        var archiveUpdateFormsBtn = document.createElement("button");
+            var archiveUpdateFormsBtn = document.createElement("button");
         archiveUpdateFormsBtn.textContent = "Archive/Update Forms";
         archiveUpdateFormsBtn.style.background = "#5b43c7";
         archiveUpdateFormsBtn.style.color = "#fff";
@@ -29375,7 +29353,7 @@
 
         // Apply glassmorphism theme to all panel buttons if glass theme is active
         if (glass) {
-            var allPanelBtns = [svcBtn, runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, importFromLibBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, bplBtn, importEligBtn, findAeBtn, findFormBtn, findStudyEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, editStudyEventsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn];
+            var allPanelBtns = [runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, importFromLibBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, bplBtn, importEligBtn, findAeBtn, findFormBtn, findStudyEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, editStudyEventsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn, svcBtn];
             for (var gi = 0; gi < allPanelBtns.length; gi++) {
                 var gb = allPanelBtns[gi];
                 gb.className = "ie-btn-primary";

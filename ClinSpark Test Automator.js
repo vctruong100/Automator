@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 4.0.2
+// @version 4.0.3
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -1157,7 +1157,7 @@
                             var tag = document.createElement("span");
                             tag.textContent = mapping.form;
                             tag.title = mapping.segment + " - " + mapping.studyEvent + " - " + mapping.form;
-                            tag.style.cssText = "display:inline-flex;align-items:center;gap:2px;padding:1px 4px;background:#3a3a5a;border-radius:3px;font-size:9px;color:#ccc;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;";
+                            tag.style.cssText = "display:inline-block;padding:1px 4px;background:#3a3a5a;border-radius:3px;font-size:9px;color:#ccc;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;flex:1;min-width:0;";
                             tag.addEventListener("click", (function(gIdx) {
                                 return function(e) {
                                     e.stopPropagation();
@@ -1168,10 +1168,13 @@
                                     loadFormAttributesForDropbox(gIdx);
                                 };
                             })(globalIdx));
-                            // X remove button
+                            // X remove button - appended to dropbox directly so it's always visible
                             var removeTag = document.createElement("span");
                             removeTag.textContent = "\u00D7";
-                            removeTag.style.cssText = "cursor:pointer;color:#ff6b6b;font-weight:bold;font-size:11px;margin-left:2px;flex-shrink:0;";
+                            removeTag.title = "Remove form from dropbox";
+                            removeTag.style.cssText = "cursor:pointer;color:#ff6b6b;font-weight:bold;font-size:13px;flex-shrink:0;padding:0 2px;line-height:1;";
+                            removeTag.addEventListener("mouseenter", function() { this.style.color = "#ff4444"; });
+                            removeTag.addEventListener("mouseleave", function() { this.style.color = "#ff6b6b"; });
                             removeTag.addEventListener("click", (function(gIdx) {
                                 return function(e) {
                                     e.stopPropagation();
@@ -1186,8 +1189,8 @@
                                     updateConfirmState();
                                 };
                             })(globalIdx));
-                            tag.appendChild(removeTag);
                             dropbox.appendChild(tag);
+                            dropbox.appendChild(removeTag);
                             // Highlight if selected
                             if (selectedDropboxIdx === globalIdx) {
                                 dropbox.style.borderColor = "#7a7aff";
@@ -15184,8 +15187,7 @@
         log("BPL: segment offset collection complete - " + Object.keys(segmentOffsets).length + " segments mapped");
         return segmentOffsets;
     }
-
-    function bplMergeSaTableWithSession(saTableItems, restoredState, segments, segmentOffsets) {
+    function bplMergeSaTableWithSession(saTableItems, restoredState, segments, segmentOffsets, forms, studyEvents) {
         var mergedSegmentFormMap = {};
         var mergedFormDataStore = {};
         var formInstanceCounter = 0;
@@ -15256,6 +15258,34 @@
             var matchedFormText = saItem.form;
             var matchedEvVal = null;
             var matchedEvText = saItem.studyEvent;
+            if (forms && forms.length > 0) {
+                var saFormNorm = normalizeSAText(saItem.form).toLowerCase();
+                for (var fmi = 0; fmi < forms.length; fmi++) {
+                    if (normalizeSAText(forms[fmi].text).toLowerCase() === saFormNorm) {
+                        matchedFormVal = forms[fmi].value;
+                        matchedFormText = forms[fmi].text;
+                        break;
+                    }
+                }
+                if (matchedFormVal) {
+                    log("BPL: merge - resolved form '" + saItem.form + "' to dropdown value '" + matchedFormVal + "'");
+                } else {
+                    log("BPL: merge - form '" + saItem.form + "' not found in dropdown options, using text as value");
+                }
+            }
+            if (studyEvents && studyEvents.length > 0) {
+                var saEvNorm = normalizeSAText(saItem.studyEvent).toLowerCase();
+                for (var evi = 0; evi < studyEvents.length; evi++) {
+                    if (normalizeSAText(studyEvents[evi].text).toLowerCase() === saEvNorm) {
+                        matchedEvVal = studyEvents[evi].value;
+                        matchedEvText = studyEvents[evi].text;
+                        break;
+                    }
+                }
+                if (matchedEvVal) {
+                    log("BPL: merge - resolved studyEvent '" + saItem.studyEvent + "' to dropdown value '" + matchedEvVal + "'");
+                }
+            }
             var segRefDateTime = "N/A";
             if (segmentOffsets && segmentOffsets[saItem.segment]) {
                 segRefDateTime = segmentOffsets[saItem.segment].referenceDateTime || "N/A";
@@ -15770,7 +15800,7 @@
         var saTableItems = (saTableData && saTableData.saTableItems) ? saTableData.saTableItems : [];
         if (saTableItems.length > 0) {
             log("BPL: merging " + saTableItems.length + " SA table items with session state");
-            var mergeResult = bplMergeSaTableWithSession(saTableItems, restoredState, segments, segmentOffsets || {});
+            var mergeResult = bplMergeSaTableWithSession(saTableItems, restoredState, segments, segmentOffsets || {}, forms, studyEvents);
             for (var mSeg in mergeResult.segmentFormMap) {
                 if (mergeResult.segmentFormMap.hasOwnProperty(mSeg)) {
                     if (segmentFormMap.hasOwnProperty(mSeg)) {
@@ -16975,7 +17005,8 @@
                         var segIndexLabel = " (" + (si2 + 1) + ")";
                         var timeRefLabel = document.createElement("span");
                         timeRefLabel.textContent = tpStr2 + segIndexLabel + "   |   " + etStr2;
-                        timeRefLabel.style.cssText = "font-size:12px;color:#ffffffff;white-space:pre;flex-shrink:0;min-width:0;overflow:hidden;text-overflow:ellipsis;max-width:220px;";                        timeRefLabel.title = tpStr2 + segIndexLabel + "  |  " + etStr2;
+                        timeRefLabel.style.cssText = "font-size:12px;color:#ffffffff;white-space:pre;flex-shrink:0;min-width:0;overflow:hidden;text-overflow:ellipsis;max-width:220px;";
+                        timeRefLabel.title = tpStr2 + segIndexLabel + "  |  " + etStr2;
                         var iconsStr = bplBuildStatusIcons(fData2);
                         var iconsLabel = document.createElement("span");
                         iconsLabel.textContent = iconsStr;
@@ -17536,14 +17567,38 @@
             return false;
         }
 
+        var resolvedValue = value;
+
+        // Try direct value match first
         select.value = value;
+        if (select.value !== value) {
+            // Direct value match failed - fall back to text-based matching
+            log("PLAP Builder: direct value match failed for '" + value + "' in " + selectId + ", trying text match");
+            var opts = select.querySelectorAll("option");
+            var normalizedTarget = normalizeSAText(value).toLowerCase();
+            var matched = false;
+            for (var i = 0; i < opts.length; i++) {
+                var optText = normalizeSAText(opts[i].textContent).toLowerCase();
+                if (optText === normalizedTarget) {
+                    resolvedValue = opts[i].value;
+                    select.value = resolvedValue;
+                    matched = true;
+                    log("PLAP Builder: text match found - '" + opts[i].textContent.trim() + "' (value: " + resolvedValue + ")");
+                    break;
+                }
+            }
+            if (!matched) {
+                log("PLAP Builder: no matching option found for '" + value + "' in " + selectId);
+                return false;
+            }
+        }
 
         var evt = new Event("change", { bubbles: true });
         select.dispatchEvent(evt);
 
         try {
             if (window.jQuery && window.jQuery.fn.select2) {
-                window.jQuery("#" + selectId).trigger("change");
+                window.jQuery("#" + selectId).val(resolvedValue).trigger("change");
             }
         } catch (e) {}
 
@@ -17554,7 +17609,7 @@
             return false;
         }
 
-        log("PLAP Builder: selected value " + value + " in " + selectId);
+        log("PLAP Builder: selected value " + resolvedValue + " in " + selectId);
         return true;
     }
 
