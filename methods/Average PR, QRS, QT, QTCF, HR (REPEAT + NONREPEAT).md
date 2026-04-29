@@ -1,8 +1,5 @@
 /* jshint strict: false */
 
-
-const RepeatGroupName = ["Average Calculation_Repeat", "Average Calculation_Repeat_V2"];
-
 // Add item names
 // items to pull for calculation
 const PRitem = ["PR", "PR V4"];

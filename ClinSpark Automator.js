@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.4.3
+// @version     2.4.4
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -667,6 +667,2140 @@
         };
     }
 
+    //==========================
+    // SET VISIBILITY CONDITION FEATURE
+    //==========================
+    var SVC_POPUP_REF = null;
+    var SVC_PROGRESS_POPUP_REF = null;
+    var SVC_CANCELLED = false;
+    var SVC_BG_IFRAME = null;
+    var SVC_BG_IFRAME_DOC = null;
+    var SVC_ITEM_CACHE = {}; // keyed by formName -> [{value, text}]
+    var SVC_TARGET_URLS = [
+        "https://cenexel.clinspark.com/secure/crfdesign/activityplans/show/",
+        "https://cenexeltest.clinspark.com/secure/crfdesign/activityplans/show/"
+    ];
+    var STORAGE_SVC_REFERENCES = "activityPlanState.svc.references";
+    var STORAGE_SVC_FULLSCREEN = "activityPlanState.svc.fullscreen";
+
+    function isOnSVCPage() {
+        var href = location.href;
+        for (var i = 0; i < SVC_TARGET_URLS.length; i++) {
+            if (href.indexOf(SVC_TARGET_URLS[i]) !== -1) return true;
+        }
+        return false;
+    }
+
+    function svcLoadReferences() {
+        try {
+            var raw = localStorage.getItem(STORAGE_SVC_REFERENCES);
+            if (raw) return JSON.parse(raw);
+        } catch (e) {}
+        return {};
+    }
+
+    function svcSaveReferences(refs) {
+        try {
+            localStorage.setItem(STORAGE_SVC_REFERENCES, JSON.stringify(refs));
+        } catch (e) {}
+    }
+
+    // Open a background iframe pointing to the current Activity Plan page
+    function svcOpenBgIframe() {
+        if (SVC_BG_IFRAME && SVC_BG_IFRAME.parentNode) return;
+        SVC_BG_IFRAME = document.createElement("iframe");
+        SVC_BG_IFRAME.id = "svc_bg_iframe";
+        SVC_BG_IFRAME.src = location.href;
+        SVC_BG_IFRAME.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;opacity:0;pointer-events:none;";
+        document.body.appendChild(SVC_BG_IFRAME);
+        log("SVC: opened background iframe");
+    }
+
+    async function svcWaitForBgIframeReady() {
+        var start = Date.now();
+        while (Date.now() - start < 20000) {
+            try {
+                var doc = SVC_BG_IFRAME.contentDocument || SVC_BG_IFRAME.contentWindow.document;
+                if (doc && doc.readyState === "complete" && doc.getElementById("saTableBody")) {
+                    SVC_BG_IFRAME_DOC = doc;
+                    log("SVC: background iframe ready");
+                    return true;
+                }
+            } catch (e) {}
+            await sleep(300);
+        }
+        log("SVC: background iframe timed out");
+        return false;
+    }
+
+    function svcCloseBgIframe() {
+        if (SVC_BG_IFRAME) {
+            try { if (SVC_BG_IFRAME.parentNode) SVC_BG_IFRAME.parentNode.removeChild(SVC_BG_IFRAME); } catch (e) {}
+            SVC_BG_IFRAME = null;
+            SVC_BG_IFRAME_DOC = null;
+            log("SVC: closed background iframe");
+        }
+    }
+
+    // Find a row in the background iframe's saTableBody
+    function svcFindRowInBgIframe(segmentText, eventText, formText) {
+        if (!SVC_BG_IFRAME_DOC) return null;
+        var tbody = SVC_BG_IFRAME_DOC.getElementById("saTableBody");
+        if (!tbody) return null;
+        var trs = tbody.querySelectorAll("tr");
+        for (var i = 0; i < trs.length; i++) {
+            var cells = trs[i].querySelectorAll("td");
+            if (cells.length < 4) continue;
+            var seg = normalizeSAText(cells[1].textContent);
+            var ev = normalizeSAText(cells[2].textContent);
+            var form = normalizeSAText(cells[3].textContent);
+            if (seg === segmentText && ev === eventText && form === formText) {
+                return trs[i];
+            }
+        }
+        return null;
+    }
+
+    // Wait for a modal in the bg iframe
+    async function svcWaitForBgModal(timeoutMs) {
+        var start = Date.now();
+        var max = timeoutMs || 10000;
+        while (Date.now() - start < max) {
+            try {
+                var modal = SVC_BG_IFRAME_DOC.getElementById("ajaxModal");
+                if (modal && modal.classList.contains("in")) {
+                    var body = modal.querySelector("#modalbody, .modal-body");
+                    if (body) {
+                        await sleep(500);
+                        return modal;
+                    }
+                }
+            } catch (e) {}
+            await sleep(300);
+        }
+        return null;
+    }
+
+    async function svcWaitForBgModalClose(timeoutMs) {
+        var start = Date.now();
+        var max = timeoutMs || 10000;
+        while (Date.now() - start < max) {
+            try {
+                var modal = SVC_BG_IFRAME_DOC.getElementById("ajaxModal");
+                if (!modal || !modal.classList.contains("in")) return true;
+            } catch (e) {}
+            await sleep(300);
+        }
+        return false;
+    }
+
+    // Set a select2 value inside the bg iframe by text match
+    async function svcSetBgSelect2ByText(selectId, targetText) {
+        var sel = SVC_BG_IFRAME_DOC.getElementById(selectId);
+        if (!sel) {
+            log("SVC: bg iframe select " + selectId + " not found");
+            return false;
+        }
+        var normalizedTarget = normalizeVisibilityText(targetText);
+        var opts = sel.querySelectorAll("option");
+        var matchValue = null;
+        // Exact normalized match
+        for (var i = 0; i < opts.length; i++) {
+            var optNorm = normalizeVisibilityText(opts[i].textContent);
+            if (optNorm === normalizedTarget) {
+                matchValue = opts[i].value;
+                break;
+            }
+        }
+        // Fuzzy fallback: substring containment
+        if (!matchValue) {
+            for (var j = 0; j < opts.length; j++) {
+                var optNorm2 = normalizeVisibilityText(opts[j].textContent);
+                if (optNorm2.indexOf(normalizedTarget) !== -1 || normalizedTarget.indexOf(optNorm2) !== -1) {
+                    matchValue = opts[j].value;
+                    break;
+                }
+            }
+        }
+        if (!matchValue) {
+            log("SVC: bg iframe could not match '" + targetText + "' in " + selectId);
+            return false;
+        }
+        sel.value = matchValue;
+        sel.dispatchEvent(new Event("change", { bubbles: true }));
+        try {
+            var bgWin = SVC_BG_IFRAME.contentWindow;
+            if (bgWin.jQuery && bgWin.jQuery.fn.select2) {
+                bgWin.jQuery("#" + selectId).trigger("change");
+            }
+        } catch (e) {}
+        await sleep(500);
+        log("SVC: bg iframe selected '" + targetText + "' in " + selectId);
+        return true;
+    }
+
+    // Wait for a bg iframe select to get options populated
+    async function svcWaitForBgSelectOptions(selectId, timeoutMs) {
+        var start = Date.now();
+        var max = timeoutMs || 5000;
+        while (Date.now() - start < max) {
+            try {
+                var sel = SVC_BG_IFRAME_DOC.getElementById(selectId);
+                if (sel) {
+                    var opts = sel.querySelectorAll("option");
+                    if (opts.length > 1) {
+                        await sleep(200);
+                        return true;
+                    }
+                }
+            } catch (e) {}
+            await sleep(200);
+        }
+        return false;
+    }
+
+    // Collect option list from a bg iframe select
+    function svcCollectBgSelectOptions(selectId) {
+        var results = [];
+        try {
+            var sel = SVC_BG_IFRAME_DOC.getElementById(selectId);
+            if (!sel) return results;
+            var opts = sel.querySelectorAll("option");
+            for (var i = 0; i < opts.length; i++) {
+                var val = (opts[i].value || "").trim();
+                var txt = (opts[i].textContent || "").trim();
+                if (val && txt) {
+                    results.push({ value: val, text: txt });
+                }
+            }
+        } catch (e) {}
+        return results;
+    }
+
+    // Open the visibility modal in the bg iframe for a given row
+    async function svcOpenVisibilityModalInBg(segmentText, eventText, formText) {
+        var row = svcFindRowInBgIframe(segmentText, eventText, formText);
+        if (!row) {
+            log("SVC: bg iframe row not found for " + segmentText + " | " + eventText + " | " + formText);
+            return false;
+        }
+        var visLink = row.querySelector('a[href*="visiblecondition"]');
+        if (!visLink) visLink = row.querySelector('a[href*="visibility"]');
+        if (!visLink) {
+            log("SVC: bg iframe visibility link not found in row");
+            return false;
+        }
+        visLink.click();
+        var modal = await svcWaitForBgModal(10000);
+        if (!modal) {
+            log("SVC: bg iframe visibility modal did not open");
+            return false;
+        }
+        log("SVC: bg iframe visibility modal opened");
+        return true;
+    }
+
+    // Select first activity plan option, then select the scheduled activity matching studyEvent + formName
+    async function svcSelectActivityAndSA(studyEvent, formName) {
+        // Select first available activity plan
+        var apSel = SVC_BG_IFRAME_DOC.getElementById("visibleActivityPlan");
+        if (!apSel) {
+            log("SVC: visibleActivityPlan not found");
+            return false;
+        }
+        var apOpts = apSel.querySelectorAll("option");
+        var firstAPValue = null;
+        for (var i = 0; i < apOpts.length; i++) {
+            var v = (apOpts[i].value || "").trim();
+            if (v) { firstAPValue = v; break; }
+        }
+        if (!firstAPValue) {
+            log("SVC: no activity plan options available");
+            return false;
+        }
+        apSel.value = firstAPValue;
+        apSel.dispatchEvent(new Event("change", { bubbles: true }));
+        try {
+            var bgWin = SVC_BG_IFRAME.contentWindow;
+            if (bgWin.jQuery && bgWin.jQuery.fn.select2) bgWin.jQuery("#visibleActivityPlan").trigger("change");
+        } catch (e) {}
+        log("SVC: selected first activity plan value=" + firstAPValue);
+        await sleep(1000);
+
+        // Wait for scheduledActivity to populate
+        var saReady = await svcWaitForBgSelectOptions("visibleScheduledActivity", 5000);
+        if (!saReady) {
+            log("SVC: visibleScheduledActivity did not populate");
+            return false;
+        }
+
+        // Match by studyEvent + formName combo
+        var targetCombo = normalizeVisibilityText(studyEvent + " " + formName);
+        var saSel = SVC_BG_IFRAME_DOC.getElementById("visibleScheduledActivity");
+        var saOpts = saSel ? saSel.querySelectorAll("option") : [];
+        var saMatch = null;
+        for (var j = 0; j < saOpts.length; j++) {
+            var optNorm = normalizeVisibilityText(saOpts[j].textContent);
+            if (optNorm.indexOf(targetCombo) !== -1) {
+                saMatch = saOpts[j].value;
+                break;
+            }
+        }
+        // Fallback: try matching formName alone
+        if (!saMatch) {
+            var targetForm = normalizeVisibilityText(formName);
+            for (var k = 0; k < saOpts.length; k++) {
+                var optNorm2 = normalizeVisibilityText(saOpts[k].textContent);
+                if (optNorm2.indexOf(targetForm) !== -1) {
+                    saMatch = saOpts[k].value;
+                    break;
+                }
+            }
+        }
+        if (!saMatch) {
+            log("SVC: could not match scheduledActivity for " + studyEvent + " / " + formName);
+            return false;
+        }
+        saSel.value = saMatch;
+        saSel.dispatchEvent(new Event("change", { bubbles: true }));
+        try {
+            var bgWin2 = SVC_BG_IFRAME.contentWindow;
+            if (bgWin2.jQuery && bgWin2.jQuery.fn.select2) bgWin2.jQuery("#visibleScheduledActivity").trigger("change");
+        } catch (e) {}
+        log("SVC: selected scheduledActivity value=" + saMatch);
+        await sleep(1000);
+
+        // Wait for item ref to populate
+        await svcWaitForBgSelectOptions("visibleItemRef", 5000);
+        return true;
+    }
+
+    // Collect items from the bg iframe after SA is selected
+    function svcCollectItems() {
+        return svcCollectBgSelectOptions("visibleItemRef");
+    }
+
+    // Select an item in the bg iframe and collect its values
+    async function svcSelectItemAndCollectValues(itemText) {
+        var matched = await svcSetBgSelect2ByText("visibleItemRef", itemText);
+        if (!matched) return [];
+        await sleep(500);
+        await svcWaitForBgSelectOptions("visibleCodeListItem", 5000);
+        return svcCollectBgSelectOptions("visibleCodeListItem");
+    }
+
+    // Close the modal in the bg iframe
+    async function svcCloseBgModal() {
+        try {
+            var modal = SVC_BG_IFRAME_DOC.getElementById("ajaxModal");
+            if (modal) {
+                var closeBtn = modal.querySelector("button[data-dismiss='modal'], .close, .btn-default");
+                if (closeBtn) closeBtn.click();
+                else {
+                    var esc = new KeyboardEvent("keydown", { key: "Escape", bubbles: true });
+                    SVC_BG_IFRAME_DOC.dispatchEvent(esc);
+                }
+            }
+        } catch (e) {}
+        await svcWaitForBgModalClose(5000);
+    }
+
+    // Build the SVC selection GUI
+    function createSVCSelectionGUI(saTableData) {
+        var saItems = (saTableData && saTableData.saTableItems) ? saTableData.saTableItems : [];
+        var svcReferences = svcLoadReferences();
+        var dropboxMappings = {}; // keyed by saItem index -> { segment, studyEvent, form, formName }
+        var selectedDropboxIdx = null;
+        var currentItems = []; // [{value, text}] for the Item dropdown
+        var currentItemValues = []; // [{value, text}] for the Item Value dropdown
+        var svcIsFullscreen = false;
+        try { svcIsFullscreen = localStorage.getItem(STORAGE_SVC_FULLSCREEN) === "true"; } catch (e) {}
+        var origPopupStyles = {};
+        var svcSegCollapsed = {};
+        var svcSearchKeywords = [];
+        var svcShowCompleted = false;
+
+        var container = document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;gap:10px;height:100%;min-height:500px;";
+
+        // Fullscreen button
+        var fullscreenBtn = document.createElement("button");
+        fullscreenBtn.textContent = "\u26F6";
+        fullscreenBtn.title = "Toggle Full Screen";
+        fullscreenBtn.style.cssText = "padding:4px 8px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:14px;cursor:pointer;line-height:1;width:32px;height:32px;display:flex;align-items:center;justify-content:center;position:absolute;top:8px;right:40px;z-index:10;";
+        fullscreenBtn.addEventListener("mouseenter", function() { this.style.background = "#555"; });
+        fullscreenBtn.addEventListener("mouseleave", function() { this.style.background = "#333"; });
+        fullscreenBtn.addEventListener("mousedown", function(e) { e.stopPropagation(); });
+        fullscreenBtn.addEventListener("click", function(e) {
+            e.stopPropagation();
+            svcIsFullscreen = !svcIsFullscreen;
+            try { localStorage.setItem(STORAGE_SVC_FULLSCREEN, String(svcIsFullscreen)); } catch (err) {}
+            applySVCFullscreen();
+        });
+
+        function applySVCFullscreen() {
+            var popup = container.closest("[id^='clinsparkPopup_']");
+            if (!popup) return;
+            if (svcIsFullscreen) {
+                origPopupStyles.width = popup.style.width;
+                origPopupStyles.maxWidth = popup.style.maxWidth;
+                origPopupStyles.height = popup.style.height;
+                origPopupStyles.maxHeight = popup.style.maxHeight;
+                origPopupStyles.top = popup.style.top;
+                origPopupStyles.left = popup.style.left;
+                origPopupStyles.transform = popup.style.transform;
+                origPopupStyles.borderRadius = popup.style.borderRadius;
+                popup.style.width = "100vw";
+                popup.style.maxWidth = "100vw";
+                popup.style.height = "100vh";
+                popup.style.maxHeight = "100vh";
+                popup.style.top = "0";
+                popup.style.left = "0";
+                popup.style.transform = "none";
+                popup.style.borderRadius = "0";
+                fullscreenBtn.textContent = "\u2716\u26F6";
+                fullscreenBtn.title = "Exit Full Screen";
+            } else {
+                popup.style.width = origPopupStyles.width || "96%";
+                popup.style.maxWidth = origPopupStyles.maxWidth || "1600px";
+                popup.style.height = origPopupStyles.height || "88%";
+                popup.style.maxHeight = origPopupStyles.maxHeight || "900px";
+                popup.style.top = origPopupStyles.top || "50%";
+                popup.style.left = origPopupStyles.left || "50%";
+                popup.style.transform = origPopupStyles.transform || "translate(-50%, -50%)";
+                popup.style.borderRadius = origPopupStyles.borderRadius || "";
+                fullscreenBtn.textContent = "\u26F6";
+                fullscreenBtn.title = "Toggle Full Screen";
+            }
+        }
+
+        // Content row: primary panel (3/5) + config panel (2/5)
+        var contentRow = document.createElement("div");
+        contentRow.style.cssText = "display:flex;flex-direction:row;gap:8px;flex:1;overflow:hidden;";
+
+        // === PRIMARY PANEL (3/5 width) ===
+        var primaryPanel = document.createElement("div");
+        primaryPanel.style.cssText = "display:flex;flex-direction:column;flex:3;border:1px solid #444;border-radius:6px;background:#1a1a1a;overflow:hidden;min-width:0;";
+
+        var primaryHeader = document.createElement("div");
+        primaryHeader.style.cssText = "padding:8px 10px;font-weight:600;font-size:13px;border-bottom:1px solid #333;background:#222;display:flex;flex-direction:column;gap:6px;";
+        var primaryTitle = document.createElement("div");
+        primaryTitle.textContent = "Forms (Grouped by Segment)";
+        primaryTitle.style.cssText = "text-align:center;";
+        primaryHeader.appendChild(primaryTitle);
+
+        // Keyword chip searchbar
+        var searchRow = document.createElement("div");
+        searchRow.style.cssText = "display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:4px 6px;border:1px solid #444;border-radius:4px;background:#1a1a1a;min-height:28px;";
+        var searchChipContainer = document.createElement("span");
+        searchChipContainer.style.cssText = "display:flex;flex-wrap:wrap;gap:3px;align-items:center;";
+        searchRow.appendChild(searchChipContainer);
+        var searchInput = document.createElement("input");
+        searchInput.type = "text";
+        searchInput.placeholder = "Type keyword + Enter...";
+        searchInput.style.cssText = "flex:1;min-width:100px;border:none;background:transparent;color:#fff;font-size:11px;outline:none;padding:2px 4px;";
+        searchInput.addEventListener("keydown", function(e) {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                var kw = this.value.trim();
+                if (kw && svcSearchKeywords.indexOf(kw) === -1) {
+                    svcSearchKeywords.push(kw);
+                    this.value = "";
+                    renderSearchChips();
+                    renderPrimaryPanel();
+                    renderSegNavPanel();
+                }
+            } else if (e.key === "Backspace" && this.value === "" && svcSearchKeywords.length > 0) {
+                svcSearchKeywords.pop();
+                renderSearchChips();
+                renderPrimaryPanel();
+                renderSegNavPanel();
+            }
+        });
+        searchRow.appendChild(searchInput);
+        primaryHeader.appendChild(searchRow);
+
+        function renderSearchChips() {
+            searchChipContainer.innerHTML = "";
+            for (var ci = 0; ci < svcSearchKeywords.length; ci++) {
+                (function(kw, idx) {
+                    var chip = document.createElement("span");
+                    chip.style.cssText = "display:inline-flex;align-items:center;gap:2px;padding:2px 6px;background:#3a3a5a;border-radius:10px;font-size:10px;color:#ccc;white-space:nowrap;";
+                    chip.textContent = kw;
+                    var chipX = document.createElement("span");
+                    chipX.textContent = "\u00D7";
+                    chipX.style.cssText = "cursor:pointer;color:#ff6b6b;font-weight:bold;font-size:11px;margin-left:2px;";
+                    chipX.addEventListener("click", function(e) {
+                        e.stopPropagation();
+                        svcSearchKeywords.splice(idx, 1);
+                        renderSearchChips();
+                        renderPrimaryPanel();
+                        renderSegNavPanel();
+                    });
+                    chip.appendChild(chipX);
+                    searchChipContainer.appendChild(chip);
+                })(svcSearchKeywords[ci], ci);
+            }
+        }
+
+        var primaryBody = document.createElement("div");
+        primaryBody.style.cssText = "flex:1;overflow-y:auto;padding:8px;";
+
+        primaryPanel.appendChild(primaryHeader);
+        primaryPanel.appendChild(primaryBody);
+
+        // Group forms by segment
+        var segmentGroups = {};
+        var segmentOrder = [];
+        for (var i = 0; i < saItems.length; i++) {
+            var item = saItems[i];
+            if (!segmentGroups[item.segment]) {
+                segmentGroups[item.segment] = [];
+                segmentOrder.push(item.segment);
+            }
+            segmentGroups[item.segment].push({ idx: i, item: item });
+        }
+        // Default all segments collapsed
+        for (var sci = 0; sci < segmentOrder.length; sci++) {
+            svcSegCollapsed[segmentOrder[sci]] = true;
+        }
+
+        function getFilledHiddenDropboxCount() {
+            var count = 0;
+            for (var key in dropboxMappings) {
+                if (dropboxMappings.hasOwnProperty(key)) {
+                    var srcItem = saItems[parseInt(key)];
+                    if (srcItem && srcItem.visibilityMustBeSet) count++;
+                }
+            }
+            return count;
+        }
+
+        function updateConfirmState() {
+            if (getFilledHiddenDropboxCount() > 0) {
+                confirmBtn.disabled = false;
+                confirmBtn.style.opacity = "1";
+                confirmBtn.style.cursor = "pointer";
+            } else {
+                confirmBtn.disabled = true;
+                confirmBtn.style.opacity = "0.5";
+                confirmBtn.style.cursor = "not-allowed";
+            }
+        }
+
+        // === SEGMENT NAV PANEL (left) ===
+        var segNavPanel = document.createElement("div");
+        segNavPanel.style.cssText = "display:flex;flex-direction:column;width:160px;min-width:140px;border:1px solid #444;border-radius:6px;background:#1a1a1a;overflow:hidden;flex-shrink:0;";
+        var segNavHeader = document.createElement("div");
+        segNavHeader.style.cssText = "padding:8px 10px;font-weight:600;font-size:12px;border-bottom:1px solid #333;background:#222;text-align:center;color:#ccc;";
+        segNavHeader.textContent = "Segments";
+        var segNavBody = document.createElement("div");
+        segNavBody.style.cssText = "flex:1;overflow-y:auto;padding:4px;";
+        segNavPanel.appendChild(segNavHeader);
+        segNavPanel.appendChild(segNavBody);
+
+        function renderSegNavPanel() {
+            segNavBody.innerHTML = "";
+            for (var ni = 0; ni < segmentOrder.length; ni++) {
+                (function(segName) {
+                    var navItem = document.createElement("div");
+                    navItem.textContent = segName;
+                    navItem.title = segName;
+                    navItem.style.cssText = "padding:5px 8px;margin:2px 0;border-radius:4px;font-size:11px;color:#bbb;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:" + (!svcSegCollapsed[segName] ? "#2a2a4a" : "transparent") + ";transition:background 0.1s;";
+                    navItem.addEventListener("mouseenter", function() { this.style.background = "#333"; });
+                    navItem.addEventListener("mouseleave", function() { this.style.background = (!svcSegCollapsed[segName] ? "#2a2a4a" : "transparent"); });
+                    navItem.addEventListener("click", function() {
+                        // Collapse all, expand only this one
+                        for (var k in svcSegCollapsed) svcSegCollapsed[k] = true;
+                        svcSegCollapsed[segName] = false;
+                        renderPrimaryPanel();
+                        renderSegNavPanel();
+                        // Scroll to this segment in primary panel
+                        var target = primaryBody.querySelector("[data-seg-name='" + CSS.escape(segName) + "']");
+                        if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+                    });
+                    segNavBody.appendChild(navItem);
+                })(segmentOrder[ni]);
+            }
+        }
+
+        // Keyword matching helper
+        function matchesKeywords(entry) {
+            if (svcSearchKeywords.length === 0) return true;
+            var text = (entry.item.segment + " " + entry.item.studyEvent + " " + entry.item.form).toLowerCase();
+            for (var ki = 0; ki < svcSearchKeywords.length; ki++) {
+                if (text.indexOf(svcSearchKeywords[ki].toLowerCase()) !== -1) return true;
+            }
+            return false;
+        }
+
+        function renderPrimaryPanel() {
+            primaryBody.innerHTML = "";
+            for (var si = 0; si < segmentOrder.length; si++) {
+                var segName = segmentOrder[si];
+                var entries = segmentGroups[segName];
+
+                // Filter entries by keywords and showCompleted
+                var filtered = [];
+                for (var fe = 0; fe < entries.length; fe++) {
+                    if (!matchesKeywords(entries[fe])) continue;
+                    if (svcShowCompleted && !dropboxMappings[String(entries[fe].idx)]) continue;
+                    filtered.push(entries[fe]);
+                }
+                // Also check if segment name matches keywords
+                var segMatchesKw = false;
+                if (svcSearchKeywords.length > 0) {
+                    var segLower = segName.toLowerCase();
+                    for (var ki2 = 0; ki2 < svcSearchKeywords.length; ki2++) {
+                        if (segLower.indexOf(svcSearchKeywords[ki2].toLowerCase()) !== -1) { segMatchesKw = true; break; }
+                    }
+                }
+                // If segment name matches, show all entries in it (subject to showCompleted)
+                if (segMatchesKw && svcSearchKeywords.length > 0) {
+                    filtered = [];
+                    for (var fe2 = 0; fe2 < entries.length; fe2++) {
+                        if (svcShowCompleted && !dropboxMappings[String(entries[fe2].idx)]) continue;
+                        filtered.push(entries[fe2]);
+                    }
+                }
+                if (filtered.length === 0 && svcSearchKeywords.length > 0) continue;
+                if (svcShowCompleted && filtered.length === 0) continue;
+
+                var isCollapsed = !!svcSegCollapsed[segName];
+
+                var segBlock = document.createElement("div");
+                segBlock.style.cssText = "margin-bottom:10px;border:1px solid #444;border-radius:6px;background:#1e1e1e;overflow:hidden;";
+                segBlock.dataset.segName = segName;
+
+                // Segment header with collapse toggle
+                var segHeader = document.createElement("div");
+                segHeader.style.cssText = "display:flex;align-items:center;gap:6px;padding:8px 10px;background:#292929;border-bottom:1px solid #444;cursor:pointer;user-select:none;";
+                var segArrow = document.createElement("span");
+                segArrow.textContent = isCollapsed ? "\u25B6" : "\u25BC";
+                segArrow.style.cssText = "font-size:10px;color:#888;flex-shrink:0;";
+                var segLabel = document.createElement("span");
+                segLabel.style.cssText = "flex:1;font-weight:600;font-size:12px;color:#ccc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+                segLabel.textContent = segName + " (" + filtered.length + " forms)";
+                segHeader.appendChild(segArrow);
+                segHeader.appendChild(segLabel);
+                segHeader.addEventListener("click", (function(sn) {
+                    return function() {
+                        svcSegCollapsed[sn] = !svcSegCollapsed[sn];
+                        renderPrimaryPanel();
+                        renderSegNavPanel();
+                    };
+                })(segName));
+                segBlock.appendChild(segHeader);
+
+                if (!isCollapsed) {
+                    var segBody = document.createElement("div");
+                    segBody.style.cssText = "padding:6px;";
+
+                    for (var fi = 0; fi < filtered.length; fi++) {
+                        var entry = filtered[fi];
+                        var saItem = entry.item;
+                        var globalIdx = entry.idx;
+                        // Dropbox enabled only for visibilityMustBeSet (red eye icon)
+                        var isDropEnabled = !!saItem.visibilityMustBeSet;
+                        var isDropDisabled = !isDropEnabled;
+                        var mapping = dropboxMappings[String(globalIdx)];
+
+                        // Color-code rows with available dropboxes
+                        var rowBg = "#2a2a2a";
+                        var rowBorder = "#333";
+                        if (isDropEnabled) {
+                            rowBg = mapping ? "#1e2e1e" : "#2a2235";
+                            rowBorder = mapping ? "#3a6a3a" : "#554";
+                        }
+
+                        var formRow = document.createElement("div");
+                        formRow.style.cssText = "display:flex;align-items:center;gap:6px;padding:5px 8px;margin-bottom:3px;border:1px solid " + rowBorder + ";border-radius:5px;background:" + rowBg + ";transition:all 0.15s ease;";
+
+                        // Row number with completion check
+                        var rowNum = document.createElement("span");
+                        var isRowComplete = !!(mapping && mapping.prefillItem && mapping.prefillItem !== "-- Select Item --" && mapping.prefillItemValue && mapping.prefillItemValue !== "-- Select Item Value --" && mapping.prefillReason);
+                        rowNum.textContent = (isRowComplete ? "\u2714 " : "") + String(fi + 1);
+                        rowNum.style.cssText = "min-width:" + (isRowComplete ? "30px" : "20px") + ";text-align:center;font-size:11px;font-weight:700;color:" + (isRowComplete ? "#4caf50" : "#888") + ";flex-shrink:0;";
+                        formRow.appendChild(rowNum);
+
+                        // Form label: [Segment] - [StudyEvent] - [FormName]
+                        var formLabel = document.createElement("span");
+                        formLabel.textContent = saItem.segment + " - " + saItem.studyEvent + " - " + saItem.form;
+                        formLabel.title = formLabel.textContent;
+                        formLabel.style.cssText = "flex:1;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:grab;min-width:0;";
+                        formLabel.draggable = true;
+                        formLabel.dataset.globalIdx = String(globalIdx);
+                        formLabel.addEventListener("dragstart", (function(idx) {
+                            return function(e) {
+                                e.dataTransfer.setData("application/x-svc-form", String(idx));
+                                e.dataTransfer.effectAllowed = "copy";
+                                this.style.opacity = "0.5";
+                            };
+                        })(globalIdx));
+                        formLabel.addEventListener("dragend", function() { this.style.opacity = "1"; });
+                        formRow.appendChild(formLabel);
+
+                        // Reversed order - Icons first
+                        var iconsStr = "";
+                        if (saItem.visibilityMustBeSet) iconsStr += "\uD83D\uDC41\uFE0F";
+                        else if (saItem.visibilityAlreadySet) iconsStr += "\u2705";
+                        if (saItem.preReference) iconsStr += "\u23EA";
+                        if (saItem.refActivity) iconsStr += BPL_ICON_REF_ACTIVITY;
+                        var iconsLabel = document.createElement("span");
+                        iconsLabel.textContent = iconsStr;
+                        iconsLabel.style.cssText = "font-size:11px;flex-shrink:0;white-space:nowrap;";
+                        formRow.appendChild(iconsLabel);
+
+                        //  Time reference next
+                        var tpDisplay = saItem.timepointDisplay || saItem.timepointCleaned || "";
+                        var timeRefLabel = document.createElement("span");
+                        timeRefLabel.textContent = tpDisplay;
+                        timeRefLabel.style.cssText = "font-size:10px;color:#888;white-space:pre;flex-shrink:0;min-width:0;overflow:hidden;text-overflow:ellipsis;max-width:120px;";
+                        timeRefLabel.title = tpDisplay;
+                        formRow.appendChild(timeRefLabel);
+
+                        // Dropbox last (far right)
+                        var dropbox = document.createElement("div");
+                        dropbox.dataset.globalIdx = String(globalIdx);
+                        dropbox.style.cssText = "min-width:120px;max-width:180px;min-height:26px;padding:2px 4px;border:1px dashed " + (isDropDisabled ? "#333" : "#555") + ";border-radius:3px;background:" + (isDropDisabled ? "#161616" : "#1a1a1a") + ";display:flex;align-items:center;gap:2px;flex-shrink:0;font-size:10px;color:" + (isDropDisabled ? "#444" : "#888") + ";" + (isDropDisabled ? "cursor:not-allowed;opacity:0.5;" : "");
+
+                        if (isDropDisabled) {
+                            var disabledLabel = document.createElement("span");
+                            disabledLabel.textContent = saItem.visibilityAlreadySet ? "Already Set" : "N/A";
+                            disabledLabel.style.cssText = "color:#555;font-size:9px;";
+                            dropbox.appendChild(disabledLabel);
+                        } else if (mapping) {
+                            var tag = document.createElement("span");
+                            tag.textContent = mapping.form;
+                            tag.title = mapping.segment + " - " + mapping.studyEvent + " - " + mapping.form;
+                            tag.style.cssText = "display:inline-flex;align-items:center;gap:2px;padding:1px 4px;background:#3a3a5a;border-radius:3px;font-size:9px;color:#ccc;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;";
+                            tag.addEventListener("click", (function(gIdx) {
+                                return function(e) {
+                                    e.stopPropagation();
+                                    selectedDropboxIdx = gIdx;
+                                    log("SVC: dropbox form clicked idx=" + gIdx);
+                                    renderPrimaryPanel();
+                                    renderSegNavPanel();
+                                    loadFormAttributesForDropbox(gIdx);
+                                };
+                            })(globalIdx));
+                            // X remove button
+                            var removeTag = document.createElement("span");
+                            removeTag.textContent = "\u00D7";
+                            removeTag.style.cssText = "cursor:pointer;color:#ff6b6b;font-weight:bold;font-size:11px;margin-left:2px;flex-shrink:0;";
+                            removeTag.addEventListener("click", (function(gIdx) {
+                                return function(e) {
+                                    e.stopPropagation();
+                                    delete dropboxMappings[String(gIdx)];
+                                    if (selectedDropboxIdx === gIdx) {
+                                        selectedDropboxIdx = null;
+                                        renderConfigPanel();
+                                    }
+                                    log("SVC: removed mapping from dropbox idx=" + gIdx);
+                                    renderPrimaryPanel();
+                                    renderSegNavPanel();
+                                    updateConfirmState();
+                                };
+                            })(globalIdx));
+                            tag.appendChild(removeTag);
+                            dropbox.appendChild(tag);
+                            // Highlight if selected
+                            if (selectedDropboxIdx === globalIdx) {
+                                dropbox.style.borderColor = "#7a7aff";
+                                dropbox.style.background = "#2a2a4a";
+                            }
+                        } else {
+                            var placeholder = document.createElement("span");
+                            placeholder.textContent = "\u2B07 Drop form";
+                            placeholder.style.cssText = "color:#666;font-size:9px;";
+                            dropbox.appendChild(placeholder);
+                        }
+
+                        if (!isDropDisabled) {
+                            dropbox.addEventListener("dragover", function(e) {
+                                var hasSvc = false;
+                                if (e.dataTransfer.types) {
+                                    for (var t = 0; t < e.dataTransfer.types.length; t++) {
+                                        if (e.dataTransfer.types[t] === "application/x-svc-form") { hasSvc = true; break; }
+                                    }
+                                }
+                                if (hasSvc) {
+                                    e.preventDefault();
+                                    e.dataTransfer.dropEffect = "copy";
+                                    this.style.borderColor = "#7a7aff";
+                                    this.style.background = "#2a2a4a";
+                                }
+                            });
+                            dropbox.addEventListener("dragleave", function() {
+                                if (selectedDropboxIdx !== parseInt(this.dataset.globalIdx)) {
+                                    this.style.borderColor = "#555";
+                                    this.style.background = "#1a1a1a";
+                                }
+                            });
+                            dropbox.addEventListener("drop", (function(gIdx) {
+                                return function(e) {
+                                    e.preventDefault();
+                                    this.style.borderColor = "#555";
+                                    this.style.background = "#1a1a1a";
+                                    var srcIdx = e.dataTransfer.getData("application/x-svc-form");
+                                    if (srcIdx === "" || srcIdx === undefined) return;
+                                    var srcItem = saItems[parseInt(srcIdx)];
+                                    if (!srcItem) return;
+                                    // Check if this form is already mapped to this dropbox (no duplicates)
+                                    var existing = dropboxMappings[String(gIdx)];
+                                    if (existing && existing.segment === srcItem.segment && existing.studyEvent === srcItem.studyEvent && existing.form === srcItem.form) {
+                                        log("SVC: duplicate drop ignored for idx=" + gIdx);
+                                        return;
+                                    }
+                                    dropboxMappings[String(gIdx)] = {
+                                        segment: srcItem.segment,
+                                        studyEvent: srcItem.studyEvent,
+                                        form: srcItem.form,
+                                        sourceIdx: parseInt(srcIdx)
+                                    };
+                                    log("SVC: mapped form " + srcItem.form + " to dropbox idx=" + gIdx);
+                                    // Auto-prefill from reference if exists
+                                    var ref = svcReferences[srcItem.form];
+                                    if (ref) {
+                                        dropboxMappings[String(gIdx)].prefillItem = ref.item;
+                                        dropboxMappings[String(gIdx)].prefillItemValue = ref.itemValue;
+                                        dropboxMappings[String(gIdx)].prefillReason = ref.reason;
+                                        log("SVC: auto-prefilled from reference for " + srcItem.form);
+                                    }
+                                    renderPrimaryPanel();
+                                    renderSegNavPanel();
+                                    updateConfirmState();
+                                };
+                            })(globalIdx));
+                        }
+                        formRow.appendChild(dropbox);
+
+                        segBody.appendChild(formRow);
+                    }
+
+                    segBlock.appendChild(segBody);
+                }
+                primaryBody.appendChild(segBlock);
+            }
+            updateConfirmState();
+        }
+
+        // === CONFIG PANEL (2/5 width) ===
+        var configPanel = document.createElement("div");
+        configPanel.style.cssText = "display:flex;flex-direction:column;flex:2;border:1px solid #444;border-radius:6px;background:#1a1a1a;overflow:hidden;min-width:0;";
+
+        var configHeader = document.createElement("div");
+        configHeader.style.cssText = "padding:10px;font-weight:600;font-size:13px;border-bottom:1px solid #333;background:#222;text-align:center;";
+        configHeader.textContent = "Visibility Condition Configuration";
+
+        var configBody = document.createElement("div");
+        configBody.style.cssText = "flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:0;";
+
+        // Top half: Attributes
+        var attrSection = document.createElement("div");
+        attrSection.style.cssText = "flex:1;display:flex;flex-direction:column;gap:8px;padding-bottom:8px;border-bottom:1px solid #333;";
+
+        var attrPlaceholder = document.createElement("div");
+        attrPlaceholder.textContent = "Click a form inside a dropbox to configure its visibility condition";
+        attrPlaceholder.style.cssText = "color:#666;font-size:12px;text-align:center;padding:20px;";
+
+        // Item dropdown
+        var itemLbl = document.createElement("label");
+        itemLbl.textContent = "Item";
+        itemLbl.style.cssText = "font-size:11px;color:#aaa;font-weight:600;";
+        var itemSelect = document.createElement("select");
+        itemSelect.style.cssText = "padding:6px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;width:100%;font-size:12px;";
+        itemSelect.addEventListener("change", async function() {
+            var selectedText = this.options[this.selectedIndex] ? this.options[this.selectedIndex].text : "";
+            if (!selectedText) return;
+            log("SVC: item selected: " + selectedText);
+            // Persist selection back to mapping
+            if (selectedDropboxIdx !== null && dropboxMappings[String(selectedDropboxIdx)]) {
+                dropboxMappings[String(selectedDropboxIdx)].prefillItem = selectedText;
+                dropboxMappings[String(selectedDropboxIdx)].prefillItemValue = null;
+            }
+            // Collect item values via bg iframe
+            currentItemValues = await svcSelectItemAndCollectValues(selectedText);
+            // Cache item values on the mapping so they persist across dropbox switches
+            if (selectedDropboxIdx !== null && dropboxMappings[String(selectedDropboxIdx)]) {
+                dropboxMappings[String(selectedDropboxIdx)]._cachedItemValues = currentItemValues.slice();
+            }
+            renderItemValueDropdown();
+            renderPrimaryPanel();
+            renderSegNavPanel();
+        });
+
+        // Item Value dropdown
+        var itemValLbl = document.createElement("label");
+        itemValLbl.textContent = "Item Value";
+        itemValLbl.style.cssText = "font-size:11px;color:#aaa;font-weight:600;";
+        var itemValSelect = document.createElement("select");
+        itemValSelect.style.cssText = "padding:6px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;width:100%;font-size:12px;";
+        itemValSelect.addEventListener("change", function() {
+            var selectedText = this.options[this.selectedIndex] ? this.options[this.selectedIndex].text : "";
+            if (selectedDropboxIdx !== null && dropboxMappings[String(selectedDropboxIdx)]) {
+                dropboxMappings[String(selectedDropboxIdx)].prefillItemValue = selectedText || null;
+                log("SVC: item value persisted: " + selectedText);
+                renderPrimaryPanel();
+                renderSegNavPanel();
+            }
+        });
+
+        // Reason text box
+        var reasonLbl = document.createElement("label");
+        reasonLbl.textContent = "Reason";
+        reasonLbl.style.cssText = "font-size:11px;color:#aaa;font-weight:600;";
+        var reasonInput = document.createElement("input");
+        reasonInput.type = "text";
+        reasonInput.value = "Add visibility condition";
+        reasonInput.style.cssText = "padding:6px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;width:100%;font-size:12px;box-sizing:border-box;";
+        reasonInput.addEventListener("input", function() {
+            if (selectedDropboxIdx !== null && dropboxMappings[String(selectedDropboxIdx)]) {
+                dropboxMappings[String(selectedDropboxIdx)].prefillReason = this.value.trim() || "Add visibility condition";
+                renderPrimaryPanel();
+                renderSegNavPanel();
+            }
+        });
+
+        // Save Reference button
+        var saveRefBtn = document.createElement("button");
+        saveRefBtn.textContent = "Save Reference";
+        saveRefBtn.style.cssText = "padding:6px 14px;border-radius:4px;border:none;background:#28a745;color:#fff;font-size:11px;font-weight:600;cursor:pointer;align-self:flex-end;";
+        saveRefBtn.addEventListener("mouseenter", function() { this.style.background = "#218838"; });
+        saveRefBtn.addEventListener("mouseleave", function() { this.style.background = "#28a745"; });
+        saveRefBtn.addEventListener("click", function() {
+            if (selectedDropboxIdx === null) return;
+            var mapping = dropboxMappings[String(selectedDropboxIdx)];
+            if (!mapping) return;
+            var sourceFormName = mapping.form;
+            var selItem = itemSelect.options[itemSelect.selectedIndex] ? itemSelect.options[itemSelect.selectedIndex].text : "";
+            var selItemVal = itemValSelect.options[itemValSelect.selectedIndex] ? itemValSelect.options[itemValSelect.selectedIndex].text : "";
+            var reason = reasonInput.value.trim() || "Add visibility condition";
+            svcReferences[sourceFormName] = { item: selItem, itemValue: selItemVal, reason: reason };
+            svcSaveReferences(svcReferences);
+            log("SVC: saved reference for source form '" + sourceFormName + "'");
+            renderReferencesPanel();
+        });
+
+        function renderItemDropdown(items, prefillItem) {
+            itemSelect.innerHTML = "";
+            var defaultOpt = document.createElement("option");
+            defaultOpt.value = "";
+            defaultOpt.textContent = "-- Select Item --";
+            itemSelect.appendChild(defaultOpt);
+            for (var i = 0; i < items.length; i++) {
+                var opt = document.createElement("option");
+                opt.value = items[i].value;
+                opt.textContent = items[i].text;
+                itemSelect.appendChild(opt);
+            }
+            if (prefillItem) {
+                for (var j = 0; j < itemSelect.options.length; j++) {
+                    if (normalizeVisibilityText(itemSelect.options[j].text) === normalizeVisibilityText(prefillItem)) {
+                        itemSelect.selectedIndex = j;
+                        break;
+                    }
+                }
+            }
+        }
+
+        function renderItemValueDropdown(prefillItemValue) {
+            itemValSelect.innerHTML = "";
+            var defaultOpt = document.createElement("option");
+            defaultOpt.value = "";
+            defaultOpt.textContent = "-- Select Item Value --";
+            itemValSelect.appendChild(defaultOpt);
+            for (var i = 0; i < currentItemValues.length; i++) {
+                var opt = document.createElement("option");
+                opt.value = currentItemValues[i].value;
+                opt.textContent = currentItemValues[i].text;
+                itemValSelect.appendChild(opt);
+            }
+            if (prefillItemValue) {
+                for (var j = 0; j < itemValSelect.options.length; j++) {
+                    if (normalizeVisibilityText(itemValSelect.options[j].text) === normalizeVisibilityText(prefillItemValue)) {
+                        itemValSelect.selectedIndex = j;
+                        break;
+                    }
+                }
+            }
+        }
+
+        async function loadFormAttributesForDropbox(gIdx) {
+            var mapping = dropboxMappings[String(gIdx)];
+            if (!mapping) {
+                renderConfigPanel();
+                return;
+            }
+            // Target = the row that owns the dropbox (saItems[gIdx])
+            // Source = the form that was dragged into the dropbox (mapping)
+            var targetItem = saItems[gIdx];
+            if (!targetItem) {
+                log("SVC: target saItem not found for gIdx=" + gIdx);
+                renderConfigPanel();
+                return;
+            }
+
+            var prefill = mapping.prefillItem || null;
+            var prefillVal = mapping.prefillItemValue || null;
+            var prefillReason = mapping.prefillReason || "Add visibility condition";
+
+            // Determine if this mapping already has cached items from a previous load
+            var hasCachedItems = !!(mapping._cachedItems && mapping._cachedItems.length > 0);
+            var hasCachedItemValues = !!(mapping._cachedItemValues && mapping._cachedItemValues.length > 0);
+            // Reference fast path: saved reference provides values but no cached items yet
+            var refForForm = svcReferences[mapping.form] || null;
+            var useRefFastPath = !!(refForForm && prefill && prefillVal && !hasCachedItems);
+
+            if (hasCachedItems) {
+                // Restore from per-mapping cache — no bg iframe needed
+                currentItems = mapping._cachedItems;
+                currentItemValues = hasCachedItemValues ? mapping._cachedItemValues : [];
+                log("SVC: restored cached items for idx=" + gIdx + " (" + currentItems.length + " items, " + currentItemValues.length + " values)");
+            } else if (useRefFastPath) {
+                // Reference fast path: create synthetic entries from saved ref values
+                currentItems = prefill ? [{ text: prefill, value: prefill }] : [];
+                currentItemValues = prefillVal ? [{ text: prefillVal, value: prefillVal }] : [];
+                log("SVC: ref fast path for idx=" + gIdx + " (form=" + mapping.form + ")");
+            } else {
+                // Full load via bg iframe
+                attrSection.innerHTML = "";
+                var loadingMsg = document.createElement("div");
+                loadingMsg.textContent = "Loading visibility for " + targetItem.form + " (source: " + mapping.form + ")...";
+                loadingMsg.style.cssText = "color:#9df;font-size:12px;text-align:center;padding:12px;";
+                attrSection.appendChild(loadingMsg);
+
+                // Cache key combines target + source since items depend on which source SA is selected
+                var cacheKey = targetItem.form + "||" + mapping.form;
+                var items = [];
+
+                // Check global cache
+                if (SVC_ITEM_CACHE[cacheKey]) {
+                    items = SVC_ITEM_CACHE[cacheKey];
+                    log("SVC: using global cached items for " + cacheKey + " (" + items.length + " items)");
+                } else {
+                    // Use bg iframe - open visibility modal for the TARGET row
+                    await svcCloseBgModal();
+                    await sleep(300);
+                    var opened = await svcOpenVisibilityModalInBg(targetItem.segment, targetItem.studyEvent, targetItem.form);
+                    if (opened) {
+                        // Fill modal dropdowns with the SOURCE form's info
+                        var saOk = await svcSelectActivityAndSA(mapping.studyEvent, mapping.form);
+                        if (saOk) {
+                            items = svcCollectItems();
+                            SVC_ITEM_CACHE[cacheKey] = items;
+                            log("SVC: collected " + items.length + " items for " + cacheKey);
+                        }
+                    }
+                }
+
+                currentItems = items;
+                currentItemValues = [];
+                // Store on the mapping so switching back won't need bg iframe again
+                mapping._cachedItems = items.slice();
+            }
+
+            // Render attribute controls
+            attrSection.innerHTML = "";
+
+            // Show target and source info above Item label
+            var segStudyInfo = document.createElement("div");
+            segStudyInfo.style.cssText = "padding:6px 8px;margin-bottom:4px;border:1px solid #333;border-radius:4px;background:#1e1e2e;";
+            var targetInfoLine = document.createElement("div");
+            targetInfoLine.style.cssText = "font-size:10px;color:#8a8aaa;margin-bottom:2px;";
+            targetInfoLine.textContent = "Target: " + targetItem.segment + " - " + targetItem.studyEvent + " - " + targetItem.form;
+            var sourceInfoLine = document.createElement("div");
+            sourceInfoLine.style.cssText = "font-size:10px;color:#9a9aba;";
+            sourceInfoLine.textContent = "Source: " + mapping.segment + " - " + mapping.studyEvent + " - " + mapping.form;
+            segStudyInfo.appendChild(targetInfoLine);
+            segStudyInfo.appendChild(sourceInfoLine);
+            attrSection.appendChild(segStudyInfo);
+
+            attrSection.appendChild(itemLbl);
+            renderItemDropdown(currentItems, prefill);
+            attrSection.appendChild(itemSelect);
+            attrSection.appendChild(itemValLbl);
+            renderItemValueDropdown(prefillVal);
+            attrSection.appendChild(itemValSelect);
+            attrSection.appendChild(reasonLbl);
+            reasonInput.value = prefillReason;
+            attrSection.appendChild(reasonInput);
+            attrSection.appendChild(saveRefBtn);
+
+            // If prefill item is set but we did a full bg iframe load (no cached values yet), trigger item value loading
+            if (!hasCachedItems && !useRefFastPath && prefill && itemSelect.selectedIndex > 0) {
+                currentItemValues = await svcSelectItemAndCollectValues(prefill);
+                // Cache the loaded item values on the mapping
+                mapping._cachedItemValues = currentItemValues.slice();
+                renderItemValueDropdown(prefillVal);
+            }
+        }
+
+        // Bottom half: Saved References
+        var refSection = document.createElement("div");
+        refSection.style.cssText = "flex:1;display:flex;flex-direction:column;gap:6px;padding-top:8px;";
+
+        var refHeader = document.createElement("div");
+        refHeader.style.cssText = "display:flex;justify-content:space-between;align-items:center;";
+        var refTitle = document.createElement("span");
+        refTitle.textContent = "Saved References";
+        refTitle.style.cssText = "font-size:12px;font-weight:600;color:#ccc;";
+        var clearAllRefBtn = document.createElement("button");
+        clearAllRefBtn.textContent = "Clear All";
+        clearAllRefBtn.style.cssText = "padding:3px 8px;border-radius:4px;border:1px solid #c0392b;background:#2a1a1a;color:#ff6b6b;font-size:10px;cursor:pointer;";
+        clearAllRefBtn.addEventListener("click", function() {
+            createPopup({
+                title: "Clear All References",
+                content: '<div style="text-align:center;padding:16px;"><p>This will remove all saved visibility references.</p><p style="margin-top:12px;"><button id="svcClearAllConfirm" style="padding:8px 16px;border-radius:4px;border:none;background:#dc3545;color:#fff;cursor:pointer;margin-right:8px;">Confirm</button><button id="svcClearAllCancel" style="padding:8px 16px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;cursor:pointer;">Cancel</button></p></div>',
+                width: "350px",
+                height: "auto"
+            });
+            setTimeout(function() {
+                var confirmEl = document.getElementById("svcClearAllConfirm");
+                var cancelEl = document.getElementById("svcClearAllCancel");
+                if (confirmEl) confirmEl.addEventListener("click", function() {
+                    svcReferences = {};
+                    svcSaveReferences(svcReferences);
+                    renderReferencesPanel();
+                    log("SVC: all references cleared");
+                    var popup = this.closest("[id^='clinsparkPopup_']");
+                    if (popup) popup.remove();
+                });
+                if (cancelEl) cancelEl.addEventListener("click", function() {
+                    var popup = this.closest("[id^='clinsparkPopup_']");
+                    if (popup) popup.remove();
+                });
+            }, 50);
+        });
+        refHeader.appendChild(refTitle);
+        refHeader.appendChild(clearAllRefBtn);
+
+        var refList = document.createElement("div");
+        refList.style.cssText = "flex:1;overflow-y:auto;border:1px solid #333;border-radius:4px;padding:4px;background:#1e1e1e;max-height:200px;";
+
+        function renderReferencesPanel() {
+            refList.innerHTML = "";
+            var keys = Object.keys(svcReferences);
+            if (keys.length === 0) {
+                var emptyMsg = document.createElement("div");
+                emptyMsg.textContent = "No saved references";
+                emptyMsg.style.cssText = "color:#666;font-size:11px;text-align:center;padding:12px;";
+                refList.appendChild(emptyMsg);
+                return;
+            }
+            for (var i = 0; i < keys.length; i++) {
+                var formName = keys[i];
+                var ref = svcReferences[formName];
+                var refRow = document.createElement("div");
+                refRow.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:4px 6px;margin-bottom:2px;border-radius:3px;background:#2a2a2a;font-size:10px;";
+                var refText = document.createElement("span");
+                refText.textContent = formName + ": " + ref.item + " = " + ref.itemValue;
+                refText.title = "Form: " + formName + "\nItem: " + ref.item + "\nItem Value: " + ref.itemValue + "\nReason: " + ref.reason;
+                refText.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#ccc;cursor:default;";
+                var refDelBtn = document.createElement("span");
+                refDelBtn.textContent = "\u2715";
+                refDelBtn.style.cssText = "cursor:pointer;color:#ff6b6b;font-weight:bold;margin-left:4px;flex-shrink:0;";
+                refDelBtn.dataset.formName = formName;
+                refDelBtn.addEventListener("click", function() {
+                    delete svcReferences[this.dataset.formName];
+                    svcSaveReferences(svcReferences);
+                    log("SVC: deleted reference for " + this.dataset.formName);
+                    renderReferencesPanel();
+                });
+                refRow.appendChild(refText);
+                refRow.appendChild(refDelBtn);
+                refList.appendChild(refRow);
+            }
+        }
+
+        function renderConfigPanel() {
+            attrSection.innerHTML = "";
+            attrSection.appendChild(attrPlaceholder);
+            currentItems = [];
+            currentItemValues = [];
+        }
+
+        // Assemble config panel
+        configPanel.appendChild(configHeader);
+        attrSection.appendChild(attrPlaceholder);
+        configBody.appendChild(attrSection);
+        refSection.appendChild(refHeader);
+        refSection.appendChild(refList);
+        configBody.appendChild(refSection);
+        configPanel.appendChild(configBody);
+
+        contentRow.appendChild(segNavPanel);
+        contentRow.appendChild(primaryPanel);
+        contentRow.appendChild(configPanel);
+
+        // Bottom bar
+        var bottomRow = document.createElement("div");
+        bottomRow.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:8px;";
+
+        // Left side: Show Completed + Collapse All/Expand All
+        var bottomLeft = document.createElement("div");
+        bottomLeft.style.cssText = "display:flex;align-items:center;gap:8px;";
+
+        // Show Completed toggle button
+        var showCompletedBtn = document.createElement("button");
+        showCompletedBtn.textContent = "Show Completed";
+        showCompletedBtn.style.cssText = "padding:6px 12px;border-radius:4px;border:1px solid #555;background:#2a2a2a;color:#ccc;font-size:11px;cursor:pointer;";
+        showCompletedBtn.addEventListener("mouseenter", function() { this.style.background = "#3a3a3a"; });
+        showCompletedBtn.addEventListener("mouseleave", function() { this.style.background = svcShowCompleted ? "#2a3a2a" : "#2a2a2a"; });
+        showCompletedBtn.addEventListener("click", function() {
+            svcShowCompleted = !svcShowCompleted;
+            this.textContent = svcShowCompleted ? "Show All" : "Show Completed";
+            this.style.background = svcShowCompleted ? "#2a3a2a" : "#2a2a2a";
+            this.style.borderColor = svcShowCompleted ? "#4a8a4a" : "#555";
+            renderPrimaryPanel();
+            renderSegNavPanel();
+        });
+
+        // Collapse All / Expand All toggle button
+        var collapseAllBtn = document.createElement("button");
+        collapseAllBtn.textContent = "Expand All";
+        collapseAllBtn.style.cssText = "padding:6px 12px;border-radius:4px;border:1px solid #555;background:#2a2a2a;color:#ccc;font-size:11px;cursor:pointer;";
+        collapseAllBtn.addEventListener("mouseenter", function() { this.style.background = "#3a3a3a"; });
+        collapseAllBtn.addEventListener("mouseleave", function() { this.style.background = "#2a2a2a"; });
+        collapseAllBtn.addEventListener("click", function() {
+            var allExpanded = true;
+            for (var k in svcSegCollapsed) { if (svcSegCollapsed[k]) { allExpanded = false; break; } }
+            if (allExpanded) {
+                for (var k2 in svcSegCollapsed) svcSegCollapsed[k2] = true;
+                this.textContent = "Expand All";
+            } else {
+                for (var k3 in svcSegCollapsed) svcSegCollapsed[k3] = false;
+                this.textContent = "Collapse All";
+            }
+            renderPrimaryPanel();
+            renderSegNavPanel();
+        });
+
+        // Auto Populate button
+        var autoPopBtn = document.createElement("button");
+        autoPopBtn.textContent = "\u26A0 Auto Populate";
+        autoPopBtn.title = "Bulk-populate dropboxes across segments using a reference segment";
+        autoPopBtn.style.cssText = "padding:6px 12px;border-radius:4px;border:1px solid #555;background:#2a2a2a;color:#ccc;font-size:11px;cursor:pointer;";
+        autoPopBtn.addEventListener("mouseenter", function() { this.style.background = "#3a3a3a"; });
+        autoPopBtn.addEventListener("mouseleave", function() { this.style.background = "#2a2a2a"; });
+        autoPopBtn.addEventListener("click", function() {
+            openAutoPopulateSegmentModal();
+        });
+
+        bottomLeft.appendChild(showCompletedBtn);
+        bottomLeft.appendChild(collapseAllBtn);
+        bottomLeft.appendChild(autoPopBtn);
+
+        // Right side: Confirm button
+        var bottomRight = document.createElement("div");
+        bottomRight.style.cssText = "display:flex;align-items:center;gap:8px;";
+
+        var confirmBtn = document.createElement("button");
+        confirmBtn.textContent = "Confirm";
+        confirmBtn.disabled = true;
+        confirmBtn.style.cssText = "padding:10px 24px;border-radius:6px;border:none;background:#28a745;color:#fff;font-weight:600;cursor:not-allowed;opacity:0.5;";
+        confirmBtn.addEventListener("mouseenter", function() { if (!this.disabled) this.style.background = "#218838"; });
+        confirmBtn.addEventListener("mouseleave", function() { if (!this.disabled) this.style.background = "#28a745"; });
+
+        bottomRight.appendChild(confirmBtn);
+        bottomRow.appendChild(bottomLeft);
+        bottomRow.appendChild(bottomRight);
+
+        container.appendChild(contentRow);
+        container.appendChild(bottomRow);
+
+        // === AUTO POPULATE FEATURE ===
+        function openAutoPopulateSegmentModal() {
+            var selectedSeg = null;
+            var autoPopRunning = false;
+
+            var modalOverlay = document.createElement("div");
+            modalOverlay.style.cssText = "position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);z-index:1000002;display:flex;align-items:center;justify-content:center;";
+
+            var modalBox = document.createElement("div");
+            modalBox.style.cssText = "background:#1a1a1a;border:1px solid #444;border-radius:8px;padding:0;width:480px;max-width:90vw;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 30px rgba(0,0,0,0.7);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;font-size:14px;color:#fff;";
+
+            // Header
+            var mHeader = document.createElement("div");
+            mHeader.style.cssText = "padding:12px 16px;border-bottom:1px solid #333;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;";
+            var mTitle = document.createElement("span");
+            mTitle.textContent = "\u26A0 Auto Populate — Select Reference Segment";
+            mTitle.style.cssText = "font-weight:600;font-size:14px;";
+            var mCloseBtn = document.createElement("button");
+            mCloseBtn.textContent = "\u2715";
+            mCloseBtn.style.cssText = "background:transparent;border:none;color:#aaa;font-size:16px;cursor:pointer;padding:4px 8px;border-radius:4px;";
+            mCloseBtn.addEventListener("mouseenter", function() { this.style.background = "#333"; });
+            mCloseBtn.addEventListener("mouseleave", function() { this.style.background = "transparent"; });
+            mCloseBtn.addEventListener("click", function() {
+                if (!autoPopRunning) modalOverlay.remove();
+            });
+            mHeader.appendChild(mTitle);
+            mHeader.appendChild(mCloseBtn);
+
+            // Description
+            var mDesc = document.createElement("div");
+            mDesc.style.cssText = "padding:10px 16px;font-size:11px;color:#999;border-bottom:1px solid #333;flex-shrink:0;";
+            mDesc.textContent = "Select the reference segment whose completed dropbox configurations will be copied to all other segments with matching forms.";
+
+            // Segment list body
+            var mBody = document.createElement("div");
+            mBody.style.cssText = "flex:1;overflow-y:auto;padding:8px 12px;";
+
+            var segRadios = [];
+            for (var si = 0; si < segmentOrder.length; si++) {
+                (function(segName, idx) {
+                    var row = document.createElement("div");
+                    row.style.cssText = "display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:4px;border:1px solid #333;border-radius:5px;background:#222;cursor:pointer;transition:all 0.1s ease;";
+
+                    var radio = document.createElement("input");
+                    radio.type = "radio";
+                    radio.name = "autoPopSegRadio";
+                    radio.value = segName;
+                    radio.style.cssText = "flex-shrink:0;accent-color:#7a7aff;";
+
+                    var label = document.createElement("span");
+                    label.style.cssText = "flex:1;font-size:12px;color:#ccc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+                    label.textContent = segName;
+
+                    // Count completed dropboxes in this segment
+                    var entries = segmentGroups[segName] || [];
+                    var completedCount = 0;
+                    var eligibleCount = 0;
+                    for (var ei = 0; ei < entries.length; ei++) {
+                        var e = entries[ei];
+                        if (e.item.visibilityMustBeSet) {
+                            eligibleCount++;
+                            var m = dropboxMappings[String(e.idx)];
+                            if (m && m.prefillItem && m.prefillItem !== "-- Select Item --" && m.prefillItemValue && m.prefillItemValue !== "-- Select Item Value --" && m.prefillReason) {
+                                completedCount++;
+                            }
+                        }
+                    }
+
+                    var countBadge = document.createElement("span");
+                    countBadge.textContent = completedCount + "/" + eligibleCount + " ready";
+                    countBadge.style.cssText = "font-size:10px;color:" + (completedCount > 0 ? "#4caf50" : "#666") + ";flex-shrink:0;white-space:nowrap;";
+
+                    row.appendChild(radio);
+                    row.appendChild(label);
+                    row.appendChild(countBadge);
+
+                    row.addEventListener("click", function() {
+                        radio.checked = true;
+                        selectedSeg = segName;
+                        // Update styles
+                        for (var ri = 0; ri < segRadios.length; ri++) {
+                            segRadios[ri].row.style.borderColor = "#333";
+                            segRadios[ri].row.style.background = "#222";
+                        }
+                        row.style.borderColor = "#7a7aff";
+                        row.style.background = "#2a2a4a";
+                        mConfirmBtn.disabled = false;
+                        mConfirmBtn.style.opacity = "1";
+                        mConfirmBtn.style.cursor = "pointer";
+                    });
+                    row.addEventListener("mouseenter", function() {
+                        if (selectedSeg !== segName) row.style.background = "#2a2a2a";
+                    });
+                    row.addEventListener("mouseleave", function() {
+                        row.style.background = selectedSeg === segName ? "#2a2a4a" : "#222";
+                    });
+
+                    segRadios.push({ row: row, radio: radio, segName: segName });
+                    mBody.appendChild(row);
+                })(segmentOrder[si], si);
+            }
+
+            // Footer
+            var mFooter = document.createElement("div");
+            mFooter.style.cssText = "padding:10px 16px;border-top:1px solid #333;display:flex;justify-content:flex-end;gap:8px;flex-shrink:0;";
+
+            var mCancelBtn = document.createElement("button");
+            mCancelBtn.textContent = "Cancel";
+            mCancelBtn.style.cssText = "padding:6px 16px;border-radius:4px;border:1px solid #555;background:#2a2a2a;color:#ccc;font-size:12px;cursor:pointer;";
+            mCancelBtn.addEventListener("mouseenter", function() { this.style.background = "#3a3a3a"; });
+            mCancelBtn.addEventListener("mouseleave", function() { this.style.background = "#2a2a2a"; });
+            mCancelBtn.addEventListener("click", function() {
+                if (!autoPopRunning) modalOverlay.remove();
+            });
+
+            var mConfirmBtn = document.createElement("button");
+            mConfirmBtn.textContent = "Populate";
+            mConfirmBtn.disabled = true;
+            mConfirmBtn.style.cssText = "padding:6px 16px;border-radius:4px;border:none;background:#5b43c7;color:#fff;font-size:12px;font-weight:600;cursor:not-allowed;opacity:0.5;";
+            mConfirmBtn.addEventListener("mouseenter", function() { if (!this.disabled) this.style.background = "#4a35b0"; });
+            mConfirmBtn.addEventListener("mouseleave", function() { if (!this.disabled) this.style.background = "#5b43c7"; });
+            mConfirmBtn.addEventListener("click", function() {
+                if (this.disabled || autoPopRunning || !selectedSeg) return;
+                autoPopRunning = true;
+                mConfirmBtn.disabled = true;
+                mConfirmBtn.style.opacity = "0.5";
+                mConfirmBtn.style.cursor = "not-allowed";
+                mCancelBtn.disabled = true;
+                mCancelBtn.style.opacity = "0.5";
+                mCloseBtn.disabled = true;
+                executeAutoPopulate(selectedSeg, modalOverlay);
+            });
+
+            mFooter.appendChild(mCancelBtn);
+            mFooter.appendChild(mConfirmBtn);
+
+            modalBox.appendChild(mHeader);
+            modalBox.appendChild(mDesc);
+            modalBox.appendChild(mBody);
+            modalBox.appendChild(mFooter);
+            modalOverlay.appendChild(modalBox);
+
+            // Close on overlay click (not on modal box)
+            modalOverlay.addEventListener("click", function(ev) {
+                if (ev.target === modalOverlay && !autoPopRunning) modalOverlay.remove();
+            });
+            // Close on Escape
+            var escHandler = function(ev) {
+                if (ev.key === "Escape" && !autoPopRunning) {
+                    modalOverlay.remove();
+                    document.removeEventListener("keydown", escHandler);
+                }
+            };
+            document.addEventListener("keydown", escHandler);
+
+            document.body.appendChild(modalOverlay);
+        }
+
+        function executeAutoPopulate(refSegName, modalOverlay) {
+            log("SVC AutoPop: starting with reference segment '" + refSegName + "'");
+
+            // 1. Collect completed configurations from reference segment
+            var refEntries = segmentGroups[refSegName] || [];
+            var refConfigs = {}; // keyed by base form name -> config object
+            for (var ri = 0; ri < refEntries.length; ri++) {
+                var re = refEntries[ri];
+                if (!re.item.visibilityMustBeSet) continue;
+                var m = dropboxMappings[String(re.idx)];
+                if (!m) continue;
+                // Check completeness
+                var isComplete = !!(m.prefillItem && m.prefillItem !== "-- Select Item --" && m.prefillItemValue && m.prefillItemValue !== "-- Select Item Value --" && m.prefillReason);
+                if (!isComplete) continue;
+                refConfigs[re.item.form] = {
+                    attachedForm: m.form,
+                    prefillItem: m.prefillItem,
+                    prefillItemValue: m.prefillItemValue,
+                    prefillReason: m.prefillReason,
+                    _cachedItems: m._cachedItems ? m._cachedItems.slice() : null,
+                    _cachedItemValues: m._cachedItemValues ? m._cachedItemValues.slice() : null
+                };
+            }
+
+            var refFormNames = Object.keys(refConfigs);
+            log("SVC AutoPop: found " + refFormNames.length + " completed configs in reference segment");
+
+            if (refFormNames.length === 0) {
+                log("SVC AutoPop: no completed configs found, aborting");
+                modalOverlay.remove();
+                return;
+            }
+
+            // 2. Build work list: iterate all other segments
+            var workItems = []; // { targetIdx, targetSegName, targetStudyEvent, targetForm, config, status }
+            for (var si = 0; si < segmentOrder.length; si++) {
+                var segName = segmentOrder[si];
+                if (segName === refSegName) continue;
+                var entries = segmentGroups[segName] || [];
+                for (var ei = 0; ei < entries.length; ei++) {
+                    var entry = entries[ei];
+                    var config = refConfigs[entry.item.form];
+                    if (!config) continue; // No matching form name in reference
+                    workItems.push({
+                        targetIdx: entry.idx,
+                        targetSegName: segName,
+                        targetStudyEvent: entry.item.studyEvent,
+                        targetForm: entry.item.form,
+                        eligible: !!entry.item.visibilityMustBeSet,
+                        alreadyFilled: !!dropboxMappings[String(entry.idx)],
+                        config: config,
+                        status: "pending" // pending | populated | skipped | failed
+                    });
+                }
+            }
+
+            log("SVC AutoPop: " + workItems.length + " candidate forms across other segments");
+
+            // 3. Show progress panel (replace modal content)
+            modalOverlay.innerHTML = "";
+            var progBox = document.createElement("div");
+            progBox.style.cssText = "background:#1a1a1a;border:1px solid #444;border-radius:8px;padding:0;width:600px;max-width:92vw;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 30px rgba(0,0,0,0.7);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;font-size:14px;color:#fff;";
+
+            var progHeader = document.createElement("div");
+            progHeader.style.cssText = "padding:12px 16px;border-bottom:1px solid #333;flex-shrink:0;";
+            progHeader.innerHTML = "<span style='font-weight:600;font-size:14px;'>\u26A0 Auto Populate — Processing</span>";
+
+            var progStatus = document.createElement("div");
+            progStatus.style.cssText = "padding:8px 16px;font-size:12px;color:#aaa;border-bottom:1px solid #333;flex-shrink:0;";
+            progStatus.textContent = "Starting...";
+
+            var progBody = document.createElement("div");
+            progBody.style.cssText = "flex:1;overflow-y:auto;padding:8px 12px;max-height:400px;";
+
+            var progFooter = document.createElement("div");
+            progFooter.style.cssText = "padding:10px 16px;border-top:1px solid #333;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;";
+
+            var progSummary = document.createElement("span");
+            progSummary.style.cssText = "font-size:11px;color:#888;";
+            var progCloseBtn = document.createElement("button");
+            progCloseBtn.textContent = "Close";
+            progCloseBtn.disabled = true;
+            progCloseBtn.style.cssText = "padding:6px 16px;border-radius:4px;border:none;background:#555;color:#fff;font-size:12px;font-weight:600;cursor:not-allowed;opacity:0.5;";
+            progCloseBtn.addEventListener("mouseenter", function() { if (!this.disabled) this.style.background = "#666"; });
+            progCloseBtn.addEventListener("mouseleave", function() { if (!this.disabled) this.style.background = "#555"; });
+            progCloseBtn.addEventListener("click", function() {
+                if (!this.disabled) modalOverlay.remove();
+            });
+
+            progFooter.appendChild(progSummary);
+            progFooter.appendChild(progCloseBtn);
+            progBox.appendChild(progHeader);
+            progBox.appendChild(progStatus);
+            progBox.appendChild(progBody);
+            progBox.appendChild(progFooter);
+            modalOverlay.appendChild(progBox);
+
+            // Build progress rows
+            var progRows = [];
+            for (var wi = 0; wi < workItems.length; wi++) {
+                var w = workItems[wi];
+                var pRow = document.createElement("div");
+                pRow.style.cssText = "display:flex;align-items:center;gap:8px;padding:5px 8px;margin-bottom:2px;border:1px solid #333;border-radius:4px;background:#222;font-size:11px;";
+
+                var pLabel = document.createElement("span");
+                pLabel.textContent = w.targetSegName + " — " + w.targetStudyEvent + " — " + w.targetForm;
+                pLabel.title = pLabel.textContent;
+                pLabel.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#ccc;min-width:0;";
+
+                var pStatus = document.createElement("span");
+                pStatus.textContent = "Pending";
+                pStatus.style.cssText = "flex-shrink:0;font-size:10px;color:#888;min-width:60px;text-align:right;";
+
+                pRow.appendChild(pLabel);
+                pRow.appendChild(pStatus);
+                progBody.appendChild(pRow);
+                progRows.push({ row: pRow, statusEl: pStatus });
+            }
+
+            function updateProgRow(idx, status, color) {
+                if (!progRows[idx]) return;
+                progRows[idx].statusEl.textContent = status;
+                progRows[idx].statusEl.style.color = color || "#888";
+                progRows[idx].row.style.borderColor = color === "#4caf50" ? "#3a6a3a" : (color === "#ff6b6b" ? "#6a3a3a" : (color === "#ffb74d" ? "#6a5a3a" : "#333"));
+            }
+
+            // 4. Process work items synchronously
+            var populated = 0;
+            var skipped = 0;
+            var failed = 0;
+
+            function processNext(idx) {
+                if (idx >= workItems.length) {
+                    // Done — show summary
+                    progStatus.textContent = "Complete!";
+                    progStatus.style.color = "#4caf50";
+                    progSummary.textContent = populated + " populated, " + skipped + " skipped, " + failed + " failed";
+                    progCloseBtn.disabled = false;
+                    progCloseBtn.style.opacity = "1";
+                    progCloseBtn.style.cursor = "pointer";
+                    progCloseBtn.style.background = "#28a745";
+                    log("SVC AutoPop: complete — " + populated + " populated, " + skipped + " skipped, " + failed + " failed");
+                    // Refresh the main GUI
+                    renderPrimaryPanel();
+                    renderSegNavPanel();
+                    updateConfirmState();
+                    return;
+                }
+
+                var w = workItems[idx];
+                progStatus.textContent = "Processing " + (idx + 1) + " of " + workItems.length + "...";
+
+                // Skip: not eligible (dropbox disabled)
+                if (!w.eligible) {
+                    w.status = "skipped";
+                    skipped++;
+                    updateProgRow(idx, "Skipped (ineligible)", "#ffb74d");
+                    log("SVC AutoPop: skipped idx=" + w.targetIdx + " (not eligible)");
+                    setTimeout(function() { processNext(idx + 1); }, 0);
+                    return;
+                }
+
+                // Skip: already has a dropbox filled — do not overwrite
+                if (w.alreadyFilled) {
+                    w.status = "skipped";
+                    skipped++;
+                    updateProgRow(idx, "Skipped (already filled)", "#ffb74d");
+                    log("SVC AutoPop: skipped idx=" + w.targetIdx + " (already filled)");
+                    setTimeout(function() { processNext(idx + 1); }, 0);
+                    return;
+                }
+
+                try {
+                    // Find the source form in the target segment to get the correct sourceIdx
+                    // We need a form with matching name = config.attachedForm in the target segment's study event
+                    // The attached form should exist somewhere in saItems — find one with the same form name
+                    // that belongs to the target segment
+                    var sourceIdx = -1;
+                    var targetSegEntries = segmentGroups[w.targetSegName] || [];
+                    for (var fi = 0; fi < targetSegEntries.length; fi++) {
+                        if (targetSegEntries[fi].item.form === w.config.attachedForm) {
+                            sourceIdx = targetSegEntries[fi].idx;
+                            break;
+                        }
+                    }
+                    // If not found in the target segment, search globally for the same form name
+                    if (sourceIdx === -1) {
+                        for (var gi = 0; gi < saItems.length; gi++) {
+                            if (saItems[gi].form === w.config.attachedForm && saItems[gi].segment === w.targetSegName) {
+                                sourceIdx = gi;
+                                break;
+                            }
+                        }
+                    }
+                    // Fallback: use any saItem with the same form name
+                    if (sourceIdx === -1) {
+                        for (var gi2 = 0; gi2 < saItems.length; gi2++) {
+                            if (saItems[gi2].form === w.config.attachedForm) {
+                                sourceIdx = gi2;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (sourceIdx === -1) {
+                        w.status = "failed";
+                        failed++;
+                        updateProgRow(idx, "Failed (source form not found)", "#ff6b6b");
+                        log("SVC AutoPop: failed idx=" + w.targetIdx + " — source form '" + w.config.attachedForm + "' not found");
+                        setTimeout(function() { processNext(idx + 1); }, 0);
+                        return;
+                    }
+
+                    var srcItem = saItems[sourceIdx];
+                    // Create the mapping — adjust segment and studyEvent to match the target context
+                    dropboxMappings[String(w.targetIdx)] = {
+                        segment: srcItem.segment,
+                        studyEvent: srcItem.studyEvent,
+                        form: w.config.attachedForm,
+                        sourceIdx: sourceIdx,
+                        prefillItem: w.config.prefillItem,
+                        prefillItemValue: w.config.prefillItemValue,
+                        prefillReason: w.config.prefillReason,
+                        _cachedItems: w.config._cachedItems ? w.config._cachedItems.slice() : null,
+                        _cachedItemValues: w.config._cachedItemValues ? w.config._cachedItemValues.slice() : null
+                    };
+
+                    w.status = "populated";
+                    populated++;
+                    updateProgRow(idx, "Populated", "#4caf50");
+                    log("SVC AutoPop: populated idx=" + w.targetIdx + " (" + w.targetSegName + " — " + w.targetForm + ") with '" + w.config.attachedForm + "'");
+                } catch (err) {
+                    w.status = "failed";
+                    failed++;
+                    updateProgRow(idx, "Failed: " + String(err), "#ff6b6b");
+                    log("SVC AutoPop: error idx=" + w.targetIdx + " — " + String(err));
+                }
+
+                setTimeout(function() { processNext(idx + 1); }, 0);
+            }
+
+            // Start processing
+            setTimeout(function() { processNext(0); }, 100);
+        }
+
+        // Initial render
+        renderPrimaryPanel();
+        renderSegNavPanel();
+        renderReferencesPanel();
+
+        setTimeout(function() {
+            if (svcIsFullscreen) applySVCFullscreen();
+        }, 50);
+
+        return {
+            container: container,
+            fullscreenBtn: fullscreenBtn,
+            confirmBtn: confirmBtn,
+            dropboxMappings: dropboxMappings,
+            saItems: saItems,
+            getReasonForIdx: function(gIdx) {
+                var m = dropboxMappings[String(gIdx)];
+                if (!m) return "Add visibility condition";
+                return m.prefillReason || reasonInput.value.trim() || "Add visibility condition";
+            },
+            getItemForIdx: function(gIdx) {
+                var m = dropboxMappings[String(gIdx)];
+                if (!m) return null;
+                if (m.prefillItem) return m.prefillItem;
+                return itemSelect.options[itemSelect.selectedIndex] ? itemSelect.options[itemSelect.selectedIndex].text : null;
+            },
+            getItemValueForIdx: function(gIdx) {
+                var m = dropboxMappings[String(gIdx)];
+                if (!m) return null;
+                if (m.prefillItemValue) return m.prefillItemValue;
+                return itemValSelect.options[itemValSelect.selectedIndex] ? itemValSelect.options[itemValSelect.selectedIndex].text : null;
+            }
+        };
+    }
+
+    // Progress popup for SVC (mirrors createBPLProgressPopup)
+    function createSVCProgressPopup(items) {
+        var container = document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;gap:12px;max-height:600px;";
+
+        var summaryDiv = document.createElement("div");
+        summaryDiv.style.cssText = "display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:8px;border:1px solid #333;border-radius:6px;background:#1a1a1a;font-size:12px;text-align:center;";
+
+        function updateSummary() {
+            var total = items.length, pending = 0, processing = 0, success = 0, failed = 0;
+            for (var i = 0; i < items.length; i++) {
+                var s = items[i].status;
+                if (s === "Pending") pending++;
+                else if (s === "In Progress") processing++;
+                else if (s === "Completed") success++;
+                else if (s === "Failed") failed++;
+            }
+            summaryDiv.innerHTML = "";
+            var sums = [
+                { label: "Total", value: total, color: "#fff" },
+                { label: "Pending", value: pending, color: "#aaa" },
+                { label: "In Progress", value: processing, color: "#9df" },
+                { label: "Completed", value: success, color: "#4f4" },
+                { label: "Failed", value: failed, color: "#f44" }
+            ];
+            for (var j = 0; j < sums.length; j++) {
+                var cell = document.createElement("div");
+                cell.style.cssText = "display:flex;flex-direction:column;gap:2px;";
+                var valSpan = document.createElement("div");
+                valSpan.textContent = String(sums[j].value);
+                valSpan.style.cssText = "font-size:18px;font-weight:700;color:" + sums[j].color + ";";
+                var lblSpan = document.createElement("div");
+                lblSpan.textContent = sums[j].label;
+                lblSpan.style.cssText = "font-size:10px;color:#888;";
+                cell.appendChild(valSpan);
+                cell.appendChild(lblSpan);
+                summaryDiv.appendChild(cell);
+            }
+        }
+
+        var statusDiv = document.createElement("div");
+        statusDiv.style.cssText = "text-align:center;font-size:15px;font-weight:600;padding:6px;";
+        statusDiv.textContent = "Processing...";
+
+        var loadingDiv = document.createElement("div");
+        loadingDiv.style.cssText = "text-align:center;font-size:13px;color:#9df;";
+        loadingDiv.textContent = "Running.";
+
+        var durationDiv = document.createElement("div");
+        durationDiv.style.cssText = "text-align:center;font-size:11px;color:#888;";
+        durationDiv.textContent = "Duration: 0s";
+
+        var listContainer = document.createElement("div");
+        listContainer.style.cssText = "flex:1;overflow-y:auto;border:1px solid #333;border-radius:4px;padding:6px;background:#1a1a1a;max-height:350px;";
+
+        function renderItems() {
+            listContainer.innerHTML = "";
+            for (var i = 0; i < items.length; i++) {
+                var it = items[i];
+                var row = document.createElement("div");
+                row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:5px 8px;margin-bottom:3px;border-radius:4px;font-size:11px;";
+                if (it.status === "Completed") row.style.background = "#1a3a1a";
+                else if (it.status === "Failed") row.style.background = "#3a1a1a";
+                else if (it.status === "In Progress") row.style.background = "#1a2a3a";
+                else row.style.background = "#222";
+                var keySpan = document.createElement("span");
+                keySpan.textContent = it.label;
+                keySpan.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:8px;";
+                var statusSpan = document.createElement("span");
+                statusSpan.textContent = it.status;
+                statusSpan.style.cssText = "font-weight:500;flex-shrink:0;";
+                if (it.status === "Completed") statusSpan.style.color = "#4f4";
+                else if (it.status === "Failed") statusSpan.style.color = "#f44";
+                else if (it.status === "In Progress") statusSpan.style.color = "#9df";
+                else statusSpan.style.color = "#aaa";
+                row.appendChild(keySpan);
+                row.appendChild(statusSpan);
+                listContainer.appendChild(row);
+            }
+            updateSummary();
+        }
+
+        renderItems();
+
+        var buttonRow = document.createElement("div");
+        buttonRow.style.cssText = "display:flex;justify-content:center;padding-top:8px;";
+        var stopBtn = document.createElement("button");
+        stopBtn.textContent = "Stop";
+        stopBtn.style.cssText = "padding:10px 24px;border-radius:6px;border:none;background:#dc3545;color:#fff;font-weight:600;cursor:pointer;";
+        stopBtn.addEventListener("click", function() {
+            SVC_CANCELLED = true;
+            log("SVC: stopped by user");
+            if (SVC_PROGRESS_POPUP_REF && SVC_PROGRESS_POPUP_REF.close) {
+                try { SVC_PROGRESS_POPUP_REF.close(); } catch (e) {}
+                SVC_PROGRESS_POPUP_REF = null;
+            }
+        });
+        buttonRow.appendChild(stopBtn);
+
+        container.appendChild(summaryDiv);
+        container.appendChild(statusDiv);
+        container.appendChild(loadingDiv);
+        container.appendChild(durationDiv);
+        container.appendChild(listContainer);
+        container.appendChild(buttonRow);
+
+        var startTime = Date.now();
+        var dots = 1;
+        var loadingInterval = setInterval(function() {
+            if (!SVC_PROGRESS_POPUP_REF || SVC_CANCELLED) { clearInterval(loadingInterval); return; }
+            dots = (dots % 3) + 1;
+            var text = "Running";
+            for (var i = 0; i < dots; i++) text += ".";
+            loadingDiv.textContent = text;
+            var elapsed = Math.floor((Date.now() - startTime) / 1000);
+            durationDiv.textContent = "Duration: " + elapsed + "s";
+        }, 500);
+
+        return {
+            element: container,
+            updateStatus: function(t) { statusDiv.textContent = t; },
+            updateItem: function(idx, status) { if (items[idx]) { items[idx].status = status; renderItems(); } },
+            setComplete: function() {
+                clearInterval(loadingInterval);
+                var elapsed = Math.floor((Date.now() - startTime) / 1000);
+                durationDiv.textContent = "Total Duration: " + elapsed + "s";
+                loadingDiv.textContent = "Done!";
+                loadingDiv.style.color = "#4f4";
+                stopBtn.textContent = "Close";
+                stopBtn.style.background = "#28a745";
+                updateSummary();
+            }
+        };
+    }
+
+    // Execute the visibility condition setting for all mapped items
+    async function svcExecute(guiResult) {
+        var mappings = guiResult.dropboxMappings;
+        var saItems = guiResult.saItems;
+        var processItems = [];
+        for (var key in mappings) {
+            if (!mappings.hasOwnProperty(key)) continue;
+            var m = mappings[key];
+            var targetItem = saItems[parseInt(key)];
+            if (!targetItem || !targetItem.hidden) continue;
+            processItems.push({
+                targetSegment: targetItem.segment,
+                targetEvent: targetItem.studyEvent,
+                targetForm: targetItem.form,
+                sourceSegment: m.segment,
+                sourceEvent: m.studyEvent,
+                sourceForm: m.form,
+                label: targetItem.segment + " - " + targetItem.studyEvent + " - " + targetItem.form,
+                status: "Pending",
+                dropboxIdx: key
+            });
+        }
+
+        if (processItems.length === 0) {
+            log("SVC: no items to process");
+            return;
+        }
+
+        var progressContent = createSVCProgressPopup(processItems);
+        SVC_PROGRESS_POPUP_REF = createPopup({
+            title: "Set Visibility Condition - Processing",
+            content: progressContent.element,
+            width: "700px",
+            height: "auto",
+            maxHeight: "85%",
+            onClose: function() {
+                SVC_CANCELLED = true;
+                log("SVC: progress popup closed by user");
+                SVC_PROGRESS_POPUP_REF = null;
+            }
+        });
+
+        for (var idx = 0; idx < processItems.length; idx++) {
+            if (SVC_CANCELLED) break;
+            var pItem = processItems[idx];
+            pItem.status = "In Progress";
+            progressContent.updateItem(idx, "In Progress");
+            progressContent.updateStatus("Processing " + (idx + 1) + " of " + processItems.length);
+            log("SVC: processing item " + (idx + 1) + " - " + pItem.label);
+
+            try {
+                // Find the target row in the main DOM
+                var targetRow = findRowInDOM(pItem.targetSegment, pItem.targetEvent, pItem.targetForm);
+                if (!targetRow) {
+                    log("SVC: target row not found");
+                    pItem.status = "Failed";
+                    progressContent.updateItem(idx, "Failed");
+                    continue;
+                }
+
+                // Click visibility link
+                var visLink = targetRow.querySelector('a[href*="visiblecondition"]');
+                if (!visLink) visLink = targetRow.querySelector('a[href*="visibility"]');
+                if (!visLink) {
+                    log("SVC: visibility link not found");
+                    pItem.status = "Failed";
+                    progressContent.updateItem(idx, "Failed");
+                    continue;
+                }
+                visLink.click();
+                var modal = await waitForSAModal(10000);
+                if (!modal) {
+                    log("SVC: visibility modal did not open");
+                    pItem.status = "Failed";
+                    progressContent.updateItem(idx, "Failed");
+                    continue;
+                }
+                await sleep(500);
+
+                // Select first activity plan
+                var apSel = document.getElementById("visibleActivityPlan");
+                if (apSel) {
+                    var apOpts = apSel.querySelectorAll("option");
+                    for (var ai = 0; ai < apOpts.length; ai++) {
+                        if ((apOpts[ai].value || "").trim()) {
+                            await setSelect2ValueByText("visibleActivityPlan", apOpts[ai].textContent.trim());
+                            break;
+                        }
+                    }
+                    await sleep(500);
+                    await waitForSelect2OptionsChange("visibleScheduledActivity", 3000);
+                    await sleep(500);
+                }
+
+                // Select scheduled activity (match sourceEvent + sourceForm)
+                // Options may contain trailing time references and counts, e.g.:
+                //   "Period 1 Day 14 🥓MEAL_BREAKFAST START  00:05:00 (1)"
+                // So we strip those suffixes before comparing.
+                var saTarget = pItem.sourceEvent + " " + pItem.sourceForm;
+                var saMatched = false;
+                for (var retrysa = 0; retrysa < 3 && !saMatched; retrysa++) {
+                    var saSel = document.getElementById("visibleScheduledActivity");
+                    if (!saSel) { await sleep(500); continue; }
+                    var saOpts = saSel.querySelectorAll("option");
+
+                    // Helper: strip trailing time ref, occurrence count, and excess whitespace
+                    function cleanSAOptionText(txt) {
+                        var s = txt.replace(/\s+/g, " ").trim();
+                        // Remove trailing (N) like (1), (2)
+                        s = s.replace(/\s*\(\d+\)\s*$/, "");
+                        // Remove trailing time HH:MM:SS (with optional +/- prefix)
+                        s = s.replace(/\s*[\+\-]?\d{1,2}:\d{2}:\d{2}\s*$/, "");
+                        return s.trim();
+                    }
+
+                    var bestMatch = null;
+                    var bestScore = 0; // 3=exact, 2=cleaned exact, 1=startsWith+contains
+
+                    for (var sai = 0; sai < saOpts.length; sai++) {
+                        var saOptRaw = saOpts[sai].textContent || "";
+                        var saOptVal = saOpts[sai].value || "";
+                        if (!saOptVal.trim()) continue;
+
+                        // Score 3: raw exact match
+                        if (saOptRaw.trim() === saTarget) {
+                            bestMatch = saOpts[sai]; bestScore = 3; break;
+                        }
+
+                        var saOptClean = cleanSAOptionText(saOptRaw);
+
+                        // Score 2: cleaned exact match
+                        if (saOptClean === saTarget && bestScore < 2) {
+                            bestMatch = saOpts[sai]; bestScore = 2;
+                            continue;
+                        }
+
+                        // Score 1: option starts with sourceEvent AND contains sourceForm
+                        if (bestScore < 1) {
+                            var optLower = saOptClean.toLowerCase();
+                            var evLower = pItem.sourceEvent.toLowerCase();
+                            var fmLower = pItem.sourceForm.toLowerCase();
+                            if (optLower.indexOf(evLower) === 0 && optLower.indexOf(fmLower) !== -1) {
+                                bestMatch = saOpts[sai]; bestScore = 1;
+                            }
+                        }
+                    }
+
+                    if (bestMatch) {
+                        saSel.value = bestMatch.value;
+                        saSel.dispatchEvent(new Event("change", { bubbles: true }));
+                        try { if (window.jQuery && window.jQuery.fn.select2) window.jQuery("#visibleScheduledActivity").trigger("change"); } catch (e) {}
+                        await sleep(300);
+                        saMatched = true;
+                        log("SVC: SA matched (score=" + bestScore + ") '" + saTarget + "' -> '" + bestMatch.textContent.trim() + "'");
+                    } else {
+                        await sleep(500);
+                    }
+                }
+                if (!saMatched) {
+                    log("SVC: could not select scheduledActivity for '" + saTarget + "'");
+                    // Try to close modal
+                    var cancelBtn = modal.querySelector("button[data-dismiss='modal'], .close");
+                    if (cancelBtn) cancelBtn.click();
+                    await waitForSAModalClose(5000);
+                    pItem.status = "Failed";
+                    progressContent.updateItem(idx, "Failed");
+                    continue;
+                }
+                await sleep(500);
+                await waitForSelect2OptionsChange("visibleItemRef", 3000);
+                await sleep(500);
+
+                // Select item
+                var itemText = guiResult.getItemForIdx(pItem.dropboxIdx);
+                if (itemText) {
+                    for (var retryItem = 0; retryItem < 3; retryItem++) {
+                        if (await setSelect2ValueByText("visibleItemRef", itemText)) break;
+                        await sleep(500);
+                    }
+                    await sleep(500);
+                    await waitForSelect2OptionsChange("visibleCodeListItem", 3000);
+                    await sleep(500);
+                }
+
+                // Select item value
+                var itemValText = guiResult.getItemValueForIdx(pItem.dropboxIdx);
+                if (itemValText) {
+                    for (var retryVal = 0; retryVal < 3; retryVal++) {
+                        if (await setSelect2ValueByText("visibleCodeListItem", itemValText)) break;
+                        await sleep(500);
+                    }
+                    await sleep(300);
+                }
+
+                // Enter reason
+                var reasonEl = document.getElementById("reasonForChange");
+                if (reasonEl) {
+                    reasonEl.value = guiResult.getReasonForIdx(pItem.dropboxIdx);
+                    reasonEl.dispatchEvent(new Event("change", { bubbles: true }));
+                }
+
+                // Save
+                var saveBtn = document.getElementById("actionButton");
+                if (saveBtn) {
+                    saveBtn.click();
+                    log("SVC: save clicked for " + pItem.label);
+                    var closed = await waitForSAModalClose(10000);
+                    if (!closed) {
+                        log("SVC: modal did not close after save");
+                        pItem.status = "Failed";
+                        progressContent.updateItem(idx, "Failed");
+                        continue;
+                    }
+                }
+
+                await sleep(500);
+                pItem.status = "Completed";
+                progressContent.updateItem(idx, "Completed");
+                log("SVC: completed " + pItem.label);
+
+            } catch (err) {
+                log("SVC: error processing " + pItem.label + " - " + String(err));
+                pItem.status = "Failed";
+                progressContent.updateItem(idx, "Failed");
+            }
+        }
+
+        progressContent.setComplete();
+        svcCloseBgIframe();
+        log("SVC: execution complete");
+    }
+
+    // Main entry point
+    async function runSetVisibilityCondition() {
+        SVC_CANCELLED = false;
+        SVC_ITEM_CACHE = {};
+        log("SVC: runSetVisibilityCondition started");
+
+        if (!isOnSVCPage()) {
+            createPopup({
+                title: "Set Visibility Condition",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;font-size:16px;margin-bottom:16px;">\u26A0\uFE0F Wrong Page</p><p>You must be on the Activity Plans Show page to use this feature.</p><p style="margin-top:12px;font-size:12px;color:#fff;">Required URL: cenexel(test).clinspark.com/secure/crfdesign/activityplans/show/###</p></div>',
+                width: "450px",
+                height: "auto"
+            });
+            log("SVC: wrong page - " + location.href);
+            return;
+        }
+
+        var collecting = createCollectingOverlay("Collecting data", "Scanning activity plans\u2026");
+
+        var enhancedScan = scanExistingBPLTableEnhanced();
+        log("SVC: scan complete - " + enhancedScan.saTableItems.length + " items found");
+
+        // Open background iframe
+        svcOpenBgIframe();
+        var bgReady = await svcWaitForBgIframeReady();
+        if (!bgReady) {
+            collecting.close();
+            createPopup({
+                title: "Set Visibility Condition",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#f66;">Background iframe failed to load.</p></div>',
+                width: "350px",
+                height: "auto"
+            });
+            return;
+        }
+
+        collecting.close();
+
+        if (SVC_CANCELLED) {
+            svcCloseBgIframe();
+            return;
+        }
+
+        var guiResult = createSVCSelectionGUI(enhancedScan);
+
+        SVC_POPUP_REF = createPopup({
+            title: "Set Visibility Condition - Configure",
+            content: guiResult.container,
+            width: "96%",
+            maxWidth: "1600px",
+            height: "88%",
+            maxHeight: "900px",
+            onClose: function() {
+                SVC_CANCELLED = true;
+                svcCloseBgIframe();
+                SVC_POPUP_REF = null;
+                log("SVC: popup closed");
+            }
+        });
+
+        // Inject fullscreen button into popup header
+        setTimeout(function() {
+            if (SVC_POPUP_REF && SVC_POPUP_REF.element) {
+                var header = SVC_POPUP_REF.element.querySelector("div");
+                if (header) {
+                    header.style.position = "relative";
+                    header.appendChild(guiResult.fullscreenBtn);
+                }
+            }
+        }, 50);
+
+        // Wire up confirm button
+        guiResult.confirmBtn.addEventListener("click", async function() {
+            if (this.disabled) return;
+            log("SVC: confirm clicked");
+            SVC_CANCELLED = false;
+            // Remove popup DOM directly — do NOT call .close() because its
+            // closure-captured onClose callback would set SVC_CANCELLED = true
+            if (SVC_POPUP_REF) {
+                try { SVC_POPUP_REF.element.remove(); } catch (e) {}
+                SVC_POPUP_REF = null;
+            }
+            svcCloseBgIframe();
+            await svcExecute(guiResult);
+        });
+    }
+
     // Import from Library Feature
     var IFL_FORM_LIST_PATH = "/secure/crfdesign/studylibrary/list/form";
     var IFL_VALID_URLS = [
@@ -705,6 +2839,7 @@
     // This feature automates importing forms from the study library modal.
     // It collects all studies and their forms, lets the user select/rename/configure,
     // then processes each import sequentially.
+    //=================================================================
 
     function isOnImportFromLibraryPage() {
         var href = location.href.split("?")[0].split('#')[0];
@@ -1320,7 +3455,7 @@
             }
         }
         var collapsed = {};
-        for (var ci = 0; ci < studies.length; ci++) collapsed[studies[ci].text] = true;
+        for (var ci = 0; ci < studies.length; ci++) collapsed[studies[ci].value] = true;
         var showSelectedOnly = false;
         var activeFormItem = null;
         var isFullscreen = false;
@@ -1627,6 +3762,7 @@
             var filter = leftSearch.value.toLowerCase();
             for (var si2 = 0; si2 < studies.length; si2++) {
                 var sName = studies[si2].text;
+                var sVal = studies[si2].value;
                 if (filter && sName.toLowerCase().indexOf(filter) === -1) continue;
                 var item = document.createElement("div");
                 item.textContent = sName;
@@ -1634,15 +3770,15 @@
                 item.title = sName;
                 item.onmouseover = (function(el) { return function() { el.style.background = tc.surfaceHover; }; })(item);
                 item.onmouseout = (function(el) { return function() { el.style.background = "transparent"; }; })(item);
-                item.onclick = (function(name) {
+                item.onclick = (function(val) {
                     return function() {
                         for (var k in collapsed) collapsed[k] = true;
-                        collapsed[name] = false;
+                        collapsed[val] = false;
                         renderMidPanel();
-                        var hdr = midList.querySelector('[data-study-header="' + CSS.escape(name) + '"]');
+                        var hdr = midList.querySelector('[data-study-value="' + CSS.escape(val) + '"]');
                         if (hdr) hdr.scrollIntoView({ block: "start", behavior: "smooth" });
                     };
-                })(sName);
+                })(sVal);
                 leftList.appendChild(item);
             }
         }
@@ -1652,9 +3788,10 @@
             var filter = midSearch.value.toLowerCase();
             for (var si3 = 0; si3 < studies.length; si3++) {
                 var sName = studies[si3].text;
+                var sVal = studies[si3].value;
                 var sItems = [];
                 for (var fi2 = 0; fi2 < formItems.length; fi2++) {
-                    if (formItems[fi2].studyName !== sName) continue;
+                    if (formItems[fi2].studyValue !== sVal) continue;
                     if (showSelectedOnly && !formItems[fi2].selected) continue;
                     var desc = formItems[fi2].studyName + " - " + formItems[fi2].formName;
                     if (filter) {
@@ -1667,7 +3804,8 @@
 
                 var hdr = document.createElement("div");
                 hdr.setAttribute("data-study-header", sName);
-                var isCollapsed = !!collapsed[sName];
+                hdr.setAttribute("data-study-value", sVal);
+                var isCollapsed = !!collapsed[sVal];
                 hdr.className = "ifl-hdr";
                 hdr.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:" + tc.surface + ";border-radius:6px;margin:4px 0 2px;cursor:pointer;user-select:none;";
                 var hdrLabel = document.createElement("span");
@@ -1678,9 +3816,9 @@
                 hdrArrow.style.cssText = "color:" + tc.textMuted + ";font-size:10px;flex-shrink:0;margin-left:8px;";
                 hdr.appendChild(hdrLabel);
                 hdr.appendChild(hdrArrow);
-                hdr.onclick = (function(name) {
-                    return function() { collapsed[name] = !collapsed[name]; renderMidPanel(); };
-                })(sName);
+                hdr.onclick = (function(val) {
+                    return function() { collapsed[val] = !collapsed[val]; renderMidPanel(); };
+                })(sVal);
                 midList.appendChild(hdr);
                 if (isCollapsed) continue;
 
@@ -1704,8 +3842,19 @@
                         nameSpan.title = nameSpan.textContent;
 
                         var lockIcon = document.createElement("span");
-                        lockIcon.textContent = fItem.lockOnSave ? "\uD83D\uDD12" : "";
-                        lockIcon.style.cssText = "font-size:11px;flex-shrink:0;width:16px;text-align:center;";
+                        lockIcon.textContent = fItem.lockOnSave ? "\uD83D\uDD12" : "\uD83D\uDD13";
+                        lockIcon.style.cssText = "font-size:11px;flex-shrink:0;width:20px;text-align:center;cursor:pointer;user-select:none;" + (fItem.lockOnSave ? "opacity:1;" : "opacity:0.4;");
+                        lockIcon.title = fItem.lockOnSave ? "Locked — double-click to unlock" : "Unlocked — double-click to lock";
+                        lockIcon.addEventListener("dblclick", (function(fi2, iconEl) {
+                            return function(e) {
+                                e.stopPropagation();
+                                fi2.lockOnSave = !fi2.lockOnSave;
+                                iconEl.textContent = fi2.lockOnSave ? "\uD83D\uDD12" : "\uD83D\uDD13";
+                                iconEl.style.opacity = fi2.lockOnSave ? "1" : "0.4";
+                                iconEl.title = fi2.lockOnSave ? "Locked — double-click to unlock" : "Unlocked — double-click to lock";
+                                log("IFL: lock toggled to " + (fi2.lockOnSave ? "locked" : "unlocked") + " for " + fi2.formName);
+                            };
+                        })(fItem, lockIcon));
 
                         var cb = document.createElement("input");
                         cb.type = "checkbox";
@@ -2514,13 +4663,33 @@
         }
 
         // Show "Collecting data" animation overlay
-        var collecting = createCollectingOverlay("Collecting data", "Scanning studies and forms\u2026");
+        var collectingOverlay = document.createElement("div");
+        collectingOverlay.id = "ifl-collecting-overlay";
+        collectingOverlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:30000;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;";
+        var collectingPanel = document.createElement("div");
+        collectingPanel.style.cssText = "background:#111;border:1px solid #333;border-radius:12px;padding:32px 48px;box-shadow:0 15px 35px rgba(0,0,0,0.5);display:flex;flex-direction:column;align-items:center;gap:16px;";
+        var spinStyle = document.createElement("style");
+        spinStyle.textContent = "@keyframes ifl-spin { to { transform: rotate(360deg); } } @keyframes ifl-pulse { 0%,100% { opacity:0.6; } 50% { opacity:1; } }";
+        collectingPanel.appendChild(spinStyle);
+        var spinner = document.createElement("div");
+        spinner.style.cssText = "width:36px;height:36px;border:3px solid #5b43c7;border-top-color:transparent;border-radius:50%;animation:ifl-spin 0.8s linear infinite;";
+        var collectingTitle = document.createElement("div");
+        collectingTitle.textContent = "Collecting data";
+        collectingTitle.style.cssText = "color:#fff;font-size:16px;font-weight:600;";
+        var collectingMsg = document.createElement("div");
+        collectingMsg.textContent = "Scanning studies and forms\u2026";
+        collectingMsg.style.cssText = "color:#999;font-size:12px;animation:ifl-pulse 1.5s ease-in-out infinite;";
+        collectingPanel.appendChild(spinner);
+        collectingPanel.appendChild(collectingTitle);
+        collectingPanel.appendChild(collectingMsg);
+        collectingOverlay.appendChild(collectingPanel);
+        document.body.appendChild(collectingOverlay);
 
         // Collect all studies & forms (main tab modal)
         var studies = await ifl_collectAllStudiesAndForms();
 
         if (!studies || studies.length === 0) {
-            collecting.close();
+            if (collectingOverlay.parentNode) collectingOverlay.parentNode.removeChild(collectingOverlay);
             ifl_closeBgTab();
             createPopup({
                 title: "Import from Library",
@@ -2540,14 +4709,14 @@
 
         // Wait for background tab to be ready with its modal open
         // (overlay stays visible — user sees "Collecting data" while bg tab loads)
-        collecting.setMessage("Preparing background worker\u2026");
+        collectingMsg.textContent = "Preparing background worker\u2026";
         var bgReady = await ifl_waitForBgTabReady();
         if (!bgReady) {
             log("IFL: bg tab not ready — item group loading will fall back to main tab");
         }
 
         // Remove "Collecting data" overlay right before showing selection GUI
-        collecting.close();
+        if (collectingOverlay.parentNode) collectingOverlay.parentNode.removeChild(collectingOverlay);
 
         // Show selection GUI
         ifl_buildSelectionGUI(studies, function(selectedItems) {
@@ -2666,7 +4835,9 @@
         var result = {
             hidden: false,
             archived: false,
-            roleRestriction: false
+            roleRestriction: false,
+            visibilityMustBeSet: false,
+            visibilityAlreadySet: false
         };
         if (!cell) {
             return result;
@@ -2674,9 +4845,15 @@
         var icons = cell.querySelectorAll("i");
         for (var i = 0; i < icons.length; i++) {
             var cls = icons[i].className || "";
+            var iconColor = (icons[i].style && icons[i].style.color) ? icons[i].style.color : "";
             if (cls.indexOf("fa-eye-slash") !== -1) {
                 result.hidden = true;
-                log("BPL: status icon fa-eye-slash detected (hidden)");
+                result.visibilityAlreadySet = true;
+                log("BPL: status icon fa-eye-slash detected (hidden, visibility already set)");
+            } else if (cls.indexOf("fa-eye") !== -1) {
+                result.hidden = true;
+                result.visibilityMustBeSet = true;
+                log("BPL: status icon fa-eye detected (hidden, visibility must be set)");
             }
             if (cls.indexOf("fa-archive") !== -1) {
                 result.archived = true;
@@ -2777,9 +4954,11 @@
                 preReference: timepointParsed.preReference,
                 refActivity: timepointParsed.refActivity,
                 hidden: statusResult.hidden,
+                visibilityMustBeSet: statusResult.visibilityMustBeSet,
+                visibilityAlreadySet: statusResult.visibilityAlreadySet,
                 autoPopulated: true
             });
-            log("BPL: enhanced scan row " + i + " - " + key + " timepoint='" + timepointRaw + "' hidden=" + statusResult.hidden + " preRef=" + timepointParsed.preReference + " refAct=" + timepointParsed.refActivity);
+            log("BPL: enhanced scan row " + i + " - " + key + " timepoint='" + timepointRaw + "' hidden=" + statusResult.hidden + " visMustSet=" + statusResult.visibilityMustBeSet + " visAlreadySet=" + statusResult.visibilityAlreadySet + " preRef=" + timepointParsed.preReference + " refAct=" + timepointParsed.refActivity);
         }
         log("BPL: enhanced scan complete - " + result.saTableItems.length + " items collected, " + skippedArchived + " archived skipped");
         return result;
@@ -4907,7 +7086,7 @@
                         var etStr2 = fData2.exampleTime || "N/A";
                         var timeRefLabel = document.createElement("span");
                         timeRefLabel.textContent = tpStr2 + "   |   " + etStr2;
-                        timeRefLabel.style.cssText = "font-size:10px;color:#888;white-space:pre;flex-shrink:0;min-width:0;overflow:hidden;text-overflow:ellipsis;max-width:220px;";                        timeRefLabel.title = tpStr2 + "  |  " + etStr2;
+                        timeRefLabel.style.cssText = "font-size:12px;color:#ffffffff;white-space:pre;flex-shrink:0;min-width:0;overflow:hidden;text-overflow:ellipsis;max-width:220px;";                        timeRefLabel.title = tpStr2 + segIndexLabel + "  |  " + etStr2;
                         var iconsStr = bplBuildStatusIcons(fData2);
                         var iconsLabel = document.createElement("span");
                         iconsLabel.textContent = iconsStr;
@@ -10913,6 +13092,7 @@
         { id: "Subject Eligibility", label: "Subject Eligibility" },
         { id: "Parse Study Event", label: "Parse Study Event" },
         { id: "Edit Study Events List", label: "Edit Study Events List" },
+        { id: "Set Visibility Condition", label: "Set Visibility Condition"},
         { id: "Pause", label: "Pause" },
         { id: "Clear Logs", label: "Clear Logs" },
         { id: "Hide Logs", label: "Hide Logs" }
@@ -27152,9 +29332,28 @@
             await runBuildProcedureLog();
         });
 
+        var svcBtn = document.createElement("button");
+        svcBtn.textContent = "Set Visibility Condition";
+        svcBtn.style.background = "#9b59b6";
+        svcBtn.style.color = "#fff";
+        svcBtn.style.border = "none";
+        svcBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        svcBtn.style.padding = scale(BUTTON_PADDING_PX);
+        svcBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
+        svcBtn.style.cursor = "pointer";
+        svcBtn.style.fontWeight = "500";
+        svcBtn.style.transition = "background 0.2s";
+        svcBtn.onmouseenter = function() { this.style.background = "#8e44ad"; };
+        svcBtn.onmouseleave = function() { this.style.background = "#9b59b6"; };
+        svcBtn.addEventListener("click", async function() {
+            SVC_CANCELLED = false;
+            log("SVC: button clicked");
+            await runSetVisibilityCondition();
+        });
+
         // Apply glassmorphism theme to all panel buttons if glass theme is active
         if (glass) {
-            var allPanelBtns = [runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, importFromLibBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, bplBtn, importEligBtn, findAeBtn, findFormBtn, findStudyEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, editStudyEventsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn];
+            var allPanelBtns = [runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, importFromLibBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, bplBtn, importEligBtn, findAeBtn, findFormBtn, findStudyEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, editStudyEventsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn, svcBtn];
             for (var gi = 0; gi < allPanelBtns.length; gi++) {
                 var gb = allPanelBtns[gi];
                 gb.className = "ie-btn-primary";
@@ -27190,6 +29389,7 @@
             { el: subjectEligBtn, label: "Subject Eligibility" },
             { el: parseStudyEventBtn, label: "Parse Study Event" },
             { el: editStudyEventsBtn, label: "Edit Study Events List" },
+            { el: svcBtn, label: "Set Visibility Condition" },
             { el: pauseBtn, label: "Pause" },
             { el: clearLogsBtn, label: "Clear Logs" },
             { el: toggleLogsBtn, label: "Hide Logs" }
