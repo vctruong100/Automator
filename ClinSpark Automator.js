@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.4.6
+// @version     2.4.8
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -9635,11 +9635,7 @@
             errorDiv.textContent = "";
             var valid = false;
             if (selectedSource && selectedTarget) {
-                if (selectedSource === selectedTarget) {
-                    errorDiv.textContent = "Source and Target cannot be the same form.";
-                } else {
-                    valid = true;
-                }
+                valid = true;
             }
             confirmBtn.disabled = !valid;
             confirmBtn.style.opacity = valid ? "1" : "0.5";
@@ -10511,6 +10507,12 @@
             return;
         }
 
+        // Determine if source and target are the same form name
+        var isSameForm = normalizeSAText(sourceForm.formText) === normalizeSAText(targetForm.text);
+        if (isSameForm) {
+            log("Archive/Update Forms: source and target are the SAME form name ('" + sourceForm.formText + "') - duplicate detection will be bypassed");
+        }
+
         var occurrences = sourceForm.occurrences.slice(); // Copy array
         var total = occurrences.length;
 
@@ -10614,7 +10616,7 @@
                 // ========================================
                 // STEP 1b: Duplicate detection - check if target already exists
                 // ========================================
-                if (checkTargetFormExistsInDOM(occ.segmentText, occ.eventText, targetForm.text, occ.timepointText)) {
+                if (!isSameForm && checkTargetFormExistsInDOM(occ.segmentText, occ.eventText, targetForm.text, occ.timepointText)) {
                     log("Archive/Update Forms: Step 1b - target form ALREADY EXISTS for " + occ.segmentText + " | " + occ.eventText + " | " + targetForm.text + " | tp=" + occ.timepointText + " - SKIPPING");
                     progressContent.setItemStatus(i, "Skipped (duplicate)", "#ffc107");
                     skipCount++;
@@ -10849,7 +10851,7 @@
                     if (ARCHIVE_UPDATE_FORMS_CANCELLED) break;
 
                     // Step 3b: Check for duplicate AGAIN after archive (in case target was added by a previous iteration)
-                    if (checkTargetFormExistsInDOM(occ.segmentText, occ.eventText, targetForm.text, occ.timepointText)) {
+                    if (!isSameForm && checkTargetFormExistsInDOM(occ.segmentText, occ.eventText, targetForm.text, occ.timepointText)) {
                         log("Archive/Update Forms: PATH B - target form already exists after archive for " + occ.segmentText + " | " + occ.eventText + " - SKIPPING add");
                         progressContent.setItemStatus(i, "Archived + Skipped (dup)", "#ffc107");
                         skipCount++;
@@ -11125,7 +11127,7 @@
         progressContent.showSummary(total, successCount, skipCount, errorCount);
         log("Archive/Update Forms: completed. Total=" + total + " Success=" + successCount + " Skipped=" + skipCount + " Errors=" + errorCount);
     }
-    
+
     // Main entry point
     async function runArchiveUpdateForms() {
         // Check if on correct page
@@ -11255,7 +11257,7 @@
         // Attach confirm handler
         guiContent.confirmBtn.addEventListener("click", async function() {
             var selection = guiContent.getSelection();
-            if (!selection.source || !selection.target || selection.source === selection.target) {
+            if (!selection.source || !selection.target) {
                 return;
             }
 
