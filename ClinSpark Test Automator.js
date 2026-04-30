@@ -8226,6 +8226,12 @@
             var rowKey = (segmentValue || normalizeText(segmentText)) + "|" +
                 (eventValue || normalizeText(eventText)) + "|" + formKey;
 
+            var editHref = "";
+            var editLinkEl = tr.querySelector('a[href*="/update/scheduledactivity/"]');
+            if (editLinkEl) {
+                editHref = editLinkEl.getAttribute("href") || "";
+            }
+
             rows.push({
                 rowElement: tr,
                 segmentText: segmentText,
@@ -8239,7 +8245,8 @@
                 archiveLink: archiveLink,
                 editLink: editLink,
                 visibilityLink: visibilityLink,
-                isArchived: isArchived
+                isArchived: isArchived,
+                editHref: editHref
             });
         }
         return rows;
@@ -8733,7 +8740,8 @@
             collectionRoleRestriction: ""
         };
 
-        await sleep(500);
+        // Wait for all form fields to be fully populated by the server
+        await sleep(1000);
 
         // Mandatory
         var mandatoryEl = document.getElementById("mandatory");
@@ -9045,6 +9053,225 @@
         }
     }
 
+    // Wait for modal to fully close, then clear stale content, then wait for fresh modal
+    async function waitForFreshSAModal(timeoutMs) {
+        var maxTime = timeoutMs || 15000;
+        var start = Date.now();
+
+        // Phase 1: Ensure any previous modal is fully gone
+        while (Date.now() - start < 5000) {
+            var modal = document.getElementById("ajaxModal");
+            if (!modal || !modal.classList.contains("in")) {
+                break;
+            }
+            await sleep(200);
+        }
+
+        // Phase 2: Clear stale modal body content so we can detect fresh load
+        var modal = document.getElementById("ajaxModal");
+        var oldBodyHTML = "";
+        if (modal) {
+            var modalBody = modal.querySelector("#modalbody, .modal-body");
+            if (modalBody) {
+                oldBodyHTML = modalBody.innerHTML;
+            }
+        }
+
+        // Phase 3: Wait for modal to appear with fresh (different) content
+        while (Date.now() - start < maxTime) {
+            modal = document.getElementById("ajaxModal");
+            if (modal && modal.classList.contains("in")) {
+                var modalBody = modal.querySelector("#modalbody, .modal-body");
+                if (modalBody && modalBody.innerHTML.length > 50) {
+                    // Check if content actually changed (not stale)
+                    if (modalBody.innerHTML !== oldBodyHTML || oldBodyHTML === "") {
+                        // Extra wait for form fields to initialize
+                        await sleep(1500);
+                        return modal;
+                    }
+                }
+            }
+            await sleep(300);
+        }
+        log("Archive/Update Forms: waitForFreshSAModal timed out after " + (Date.now() - start) + "ms");
+        return null;
+    }
+
+    // Verify that the Edit modal loaded the correct occurrence by reading segment/studyEvent/form from Select2 displays
+    async function verifyEditModalMatchesOccurrence(occ) {
+        await sleep(500);
+        var segSpan = document.querySelector("#s2id_segment .select2-chosen");
+        var evSpan = document.querySelector("#s2id_studyEvent .select2-chosen");
+        var formSpan = document.querySelector("#s2id_form .select2-chosen");
+
+        var modalSeg = segSpan ? normalizeSAText(segSpan.textContent) : "";
+        var modalEv = evSpan ? normalizeSAText(evSpan.textContent) : "";
+        var modalForm = formSpan ? normalizeSAText(formSpan.textContent) : "";
+
+        var expectedSeg = normalizeSAText(occ.segmentText);
+        var expectedEv = normalizeSAText(occ.eventText);
+        var expectedForm = normalizeSAText(occ.formText);
+
+        log("Archive/Update Forms: verifyEditModal - expected seg='" + expectedSeg + "' ev='" + expectedEv + "' form='" + expectedForm + "'");
+        log("Archive/Update Forms: verifyEditModal - modal   seg='" + modalSeg + "' ev='" + modalEv + "' form='" + modalForm + "'");
+
+        if (modalSeg.toLowerCase() !== expectedSeg.toLowerCase()) {
+            log("Archive/Update Forms: MISMATCH - segment '" + modalSeg + "' != '" + expectedSeg + "'");
+            return false;
+        }
+        if (modalEv.toLowerCase() !== expectedEv.toLowerCase()) {
+            log("Archive/Update Forms: MISMATCH - studyEvent '" + modalEv + "' != '" + expectedEv + "'");
+            return false;
+        }
+        // Form may have extra suffix like "(Postrandomization)" so check both ways
+        if (modalForm.toLowerCase().indexOf(expectedForm.toLowerCase()) === -1 &&
+            expectedForm.toLowerCase().indexOf(modalForm.toLowerCase()) === -1) {
+            log("Archive/Update Forms: MISMATCH - form '" + modalForm + "' != '" + expectedForm + "'");
+            return false;
+        }
+
+        log("Archive/Update Forms: verifyEditModal - MATCH confirmed");
+        return true;
+    }
+
+    // Read back Select2 display text after setting a value, to confirm it actually took
+    async function verifySelect2DisplayText(selectId, expectedText, maxRetries) {
+        var retries = maxRetries || 3;
+        var normalizedExpected = normalizeSAText(expectedText).toLowerCase();
+        for (var attempt = 0; attempt < retries; attempt++) {
+            await sleep(300);
+            var span = document.querySelector("#s2id_" + selectId + " .select2-chosen");
+            if (span) {
+                var displayText = normalizeSAText(span.textContent).toLowerCase();
+                if (displayText === normalizedExpected) {
+                    return true;
+                }
+                log("Archive/Update Forms: verifySelect2 attempt " + (attempt + 1) + " for " + selectId + " - got '" + displayText + "', expected '" + normalizedExpected + "'");
+            }
+            // Retry setting the value
+            await setSelect2ValueByText(selectId, expectedText);
+            await sleep(500);
+        }
+        return false;
+    }
+
+    // After setting time offset values, read them back to verify they stuck
+    async function verifyTimeOffsetValues(expectedDays, expectedHours, expectedMinutes, expectedSeconds) {
+        await sleep(300);
+        var daysEl = document.querySelector("input[name='offset.days']");
+        var hoursEl = document.querySelector("input[name='offset.hours']");
+        var minutesEl = document.querySelector("input[name='offset.minutes']");
+        var secondsEl = document.querySelector("input[name='offset.seconds']");
+
+        var actualDays = daysEl ? daysEl.value : "";
+        var actualHours = hoursEl ? hoursEl.value : "";
+        var actualMinutes = minutesEl ? minutesEl.value : "";
+        var actualSeconds = secondsEl ? secondsEl.value : "";
+
+        var match = (
+            String(actualDays) === String(expectedDays) &&
+            String(actualHours) === String(expectedHours) &&
+            String(actualMinutes) === String(expectedMinutes) &&
+            String(actualSeconds) === String(expectedSeconds)
+        );
+
+        if (!match) {
+            log("Archive/Update Forms: TIME OFFSET MISMATCH - expected D:" + expectedDays + " H:" + expectedHours + " M:" + expectedMinutes + " S:" + expectedSeconds +
+                " but got D:" + actualDays + " H:" + actualHours + " M:" + actualMinutes + " S:" + actualSeconds);
+        }
+        return match;
+    }
+
+    // Set time offset values with retry + verification loop
+    async function setAndVerifyTimeOffset(props) {
+        var maxAttempts = 3;
+        for (var attempt = 0; attempt < maxAttempts; attempt++) {
+            var daysEl = document.querySelector("input[name='offset.days']");
+            var hoursEl = document.querySelector("input[name='offset.hours']");
+            var minutesEl = document.querySelector("input[name='offset.minutes']");
+            var secondsEl = document.querySelector("input[name='offset.seconds']");
+
+            if (daysEl && !daysEl.disabled) {
+                daysEl.focus();
+                daysEl.value = String(props.offsetDays || "0");
+                daysEl.dispatchEvent(new Event("input", { bubbles: true }));
+                daysEl.dispatchEvent(new Event("change", { bubbles: true }));
+            }
+            await sleep(200);
+            if (hoursEl && !hoursEl.disabled) {
+                hoursEl.focus();
+                hoursEl.value = String(props.offsetHours || "0");
+                hoursEl.dispatchEvent(new Event("input", { bubbles: true }));
+                hoursEl.dispatchEvent(new Event("change", { bubbles: true }));
+            }
+            await sleep(200);
+            if (minutesEl && !minutesEl.disabled) {
+                minutesEl.focus();
+                minutesEl.value = String(props.offsetMinutes || "0");
+                minutesEl.dispatchEvent(new Event("input", { bubbles: true }));
+                minutesEl.dispatchEvent(new Event("change", { bubbles: true }));
+            }
+            await sleep(200);
+            if (secondsEl && !secondsEl.disabled) {
+                secondsEl.focus();
+                secondsEl.value = String(props.offsetSeconds || "0");
+                secondsEl.dispatchEvent(new Event("input", { bubbles: true }));
+                secondsEl.dispatchEvent(new Event("change", { bubbles: true }));
+            }
+            await sleep(300);
+
+            var verified = await verifyTimeOffsetValues(
+                props.offsetDays || "0",
+                props.offsetHours || "0",
+                props.offsetMinutes || "0",
+                props.offsetSeconds || "0"
+            );
+            if (verified) {
+                log("Archive/Update Forms: time offset verified on attempt " + (attempt + 1));
+                return true;
+            }
+            log("Archive/Update Forms: time offset NOT verified on attempt " + (attempt + 1) + ", retrying...");
+            await sleep(500);
+        }
+        log("Archive/Update Forms: FAILED to verify time offset after " + maxAttempts + " attempts");
+        return false;
+    }
+
+    // Find row in DOM by its unique edit href (most reliable)
+    function findRowInDOMByEditHref(editHref) {
+        if (!editHref) return null;
+        var tbody = document.getElementById("saTableBody");
+        if (!tbody) return null;
+        var link = tbody.querySelector("a[href='" + editHref + "']");
+        if (link) {
+            return link.closest("tr");
+        }
+        // Fallback: iterate all rows
+        var trs = tbody.querySelectorAll("tr");
+        for (var i = 0; i < trs.length; i++) {
+            var el = trs[i].querySelector("a[href*='/update/scheduledactivity/']");
+            if (el && el.getAttribute("href") === editHref) {
+                return trs[i];
+            }
+        }
+        return null;
+    }
+
+    // Dismiss any open modal (cancel/escape), then wait for it to close
+    async function dismissOpenModal() {
+        var modal = document.getElementById("ajaxModal");
+        if (modal && modal.classList.contains("in")) {
+            var cancelBtn = modal.querySelector("button[data-dismiss='modal'], .btn-default, .close");
+            if (cancelBtn) {
+                cancelBtn.click();
+            } else {
+                document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+            }
+            await waitForSAModalClose(5000);
+            await sleep(500);
+        }
+    }
+
     // Wait for Select2 options to change/load
     async function waitForSelect2OptionsChange(selectId, timeoutMs) {
         var start = Date.now();
@@ -9252,10 +9479,23 @@
             var occ = occurrences[i];
             progressContent.updateProgress(i + 1, total);
             progressContent.setItemStatus(i, "Processing...", "#17a2b8");
+            log("Archive/Update Forms: === ITEM " + (i + 1) + "/" + total + " === " + occ.rowKey + " editHref=" + (occ.editHref || "none"));
 
             try {
-                // Find the occurrence row
-                var row = findRowInDOM(occ.segmentText, occ.eventText, occ.formText);
+                // ===== FIND ROW: Use editHref first (unique per row), fall back to text matching =====
+                var row = null;
+                if (occ.editHref) {
+                    row = findRowInDOMByEditHref(occ.editHref);
+                    if (row) {
+                        log("Archive/Update Forms: found row by editHref");
+                    }
+                }
+                if (!row) {
+                    row = findRowInDOM(occ.segmentText, occ.eventText, occ.formText);
+                    if (row) {
+                        log("Archive/Update Forms: found row by text matching (editHref fallback)");
+                    }
+                }
                 if (!row) {
                     log("Archive/Update Forms: could not find row for " + occ.rowKey);
                     progressContent.setItemStatus(i, "Error (not found)", "#dc3545");
@@ -9263,16 +9503,13 @@
                     continue;
                 }
 
-                // Step 1: Open Edit modal and collect properties
+                // ===== STEP 1: Open Edit modal and collect properties =====
                 var editProps = null;
-                // Find edit link directly in the row (8th column)
                 var editLink = row.querySelector('a[href*="/update/scheduledactivity/"]');
                 if (!editLink) {
-                    // Fallback: try other selectors
                     editLink = row.querySelector('a[href*="editscheduledactivity"]');
                 }
                 if (!editLink) {
-                    // Fallback: look for Edit text
                     var links = row.querySelectorAll('a[data-toggle="modal"]');
                     for (var li = 0; li < links.length; li++) {
                         if (links[li].textContent.indexOf("Edit") !== -1) {
@@ -9281,38 +9518,75 @@
                         }
                     }
                 }
-                log("Archive/Update Forms: editLink found=" + !!editLink);
+                log("Archive/Update Forms: Step 1 - editLink found=" + !!editLink);
                 if (editLink) {
+                    // Dismiss any stale modal first
+                    await dismissOpenModal();
+                    await sleep(500);
+
                     editLink.click();
-                    var editModal = await waitForSAModal(10000);
+                    log("Archive/Update Forms: Step 1 - clicked edit link, waiting for FRESH modal...");
+                    var editModal = await waitForFreshSAModal(15000);
                     if (editModal) {
-                        editProps = await collectEditModalProperties();
-                        log("Archive/Update Forms: collected editProps.hidden=" + editProps.hidden + ", preWindow='" + editProps.preWindow + "', postWindow='" + editProps.postWindow + "'");
-                        // Cancel the edit modal
-                        var cancelBtn = editModal.querySelector("button[data-dismiss='modal'], .btn-default, .close");
-                        if (cancelBtn) {
-                            cancelBtn.click();
-                        } else {
-                            document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+                        // VERIFY: the modal loaded the correct item
+                        var modalMatch = await verifyEditModalMatchesOccurrence(occ);
+                        if (!modalMatch) {
+                            log("Archive/Update Forms: Step 1 - MODAL MISMATCH! Closing and retrying once...");
+                            await dismissOpenModal();
+                            await sleep(1500);
+
+                            // Re-find the row (DOM may have changed)
+                            row = occ.editHref ? findRowInDOMByEditHref(occ.editHref) : findRowInDOM(occ.segmentText, occ.eventText, occ.formText);
+                            if (row) {
+                                editLink = row.querySelector('a[href*="/update/scheduledactivity/"]');
+                                if (editLink) {
+                                    editLink.click();
+                                    editModal = await waitForFreshSAModal(15000);
+                                    if (editModal) {
+                                        modalMatch = await verifyEditModalMatchesOccurrence(occ);
+                                        if (!modalMatch) {
+                                            log("Archive/Update Forms: Step 1 - MODAL MISMATCH after retry! Aborting this item.");
+                                            await dismissOpenModal();
+                                            progressContent.setItemStatus(i, "Error (modal mismatch)", "#dc3545");
+                                            errorCount++;
+                                            continue;
+                                        }
+                                    }
+                                }
+                            }
                         }
-                        await waitForSAModalClose(5000);
+
+                        if (editModal) {
+                            // Wait extra for all form fields to fully populate
+                            await sleep(1000);
+                            editProps = await collectEditModalProperties();
+                            log("Archive/Update Forms: Step 1 - collected editProps: hidden=" + editProps.hidden +
+                                ", preWindow='" + editProps.preWindow + "', postWindow='" + editProps.postWindow + "'" +
+                                ", offsetDays='" + editProps.offsetDays + "', offsetHours='" + editProps.offsetHours + "'" +
+                                ", offsetMinutes='" + editProps.offsetMinutes + "', offsetSeconds='" + editProps.offsetSeconds + "'" +
+                                ", refActivity=" + editProps.referenceActivity + ", preRef='" + editProps.offsetPreReference + "'");
+
+                            // Cancel the edit modal
+                            await dismissOpenModal();
+                        }
                     } else {
-                        log("Archive/Update Forms: edit modal did not open for " + occ.rowKey);
+                        log("Archive/Update Forms: Step 1 - edit modal did not open for " + occ.rowKey);
                     }
                 } else {
-                    log("Archive/Update Forms: edit link not found for " + occ.rowKey);
+                    log("Archive/Update Forms: Step 1 - edit link not found for " + occ.rowKey);
                 }
 
                 if (ARCHIVE_UPDATE_FORMS_CANCELLED) break;
+                await sleep(1000);
 
-                // Step 2: Collect visibility if hidden
+                // ===== STEP 2: Collect visibility if hidden =====
                 var visibilityProps = null;
                 if (editProps && editProps.hidden) {
                     log("Archive/Update Forms: Step 2 - attempting to collect visibility properties");
-                    await sleep(500);
-                    row = findRowInDOM(occ.segmentText, occ.eventText, occ.formText);
+                    await sleep(1000);
+                    // Re-find row
+                    row = occ.editHref ? findRowInDOMByEditHref(occ.editHref) : findRowInDOM(occ.segmentText, occ.eventText, occ.formText);
                     if (row) {
-                        // Find visibility link directly in the row
                         var visLink = row.querySelector('a[href*="visiblecondition"]');
                         if (!visLink) {
                             visLink = row.querySelector('a[href*="visibility"]');
@@ -9320,18 +9594,12 @@
                         log("Archive/Update Forms: Step 2 - visibility link found=" + !!visLink);
                         if (visLink) {
                             visLink.click();
-                            var visModal = await waitForSAModal(10000);
+                            var visModal = await waitForFreshSAModal(15000);
                             log("Archive/Update Forms: Step 2 - visibility modal opened=" + !!visModal);
                             if (visModal) {
                                 visibilityProps = await collectVisibilityModalProperties();
                                 log("Archive/Update Forms: Step 2 - collected visibilityProps=" + JSON.stringify(visibilityProps));
-                                var visCancelBtn = visModal.querySelector("button[data-dismiss='modal'], .btn-default, .close");
-                                if (visCancelBtn) {
-                                    visCancelBtn.click();
-                                } else {
-                                    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-                                }
-                                await waitForSAModalClose(5000);
+                                await dismissOpenModal();
                             } else {
                                 log("Archive/Update Forms: Step 2 - visibility modal did not open");
                             }
@@ -9344,12 +9612,13 @@
                 }
 
                 if (ARCHIVE_UPDATE_FORMS_CANCELLED) break;
+                await sleep(1000);
 
-                // Step 3: Archive the source occurrence
-                await sleep(500);
-                row = findRowInDOM(occ.segmentText, occ.eventText, occ.formText);
+                // ===== STEP 3: Archive the source occurrence =====
+                // Re-find row
+                row = occ.editHref ? findRowInDOMByEditHref(occ.editHref) : findRowInDOM(occ.segmentText, occ.eventText, occ.formText);
                 if (!row) {
-                    log("Archive/Update Forms: could not find row for archiving " + occ.rowKey);
+                    log("Archive/Update Forms: Step 3 - could not find row for archiving " + occ.rowKey);
                     progressContent.setItemStatus(i, "Error (row not found)", "#dc3545");
                     errorCount++;
                     continue;
@@ -9370,7 +9639,7 @@
                 }
 
                 if (!archiveLink && !deleteLink) {
-                    log("Archive/Update Forms: no archive or delete link found for " + occ.rowKey);
+                    log("Archive/Update Forms: Step 3 - no archive or delete link found for " + occ.rowKey);
                     progressContent.setItemStatus(i, "Error (no archive/delete link)", "#dc3545");
                     errorCount++;
                     continue;
@@ -9378,9 +9647,8 @@
 
                 if (!archiveLink) {
                     // No archive button (activity plan not locked) - fall back to Delete
-                    log("Archive/Update Forms: using delete for " + occ.rowKey);
+                    log("Archive/Update Forms: Step 3 - using delete for " + occ.rowKey);
                     deleteLink.click();
-                    // Wait for bootbox confirm dialog and click OK
                     var confirmBtn = null;
                     var confirmPollStart = Date.now();
                     while (Date.now() - confirmPollStart < 10000) {
@@ -9389,24 +9657,24 @@
                         await sleep(500);
                     }
                     if (!confirmBtn) {
-                        log("Archive/Update Forms: confirm dialog did not appear for delete " + occ.rowKey);
+                        log("Archive/Update Forms: Step 3 - confirm dialog did not appear for delete " + occ.rowKey);
                         progressContent.setItemStatus(i, "Error (delete confirm)", "#dc3545");
                         errorCount++;
                         continue;
                     }
                     confirmBtn.click();
-                    log("Archive/Update Forms: deleted " + occ.rowKey);
-                    await sleep(1000);
+                    log("Archive/Update Forms: Step 3 - deleted " + occ.rowKey);
+                    await sleep(2000);
                 } else {
                     // Check if it's Un-Archive (already archived)
                     var archiveLinkText = (archiveLink.textContent || "").toLowerCase();
                     if (archiveLinkText.indexOf("un-archive") !== -1) {
-                        log("Archive/Update Forms: row already archived for " + occ.rowKey + "; skipping archive step");
+                        log("Archive/Update Forms: Step 3 - row already archived for " + occ.rowKey + "; skipping archive step");
                     } else {
                         archiveLink.click();
-                        var archiveModal = await waitForSAModal(10000);
+                        var archiveModal = await waitForFreshSAModal(15000);
                         if (!archiveModal) {
-                            log("Archive/Update Forms: archive modal did not open for " + occ.rowKey);
+                            log("Archive/Update Forms: Step 3 - archive modal did not open for " + occ.rowKey);
                             progressContent.setItemStatus(i, "Error (archive modal)", "#dc3545");
                             errorCount++;
                             continue;
@@ -9417,84 +9685,136 @@
                             reasonEl.value = archiveReason || "Old version";
                             reasonEl.dispatchEvent(new Event("change", { bubbles: true }));
                         }
+                        await sleep(500);
                         // Click Save
                         var saveBtn = document.getElementById("actionButton");
                         if (saveBtn) {
                             saveBtn.click();
-                            var closed = await waitForSAModalClose(10000);
+                            var closed = await waitForSAModalClose(15000);
                             if (!closed) {
-                                log("Archive/Update Forms: archive modal did not close for " + occ.rowKey);
+                                log("Archive/Update Forms: Step 3 - archive modal did not close for " + occ.rowKey);
                                 progressContent.setItemStatus(i, "Error (archive)", "#dc3545");
                                 errorCount++;
                                 continue;
                             }
                         }
-                        await sleep(1000);
+                        await sleep(2000);
                     }
                 }
 
                 if (ARCHIVE_UPDATE_FORMS_CANCELLED) break;
 
-                // Step 4: Add target form
-                await sleep(500);
+                // ===== STEP 4: Add target form =====
+                await sleep(1500);
                 if (!clickAddSaButton()) {
-                    log("Archive/Update Forms: could not click Add button");
+                    log("Archive/Update Forms: Step 4 - could not click Add button");
                     progressContent.setItemStatus(i, "Error (add)", "#dc3545");
                     errorCount++;
                     continue;
                 }
 
-                var addModal = await waitForSAModal(10000);
+                var addModal = await waitForFreshSAModal(15000);
                 if (!addModal) {
-                    log("Archive/Update Forms: add modal did not open");
+                    log("Archive/Update Forms: Step 4 - add modal did not open");
                     progressContent.setItemStatus(i, "Error (add modal)", "#dc3545");
                     errorCount++;
                     continue;
                 }
 
-                // Select segment by text (more reliable than value)
+                // Select segment with verification
                 await setSelect2ValueByText("segment", occ.segmentText);
-                await sleep(500);
+                var segVerified = await verifySelect2DisplayText("segment", occ.segmentText, 3);
+                if (!segVerified) {
+                    log("Archive/Update Forms: Step 4 - FAILED to verify segment selection: " + occ.segmentText);
+                    await dismissOpenModal();
+                    progressContent.setItemStatus(i, "Error (segment select)", "#dc3545");
+                    errorCount++;
+                    continue;
+                }
+                log("Archive/Update Forms: Step 4 - segment verified: " + occ.segmentText);
+                await sleep(800);
 
-                // Select study event by text (more reliable than value)
+                // Select study event with verification
                 await setSelect2ValueByText("studyEvent", occ.eventText);
-                await sleep(500);
+                var evVerified = await verifySelect2DisplayText("studyEvent", occ.eventText, 3);
+                if (!evVerified) {
+                    log("Archive/Update Forms: Step 4 - FAILED to verify studyEvent selection: " + occ.eventText);
+                    await dismissOpenModal();
+                    progressContent.setItemStatus(i, "Error (event select)", "#dc3545");
+                    errorCount++;
+                    continue;
+                }
+                log("Archive/Update Forms: Step 4 - studyEvent verified: " + occ.eventText);
+                await sleep(800);
 
-                // Select target form by text (more reliable than value)
+                // Select target form with verification
                 await setSelect2ValueByText("form", targetForm.text);
-                await sleep(500);
+                var formVerified = await verifySelect2DisplayText("form", targetForm.text, 3);
+                if (!formVerified) {
+                    log("Archive/Update Forms: Step 4 - FAILED to verify form selection: " + targetForm.text);
+                    await dismissOpenModal();
+                    progressContent.setItemStatus(i, "Error (form select)", "#dc3545");
+                    errorCount++;
+                    continue;
+                }
+                log("Archive/Update Forms: Step 4 - form verified: " + targetForm.text);
+                await sleep(800);
 
-                // Apply copied properties
+                // Apply copied properties with verification
                 if (editProps) {
                     await applyPropertiesToAddModal(editProps);
+
+                    // Verify time offset if not reference activity
+                    if (!editProps.referenceActivity) {
+                        var timeVerified = await setAndVerifyTimeOffset(editProps);
+                        if (!timeVerified) {
+                            log("Archive/Update Forms: Step 4 - WARNING: time offset verification failed, proceeding anyway");
+                        }
+                    }
+
+                    // Final pause to let all values settle before save
+                    await sleep(1000);
+
+                    // Re-verify segment and studyEvent haven't been clobbered
+                    var segRecheck = await verifySelect2DisplayText("segment", occ.segmentText, 1);
+                    var evRecheck = await verifySelect2DisplayText("studyEvent", occ.eventText, 1);
+                    if (!segRecheck || !evRecheck) {
+                        log("Archive/Update Forms: Step 4 - CRITICAL: segment/event changed during property application! seg=" + segRecheck + " ev=" + evRecheck);
+                        await dismissOpenModal();
+                        progressContent.setItemStatus(i, "Error (values changed)", "#dc3545");
+                        errorCount++;
+                        continue;
+                    }
                 }
+
+                await sleep(500);
 
                 // Save the new scheduled activity
                 var addSaveBtn = document.getElementById("actionButton");
                 if (addSaveBtn) {
                     addSaveBtn.click();
-                    var addClosed = await waitForSAModalClose(10000);
+                    var addClosed = await waitForSAModalClose(15000);
                     if (!addClosed) {
-                        log("Archive/Update Forms: add modal did not close");
+                        log("Archive/Update Forms: Step 4 - add modal did not close");
                         progressContent.setItemStatus(i, "Error (save)", "#dc3545");
                         errorCount++;
                         continue;
                     }
                 }
 
-                await sleep(1000);
+                await sleep(2000);
 
                 if (ARCHIVE_UPDATE_FORMS_CANCELLED) break;
 
-                // Step 5: Set visibility if source was hidden
+                // ===== STEP 5: Set visibility if source was hidden =====
                 log("Archive/Update Forms: Step 5 check - editProps.hidden=" + (editProps && editProps.hidden) + ", visibilityProps=" + !!visibilityProps);
                 if (editProps && editProps.hidden && visibilityProps) {
                     log("Archive/Update Forms: Step 5 - attempting to set visibility on new row");
+                    await sleep(1000);
                     // Find the newly added row
                     var newRow = findRowInDOM(occ.segmentText, occ.eventText, targetForm.text);
                     if (newRow) {
                         log("Archive/Update Forms: Step 5 - new row found");
-                        // Find visibility link directly in the row
                         var newVisLink = newRow.querySelector('a[href*="visiblecondition"]');
                         if (!newVisLink) {
                             newVisLink = newRow.querySelector('a[href*="visibility"]');
@@ -9502,12 +9822,11 @@
                         log("Archive/Update Forms: Step 5 - visibility link found=" + !!newVisLink);
                         if (newVisLink) {
                             newVisLink.click();
-                            var newVisModal = await waitForSAModal(10000);
+                            var newVisModal = await waitForFreshSAModal(15000);
                             log("Archive/Update Forms: Step 5 - visibility modal opened=" + !!newVisModal);
                             if (newVisModal) {
-                                await sleep(500);
+                                await sleep(1000);
 
-                                // Set visibility fields one at a time with delays
                                 var visSuccess = true;
 
                                 // 1. Activity Plan
@@ -9518,9 +9837,9 @@
                                         log("Archive/Update Forms: Step 5 - failed to set Activity Plan");
                                         visSuccess = false;
                                     } else {
-                                        await sleep(500);
-                                        await waitForSelect2OptionsChange("visibleScheduledActivity", 3000);
-                                        await sleep(500);
+                                        await sleep(800);
+                                        await waitForSelect2OptionsChange("visibleScheduledActivity", 5000);
+                                        await sleep(800);
                                     }
                                 }
 
@@ -9533,15 +9852,15 @@
                                         saSet = await setSelect2ValueByText("visibleScheduledActivity", targetSA);
                                         if (saSet) break;
                                         log("Archive/Update Forms: Step 5 - retry " + (retry + 1) + " for Scheduled Activity");
-                                        await sleep(1000);
+                                        await sleep(1500);
                                     }
                                     if (!saSet) {
                                         log("Archive/Update Forms: Step 5 - failed to set Scheduled Activity after retries");
                                         visSuccess = false;
                                     } else {
-                                        await sleep(500);
-                                        await waitForSelect2OptionsChange("visibleItemRef", 3000);
-                                        await sleep(500);
+                                        await sleep(800);
+                                        await waitForSelect2OptionsChange("visibleItemRef", 5000);
+                                        await sleep(800);
                                     }
                                 }
 
@@ -9553,15 +9872,15 @@
                                         itemSet = await setSelect2ValueByText("visibleItemRef", visibilityProps.item);
                                         if (itemSet) break;
                                         log("Archive/Update Forms: Step 5 - retry " + (retry + 1) + " for Item");
-                                        await sleep(1000);
+                                        await sleep(1500);
                                     }
                                     if (!itemSet) {
                                         log("Archive/Update Forms: Step 5 - failed to set Item after retries");
                                         visSuccess = false;
                                     } else {
-                                        await sleep(500);
-                                        await waitForSelect2OptionsChange("visibleCodeListItem", 3000);
-                                        await sleep(500);
+                                        await sleep(800);
+                                        await waitForSelect2OptionsChange("visibleCodeListItem", 5000);
+                                        await sleep(800);
                                     }
                                 }
 
@@ -9573,13 +9892,13 @@
                                         ivSet = await setSelect2ValueByText("visibleCodeListItem", visibilityProps.itemValue);
                                         if (ivSet) break;
                                         log("Archive/Update Forms: Step 5 - retry " + (retry + 1) + " for Item Value");
-                                        await sleep(1000);
+                                        await sleep(1500);
                                     }
                                     if (!ivSet) {
                                         log("Archive/Update Forms: Step 5 - failed to set Item Value after retries");
                                         visSuccess = false;
                                     } else {
-                                        await sleep(500);
+                                        await sleep(800);
                                     }
                                 }
 
@@ -9589,15 +9908,16 @@
                                     visReasonEl.value = visibilityReason || "Add visibility condition";
                                     visReasonEl.dispatchEvent(new Event("change", { bubbles: true }));
                                 }
+                                await sleep(500);
 
                                 // Save visibility
                                 var visSaveBtn = document.getElementById("actionButton");
                                 if (visSaveBtn) {
                                     log("Archive/Update Forms: Step 5 - clicking Save button");
                                     visSaveBtn.click();
-                                    await waitForSAModalClose(10000);
+                                    await waitForSAModalClose(15000);
                                 }
-                                await sleep(500);
+                                await sleep(1000);
                                 log("Archive/Update Forms: Step 5 - visibility set successfully");
                             } else {
                                 log("Archive/Update Forms: Step 5 - visibility modal did not open");
@@ -9618,9 +9938,12 @@
                 log("Archive/Update Forms: error processing " + occ.rowKey + " - " + String(err));
                 progressContent.setItemStatus(i, "Error", "#dc3545");
                 errorCount++;
+                // Ensure any open modal is dismissed before next item
+                try { await dismissOpenModal(); } catch (e2) {}
             }
 
-            await sleep(500);
+            // Generous cooldown between items to let DOM stabilize
+            await sleep(2000);
         }
 
         // Show summary
