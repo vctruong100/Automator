@@ -1075,7 +1075,8 @@
                                         segment: srcItem.segment,
                                         studyEvent: srcItem.studyEvent,
                                         form: srcItem.form,
-                                        sourceIdx: parseInt(srcIdx)
+                                        sourceIdx: parseInt(srcIdx),
+                                        prefillReason: "Add visibility condition"
                                     };
                                     log("SVC: mapped form " + srcItem.form + " to dropbox idx=" + gIdx);
                                     // Auto-prefill from reference if exists
@@ -1083,7 +1084,7 @@
                                     if (ref) {
                                         dropboxMappings[String(gIdx)].prefillItem = ref.item;
                                         dropboxMappings[String(gIdx)].prefillItemValue = ref.itemValue;
-                                        dropboxMappings[String(gIdx)].prefillReason = ref.reason;
+                                        dropboxMappings[String(gIdx)].prefillReason = ref.reason || "Add visibility condition";
                                         log("SVC: auto-prefilled from reference for " + srcItem.form);
                                     }
                                     renderPrimaryPanel();
@@ -1263,6 +1264,9 @@
             var prefill = mapping.prefillItem || null;
             var prefillVal = mapping.prefillItemValue || null;
             var prefillReason = mapping.prefillReason || "Add visibility condition";
+            if (!mapping.prefillReason) {
+                mapping.prefillReason = prefillReason;
+            }
 
             // Determine if this mapping already has cached items from a previous load
             var hasCachedItems = !!(mapping._cachedItems && mapping._cachedItems.length > 0);
@@ -2771,40 +2775,76 @@
             }
         }
     }
-
     
-    // Standardized "Collecting Data" overlay used by all features
     function createCollectingOverlay(title, message) {
+
         var overlay = document.createElement("div");
         overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:30000;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;";
+
         var panel = document.createElement("div");
         panel.style.cssText = "background:#111;border:1px solid #333;border-radius:12px;padding:32px 48px;box-shadow:0 15px 35px rgba(0,0,0,0.5);display:flex;flex-direction:column;align-items:center;gap:16px;min-width:320px;";
+
         var spinStyle = document.createElement("style");
         spinStyle.textContent = "@keyframes cda-spin { to { transform: rotate(360deg); } } @keyframes cda-pulse { 0%,100% { opacity:0.6; } 50% { opacity:1; } }";
         panel.appendChild(spinStyle);
+
         var spinner = document.createElement("div");
         spinner.style.cssText = "width:36px;height:36px;border:3px solid #5b43c7;border-top-color:transparent;border-radius:50%;animation:cda-spin 0.8s linear infinite;";
         panel.appendChild(spinner);
+
         var titleEl = document.createElement("div");
         titleEl.textContent = title || "Collecting data";
         titleEl.style.cssText = "color:#fff;font-size:16px;font-weight:600;";
         panel.appendChild(titleEl);
+
         var messageEl = document.createElement("div");
         messageEl.textContent = message || "";
         messageEl.style.cssText = "color:#999;font-size:12px;animation:cda-pulse 1.5s ease-in-out infinite;";
         panel.appendChild(messageEl);
+
+        var timerEl = document.createElement("div");
+        timerEl.textContent = "00:00";
+        timerEl.style.cssText = "color:#6f6;font-size:12px;font-variant-numeric:tabular-nums;";
+        panel.appendChild(timerEl);
+
         overlay.appendChild(panel);
         document.body.appendChild(overlay);
+
+        var startTime = Date.now();
+
+        var timerInterval = setInterval(function () {
+            var elapsedMs = Date.now() - startTime;
+            var totalSeconds = Math.floor(elapsedMs / 1000);
+            var minutes = Math.floor(totalSeconds / 60);
+            var seconds = totalSeconds % 60;
+
+            var mm = String(minutes).padStart(2, "0");
+            var ss = String(seconds).padStart(2, "0");
+
+            timerEl.textContent = mm + ":" + ss;
+        }, 1000);
+
         return {
             overlay: overlay,
             panel: panel,
             titleEl: titleEl,
             messageEl: messageEl,
-            setTitle: function(t) { titleEl.textContent = t; },
-            setMessage: function(m) { messageEl.textContent = m; },
-            close: function() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+            timerEl: timerEl,
+            setTitle: function(t) {
+                titleEl.textContent = t;
+            },
+            setMessage: function(m) {
+                messageEl.textContent = m;
+            },
+            close: function() {
+                clearInterval(timerInterval);
+                if (overlay.parentNode) {
+                    overlay.parentNode.removeChild(overlay);
+                }
+            }
         };
     }
+
 
     // Import from Library Feature
     var IFL_FORM_LIST_PATH = "/secure/crfdesign/studylibrary/list/form";
@@ -4749,6 +4789,7 @@
     var STORAGE_BPL_SEGMENT_OFFSETS = "activityPlanState.bpl.segmentOffsets";
     var STORAGE_BPL_SA_TABLE_DATA = "activityPlanState.bpl.saTableData";
     var STORAGE_BPL_HIDE_EXISTING = "activityPlanState.bpl.hideExisting";
+    var STORAGE_BPL_SHOW_UPDATED_ONLY = "activityPlanState.bpl.showUpdatedOnly";
 
     function clearBPLStorage() {
         try {
@@ -4812,7 +4853,6 @@
         if (cleaned.indexOf("*") !== -1) {
             result.refActivity = true;
         }
-        log("BPL: parsed timepoint '" + raw + "' -> preReference=" + result.preReference + ", refActivity=" + result.refActivity + ", cleaned='" + cleaned + "'");
         return result;
     }
 
@@ -4834,19 +4874,15 @@
             if (cls.indexOf("fa-eye-slash") !== -1) {
                 result.hidden = true;
                 result.visibilityAlreadySet = true;
-                log("BPL: status icon fa-eye-slash detected (hidden, visibility already set)");
             } else if (cls.indexOf("fa-eye") !== -1) {
                 result.hidden = true;
                 result.visibilityMustBeSet = true;
-                log("BPL: status icon fa-eye detected (hidden, visibility must be set)");
             }
             if (cls.indexOf("fa-archive") !== -1) {
                 result.archived = true;
-                log("BPL: status icon fa-archive detected (archived)");
             }
             if (cls.indexOf("fa-user-plus") !== -1) {
                 result.roleRestriction = true;
-                log("BPL: status icon fa-user-plus detected (role restriction, informational)");
             }
         }
         return result;
@@ -4859,18 +4895,17 @@
             log("BPL: saTableBody not found");
             return existing;
         }
-        var rows = tbody.querySelectorAll("tr");
-        log("BPL: found " + rows.length + " rows in saTableBody");
-        for (var i = 0; i < rows.length; i++) {
-            var row = rows[i];
-            var cells = row.querySelectorAll("td");
+        var rows = tbody.rows;
+        var rowCount = rows.length;
+        log("BPL: found " + rowCount + " rows in saTableBody");
+        for (var i = 0; i < rowCount; i++) {
+            var cells = rows[i].cells;
             if (cells.length >= 4) {
-                var segment = normalizeSAText(cells[1].textContent);
-                var studyEvent = normalizeSAText(cells[2].textContent);
-                var form = normalizeSAText(cells[3].textContent);
+                var segment = cells[1].textContent.trim().replace(/\s+/g, " ");
+                var studyEvent = cells[2].textContent.trim().replace(/\s+/g, " ");
+                var form = cells[3].textContent.trim().replace(/\s+/g, " ");
                 if (segment && studyEvent && form) {
-                    var key = segment + " | " + studyEvent + " | " + form;
-                    existing.push(key);
+                    existing.push(segment + " | " + studyEvent + " | " + form);
                 }
             }
         }
@@ -4891,73 +4926,107 @@
         var timepointColIndex = bplDetectTimepointColumn();
         var hasTimepoint = timepointColIndex !== -1;
         log("BPL: enhanced scan - hasTimepoint=" + hasTimepoint + ", timepointColIndex=" + timepointColIndex);
-        var rows = tbody.querySelectorAll("tr");
-        log("BPL: enhanced scan found " + rows.length + " rows");
+
+        // Use native HTMLCollection (tbody.rows) instead of querySelectorAll
+        var rows = tbody.rows;
+        var rowCount = rows.length;
+        log("BPL: enhanced scan found " + rowCount + " rows");
+
+        // Bulk-collect ALL edit links in one query, then map by row index
+        var editLinkMap = {};
+        var allEditLinks = tbody.querySelectorAll("a[href*='/update/scheduledactivity/']");
+        for (var e = 0; e < allEditLinks.length; e++) {
+            var parentRow = allEditLinks[e].parentNode;
+            while (parentRow && parentRow.tagName !== "TR") {
+                parentRow = parentRow.parentNode;
+            }
+            if (parentRow) {
+                editLinkMap[parentRow.sectionRowIndex] = allEditLinks[e].getAttribute("href");
+            }
+        }
+
         var skippedArchived = 0;
         var skippedDuplicate = 0;
         var seenKeys = {};
-        for (var i = 0; i < rows.length; i++) {
-            var row = rows[i];
-            var cells = row.querySelectorAll("td");
-            if (cells.length < 4) {
+        var statusCellIndex = hasTimepoint ? 6 : 4;
+
+        for (var i = 0; i < rowCount; i++) {
+            var cells = rows[i].cells;
+            var cellCount = cells.length;
+            if (cellCount < 4) {
                 continue;
             }
-            var segment = normalizeSAText(cells[1].textContent);
-            var studyEvent = normalizeSAText(cells[2].textContent);
-            var form = normalizeSAText(cells[3].textContent);
+
+            // Inline normalization: trim + collapse whitespace
+            var segment = cells[1].textContent.trim().replace(/\s+/g, " ");
+            var studyEvent = cells[2].textContent.trim().replace(/\s+/g, " ");
+            var form = cells[3].textContent.trim().replace(/\s+/g, " ");
             if (!segment || !studyEvent || !form) {
                 continue;
             }
-            var timepointRaw = "";
-            var statusCell = null;
-            if (hasTimepoint) {
-                if (cells.length > timepointColIndex) {
-                    timepointRaw = normalizeSAText(cells[timepointColIndex].textContent);
-                }
-                if (cells.length > 6) {
-                    statusCell = cells[6];
-                }
-            } else {
-                if (cells.length > 4) {
-                    statusCell = cells[4];
-                }
-            }
-            var statusResult = bplParseStatusCell(statusCell);
-            if (statusResult.archived) {
-                skippedArchived = skippedArchived + 1;
-                log("BPL: skipping archived row " + i + " - " + segment + " | " + studyEvent + " | " + form);
+
+            // Read status cell innerHTML once, reuse for archive + visibility checks
+            var statusHtml = (cellCount > statusCellIndex) ? cells[statusCellIndex].innerHTML : "";
+            if (statusHtml.indexOf("fa-archive") !== -1) {
+                skippedArchived++;
                 continue;
             }
-            var timepointParsed = bplParseTimepointText(timepointRaw);
-            var key = segment + " | " + studyEvent + " | " + form;
 
-            var dedupKey = key + " | " + (timepointParsed.cleaned || timepointRaw || "");
+            // Inline timepoint extraction and parsing
+            var timepointRaw = "";
+            if (hasTimepoint && cellCount > timepointColIndex) {
+                timepointRaw = cells[timepointColIndex].textContent.trim().replace(/\s+/g, " ");
+            }
+            var timepointCleaned = "";
+            var preReference = false;
+            var refActivity = false;
+            if (timepointRaw) {
+                timepointCleaned = timepointRaw.replace(/\(\d+\)\s*$/, "").trim();
+                if (timepointCleaned.indexOf("-") !== -1) {
+                    preReference = true;
+                }
+                if (timepointCleaned.indexOf("*") !== -1) {
+                    refActivity = true;
+                }
+            }
+
+            var key = segment + " | " + studyEvent + " | " + form;
+            var dedupKey = key + " | " + (timepointCleaned || timepointRaw || "");
             if (seenKeys[dedupKey]) {
-                skippedDuplicate = skippedDuplicate + 1;
-                log("BPL: skipping duplicate row " + i + " - " + dedupKey);
+                skippedDuplicate++;
                 continue;
             }
             seenKeys[dedupKey] = true;
-            var editLink = row.querySelector("a[href*='/update/scheduledactivity/']");
-            var editHref = editLink ? editLink.getAttribute("href") : "";
+
+            // Reuse cached statusHtml for visibility check
+            var isHidden = false;
+            var visibilityMustBeSet = false;
+            var visibilityAlreadySet = false;
+            if (statusHtml.indexOf("fa-eye-slash") !== -1) {
+                isHidden = true;
+                visibilityAlreadySet = true;
+            } else if (statusHtml.indexOf("fa-eye") !== -1) {
+                isHidden = true;
+                visibilityMustBeSet = true;
+            }
+
             result.existingKeys.push(key);
             result.saTableItems.push({
                 segment: segment,
                 studyEvent: studyEvent,
                 form: form,
                 timepointRaw: timepointRaw,
-                timepointCleaned: timepointParsed.cleaned,
-                timepointDisplay: timepointParsed.display,
-                preReference: timepointParsed.preReference,
-                refActivity: timepointParsed.refActivity,
-                hidden: statusResult.hidden,
-                visibilityMustBeSet: statusResult.visibilityMustBeSet,
-                visibilityAlreadySet: statusResult.visibilityAlreadySet,
+                timepointCleaned: timepointCleaned,
+                timepointDisplay: timepointRaw || "",
+                preReference: preReference,
+                refActivity: refActivity,
+                hidden: isHidden,
+                visibilityMustBeSet: visibilityMustBeSet,
+                visibilityAlreadySet: visibilityAlreadySet,
                 autoPopulated: true,
-                editHref: editHref,
+                editHref: editLinkMap[i] || "",
                 saRowIndex: i
             });
-            log("BPL: enhanced scan row " + i + " - " + key + " timepoint='" + timepointRaw + "' hidden=" + statusResult.hidden + " preRef=" + timepointParsed.preReference + " refAct=" + timepointParsed.refActivity + " editHref='" + editHref + "'");
         }
         log("BPL: enhanced scan complete - " + result.saTableItems.length + " items collected, " + skippedArchived + " archived skipped, " + skippedDuplicate + " duplicates skipped");
         return result;
@@ -5801,6 +5870,10 @@
                             preReference: fd.preReference || false,
                             studyEvents: filteredEvents,
                             autoPopulated: fd.autoPopulated || false,
+                            modified: fd.modified || false,
+                            editHref: fd.editHref || "",
+                            saRowIndex: fd.saRowIndex,
+                            originalValues: fd.originalValues || null,
                             timepointRaw: fd.timepointRaw || "",
                             timepointCleaned: fd.timepointCleaned || "",
                             timepointDisplay: fd.timepointDisplay || "",
@@ -5875,6 +5948,15 @@
             }
         } catch (e) {}
         log("BPL: hideExisting initial state = " + bplHideExisting);
+
+        var bplShowUpdatedOnly = false;
+        try {
+            var savedShowUpdated = localStorage.getItem(STORAGE_BPL_SHOW_UPDATED_ONLY);
+            if (savedShowUpdated === "true") {
+                bplShowUpdatedOnly = true;
+            }
+        } catch (e) {}
+        log("BPL: showUpdatedOnly initial state = " + bplShowUpdatedOnly);
 
         var bplHideKeybind = "F4";
         try {
@@ -6413,6 +6495,22 @@
             }
             var tpStr = bplFormatTimePoint(data.days || 0, data.hours || 0, data.minutes || 0, data.seconds || 0, false);
             data.exampleTime = bplComputeExampleTime(data.segmentRefDateTime || "N/A", tpStr, data.preReference || false);
+            if (data.autoPopulated && !data.originalValues) {
+                data.originalValues = {
+                    days: data.days || 0,
+                    hours: data.hours || 0,
+                    minutes: data.minutes || 0,
+                    seconds: data.seconds || 0,
+                    hidden: !!data.hidden,
+                    mandatory: data.mandatory !== false,
+                    enforce: !!data.enforce,
+                    preWindow: data.preWindow || "",
+                    postWindow: data.postWindow || "",
+                    refActivity: !!data.refActivity,
+                    preReference: !!data.preReference
+                };
+                log("BPL: created missing originalValues for auto-populated form " + key);
+            }
             if (data.autoPopulated && data.originalValues) {
                 var orig = data.originalValues;
                 var isModified = (
@@ -6493,7 +6591,8 @@
             input.style.cssText = "padding:6px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;width:100%;font-size:12px;box-sizing:border-box;";
             input.addEventListener("input", function() {
                 saveFormDataFromPanel(selectedFormKey);
-                saveSession();
+                renderCenterPanel(centerSearch.value);
+                runAutoValidation();
             });
             row.appendChild(lbl);
             row.appendChild(input);
@@ -6673,6 +6772,9 @@
                         if (fcIsAuto && bplHideExisting) {
                             continue;
                         }
+                        if (bplShowUpdatedOnly && !((!fcIsAuto) || (fcIsAuto && fcData.modified))) {
+                            continue;
+                        }
                         var searchableText = (fcEntry.text || "").toLowerCase();
                         for (var evi = 0; evi < fcEvents.length; evi++) {
                             searchableText += " " + (fcEvents[evi].text || "").toLowerCase();
@@ -6689,6 +6791,23 @@
                         }
                     }
                     if (matchingFormIndices.length === 0) {
+                        continue;
+                    }
+                }
+                if (bplShowUpdatedOnly) {
+                    var segFormsForFilter = segmentFormMap[seg.value] || [];
+                    var hasVisibleForm = false;
+                    for (var sufi = 0; sufi < segFormsForFilter.length; sufi++) {
+                        var sufEntry = segFormsForFilter[sufi];
+                        var sufKey = getFormDataKey(seg.value, sufEntry.value, sufEntry.index);
+                        var sufData = formDataStore[sufKey] || getDefaultFormData();
+                        var sufIsAuto = sufEntry.autoPopulated || sufData.autoPopulated || false;
+                        if (!sufIsAuto || (sufIsAuto && sufData.modified)) {
+                            hasVisibleForm = true;
+                            break;
+                        }
+                    }
+                    if (!hasVisibleForm) {
                         continue;
                     }
                 }
@@ -6714,7 +6833,6 @@
                 var segLabel = document.createElement("span");
                 segLabel.textContent = seg.text + " (" + segFormCount + " form" + (segFormCount !== 1 ? "s" : "") + ")";
                 segLabel.style.cssText = "font-weight:600;font-size:13px;flex:1;";
-                log("BPL: segment " + seg.text + " has " + segFormCount + " form(s)");
                 var sortBtn = document.createElement("button");
                 sortBtn.textContent = "\u2195 Sort";
                 sortBtn.style.cssText = "padding:3px 8px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:11px;cursor:pointer;";
@@ -6873,6 +6991,9 @@
                         if (isAutoPopulated && bplHideExisting) {
                             continue;
                         }
+                        if (bplShowUpdatedOnly && !((!isAutoPopulated) || (isAutoPopulated && fData2.modified))) {
+                            continue;
+                        }
                         if (matchingFormIndices !== null && matchingFormIndices.indexOf(fi) === -1) {
                             continue;
                         }
@@ -6892,7 +7013,7 @@
                             }
                         }
                         if (isSelected) {
-                            rowBorderColor = "#7a7aff";
+                            rowBorderColor = isModifiedAuto ? "#2d8a2d" : "#7a7aff";
                             rowBg = isAutoPopulated ? "#3a3a3a" : "#3a3a5a";
                         } else if (!isAutoPopulated && hasMissingEvents) {
                             rowBorderColor = "#aa4444";
@@ -7252,6 +7373,25 @@
             renderCenterPanel(centerSearch.value);
         });
         legendRow.appendChild(hideExistingBtn);
+
+        var showUpdatedBtn = document.createElement("button");
+        showUpdatedBtn.textContent = bplShowUpdatedOnly ? "\u{1F441} Show All" : "\u{270F}\u{FE0F} Show Updated Only";
+        showUpdatedBtn.title = bplShowUpdatedOnly ? "Show all forms including unmodified auto-populated" : "Only show user-added forms and modified auto-populated forms";
+        showUpdatedBtn.style.cssText = "padding:5px 12px;border-radius:4px;border:1px solid " + (bplShowUpdatedOnly ? "#27ae60" : "#555") + ";background:" + (bplShowUpdatedOnly ? "#1a2a1a" : "#2a2a2a") + ";color:" + (bplShowUpdatedOnly ? "#58d68d" : "#aaa") + ";font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;";
+        showUpdatedBtn.addEventListener("click", function() {
+            bplShowUpdatedOnly = !bplShowUpdatedOnly;
+            try {
+                localStorage.setItem(STORAGE_BPL_SHOW_UPDATED_ONLY, bplShowUpdatedOnly ? "true" : "false");
+            } catch (e) {}
+            this.textContent = bplShowUpdatedOnly ? "\u{1F441} Show All" : "\u{270F}\u{FE0F} Show Updated Only";
+            this.title = bplShowUpdatedOnly ? "Show all forms including unmodified auto-populated" : "Only show user-added forms and modified auto-populated forms";
+            this.style.borderColor = bplShowUpdatedOnly ? "#27ae60" : "#555";
+            this.style.background = bplShowUpdatedOnly ? "#1a2a1a" : "#2a2a2a";
+            this.style.color = bplShowUpdatedOnly ? "#58d68d" : "#aaa";
+            log("BPL: showUpdatedOnly toggled to " + bplShowUpdatedOnly);
+            renderCenterPanel(centerSearch.value);
+        });
+        legendRow.appendChild(showUpdatedBtn);
 
         var clearAllBtn = document.createElement("button");
         clearAllBtn.textContent = "\uD83D\uDDD1 Clear All";
@@ -8121,6 +8261,11 @@
             BPL_PROGRESS_POPUP_REF.close();
             BPL_PROGRESS_POPUP_REF = null;
         }
+
+        // Reset BPL_CANCELLED since the programmatic .close() above triggers
+        // the popup's onClose callback which sets BPL_CANCELLED = true.
+        // The update phase already completed successfully at this point.
+        BPL_CANCELLED = false;
 
         await sleep(1000);
 
