@@ -8236,7 +8236,11 @@
             var formKey = formValue || normalizeText(formText);
             var rowKey = (segmentValue || normalizeText(segmentText)) + "|" +
                 (eventValue || normalizeText(eventText)) + "|" + formKey;
-
+            var editHref = "";
+            var editLinkEl = tr.querySelector('a[href*="/update/scheduledactivity/"]');
+            if (editLinkEl) {
+                editHref = editLinkEl.getAttribute("href") || "";
+            }
             rows.push({
                 rowElement: tr,
                 segmentText: segmentText,
@@ -8251,7 +8255,8 @@
                 archiveLink: archiveLink,
                 editLink: editLink,
                 visibilityLink: visibilityLink,
-                isArchived: isArchived
+                isArchived: isArchived,
+                editHref: editHref
             });
         }
         return rows;
@@ -8741,7 +8746,7 @@
             collectionRoleRestriction: ""
         };
 
-        await sleep(500);
+        await sleep(1000);
 
         // Mandatory
         var mandatoryEl = document.getElementById("mandatory");
@@ -15227,6 +15232,7 @@
         var rows = tbody.querySelectorAll("tr");
         log("BPL: enhanced scan found " + rows.length + " rows");
         var skippedArchived = 0;
+        var seenKeys = {};
         for (var i = 0; i < rows.length; i++) {
             var row = rows[i];
             var cells = row.querySelectorAll("td");
@@ -15261,6 +15267,15 @@
             }
             var timepointParsed = bplParseTimepointText(timepointRaw);
             var key = segment + " | " + studyEvent + " | " + form;
+            var dedupKey = key + " | " + (timepointParsed.cleaned || timepointRaw || "");
+            if (seenKeys[dedupKey]) {
+                skippedDuplicate = skippedDuplicate + 1;
+                log("BPL: Skipping duplicate row " + i + " - " + dedupKey);
+                continue;
+            }
+            seenKeys[dedupKey] = true;
+            var editLink = row.querySelector("a[href*='/update/scheduleactivity/']");
+            var editHref = editLink ? editLink.getAttribute("href") : "";
             result.existingKeys.push(key);
             result.saTableItems.push({
                 segment: segment,
@@ -15274,11 +15289,14 @@
                 hidden: statusResult.hidden,
                 visibilityMustBeSet: statusResult.visibilityMustBeSet,
                 visibilityAlreadySet: statusResult.visibilityAlreadySet,
-                autoPopulated: true
+                autoPopulated: true,
+                editHref: editHref,
+                saRowIndex: i
+
             });
-            log("BPL: enhanced scan row " + i + " - " + key + " timepoint='" + timepointRaw + "' hidden=" + statusResult.hidden + " visMustSet=" + statusResult.visibilityMustBeSet + " visAlreadySet=" + statusResult.visibilityAlreadySet + " preRef=" + timepointParsed.preReference + " refAct=" + timepointParsed.refActivity);
+            log("BPL: enhanced scan row " + i + " - " + key + " timepoint='" + timepointRaw + "' hidden=" + statusResult.hidden + " preRef=" + timepointParsed.preReference + " refAct=" + timepointParsed.refActivity + " editHref='" + editHref + "'");
         }
-        log("BPL: enhanced scan complete - " + result.saTableItems.length + " items collected, " + skippedArchived + " archived skipped");
+        log("BPL: enhanced scan complete - " + result.saTableItems.length + " items collected, " + skippedArchived + " archived skipped, " + skippedDuplicate + " duplicates skipped");
         return result;
     }
 
@@ -15625,29 +15643,51 @@
                 continue;
             }
             var existingForms = mergedSegmentFormMap[matchedSegVal] || [];
-            var existingIdx = -1;
+            var existingAutoIdx = -1;
+            var existingSessionIdx = -1;
             for (var ef = 0; ef < existingForms.length; ef++) {
                 var efKey = matchedSegVal + "|" + existingForms[ef].value + "|" + existingForms[ef].index;
                 var efData = mergedFormDataStore[efKey];
-                if (efData && efData.autoPopulated) {
+                if (!efData) {
                     continue;
                 }
-                if (efData && efData.studyEvents && efData.studyEvents.length > 0) {
+                if (efData.studyEvents && efData.studyEvents.length > 0) {
                     var evText = normalizeSAText(efData.studyEvents[0].text);
                     var formText = normalizeSAText(existingForms[ef].text);
                     if (evText === saItem.studyEvent && formText === saItem.form) {
-                        existingIdx = ef;
-                        break;
+                        var efTpCleaned = efData.timepointCleaned || "";
+                        var saTpCleaned = saItem.timepointCleaned || "";
+                        if (efTpCleaned === saTpCleaned) {
+                            if (efData.autoPopulated) {
+                                existingAutoIdx = ef;
+                            } else {
+                                existingSessionIdx = ef;
+                            }
+                            break;
+                        }
                     }
                 }
             }
-            if (existingIdx !== -1) {
-                var oldEntry = existingForms[existingIdx];
+            if (existingAutoIdx !== -1) {
+                var autoEntry = existingForms[existingAutoIdx];
+                var autoKey = matchedSegVal + "|" + autoEntry.value + "|" + autoEntry.index;
+                var autoData = mergedFormDataStore[autoKey];
+                if (autoData) {
+                    autoData.editHref = saItem.editHref || autoData.editHref || "";
+                    autoData.saRowIndex = saItem.saRowIndex;
+                    mergedFormDataStore[autoKey] = autoData;
+                }
+                log("BPL: merge - SA item already exists as auto-populated at index " + existingAutoIdx + " for " + saItem.segment + "|" + saItem.studyEvent + "|" + saItem.form + ", skipping duplicate");
+                saItemCount = saItemCount + 1;
+                continue;
+            }
+            if (existingSessionIdx !== -1) {
+                var oldEntry = existingForms[existingSessionIdx];
                 var oldKey = matchedSegVal + "|" + oldEntry.value + "|" + oldEntry.index;
                 delete mergedFormDataStore[oldKey];
-                existingForms.splice(existingIdx, 1);
+                existingForms.splice(existingSessionIdx, 1);
                 saReplacedCount = saReplacedCount + 1;
-                log("BPL: merge - SA item replaced session item at index " + existingIdx + " for " + saItem.segment + "|" + saItem.studyEvent + "|" + saItem.form);
+                log("BPL: merge - SA item replaced session item at index " + existingSessionIdx + " for " + saItem.segment + "|" + saItem.studyEvent + "|" + saItem.form);
             } else {
                 saNewCount = saNewCount + 1;
             }
@@ -15730,6 +15770,22 @@
                     text: matchedEvText
                 }],
                 autoPopulated: true,
+                modified: false,
+                editHref: saItem.editHref || "",
+                saRowIndex: saItem.saRowIndex,
+                originalValues: {
+                    days: tpDays,
+                    hours: tpHours,
+                    minutes: tpMinutes,
+                    seconds: tpSeconds,
+                    hidden: saItem.hidden || false,
+                    mandatory: true,
+                    enforce: false,
+                    preWindow: "",
+                    postWindow: "",
+                    refActivity: saItem.refActivity || false,
+                    preReference: saItem.preReference || false,
+                },
                 timepointRaw: saItem.timepointRaw || "",
                 timepointCleaned: saItem.timepointCleaned || "",
                 timepointDisplay: saItem.timepointDisplay || "",
@@ -16644,9 +16700,6 @@
             if (!data) {
                 return;
             }
-            if (data.autoPopulated) {
-                return;
-            }
             var daysEl = document.getElementById("bplDays");
             var hoursEl = document.getElementById("bplHours");
             var minutesEl = document.getElementById("bplMinutes");
@@ -16697,6 +16750,27 @@
             }
             var tpStr = bplFormatTimePoint(data.days || 0, data.hours || 0, data.minutes || 0, data.seconds || 0, false);
             data.exampleTime = bplComputeExampleTime(data.segmentRefDateTime || "N/A", tpStr, data.preReference || false);
+            if (data.autoPopulated && data.originalValues) {
+                var orig = data.originalValues;
+                var isModified = (
+                    (data.days || 0) !== (orig.days || 0) ||
+                    (data.hours || 0) !== (orig.hours || 0) ||
+                    (data.minutes || 0) !== (orig.minutes || 0) ||
+                    (data.seconds || 0) !== (orig.seconds || 0) ||
+                    !!data.hidden !== !! orig.hidden ||
+                    !!data.mandatory !== !! orig.mandatory ||
+                    !!data.enforce !== !! orig.enforce ||
+                    (data.preWindow || "") !== (orig.preWindow || "") ||
+                    (data.postWindow || "") !== (orig.postWindow || "") ||
+                    !!data.refActivity !== !!orig.refActivity ||
+                    !!data.preReference !== !!orig.preReference
+                );
+                if (isModified !== data.modified) {
+                    data.modified = isModified;
+                    log("BPL: auto-populated form " + key + " modified=" + isModified);
+                }
+
+            }
             formDataStore[key] = data;
         }
 
@@ -16774,11 +16848,31 @@
                 return;
             }
             var isAutoPopulatedForm = data.autoPopulated || false;
+            var isModifiedAutoForm = isAutoPopulatedForm && data.modified;
             if (isAutoPopulatedForm) {
                 var autoBanner = document.createElement("div");
-                autoBanner.style.cssText = "padding:6px 8px;background:#3a3500;border:1px solid #665500;border-radius:4px;margin-bottom:8px;font-size:11px;color:#d4a017;";
-                autoBanner.textContent = "\u{1F4CC} Auto-populated from SA table (read-only)";
+                if (isModifiedAutoForm) {
+                    autoBanner.style.cssText = "padding:6px 8px;background:#1a3a1a;border:1px solid #2d8a2d;border-radius:4px;margin-bottom:8px;font-size:11px;color:#4caf50;";
+                    autoBanner.textContent = "\u270F\uFE0F Auto-populated from SA table (modified \u2014 will be updated on Confirm)";
+                } else {
+                    autoBanner.style.cssText = "padding:6px 8px;background:#3a3500;border:1px solid #665500;border-radius:4px;margin-bottom:8px;font-size:11px;color:#d4a017;";
+                    autoBanner.textContent = "\u{1F4CC} Auto-populated from SA table (editable)";
+                }
                 timeBody.appendChild(autoBanner);
+            }
+            var segValForKey = key ? key.split("|")[0] : "";
+            var segmentHasOtherRefActivity = false;
+            if (segValForKey) {
+                var segForms = segmentFormMap[segValForKey] || [];
+                for (var rfi = 0; rfi < segForms.length; rfi++) {
+                    var rfKey = getFormDataKey(segValForKey, segForms[rfi].value, segForms[rfi].index);
+                    if (rfKey === key) continue;
+                    var rfData = formDataStore[rfKey];
+                    if (rfData && rfData.refActivity) {
+                        segmentHasOtherRefActivity = true;
+                        break;
+                    }
+                }
             }
             timeBody.appendChild(createBPLCheckbox("Hidden?", "bplHidden", data.hidden));
             timeBody.appendChild(createBPLCheckbox("Mandatory", "bplMandatory", data.mandatory));
@@ -16815,13 +16909,17 @@
             if (postWindowEl) {
                 postWindowEl.value = data.postWindow || "";
             }
-            if (isAutoPopulatedForm) {
-                var allInputs = timeBody.querySelectorAll("input");
-                for (var ai = 0; ai < allInputs.length; ai++) {
-                    var inp = allInputs[ai];
-                    inp.tabIndex = -1;
-                    inp.style.pointerEvents = "none";
-                    inp.style.cursor = "default";
+            if (segmentHasOtherRefActivity && !data.refActivity) {
+                var refActEl = document.getElementById("bplRefActivity");
+                if (refActEl) {
+                    refActEl.disabled = true;
+                    refActEl.style.opacity = "0.4";
+                    refActEl.title = "Another form in this segment already has Reference Activity";
+                    var refActLabel = refActEl.parentElement ? refActEl.parentElement.querySelector("label") : null;
+                    if (refActLabel) {
+                        refActLabel.style.opacity = "0.4";
+                        refActLabel.title = "Another form in this segment already has Reference Activity";
+                    }
                 }
             }
             var refActivityEl = document.getElementById("bplRefActivity");
@@ -17117,11 +17215,18 @@
                         var formRow = document.createElement("div");
                         var isSelected = (fKey === selectedFormKey);
                         var hasMissingEvents = (fEvents.length === 0);
+                        var isModifiedAuto = isAutoPopulated && fData2.modified;
                         var rowBorderColor = "#444";
                         var rowBg = "#2a2a2a";
                         if (isAutoPopulated) {
-                            rowBorderColor = "#665500";
-                            rowBg = "#2a2a1a";
+                            if (isModifiedAuto) {
+                                rowBorderColor = "#2d8a2d";
+                                rowBg = "#1a2a1a";
+                            }
+                            else {
+                                rowBorderColor = "#665500";
+                                rowBg = "#2a2a1a";
+                            }
                         }
                         if (isSelected) {
                             rowBorderColor = "#7a7aff";
@@ -17130,9 +17235,13 @@
                             rowBorderColor = "#aa4444";
                             rowBg = "#3a2a2a";
                         }
-                        var autoPopBorderLeft = isAutoPopulated ? "border-left:3px solid #d4a017;" : "";
+                        var autoPopBorderLeft = "";
                         formRow.style.cssText = "display:flex;align-items:center;gap:6px;padding:5px 8px;margin-bottom:4px;border:1px solid " + rowBorderColor + ";border-radius:5px;background:" + rowBg + ";transition:all 0.15s ease;" + autoPopBorderLeft;
                         if (isAutoPopulated) {
+                            autoPopBorderLeft = isModifiedAuto ? "border-left:3px solid #4caf50;" : "border-left:3px solid #d4a017;";
+                        }
+                        formRow.style.cssText = "display:flex;align-items:center;gap:6px;padding:5px 8px;margin-bottom:4px;border:1px solid " + rowBorderColor + ";border-radius:5px;background:" + rowBg + ";transition:all 0.15s ease;" + autoPopBorderLeft;
+                        if (isAutoPopulated && !isModifiedAuto) {
                             formRow.style.opacity = "0.85";
                         }
                         formRow.dataset.formKey = fKey;
@@ -17579,6 +17688,7 @@
             confirmErrorDiv.style.display = "none";
             confirmErrorDiv.innerHTML = "";
             var mappedItems = [];
+            var updateItems = [];
             for (var si3 = 0; si3 < segments.length; si3++) {
                 var sv = segments[si3].value;
                 var sText = segments[si3].text;
@@ -17590,8 +17700,48 @@
                     var fEntry = fList[fi3];
                     var fk = getFormDataKey(sv, fEntry.value, fEntry.index);
                     var fd = formDataStore[fk] || getDefaultFormData();
-                    if (fEntry.autoPopulated || fd.autoPopulated) {
-                        log("BPL: skipping auto-populated item " + fEntry.text + " in segment " + sText);
+                    var isAuto = fEntry.autoPopulated || fd.autoPopulated;
+                    if (isAuto && !fd.modified) {
+                        log("BPL: skipping unmodified auto-populated item " + fEntry.text + " in segment " + sText);
+                        continue;
+                    }
+                    if (isAuto && fd.modified) {
+                        var evts2 = fd.studyEvents || [];
+                        var evText2 = evts2.length > 0 ? evts2[0].text : "[Auto]";
+                        var timeOffset2 = {
+                            days: fd.days || 0,
+                            hours: fd.hours || 0,
+                            minutes: fd.minutes || 0,
+                            seconds: fd.seconds || 0
+                        };
+                        if (fd.refActivity) {
+                            timeOffset2 = { days: 0, hours: 0, minutes: 0, seconds: 0 };
+                        }
+                        var tp2 = bplFormatTimePoint(timeOffset2.days, timeOffset2.hours, timeOffset2.minutes, timeOffset2.seconds, fd.preReference);
+                        var statusIcons2 = bplBuildStatusIcons(fd);
+                        var labelStr2 = "\u270F " + sText + " - " + evText2 + " - " + fEntry.text + " - " + tp2;
+                        if (statusIcons2) {
+                            labelStr2 = labelStr2 + " - " + statusIcons2;
+                        }
+                        updateItems.push({
+                            segmentValue: sv,
+                            segmentText: sText,
+                            formValue: fEntry.value,
+                            formText: fEntry.text,
+                            timeOffset: timeOffset2,
+                            hidden: fd.hidden,
+                            mandatory: fd.mandatory,
+                            enforce: fd.enforce,
+                            preWindow: fd.preWindow || "",
+                            postWindow: fd.postWindow || "",
+                            refActivity: fd.refActivity,
+                            preReference: fd.preReference,
+                            editHref: fd.editHref || "",
+                            saRowIndex: fd.saRowIndex,
+                            label: labelStr2,
+                            status: "Pending"
+                        });
+                        log("BPL: queued modified auto-populated item for update: " + fEntry.text + " in segment " + sText + " editHref=" + (fd.editHref || ""));
                         continue;
                     }
                     var evts = fd.studyEvents || [];
@@ -17633,7 +17783,17 @@
                     }
                 }
             }
-            log("BPL: confirm clicked, " + mappedItems.length + " items to add");
+            log("BPL: confirm clicked, " + mappedItems.length + " new items to add, " + updateItems.length + " items to update");
+            if (updateItems.length === 0 && mappedItems.length === 0) {
+                log("BPL: nothing to process (no new items and no modified items)");
+                confirmErrorDiv.style.display = "block";
+                confirmErrorDiv.innerHTML = "";
+                var noItemsMsg = document.createElement("div");
+                noItemsMsg.textContent = "Nothing to process. Add new forms or modify existing auto-populated items.";
+                noItemsMsg.style.cssText = "margin-bottom:2px;";
+                confirmErrorDiv.appendChild(noItemsMsg);
+                return;
+            }
             if (BPL_POPUP_REF) {
                 BPL_POPUP_REF.close();
                 BPL_POPUP_REF = null;
@@ -17642,7 +17802,13 @@
                 log("BPL: cancelled before add process");
                 return;
             }
-            startBPLAddProcess(mappedItems);
+            if (updateItems.length > 0 && mappedItems.length > 0) {
+                startBPLUpdateThenAddProcess(updateItems, mappedItems);
+            } else if (updateItems.length > 0) {
+                startBPLUpdateProcess(updateItems);
+            } else {
+                startBPLAddProcess(mappedItems);
+            }
         });
 
         confirmArea.appendChild(confirmErrorDiv);
@@ -18010,6 +18176,299 @@
 
         log("PLAP Builder: selected value " + resolvedValue + " in " + selectId);
         return true;
+    }
+
+        async function startBPLUpdateProcess(updateItems) {
+        log("BPL Update: starting update process for " + updateItems.length + " modified items");
+
+        var progressContent = createBPLProgressPopup(updateItems);
+        BPL_PROGRESS_POPUP_REF = createPopup({
+            title: "PLAP Builder - Updating Existing Items",
+            content: progressContent.element,
+            width: "700px",
+            height: "auto",
+            maxHeight: "85%",
+            onClose: function() {
+                BPL_CANCELLED = true;
+                log("BPL Update: progress popup closed by user (X button)");
+                BPL_PROGRESS_POPUP_REF = null;
+            }
+        });
+
+        if (BPL_CANCELLED) {
+            log("BPL Update: cancelled before processing");
+            return;
+        }
+
+        for (var idx = 0; idx < updateItems.length; idx++) {
+            if (BPL_CANCELLED) {
+                log("BPL Update: cancelled");
+                break;
+            }
+
+            var item = updateItems[idx];
+
+            if (!item.editHref) {
+                log("BPL Update: no editHref for item " + item.label + ", skipping");
+                item.status = "Skipped";
+                progressContent.updateItem(idx, "Skipped");
+                continue;
+            }
+
+            item.status = "Processing";
+            progressContent.updateItem(idx, "Processing");
+            progressContent.updateStatus("Updating item " + (idx + 1) + " of " + updateItems.length);
+            log("BPL Update: updating item " + (idx + 1) + " - " + item.label + " via " + item.editHref);
+
+            try {
+                if (BPL_CANCELLED) {
+                    break;
+                }
+
+                var editLink = document.querySelector("a[href='" + item.editHref + "']");
+                if (!editLink) {
+                    var tbody = document.getElementById("saTableBody");
+                    if (tbody) {
+                        var allEditLinks = tbody.querySelectorAll("a[href*='/update/scheduledactivity/']");
+                        for (var eli = 0; eli < allEditLinks.length; eli++) {
+                            if (allEditLinks[eli].getAttribute("href") === item.editHref) {
+                                editLink = allEditLinks[eli];
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (!editLink) {
+                    log("BPL Update: edit link not found for href=" + item.editHref);
+                    item.status = "Failed";
+                    progressContent.updateItem(idx, "Failed");
+                    continue;
+                }
+
+                editLink.click();
+                log("BPL Update: clicked edit link for " + item.editHref);
+
+                var modal = await waitForSAModal(10000);
+                if (!modal) {
+                    log("BPL Update: modal did not appear");
+                    item.status = "Failed";
+                    progressContent.updateItem(idx, "Failed");
+                    continue;
+                }
+
+                if (BPL_CANCELLED) {
+                    break;
+                }
+
+                await sleep(1000);
+
+                if (BPL_CANCELLED) {
+                    break;
+                }
+
+                var hiddenCheckboxEl = document.querySelector("#uniform-hidden span input#hidden.checkbox");
+                if (!hiddenCheckboxEl) {
+                    hiddenCheckboxEl = document.getElementById("hidden");
+                }
+                if (hiddenCheckboxEl) {
+                    if (item.hidden && !hiddenCheckboxEl.checked) {
+                        hiddenCheckboxEl.click();
+                        log("BPL Update: Hidden checkbox checked");
+                        await sleep(200);
+                    } else if (!item.hidden && hiddenCheckboxEl.checked) {
+                        hiddenCheckboxEl.click();
+                        log("BPL Update: Hidden checkbox unchecked");
+                        await sleep(200);
+                    }
+                }
+
+                var mandatoryEl = document.querySelector("#uniform-mandatory span input#mandatory.checkbox");
+                if (!mandatoryEl) {
+                    mandatoryEl = document.getElementById("mandatory");
+                }
+                if (mandatoryEl) {
+                    if (item.mandatory && !mandatoryEl.checked) {
+                        mandatoryEl.click();
+                        log("BPL Update: Mandatory checkbox checked");
+                        await sleep(200);
+                    } else if (!item.mandatory && mandatoryEl.checked) {
+                        mandatoryEl.click();
+                        log("BPL Update: Mandatory checkbox unchecked");
+                        await sleep(200);
+                    }
+                }
+
+                var enforceEl = document.querySelector("#uniform-enforceDataCollectionOrder span input#enforceDataCollectionOrder.checkbox");
+                if (!enforceEl) {
+                    enforceEl = document.getElementById("enforceDataCollectionOrder");
+                }
+                if (enforceEl) {
+                    if (item.enforce && !enforceEl.checked) {
+                        enforceEl.click();
+                        log("BPL Update: Enforce checkbox checked");
+                        await sleep(200);
+                    } else if (!item.enforce && enforceEl.checked) {
+                        enforceEl.click();
+                        log("BPL Update: Enforce checkbox unchecked");
+                        await sleep(200);
+                    }
+                }
+
+                var preWindow = document.getElementById("preWindow");
+                var postWindow = document.getElementById("postWindow");
+                if (preWindow) {
+                    preWindow.value = item.preWindow || "";
+                    preWindow.dispatchEvent(new Event("input", { bubbles: true }));
+                    log("BPL Update: Pre-Window set to '" + (item.preWindow || "") + "'");
+                }
+                if (postWindow) {
+                    postWindow.value = item.postWindow || "";
+                    postWindow.dispatchEvent(new Event("input", { bubbles: true }));
+                    log("BPL Update: Post-Window set to '" + (item.postWindow || "") + "'");
+                }
+
+                var refActivityEl = document.getElementById("referenceActivity");
+                if (refActivityEl) {
+                    if (item.refActivity && !refActivityEl.checked) {
+                        refActivityEl.click();
+                        log("BPL Update: Reference Activity checkbox checked");
+                        await sleep(200);
+                    } else if (!item.refActivity && refActivityEl.checked) {
+                        refActivityEl.click();
+                        log("BPL Update: Reference Activity checkbox unchecked");
+                        await sleep(200);
+                    }
+                }
+
+                var preRefContainer = document.getElementById("uniform-offset.preReference");
+                var preRefEl = document.getElementById("offset.preReference");
+                if (preRefEl && preRefContainer) {
+                    var preRefSpan = preRefContainer.querySelector("span");
+                    var preRefCurrentlyChecked = preRefSpan && preRefSpan.classList.contains("checked");
+                    if (item.preReference !== preRefCurrentlyChecked) {
+                        preRefEl.checked = item.preReference;
+                        if (preRefSpan) {
+                            if (item.preReference) {
+                                preRefSpan.classList.add("checked");
+                            } else {
+                                preRefSpan.classList.remove("checked");
+                            }
+                        }
+                        try {
+                            if (window.jQuery && window.jQuery.fn.uniform) {
+                                window.jQuery(preRefEl).uniform.update(preRefEl);
+                            }
+                        } catch (ue) {}
+                        preRefEl.dispatchEvent(new Event("change", { bubbles: true }));
+                        log("BPL Update: Pre-Reference checkbox " + (item.preReference ? "checked" : "unchecked"));
+                        await sleep(200);
+                    }
+                }
+
+                if (!item.refActivity) {
+                    var daysInput = document.querySelector("input[name='offset.days']");
+                    var hoursInput = document.querySelector("input[name='offset.hours']");
+                    var minutesInput = document.querySelector("input[name='offset.minutes']");
+                    var secondsInput = document.querySelector("input[name='offset.seconds']");
+
+                    if (daysInput) {
+                        daysInput.value = String(item.timeOffset.days);
+                        daysInput.dispatchEvent(new Event("input", { bubbles: true }));
+                    }
+                    if (hoursInput) {
+                        hoursInput.value = String(item.timeOffset.hours);
+                        hoursInput.dispatchEvent(new Event("input", { bubbles: true }));
+                    }
+                    if (minutesInput) {
+                        minutesInput.value = String(item.timeOffset.minutes);
+                        minutesInput.dispatchEvent(new Event("input", { bubbles: true }));
+                    }
+                    if (secondsInput) {
+                        secondsInput.value = String(item.timeOffset.seconds);
+                        secondsInput.dispatchEvent(new Event("input", { bubbles: true }));
+                    }
+                    log("BPL Update: time offset set - D:" + item.timeOffset.days + " H:" + item.timeOffset.hours + " M:" + item.timeOffset.minutes + " S:" + item.timeOffset.seconds);
+                } else {
+                    log("BPL Update: Skipping time offset (Reference Activity checked)");
+                }
+
+                await sleep(300);
+
+                if (BPL_CANCELLED) {
+                    break;
+                }
+
+                var saveBtn = document.getElementById("actionButton");
+                if (saveBtn) {
+                    saveBtn.click();
+                    log("BPL Update: Save button clicked");
+                } else {
+                    log("BPL Update: Save button not found");
+                    item.status = "Failed";
+                    progressContent.updateItem(idx, "Failed");
+                    continue;
+                }
+
+                var closed = await waitForSAModalClose(10000);
+                if (!closed) {
+                    log("BPL Update: modal did not close");
+                    item.status = "Failed";
+                    progressContent.updateItem(idx, "Failed");
+                    continue;
+                }
+
+                if (BPL_CANCELLED) {
+                    break;
+                }
+
+                item.status = "Success";
+                progressContent.updateItem(idx, "Success");
+                log("BPL Update: item completed - " + item.label);
+
+                await sleep(2000);
+
+                if (BPL_CANCELLED) {
+                    break;
+                }
+
+            } catch (err) {
+                log("BPL Update: error updating item - " + String(err));
+                item.status = "Failed";
+                progressContent.updateItem(idx, "Failed");
+                continue;
+            }
+        }
+
+        if (!BPL_CANCELLED) {
+            progressContent.updateStatus("Updates completed!");
+            progressContent.setComplete();
+            log("BPL Update: all update items processed");
+        }
+    }
+
+    async function startBPLUpdateThenAddProcess(updateItems, addItems) {
+        log("BPL: running update phase first (" + updateItems.length + " updates), then add phase (" + addItems.length + " adds)");
+        await startBPLUpdateProcess(updateItems);
+
+        if (BPL_CANCELLED) {
+            log("BPL: cancelled after update phase, skipping add phase");
+            return;
+        }
+
+        if (BPL_PROGRESS_POPUP_REF) {
+            BPL_PROGRESS_POPUP_REF.close();
+            BPL_PROGRESS_POPUP_REF = null;
+        }
+
+        await sleep(1000);
+
+        if (BPL_CANCELLED) {
+            log("BPL: cancelled between update and add phases");
+            return;
+        }
+
+        await startBPLAddProcess(addItems);
     }
 
     async function startBPLAddProcess(mappedItems) {
