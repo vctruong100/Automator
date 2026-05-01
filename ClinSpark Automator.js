@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.4.8
+// @version     2.4.9
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -5517,7 +5517,8 @@
                     preWindow: "",
                     postWindow: "",
                     refActivity: saItem.refActivity || false,
-                    preReference: saItem.preReference || false
+                    preReference: saItem.preReference || false,
+                    studyEventText: matchedEvText
                 },
                 timepointRaw: saItem.timepointRaw || "",
                 timepointCleaned: saItem.timepointCleaned || "",
@@ -7431,6 +7432,319 @@
         });
         legendRow.appendChild(clearAllBtn);
 
+        var clearExistingBtn = document.createElement("button");
+        clearExistingBtn.textContent = "\uD83E\uDDF9 Clear Existing";
+        clearExistingBtn.title = "Remove all non-updated auto-populated forms (keeps user-added and modified auto-populated forms)";
+        clearExistingBtn.style.cssText = "padding:5px 12px;border-radius:4px;border:1px solid #c0392b;background:#2a1a1a;color:#ff6b6b;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;";
+        clearExistingBtn.addEventListener("mouseenter", function() {
+            this.style.background = "#3a1a1a";
+            this.style.borderColor = "#e74c3c";
+        });
+        clearExistingBtn.addEventListener("mouseleave", function() {
+            this.style.background = "#2a1a1a";
+            this.style.borderColor = "#c0392b";
+        });
+        clearExistingBtn.addEventListener("click", function() {
+            var msg = "This will remove all NON-UPDATED auto-populated forms from the PLAP Builder.\n\nUser-added forms and modified (updated) auto-populated forms will NOT be removed.\n\nAre you sure?";
+            if (!confirm(msg)) {
+                log("BPL: clear existing cancelled by user");
+                return;
+            }
+            log("BPL: clear existing confirmed");
+            var removedCount = 0;
+            for (var cSeg in segmentFormMap) {
+                if (!segmentFormMap.hasOwnProperty(cSeg)) continue;
+                var fList = segmentFormMap[cSeg];
+                var kept = [];
+                for (var fi = 0; fi < fList.length; fi++) {
+                    var fEntry = fList[fi];
+                    var fk = getFormDataKey(cSeg, fEntry.value, fEntry.index);
+                    var fd = formDataStore[fk] || getDefaultFormData();
+                    var isAuto = fEntry.autoPopulated || fd.autoPopulated;
+                    if (isAuto && !fd.modified) {
+                        // Remove this non-updated auto-populated form
+                        delete formDataStore[fk];
+                        removedCount++;
+                    } else {
+                        kept.push(fEntry);
+                    }
+                }
+                segmentFormMap[cSeg] = kept;
+            }
+            if (selectedFormKey) {
+                // Check if the selected form was removed
+                var stillExists = false;
+                for (var chkSeg in segmentFormMap) {
+                    if (!segmentFormMap.hasOwnProperty(chkSeg)) continue;
+                    var chkList = segmentFormMap[chkSeg];
+                    for (var chkI = 0; chkI < chkList.length; chkI++) {
+                        var chkKey = getFormDataKey(chkSeg, chkList[chkI].value, chkList[chkI].index);
+                        if (chkKey === selectedFormKey) {
+                            stillExists = true;
+                            break;
+                        }
+                    }
+                    if (stillExists) break;
+                }
+                if (!stillExists) {
+                    selectedFormKey = null;
+                    renderTimePanel({}, null);
+                }
+            }
+            saveSession();
+            renderCenterPanel(centerSearch.value);
+            runAutoValidation();
+            log("BPL: clear existing complete - " + removedCount + " non-updated auto-populated forms removed");
+        });
+        legendRow.appendChild(clearExistingBtn);
+
+        var collectExistingBtn = document.createElement("button");
+        collectExistingBtn.textContent = "\uD83D\uDD04 Collect Existing";
+        collectExistingBtn.title = "Re-scan SA table and fill center panel with new forms (skips updated auto-populated forms)";
+        collectExistingBtn.style.cssText = "padding:5px 12px;border-radius:4px;border:1px solid #2980b9;background:#1a2a3a;color:#5dade2;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;";
+        collectExistingBtn.addEventListener("mouseenter", function() {
+            this.style.background = "#1a3a4a";
+            this.style.borderColor = "#3498db";
+        });
+        collectExistingBtn.addEventListener("mouseleave", function() {
+            this.style.background = "#1a2a3a";
+            this.style.borderColor = "#2980b9";
+        });
+        collectExistingBtn.addEventListener("click", function() {
+            // Check if there are any non-updated auto-populated forms
+            var hasNonUpdatedAuto = false;
+            for (var cSeg in segmentFormMap) {
+                if (!segmentFormMap.hasOwnProperty(cSeg)) continue;
+                var fList = segmentFormMap[cSeg];
+                for (var fi = 0; fi < fList.length; fi++) {
+                    var fEntry = fList[fi];
+                    var fk = getFormDataKey(cSeg, fEntry.value, fEntry.index);
+                    var fd = formDataStore[fk] || getDefaultFormData();
+                    var isAuto = fEntry.autoPopulated || fd.autoPopulated;
+                    if (isAuto && !fd.modified) {
+                        hasNonUpdatedAuto = true;
+                        break;
+                    }
+                }
+                if (hasNonUpdatedAuto) break;
+            }
+            if (hasNonUpdatedAuto) {
+                alert("Cannot Collect Existing while there are non-updated auto-populated forms.\n\nPlease use 'Clear Existing' first to remove them, or modify them so they are marked as updated.");
+                log("BPL: collect existing blocked - non-updated auto-populated forms exist");
+                return;
+            }
+
+            log("BPL: collect existing started");
+
+            // Build a set of updated auto-populated form identities (segment + studyEvent)
+            // to avoid re-adding duplicates
+            var updatedAutoKeys = {};
+            for (var uSeg in segmentFormMap) {
+                if (!segmentFormMap.hasOwnProperty(uSeg)) continue;
+                var uList = segmentFormMap[uSeg];
+                for (var ui = 0; ui < uList.length; ui++) {
+                    var uEntry = uList[ui];
+                    var uKey = getFormDataKey(uSeg, uEntry.value, uEntry.index);
+                    var uData = formDataStore[uKey] || getDefaultFormData();
+                    var uIsAuto = uEntry.autoPopulated || uData.autoPopulated;
+                    if (uIsAuto && uData.modified) {
+                        // Build identity key from segment value + original study event text + form text
+                        // Use original study event if available, otherwise current
+                        var origEvText = "";
+                        if (uData.originalValues && uData.originalValues.studyEventText) {
+                            origEvText = uData.originalValues.studyEventText;
+                        } else if (uData.studyEvents && uData.studyEvents.length > 0) {
+                            origEvText = uData.studyEvents[0].text;
+                        }
+                        var identityKey = uSeg + "|" + normalizeSAText(origEvText) + "|" + normalizeSAText(uEntry.text);
+                        updatedAutoKeys[identityKey] = true;
+                        // Also add key with current study event in case it was changed
+                        if (uData.studyEvents && uData.studyEvents.length > 0) {
+                            var currEvText = uData.studyEvents[0].text;
+                            var identityKey2 = uSeg + "|" + normalizeSAText(currEvText) + "|" + normalizeSAText(uEntry.text);
+                            updatedAutoKeys[identityKey2] = true;
+                        }
+                    }
+                }
+            }
+
+            // Re-scan the SA table
+            var freshScan = scanExistingBPLTableEnhanced();
+            var freshItems = freshScan.saTableItems || [];
+            log("BPL: collect existing - fresh scan found " + freshItems.length + " items");
+
+            var addedCount = 0;
+            var skippedCount = 0;
+            for (var t = 0; t < freshItems.length; t++) {
+                var saItem = freshItems[t];
+                // Find matching segment value
+                var matchedSegVal = null;
+                for (var s = 0; s < segments.length; s++) {
+                    if (normalizeSAText(segments[s].text) === saItem.segment) {
+                        matchedSegVal = segments[s].value;
+                        break;
+                    }
+                }
+                if (!matchedSegVal) continue;
+
+                // Check if this item already exists as an updated auto-populated form
+                var matchedFormText = saItem.form;
+                // Try to resolve form text from forms dropdown
+                var resolvedFormText = matchedFormText;
+                if (forms && forms.length > 0) {
+                    var saFormNorm = normalizeSAText(saItem.form).toLowerCase();
+                    for (var fmi = 0; fmi < forms.length; fmi++) {
+                        if (normalizeSAText(forms[fmi].text).toLowerCase() === saFormNorm) {
+                            resolvedFormText = forms[fmi].text;
+                            break;
+                        }
+                    }
+                }
+
+                var checkKey = matchedSegVal + "|" + normalizeSAText(saItem.studyEvent) + "|" + normalizeSAText(resolvedFormText);
+                if (updatedAutoKeys[checkKey]) {
+                    skippedCount++;
+                    log("BPL: collect existing - skipping updated auto-populated form: " + saItem.segment + "|" + saItem.studyEvent + "|" + saItem.form);
+                    continue;
+                }
+
+                // Check if this exact item already exists in segmentFormMap (any form, not just auto)
+                var existingForms = segmentFormMap[matchedSegVal] || [];
+                var alreadyExists = false;
+                for (var ef = 0; ef < existingForms.length; ef++) {
+                    var efKey = getFormDataKey(matchedSegVal, existingForms[ef].value, existingForms[ef].index);
+                    var efData = formDataStore[efKey];
+                    if (!efData) continue;
+                    if (efData.studyEvents && efData.studyEvents.length > 0) {
+                        var evText = normalizeSAText(efData.studyEvents[0].text);
+                        var formTextNorm = normalizeSAText(existingForms[ef].text);
+                        var saTpCleaned = saItem.timepointCleaned || "";
+                        var efTpCleaned = efData.timepointCleaned || "";
+                        if (evText === saItem.studyEvent && formTextNorm === saItem.form && efTpCleaned === saTpCleaned) {
+                            alreadyExists = true;
+                            break;
+                        }
+                    }
+                }
+                if (alreadyExists) {
+                    skippedCount++;
+                    continue;
+                }
+
+                // Add this item as a new auto-populated form
+                formInstanceCounter++;
+                var newIndex = formInstanceCounter;
+                var matchedFormVal = null;
+                var matchedEvVal = null;
+                var matchedEvText = saItem.studyEvent;
+                if (forms && forms.length > 0) {
+                    var saFormNorm2 = normalizeSAText(saItem.form).toLowerCase();
+                    for (var fmi2 = 0; fmi2 < forms.length; fmi2++) {
+                        if (normalizeSAText(forms[fmi2].text).toLowerCase() === saFormNorm2) {
+                            matchedFormVal = forms[fmi2].value;
+                            resolvedFormText = forms[fmi2].text;
+                            break;
+                        }
+                    }
+                }
+                if (studyEvents && studyEvents.length > 0) {
+                    var saEvNorm = normalizeSAText(saItem.studyEvent).toLowerCase();
+                    for (var evi = 0; evi < studyEvents.length; evi++) {
+                        if (normalizeSAText(studyEvents[evi].text).toLowerCase() === saEvNorm) {
+                            matchedEvVal = studyEvents[evi].value;
+                            matchedEvText = studyEvents[evi].text;
+                            break;
+                        }
+                    }
+                }
+
+                var segRefDateTime = "N/A";
+                if (segmentOffsets && segmentOffsets[saItem.segment]) {
+                    segRefDateTime = segmentOffsets[saItem.segment].referenceDateTime || "N/A";
+                }
+
+                existingForms.push({
+                    value: matchedFormVal || saItem.form,
+                    text: resolvedFormText,
+                    index: newIndex,
+                    autoPopulated: true
+                });
+                segmentFormMap[matchedSegVal] = existingForms;
+
+                var tpDays = 0, tpHours = 0, tpMinutes = 0, tpSeconds = 0;
+                var tpCleaned = (saItem.timepointCleaned || "").replace(/[*\-()]/g, "").trim();
+                if (tpCleaned.length > 0) {
+                    var tpParts = tpCleaned.split(":");
+                    if (tpParts.length >= 1) {
+                        var totalH = parseInt(tpParts[0]) || 0;
+                        tpDays = Math.floor(totalH / 24);
+                        tpHours = totalH % 24;
+                    }
+                    if (tpParts.length >= 2) {
+                        tpMinutes = parseInt(tpParts[1]) || 0;
+                    }
+                    if (tpParts.length >= 3) {
+                        tpSeconds = parseInt(tpParts[2]) || 0;
+                    }
+                }
+
+                var newKey = getFormDataKey(matchedSegVal, matchedFormVal || saItem.form, newIndex);
+                formDataStore[newKey] = {
+                    days: tpDays,
+                    hours: tpHours,
+                    minutes: tpMinutes,
+                    seconds: tpSeconds,
+                    hidden: saItem.hidden || false,
+                    mandatory: true,
+                    enforce: false,
+                    preWindow: "",
+                    postWindow: "",
+                    refActivity: saItem.refActivity || false,
+                    preReference: saItem.preReference || false,
+                    studyEvents: [{
+                        value: matchedEvVal || saItem.studyEvent,
+                        text: matchedEvText
+                    }],
+                    autoPopulated: true,
+                    modified: false,
+                    editHref: saItem.editHref || "",
+                    saRowIndex: saItem.saRowIndex,
+                    originalValues: {
+                        days: tpDays,
+                        hours: tpHours,
+                        minutes: tpMinutes,
+                        seconds: tpSeconds,
+                        hidden: saItem.hidden || false,
+                        mandatory: true,
+                        enforce: false,
+                        preWindow: "",
+                        postWindow: "",
+                        refActivity: saItem.refActivity || false,
+                        preReference: saItem.preReference || false,
+                        studyEventText: matchedEvText
+                    },
+                    timepointRaw: saItem.timepointRaw || "",
+                    timepointCleaned: saItem.timepointCleaned || "",
+                    timepointDisplay: saItem.timepointDisplay || "",
+                    segmentRefDateTime: segRefDateTime,
+                    exampleTime: bplComputeExampleTime(segRefDateTime, saItem.timepointCleaned || "", saItem.preReference || false)
+                };
+                addedCount++;
+            }
+
+            // Also update existing items with fresh SA data (editHref, saRowIndex)
+            try {
+                localStorage.setItem(STORAGE_BPL_EXISTING, JSON.stringify(freshScan.existingKeys || []));
+                localStorage.setItem(STORAGE_BPL_SA_TABLE_DATA, JSON.stringify(freshScan));
+            } catch (e) {}
+
+            saveSession();
+            renderCenterPanel(centerSearch.value);
+            runAutoValidation();
+            log("BPL: collect existing complete - " + addedCount + " forms added, " + skippedCount + " skipped");
+        });
+        legendRow.appendChild(collectExistingBtn);
+
         var bottomRow = document.createElement("div");
         bottomRow.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:12px;";
 
@@ -7524,9 +7838,12 @@
                         if (statusIcons2) {
                             labelStr2 = labelStr2 + " - " + statusIcons2;
                         }
+                        var evVal2 = evts2.length > 0 ? evts2[0].value : "";
                         updateItems.push({
                             segmentValue: sv,
                             segmentText: sText,
+                            eventValue: evVal2,
+                            eventText: evText2,
                             formValue: fEntry.value,
                             formText: fEntry.text,
                             timeOffset: timeOffset2,
@@ -7748,6 +8065,7 @@
             var success = 0;
             var failed = 0;
             var duplicate = 0;
+            var skipped = 0;
             for (var i = 0; i < mappedItems.length; i++) {
                 var s = mappedItems[i].status;
                 if (s === "Pending") {
@@ -7760,6 +8078,8 @@
                     failed = failed + 1;
                 } else if (s === "Duplicate") {
                     duplicate = duplicate + 1;
+                } else if (s === "Skipped") {
+                    skipped = skipped + 1;
                 }
             }
             summaryDiv.innerHTML = "";
@@ -7769,7 +8089,8 @@
                 { label: "In Progress", value: processing, color: "#9df" },
                 { label: "Success", value: success, color: "#4f4" },
                 { label: "Failed", value: failed, color: "#f44" },
-                { label: "Duplicate", value: duplicate, color: "#ff4" }
+                { label: "Duplicate", value: duplicate, color: "#ff4" },
+                { label: "Skipped", value: skipped, color: "#f90" }
             ];
             for (var j = 0; j < items.length; j++) {
                 var cell = document.createElement("div");
@@ -7820,6 +8141,8 @@
                     row.style.background = "#3a1a1a";
                 } else if (item.status === "Processing") {
                     row.style.background = "#1a2a3a";
+                } else if (item.status === "Skipped") {
+                    row.style.background = "#3a2a1a";
                 } else {
                     row.style.background = "#222";
                 }
@@ -7839,6 +8162,8 @@
                     statusSpan.style.color = "#f44";
                 } else if (item.status === "Processing") {
                     statusSpan.style.color = "#9df";
+                } else if (item.status === "Skipped") {
+                    statusSpan.style.color = "#f90";
                 } else {
                     statusSpan.style.color = "#aaa";
                 }
@@ -8066,6 +8391,53 @@
 
                 if (BPL_CANCELLED) {
                     break;
+                }
+
+                // Check if studyEvent or form dropdowns are disabled — if so, skip this form
+                var studyEventSel = document.getElementById("studyEvent");
+                var formSel = document.getElementById("form");
+                if ((studyEventSel && studyEventSel.disabled) || (formSel && formSel.disabled)) {
+                    log("BPL Update: studyEvent or form dropdown is disabled, skipping item " + item.label);
+                    // Find and click Cancel button
+                    var cancelBtns = modal.querySelectorAll('button[data-dismiss="modal"]');
+                    var cancelClicked = false;
+                    for (var ci = 0; ci < cancelBtns.length; ci++) {
+                        var btnText = cancelBtns[ci].textContent.trim().toLowerCase();
+                        if (btnText.indexOf("cancel") !== -1 || cancelBtns[ci].classList.contains("default")) {
+                            cancelBtns[ci].click();
+                            cancelClicked = true;
+                            log("BPL Update: Cancel button clicked");
+                            break;
+                        }
+                    }
+                    if (!cancelClicked && cancelBtns.length > 0) {
+                        cancelBtns[0].click();
+                        cancelClicked = true;
+                        log("BPL Update: fallback Cancel button clicked");
+                    }
+                    if (!cancelClicked) {
+                        var closeModalBtn = modal.querySelector(".close, [data-dismiss='modal']");
+                        if (closeModalBtn) {
+                            closeModalBtn.click();
+                            log("BPL Update: close button clicked as fallback");
+                        }
+                    }
+                    await waitForSAModalClose(5000);
+                    item.status = "Skipped";
+                    progressContent.updateItem(idx, "Skipped");
+                    await sleep(500);
+                    continue;
+                }
+
+                // Update study event dropdown if item has a new event value
+                if (item.eventValue && studyEventSel && !studyEventSel.disabled) {
+                    log("BPL Update: selecting study event " + item.eventText + " (value: " + item.eventValue + ")");
+                    await selectBPLSelect2Value("studyEvent", item.eventValue);
+                    await sleep(500);
+
+                    if (BPL_CANCELLED) {
+                        break;
+                    }
                 }
 
                 var hiddenCheckboxEl = document.querySelector("#uniform-hidden span input#hidden.checkbox");
