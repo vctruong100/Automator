@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.5.0
+// @version     2.5.1
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -5964,6 +5964,7 @@
         var copiedAllForms = null;
         var copiedAllSourceSegment = null;
         var copiedStudyEvent = null;
+        var pasteHistory = {};
         var segmentCollapseStates = {};
 
         var bplHideExisting = false;
@@ -6301,7 +6302,7 @@
                         e.preventDefault();
                         copiedStudyEvent = { value: val, text: txt };
                         log("BPL: copied study event " + txt);
-                        showCopyToast("Copied: " + txt);
+                        showCopyToast("Copied: " + txt, e);
                     };
                 })(ev.value, ev.text));
                 evCopyBtn.addEventListener("dragstart", function(e) {
@@ -6464,19 +6465,31 @@
             };
         }
 
-        function showCopyToast(message) {
-            var toast = document.createElement("div");
-            toast.textContent = message || "Copied!";
-            toast.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#27ae60;color:#fff;font-size:13px;padding:6px 16px;border-radius:6px;z-index:999999;pointer-events:none;opacity:1;transition:opacity 0.5s ease;box-shadow:0 2px 8px rgba(0,0,0,0.3);";
-            document.body.appendChild(toast);
+        function showCopyToast(message, event) {
+            var tooltip = document.createElement("div");
+            tooltip.textContent = message || "Copied!";
+            tooltip.style.cssText = "position:fixed;background:#27ae60;color:#fff;font-size:11px;padding:4px 10px;border-radius:4px;z-index:999999;pointer-events:none;opacity:1;transition:opacity 0.4s ease;box-shadow:0 2px 6px rgba(0,0,0,0.3);white-space:nowrap;";
+            document.body.appendChild(tooltip);
+            if (event && event.target) {
+                var rect = event.target.getBoundingClientRect();
+                tooltip.style.left = rect.left + "px";
+                tooltip.style.top = (rect.top - tooltip.offsetHeight - 4) + "px";
+                if (parseFloat(tooltip.style.top) < 0) {
+                    tooltip.style.top = (rect.bottom + 4) + "px";
+                }
+            } else {
+                tooltip.style.top = "20px";
+                tooltip.style.left = "50%";
+                tooltip.style.transform = "translateX(-50%)";
+            }
             setTimeout(function() {
-                toast.style.opacity = "0";
+                tooltip.style.opacity = "0";
             }, 1200);
             setTimeout(function() {
-                if (toast.parentNode) {
-                    toast.parentNode.removeChild(toast);
+                if (tooltip.parentNode) {
+                    tooltip.parentNode.removeChild(tooltip);
                 }
-            }, 1700);
+            }, 1600);
         }
 
         function getSegmentRefDateTime(segVal) {
@@ -6934,7 +6947,7 @@
                             });
                         }
                         log("BPL: copied all " + copiedAllForms.length + " forms from segment " + segVal);
-                        showCopyToast("Copied " + copiedAllForms.length + " form" + (copiedAllForms.length !== 1 ? "s" : "") + "!");
+                        showCopyToast("Copied " + copiedAllForms.length + " form" + (copiedAllForms.length !== 1 ? "s" : "") + "!", e);
                     };
                 })(seg.value));
                 var pasteAllBtn = document.createElement("button");
@@ -6999,6 +7012,8 @@
                             var tpStr = bplFormatTimePoint(pastedData.days || 0, pastedData.hours || 0, pastedData.minutes || 0, pastedData.seconds || 0, false);
                             pastedData.exampleTime = bplComputeExampleTime(segRef, tpStr, pastedData.preReference || false);
                             formDataStore[newKey] = pastedData;
+                            if (!pasteHistory[segVal]) { pasteHistory[segVal] = []; }
+                            pasteHistory[segVal].push({ formKey: newKey, originalDays: cf.days, originalHours: cf.hours, originalMinutes: cf.minutes, originalSeconds: cf.seconds, originalStudyEvents: [] });
                             pastedCount++;
                         }
                         segmentFormMap[segVal] = existingForms;
@@ -7074,6 +7089,8 @@
                         var tpStr = bplFormatTimePoint(pastedData.days || 0, pastedData.hours || 0, pastedData.minutes || 0, pastedData.seconds || 0, false);
                         pastedData.exampleTime = bplComputeExampleTime(segRef, tpStr, pastedData.preReference || false);
                         formDataStore[newKey] = pastedData;
+                        if (!pasteHistory[segVal]) { pasteHistory[segVal] = []; }
+                        pasteHistory[segVal].push({ formKey: newKey, originalDays: copiedForm.days, originalHours: copiedForm.hours, originalMinutes: copiedForm.minutes, originalSeconds: copiedForm.seconds, originalStudyEvents: [] });
                         log("BPL: pasted form " + copiedForm.formText + " into segment " + segVal + " as instance " + newIndex);
                         renderCenterPanel(centerSearch.value);
                         runAutoValidation();
@@ -7088,8 +7105,60 @@
                     segmentCollapseStates[sv] = !segmentCollapseStates[sv];
                     renderCenterPanel(centerSearch.value);
                 });
+                var undoBtn = document.createElement("button");
+                undoBtn.textContent = "\u21A9 Undo";
+                undoBtn.style.cssText = "padding:3px 8px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:11px;cursor:pointer;";
+                undoBtn.dataset.segmentValue = seg.value;
+                undoBtn.addEventListener("click", (function(segVal) {
+                    return function(e) {
+                        e.stopPropagation();
+                        var history = pasteHistory[segVal];
+                        if (!history || history.length === 0) {
+                            showCopyToast("Nothing to undo", e);
+                            return;
+                        }
+                        var removedCount = 0;
+                        var skippedCount = 0;
+                        for (var hi = history.length - 1; hi >= 0; hi--) {
+                            var entry = history[hi];
+                            var d = formDataStore[entry.formKey];
+                            if (!d) {
+                                history.splice(hi, 1);
+                                continue;
+                            }
+                            var eventsChanged = d.studyEvents && d.studyEvents.length > 0;
+                            var timeChanged = (d.days || 0) !== (entry.originalDays || 0) || (d.hours || 0) !== (entry.originalHours || 0) || (d.minutes || 0) !== (entry.originalMinutes || 0) || (d.seconds || 0) !== (entry.originalSeconds || 0);
+                            if (eventsChanged || timeChanged) {
+                                skippedCount++;
+                                continue;
+                            }
+                            var arr = segmentFormMap[segVal] || [];
+                            for (var ai = arr.length - 1; ai >= 0; ai--) {
+                                var ck = getFormDataKey(segVal, arr[ai].value, arr[ai].index);
+                                if (ck === entry.formKey) {
+                                    arr.splice(ai, 1);
+                                    break;
+                                }
+                            }
+                            segmentFormMap[segVal] = arr;
+                            delete formDataStore[entry.formKey];
+                            if (selectedFormKey === entry.formKey) {
+                                selectedFormKey = null;
+                                renderTimePanel({}, null);
+                            }
+                            history.splice(hi, 1);
+                            removedCount++;
+                        }
+                        pasteHistory[segVal] = history;
+                        log("BPL: undo in segment " + segVal + " - removed " + removedCount + " forms, skipped " + skippedCount + " modified forms");
+                        showCopyToast("Undid " + removedCount + " form" + (removedCount !== 1 ? "s" : "") + (skippedCount > 0 ? " (" + skippedCount + " modified, kept)" : ""), e);
+                        renderCenterPanel(centerSearch.value);
+                        runAutoValidation();
+                    };
+                })(seg.value));
                 segHeaderDiv.appendChild(segCb);
                 segHeaderDiv.appendChild(segLabel);
+                segHeaderDiv.appendChild(undoBtn);
                 segHeaderDiv.appendChild(copyAllBtn);
                 segHeaderDiv.appendChild(pasteAllBtn);
                 segHeaderDiv.appendChild(sortBtn);
@@ -7474,7 +7543,7 @@
                                     preReference: d.preReference || false
                                 };
                                 log("BPL: copied form " + ft + " from segment " + sv + " (key " + fk + ")");
-                                showCopyToast("Copied: " + ft);
+                                showCopyToast("Copied: " + ft, e);
                                 renderCenterPanel(centerSearch.value);
                             };
                         })(seg.value, fEntry.value, fEntry.text, fKey));
@@ -7623,6 +7692,7 @@
             copiedAllForms = null;
             copiedAllSourceSegment = null;
             copiedStudyEvent = null;
+            pasteHistory = {};
             clearBPLSessionStateWithBackup();
             renderCenterPanel(centerSearch.value);
             renderTimePanel({}, null);
