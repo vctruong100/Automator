@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 4.0.5
+// @version 4.0.6
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -15124,7 +15124,7 @@
     var STORAGE_BPL_SA_TABLE_DATA = "activityPlanState.bpl.saTableData";
     var STORAGE_BPL_HIDE_EXISTING = "activityPlanState.bpl.hideExisting";
     var STORAGE_BPL_SHOW_UPDATED_ONLY = "activityPlanState.bpl.showUpdatedOnly";
-    
+
     function clearBPLStorage() {
         try {
             localStorage.removeItem(STORAGE_BPL_EXISTING);
@@ -15365,7 +15365,6 @@
         log("BPL: enhanced scan complete - " + result.saTableItems.length + " items collected, " + skippedArchived + " archived skipped, " + skippedDuplicate + " duplicates skipped");
         return result;
     }
-
 
     async function bplCollectExampleReferenceTime() {
         log("BPL: attempting to collect Example Reference Time");
@@ -15671,6 +15670,7 @@
         log("BPL: segment offset collection complete - " + Object.keys(segmentOffsets).length + " segments mapped");
         return segmentOffsets;
     }
+
     function bplMergeSaTableWithSession(saTableItems, restoredState, segments, segmentOffsets, forms, studyEvents) {
         var mergedSegmentFormMap = {};
         var mergedFormDataStore = {};
@@ -15848,7 +15848,7 @@
                     text: matchedEvText
                 }],
                 autoPopulated: true,
-                                modified: false,
+                modified: false,
                 editHref: saItem.editHref || "",
                 saRowIndex: saItem.saRowIndex,
                 originalValues: {
@@ -15862,7 +15862,8 @@
                     preWindow: "",
                     postWindow: "",
                     refActivity: saItem.refActivity || false,
-                    preReference: saItem.preReference || false
+                    preReference: saItem.preReference || false,
+                    studyEventText: matchedEvText
                 },
                 timepointRaw: saItem.timepointRaw || "",
                 timepointCleaned: saItem.timepointCleaned || "",
@@ -16051,7 +16052,6 @@
         return errors;
     }
 
-
     function saveBPLSessionState(segmentFormMap, formDataStore, segmentCheckboxStates, formInstanceCounter) {
         try {
             var state = {
@@ -16178,6 +16178,12 @@
                         log("BPL: restore skipping removed form " + sf.text + " (value=" + sf.value + ") in segment " + segVal);
                         continue;
                     }
+                    var oldKey = segVal + "|" + sf.value + "|" + sf.index;
+                    var fd = savedData[oldKey];
+                    if (fd && fd.autoPopulated && fd.modified) {
+                        log("BPL: restore skipping modified auto-populated form " + sf.text + " (key=" + oldKey + ") - SA table will provide current values");
+                        continue;
+                    }
                     validForms.push({
                         value: sf.value,
                         text: sf.text,
@@ -16187,8 +16193,6 @@
                     if (sf.index > maxIndex) {
                         maxIndex = sf.index;
                     }
-                    var oldKey = segVal + "|" + sf.value + "|" + sf.index;
-                    var fd = savedData[oldKey];
                     if (fd) {
                         var filteredEvents = [];
                         var savedEvents = fd.studyEvents || [];
@@ -16284,6 +16288,10 @@
         var selectedFormKey = null;
         var formInstanceCounter = 0;
         var copiedForm = null;
+        var copiedAllForms = null;
+        var copiedAllSourceSegment = null;
+        var copiedStudyEvent = null;
+        var pasteHistory = {};
         var segmentCollapseStates = {};
 
         var bplHideExisting = false;
@@ -16303,6 +16311,7 @@
             }
         } catch (e) {}
         log("BPL: showUpdatedOnly initial state = " + bplShowUpdatedOnly);
+
         var bplHideKeybind = "F4";
         try {
             var savedKeybind = localStorage.getItem(STORAGE_BPL_HIDE_KEYBIND);
@@ -16604,8 +16613,30 @@
                     continue;
                 }
                 var evItem = document.createElement("div");
-                evItem.style.cssText = "padding:8px 10px;margin-bottom:4px;border:1px solid #555;border-radius:5px;background:#2a2a2a;cursor:grab;color:#fff;font-size:13px;font-weight:500;transition:all 0.2s ease;box-shadow:0 1px 3px rgba(0,0,0,0.2);";
-                evItem.textContent = ev.text;
+                evItem.style.cssText = "display:flex;align-items:center;gap:4px;padding:8px 10px;margin-bottom:4px;border:1px solid #555;border-radius:5px;background:#2a2a2a;cursor:grab;color:#fff;font-size:13px;font-weight:500;transition:all 0.2s ease;box-shadow:0 1px 3px rgba(0,0,0,0.2);";
+                var evTextSpan = document.createElement("span");
+                evTextSpan.textContent = ev.text;
+                evTextSpan.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+                evItem.appendChild(evTextSpan);
+                var evCopyBtn = document.createElement("button");
+                evCopyBtn.textContent = "\u{1F4CB}";
+                evCopyBtn.title = "Copy this study event";
+                evCopyBtn.style.cssText = "padding:2px 5px;border-radius:3px;border:1px solid #555;background:#333;color:#fff;font-size:10px;cursor:pointer;flex-shrink:0;";
+                evCopyBtn.draggable = false;
+                evCopyBtn.addEventListener("click", (function(val, txt) {
+                    return function(e) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        copiedStudyEvent = { value: val, text: txt };
+                        log("BPL: copied study event " + txt);
+                        showCopyToast("Copied: " + txt, e);
+                    };
+                })(ev.value, ev.text));
+                evCopyBtn.addEventListener("dragstart", function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                });
+                evItem.appendChild(evCopyBtn);
                 evItem.draggable = true;
                 evItem.dataset.eventValue = ev.value;
                 evItem.dataset.eventText = ev.text;
@@ -16761,6 +16792,33 @@
             };
         }
 
+        function showCopyToast(message, event) {
+            var tooltip = document.createElement("div");
+            tooltip.textContent = message || "Copied!";
+            tooltip.style.cssText = "position:fixed;background:#27ae60;color:#fff;font-size:11px;padding:4px 10px;border-radius:4px;z-index:999999;pointer-events:none;opacity:1;transition:opacity 0.4s ease;box-shadow:0 2px 6px rgba(0,0,0,0.3);white-space:nowrap;";
+            document.body.appendChild(tooltip);
+            if (event && event.target) {
+                var rect = event.target.getBoundingClientRect();
+                tooltip.style.left = rect.left + "px";
+                tooltip.style.top = (rect.top - tooltip.offsetHeight - 4) + "px";
+                if (parseFloat(tooltip.style.top) < 0) {
+                    tooltip.style.top = (rect.bottom + 4) + "px";
+                }
+            } else {
+                tooltip.style.top = "20px";
+                tooltip.style.left = "50%";
+                tooltip.style.transform = "translateX(-50%)";
+            }
+            setTimeout(function() {
+                tooltip.style.opacity = "0";
+            }, 1200);
+            setTimeout(function() {
+                if (tooltip.parentNode) {
+                    tooltip.parentNode.removeChild(tooltip);
+                }
+            }, 1600);
+        }
+
         function getSegmentRefDateTime(segVal) {
             if (!segmentOffsets) return "N/A";
             for (var si = 0; si < segments.length; si++) {
@@ -16857,7 +16915,6 @@
                 };
                 log("BPL: created missing originalValues for auto-populated form " + key);
             }
-
             if (data.autoPopulated && data.originalValues) {
                 var orig = data.originalValues;
                 var currentEvText = (data.studyEvents && data.studyEvents.length > 0) ? (data.studyEvents[0].text || "") : "";
@@ -17183,6 +17240,115 @@
                 var segLabel = document.createElement("span");
                 segLabel.textContent = seg.text + " (" + segFormCount + " form" + (segFormCount !== 1 ? "s" : "") + ")";
                 segLabel.style.cssText = "font-weight:600;font-size:13px;flex:1;";
+                var copyAllBtn = document.createElement("button");
+                copyAllBtn.textContent = "\u{1F4CB} Copy All";
+                copyAllBtn.style.cssText = "padding:3px 8px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:11px;cursor:pointer;";
+                copyAllBtn.dataset.segmentValue = seg.value;
+                copyAllBtn.addEventListener("click", (function(segVal) {
+                    return function(e) {
+                        e.stopPropagation();
+                        var forms = segmentFormMap[segVal] || [];
+                        if (forms.length === 0) {
+                            log("BPL: copy all attempted but segment " + segVal + " has no forms");
+                            return;
+                        }
+                        copiedAllForms = [];
+                        copiedAllSourceSegment = segVal;
+                        for (var ci = 0; ci < forms.length; ci++) {
+                            var fk = getFormDataKey(segVal, forms[ci].value, forms[ci].index);
+                            var d = formDataStore[fk] || getDefaultFormData();
+                            copiedAllForms.push({
+                                formValue: forms[ci].value,
+                                formText: forms[ci].text,
+                                days: d.days || 0,
+                                hours: d.hours || 0,
+                                minutes: d.minutes || 0,
+                                seconds: d.seconds || 0,
+                                hidden: d.hidden || false,
+                                mandatory: d.mandatory !== false,
+                                enforce: d.enforce || false,
+                                preWindow: d.preWindow || "",
+                                postWindow: d.postWindow || "",
+                                refActivity: d.refActivity || false,
+                                preReference: d.preReference || false
+                            });
+                        }
+                        log("BPL: copied all " + copiedAllForms.length + " forms from segment " + segVal);
+                        showCopyToast("Copied " + copiedAllForms.length + " form" + (copiedAllForms.length !== 1 ? "s" : "") + "!", e);
+                    };
+                })(seg.value));
+                var pasteAllBtn = document.createElement("button");
+                pasteAllBtn.textContent = "\u{1F4CB} Paste All";
+                pasteAllBtn.style.cssText = "padding:3px 8px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:11px;cursor:pointer;";
+                pasteAllBtn.dataset.segmentValue = seg.value;
+                pasteAllBtn.addEventListener("click", (function(segVal) {
+                    return function() {
+                        if (!copiedAllForms || copiedAllForms.length === 0) {
+                            log("BPL: paste all attempted but no forms copied with Copy All");
+                            return;
+                        }
+                        if (copiedAllSourceSegment === segVal) {
+                            log("BPL: paste all cannot be used on the same segment");
+                            alert("Cannot paste into the same segment that was copied from.");
+                            return;
+                        }
+                        var existingForms = segmentFormMap[segVal] || [];
+                        var pastedCount = 0;
+                        var skippedCount = 0;
+                        for (var pi = 0; pi < copiedAllForms.length; pi++) {
+                            var cf = copiedAllForms[pi];
+                            var isDuplicate = false;
+                            for (var ei = 0; ei < existingForms.length; ei++) {
+                                if (existingForms[ei].text === cf.formText) {
+                                    var eKey = getFormDataKey(segVal, existingForms[ei].value, existingForms[ei].index);
+                                    var eData = formDataStore[eKey] || getDefaultFormData();
+                                    if ((eData.days || 0) === cf.days && (eData.hours || 0) === cf.hours && (eData.minutes || 0) === cf.minutes && (eData.seconds || 0) === cf.seconds && (eData.preReference || false) === cf.preReference) {
+                                        isDuplicate = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (isDuplicate) {
+                                skippedCount++;
+                                log("BPL: paste all skipping duplicate form " + cf.formText);
+                                continue;
+                            }
+                            formInstanceCounter = formInstanceCounter + 1;
+                            var newIndex = formInstanceCounter;
+                            existingForms.push({
+                                value: cf.formValue,
+                                text: cf.formText,
+                                index: newIndex
+                            });
+                            var newKey = getFormDataKey(segVal, cf.formValue, newIndex);
+                            var pastedData = getDefaultFormData();
+                            pastedData.days = cf.days;
+                            pastedData.hours = cf.hours;
+                            pastedData.minutes = cf.minutes;
+                            pastedData.seconds = cf.seconds;
+                            pastedData.hidden = cf.hidden;
+                            pastedData.mandatory = cf.mandatory;
+                            pastedData.enforce = cf.enforce;
+                            pastedData.preWindow = cf.preWindow;
+                            pastedData.postWindow = cf.postWindow;
+                            pastedData.refActivity = cf.refActivity;
+                            pastedData.preReference = cf.preReference;
+                            pastedData.studyEvents = [];
+                            var segRef = getSegmentRefDateTime(segVal);
+                            pastedData.segmentRefDateTime = segRef;
+                            var tpStr = bplFormatTimePoint(pastedData.days || 0, pastedData.hours || 0, pastedData.minutes || 0, pastedData.seconds || 0, false);
+                            pastedData.exampleTime = bplComputeExampleTime(segRef, tpStr, pastedData.preReference || false);
+                            formDataStore[newKey] = pastedData;
+                            if (!pasteHistory[segVal]) { pasteHistory[segVal] = []; }
+                            pasteHistory[segVal].push({ formKey: newKey, originalDays: cf.days, originalHours: cf.hours, originalMinutes: cf.minutes, originalSeconds: cf.seconds, originalStudyEvents: [] });
+                            pastedCount++;
+                        }
+                        segmentFormMap[segVal] = existingForms;
+                        log("BPL: paste all completed - pasted " + pastedCount + " forms, skipped " + skippedCount + " duplicates into segment " + segVal);
+                        renderCenterPanel(centerSearch.value);
+                        runAutoValidation();
+                    };
+                })(seg.value));
                 var sortBtn = document.createElement("button");
                 sortBtn.textContent = "\u2195 Sort";
                 sortBtn.style.cssText = "padding:3px 8px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:11px;cursor:pointer;";
@@ -17250,6 +17416,8 @@
                         var tpStr = bplFormatTimePoint(pastedData.days || 0, pastedData.hours || 0, pastedData.minutes || 0, pastedData.seconds || 0, false);
                         pastedData.exampleTime = bplComputeExampleTime(segRef, tpStr, pastedData.preReference || false);
                         formDataStore[newKey] = pastedData;
+                        if (!pasteHistory[segVal]) { pasteHistory[segVal] = []; }
+                        pasteHistory[segVal].push({ formKey: newKey, originalDays: copiedForm.days, originalHours: copiedForm.hours, originalMinutes: copiedForm.minutes, originalSeconds: copiedForm.seconds, originalStudyEvents: [] });
                         log("BPL: pasted form " + copiedForm.formText + " into segment " + segVal + " as instance " + newIndex);
                         renderCenterPanel(centerSearch.value);
                         runAutoValidation();
@@ -17264,8 +17432,62 @@
                     segmentCollapseStates[sv] = !segmentCollapseStates[sv];
                     renderCenterPanel(centerSearch.value);
                 });
+                var undoBtn = document.createElement("button");
+                undoBtn.textContent = "\u21A9 Undo";
+                undoBtn.style.cssText = "padding:3px 8px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:11px;cursor:pointer;";
+                undoBtn.dataset.segmentValue = seg.value;
+                undoBtn.addEventListener("click", (function(segVal) {
+                    return function(e) {
+                        e.stopPropagation();
+                        var history = pasteHistory[segVal];
+                        if (!history || history.length === 0) {
+                            showCopyToast("Nothing to undo", e);
+                            return;
+                        }
+                        var removedCount = 0;
+                        var skippedCount = 0;
+                        for (var hi = history.length - 1; hi >= 0; hi--) {
+                            var entry = history[hi];
+                            var d = formDataStore[entry.formKey];
+                            if (!d) {
+                                history.splice(hi, 1);
+                                continue;
+                            }
+                            var eventsChanged = d.studyEvents && d.studyEvents.length > 0;
+                            var timeChanged = (d.days || 0) !== (entry.originalDays || 0) || (d.hours || 0) !== (entry.originalHours || 0) || (d.minutes || 0) !== (entry.originalMinutes || 0) || (d.seconds || 0) !== (entry.originalSeconds || 0);
+                            if (eventsChanged || timeChanged) {
+                                skippedCount++;
+                                continue;
+                            }
+                            var arr = segmentFormMap[segVal] || [];
+                            for (var ai = arr.length - 1; ai >= 0; ai--) {
+                                var ck = getFormDataKey(segVal, arr[ai].value, arr[ai].index);
+                                if (ck === entry.formKey) {
+                                    arr.splice(ai, 1);
+                                    break;
+                                }
+                            }
+                            segmentFormMap[segVal] = arr;
+                            delete formDataStore[entry.formKey];
+                            if (selectedFormKey === entry.formKey) {
+                                selectedFormKey = null;
+                                renderTimePanel({}, null);
+                            }
+                            history.splice(hi, 1);
+                            removedCount++;
+                        }
+                        pasteHistory[segVal] = history;
+                        log("BPL: undo in segment " + segVal + " - removed " + removedCount + " forms, skipped " + skippedCount + " modified forms");
+                        showCopyToast("Undid " + removedCount + " form" + (removedCount !== 1 ? "s" : "") + (skippedCount > 0 ? " (" + skippedCount + " modified, kept)" : ""), e);
+                        renderCenterPanel(centerSearch.value);
+                        runAutoValidation();
+                    };
+                })(seg.value));
                 segHeaderDiv.appendChild(segCb);
                 segHeaderDiv.appendChild(segLabel);
+                segHeaderDiv.appendChild(undoBtn);
+                segHeaderDiv.appendChild(copyAllBtn);
+                segHeaderDiv.appendChild(pasteAllBtn);
                 segHeaderDiv.appendChild(sortBtn);
                 segHeaderDiv.appendChild(collapseBtn);
                 segHeaderDiv.appendChild(pasteBtn);
@@ -17357,8 +17579,7 @@
                             if (isModifiedAuto) {
                                 rowBorderColor = "#2d8a2d";
                                 rowBg = "#1a2a1a";
-                            }
-                            else {
+                            } else {
                                 rowBorderColor = "#665500";
                                 rowBg = "#2a2a1a";
                             }
@@ -17386,131 +17607,151 @@
                         var eventDropBox = document.createElement("div");
                         eventDropBox.style.cssText = "min-width:80px;max-width:140px;min-height:24px;padding:2px 4px;border:1px dashed #555;border-radius:3px;background:#1a1a1a;display:flex;flex-wrap:wrap;gap:2px;align-items:center;flex-shrink:0;";
                         eventDropBox.dataset.formKey = fKey;
-                        if (fEvents.length === 0 && !isAutoPopulated) {
+                        if (fEvents.length === 0) {
                             var evPlaceholder = document.createElement("span");
                             evPlaceholder.textContent = "\u2B07 Event";
                             evPlaceholder.style.cssText = "color:#666;font-size:9px;padding:1px;";
                             eventDropBox.appendChild(evPlaceholder);
-                        } else if (fEvents.length === 0 && isAutoPopulated) {
-                            var evPlaceholderAuto = document.createElement("span");
-                            evPlaceholderAuto.textContent = "[Auto]";
-                            evPlaceholderAuto.style.cssText = "color:#887700;font-size:9px;padding:1px;";
-                            eventDropBox.appendChild(evPlaceholderAuto);
                         } else {
                             var evTag = document.createElement("span");
-                            evTag.style.cssText = "display:inline-flex;align-items:center;gap:2px;padding:1px 4px;background:" + (isAutoPopulated ? "#4a4a2a" : "#3a3a5a") + ";border-radius:3px;font-size:9px;color:#ccc;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" + (isAutoPopulated ? "cursor:default;" : "cursor:grab;");
+                            evTag.style.cssText = "display:inline-flex;align-items:center;gap:2px;padding:1px 4px;background:" + (isAutoPopulated ? "#4a4a2a" : "#3a3a5a") + ";border-radius:3px;font-size:9px;color:#ccc;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:grab;";
                             evTag.textContent = fEvents[0].text;
                             evTag.title = fEvents[0].text;
-                            if (!isAutoPopulated) {
-                                evTag.draggable = true;
-                                evTag.dataset.eventValue = fEvents[0].value;
-                                evTag.dataset.eventText = fEvents[0].text;
-                                evTag.dataset.sourceFormKey = fKey;
-                                evTag.addEventListener("dragstart", (function(fk, evVal, evText) {
-                                    return function(e) {
-                                        e.stopPropagation();
-                                        e.dataTransfer.setData("application/x-bpl-event", JSON.stringify({
-                                            value: evVal,
-                                            text: evText
-                                        }));
-                                        e.dataTransfer.setData("application/x-bpl-event-source", fk);
-                                        e.dataTransfer.effectAllowed = "copyMove";
-                                        this.style.opacity = "0.5";
-                                    };
-                                })(fKey, fEvents[0].value, fEvents[0].text));
-                                evTag.addEventListener("dragend", (function(fk) {
-                                    return function(e) {
-                                        this.style.opacity = "1";
-                                        if (e.dataTransfer.dropEffect === "none") {
-                                            var d = formDataStore[fk];
-                                            if (d && d.studyEvents) {
-                                                d.studyEvents = [];
-                                                formDataStore[fk] = d;
-                                            }
-                                            log("BPL: event removed from form " + fk + " (dropped outside valid target)");
-                                            renderCenterPanel(centerSearch.value);
-                                            runAutoValidation();
-                                        }
-                                    };
-                                })(fKey));
-                                var evRemoveBtn = document.createElement("span");
-                                evRemoveBtn.textContent = "\u00D7";
-                                evRemoveBtn.style.cssText = "cursor:pointer;color:#ff6b6b;font-weight:bold;font-size:11px;margin-left:1px;flex-shrink:0;";
-                                evRemoveBtn.dataset.formKey = fKey;
-                                evRemoveBtn.addEventListener("click", (function(fk) {
-                                    return function(e) {
-                                        e.stopPropagation();
+                            evTag.draggable = true;
+                            evTag.dataset.eventValue = fEvents[0].value;
+                            evTag.dataset.eventText = fEvents[0].text;
+                            evTag.dataset.sourceFormKey = fKey;
+                            evTag.addEventListener("dragstart", (function(fk, evVal, evText) {
+                                return function(e) {
+                                    e.stopPropagation();
+                                    e.dataTransfer.setData("application/x-bpl-event", JSON.stringify({
+                                        value: evVal,
+                                        text: evText
+                                    }));
+                                    e.dataTransfer.setData("application/x-bpl-event-source", fk);
+                                    e.dataTransfer.effectAllowed = "copyMove";
+                                    this.style.opacity = "0.5";
+                                };
+                            })(fKey, fEvents[0].value, fEvents[0].text));
+                            evTag.addEventListener("dragend", (function(fk, isAuto) {
+                                return function(e) {
+                                    this.style.opacity = "1";
+                                    if (e.dataTransfer.dropEffect === "none") {
                                         var d = formDataStore[fk];
                                         if (d && d.studyEvents) {
                                             d.studyEvents = [];
+                                            if (isAuto) d.modified = true;
                                             formDataStore[fk] = d;
                                         }
-                                        log("BPL: removed study event from form " + fk);
+                                        log("BPL: event removed from form " + fk + " (dropped outside valid target)");
                                         renderCenterPanel(centerSearch.value);
                                         runAutoValidation();
-                                    };
-                                })(fKey));
-                                evTag.appendChild(evRemoveBtn);
-                            }
-                            eventDropBox.appendChild(evTag);
-                        }
-                        if (!isAutoPopulated) {
-                            eventDropBox.addEventListener("dragover", function(e) {
-                                var hasEvent = false;
-                                if (e.dataTransfer.types) {
-                                    for (var t = 0; t < e.dataTransfer.types.length; t++) {
-                                        if (e.dataTransfer.types[t] === "application/x-bpl-event") {
-                                            hasEvent = true;
-                                            break;
-                                        }
-                                    }
-                                }
-                                if (hasEvent) {
-                                    e.preventDefault();
-                                    e.dataTransfer.dropEffect = "copy";
-                                    this.style.borderColor = "#7a7aff";
-                                    this.style.background = "#2a2a4a";
-                                }
-                            });
-                            eventDropBox.addEventListener("dragleave", function() {
-                                this.style.borderColor = "#555";
-                                this.style.background = "#1a1a1a";
-                            });
-                            eventDropBox.addEventListener("drop", (function(fk) {
-                                return function(e) {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    this.style.borderColor = "#555";
-                                    this.style.background = "#1a1a1a";
-                                    var evJson = e.dataTransfer.getData("application/x-bpl-event");
-                                    if (!evJson) {
-                                        return;
-                                    }
-                                    try {
-                                        var evData = JSON.parse(evJson);
-                                        var d = formDataStore[fk];
-                                        if (!d) {
-                                            d = getDefaultFormData();
-                                        }
-                                        d.studyEvents = [{
-                                            value: evData.value,
-                                            text: evData.text
-                                        }];
-                                        formDataStore[fk] = d;
-                                        log("BPL: set study event " + evData.text + " on form " + fk);
-                                        renderCenterPanel(centerSearch.value);
-                                        runAutoValidation();
-                                    } catch (err) {
-                                        log("BPL: event drop error " + err);
                                     }
                                 };
-                            })(fKey));
+                            })(fKey, isAutoPopulated));
+                            var evRemoveBtn = document.createElement("span");
+                            evRemoveBtn.textContent = "\u00D7";
+                            evRemoveBtn.style.cssText = "cursor:pointer;color:#ff6b6b;font-weight:bold;font-size:11px;margin-left:1px;flex-shrink:0;";
+                            evRemoveBtn.dataset.formKey = fKey;
+                            evRemoveBtn.addEventListener("click", (function(fk, isAuto) {
+                                return function(e) {
+                                    e.stopPropagation();
+                                    var d = formDataStore[fk];
+                                    if (d && d.studyEvents) {
+                                        d.studyEvents = [];
+                                        if (isAuto) d.modified = true;
+                                        formDataStore[fk] = d;
+                                    }
+                                    log("BPL: removed study event from form " + fk);
+                                    renderCenterPanel(centerSearch.value);
+                                    runAutoValidation();
+                                };
+                            })(fKey, isAutoPopulated));
+                            evTag.appendChild(evRemoveBtn);
+                            eventDropBox.appendChild(evTag);
                         }
+                        var evPasteIcon = document.createElement("span");
+                        evPasteIcon.textContent = "\u{1F4CB}";
+                        evPasteIcon.title = "Paste copied study event";
+                        evPasteIcon.style.cssText = "cursor:pointer;font-size:9px;flex-shrink:0;opacity:0.5;padding:1px 2px;border-radius:2px;";
+                        evPasteIcon.addEventListener("mouseenter", function() { this.style.opacity = "1"; this.style.background = "rgba(122,122,255,0.2)"; });
+                        evPasteIcon.addEventListener("mouseleave", function() { this.style.opacity = "0.5"; this.style.background = ""; });
+                        evPasteIcon.addEventListener("click", (function(fk, isAuto) {
+                            return function(e) {
+                                e.stopPropagation();
+                                if (!copiedStudyEvent) {
+                                    log("BPL: paste event attempted but no study event copied");
+                                    return;
+                                }
+                                var d = formDataStore[fk];
+                                if (!d) {
+                                    d = getDefaultFormData();
+                                }
+                                d.studyEvents = [{ value: copiedStudyEvent.value, text: copiedStudyEvent.text }];
+                                if (isAuto) d.modified = true;
+                                formDataStore[fk] = d;
+                                log("BPL: pasted study event " + copiedStudyEvent.text + " on form " + fk);
+                                renderCenterPanel(centerSearch.value);
+                                runAutoValidation();
+                            };
+                        })(fKey, isAutoPopulated));
+                        eventDropBox.appendChild(evPasteIcon);
+                        eventDropBox.addEventListener("dragover", function(e) {
+                            var hasEvent = false;
+                            if (e.dataTransfer.types) {
+                                for (var t = 0; t < e.dataTransfer.types.length; t++) {
+                                    if (e.dataTransfer.types[t] === "application/x-bpl-event") {
+                                        hasEvent = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (hasEvent) {
+                                e.preventDefault();
+                                e.dataTransfer.dropEffect = "copy";
+                                this.style.borderColor = "#7a7aff";
+                                this.style.background = "#2a2a4a";
+                            }
+                        });
+                        eventDropBox.addEventListener("dragleave", function() {
+                            this.style.borderColor = "#555";
+                            this.style.background = "#1a1a1a";
+                        });
+                        eventDropBox.addEventListener("drop", (function(fk, isAuto) {
+                            return function(e) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                this.style.borderColor = "#555";
+                                this.style.background = "#1a1a1a";
+                                var evJson = e.dataTransfer.getData("application/x-bpl-event");
+                                if (!evJson) {
+                                    return;
+                                }
+                                try {
+                                    var evData = JSON.parse(evJson);
+                                    var d = formDataStore[fk];
+                                    if (!d) {
+                                        d = getDefaultFormData();
+                                    }
+                                    d.studyEvents = [{
+                                        value: evData.value,
+                                        text: evData.text
+                                    }];
+                                    if (isAuto) d.modified = true;
+                                    formDataStore[fk] = d;
+                                    log("BPL: set study event " + evData.text + " on form " + fk);
+                                    renderCenterPanel(centerSearch.value);
+                                    runAutoValidation();
+                                } catch (err) {
+                                    log("BPL: event drop error " + err);
+                                }
+                            };
+                        })(fKey, isAutoPopulated));
                         var formLabel = document.createElement("span");
                         formLabel.style.cssText = "flex:1;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;min-width:0;" + (isAutoPopulated ? "color:#ccaa44;" : "");
                         formLabel.title = bplBuildFormLabel(seg.text, fEvents, fEntry.text, fData2);
                         formLabel.textContent = formLabel.title;
-                        if (!isAutoPopulated && hasMissingEvents) {
+                        if (hasMissingEvents && (!isAutoPopulated || isModifiedAuto)) {
                             formLabel.style.color = "#ff8888";
                         }
                         formLabel.addEventListener("click", (function(k) {
@@ -17629,6 +17870,7 @@
                                     preReference: d.preReference || false
                                 };
                                 log("BPL: copied form " + ft + " from segment " + sv + " (key " + fk + ")");
+                                showCopyToast("Copied: " + ft, e);
                                 renderCenterPanel(centerSearch.value);
                             };
                         })(seg.value, fEntry.value, fEntry.text, fKey));
@@ -17645,11 +17887,9 @@
                             tpStr2 = bplFormatTimePoint(fData2.days || 0, fData2.hours || 0, fData2.minutes || 0, fData2.seconds || 0, fData2.preReference || false);
                         }
                         var etStr2 = fData2.exampleTime || "N/A";
-                        var segIndexLabel = " (" + (si2 + 1) + ")";
                         var timeRefLabel = document.createElement("span");
-                        timeRefLabel.textContent = tpStr2 + segIndexLabel + "   |   " + etStr2;
+                        timeRefLabel.textContent = tpStr2 + "   |   " + etStr2;
                         timeRefLabel.style.cssText = "font-size:12px;color:#ffffffff;white-space:pre;flex-shrink:0;min-width:0;overflow:hidden;text-overflow:ellipsis;max-width:220px;";
-                        timeRefLabel.title = tpStr2 + segIndexLabel + "  |  " + etStr2;
                         var iconsStr = bplBuildStatusIcons(fData2);
                         var iconsLabel = document.createElement("span");
                         iconsLabel.textContent = iconsStr;
@@ -17758,7 +17998,7 @@
             this.style.borderColor = "#c0392b";
         });
         clearAllBtn.addEventListener("click", function() {
-            var msg = "This will remove ALL configured Segments and Forms from the PLAP Builder.\n\nAll form assignments, study event selections, and time-relative settings will be permanently cleared.\n\nAlready-added Activity Plan items in the system will NOT be affected.\n\nAre you sure you want to clear everything?";
+            var msg = "This will remove ALL Segments and Forms from the PLAP Builder. Including the existing forms from the table, the newly added forms, and the updated forms.\n\nAll form assignments, study event selections, and time-relative settings will be cleared.\n\nAre you sure you want to clear everything?";
             if (!confirm(msg)) {
                 log("BPL: clear all cancelled by user");
                 return;
@@ -17776,6 +18016,10 @@
             formInstanceCounter = 0;
             selectedFormKey = null;
             copiedForm = null;
+            copiedAllForms = null;
+            copiedAllSourceSegment = null;
+            copiedStudyEvent = null;
+            pasteHistory = {};
             clearBPLSessionStateWithBackup();
             renderCenterPanel(centerSearch.value);
             renderTimePanel({}, null);
@@ -17783,6 +18027,319 @@
             log("BPL: clear all complete - all segments emptied and session state cleared");
         });
         legendRow.appendChild(clearAllBtn);
+
+        var clearExistingBtn = document.createElement("button");
+        clearExistingBtn.textContent = "\uD83E\uDDF9 Clear Existing";
+        clearExistingBtn.title = "Remove all non-updated auto-populated forms (keeps user-added and modified auto-populated forms)";
+        clearExistingBtn.style.cssText = "padding:5px 12px;border-radius:4px;border:1px solid #c0392b;background:#2a1a1a;color:#ff6b6b;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;";
+        clearExistingBtn.addEventListener("mouseenter", function() {
+            this.style.background = "#3a1a1a";
+            this.style.borderColor = "#e74c3c";
+        });
+        clearExistingBtn.addEventListener("mouseleave", function() {
+            this.style.background = "#2a1a1a";
+            this.style.borderColor = "#c0392b";
+        });
+        clearExistingBtn.addEventListener("click", function() {
+            var msg = "This will remove all NON-UPDATED auto-populated forms from the PLAP Builder.\n\nUser-added forms and modified (updated) auto-populated forms will NOT be removed.\n\nAre you sure?";
+            if (!confirm(msg)) {
+                log("BPL: clear existing cancelled by user");
+                return;
+            }
+            log("BPL: clear existing confirmed");
+            var removedCount = 0;
+            for (var cSeg in segmentFormMap) {
+                if (!segmentFormMap.hasOwnProperty(cSeg)) continue;
+                var fList = segmentFormMap[cSeg];
+                var kept = [];
+                for (var fi = 0; fi < fList.length; fi++) {
+                    var fEntry = fList[fi];
+                    var fk = getFormDataKey(cSeg, fEntry.value, fEntry.index);
+                    var fd = formDataStore[fk] || getDefaultFormData();
+                    var isAuto = fEntry.autoPopulated || fd.autoPopulated;
+                    if (isAuto && !fd.modified) {
+                        // Remove this non-updated auto-populated form
+                        delete formDataStore[fk];
+                        removedCount++;
+                    } else {
+                        kept.push(fEntry);
+                    }
+                }
+                segmentFormMap[cSeg] = kept;
+            }
+            if (selectedFormKey) {
+                // Check if the selected form was removed
+                var stillExists = false;
+                for (var chkSeg in segmentFormMap) {
+                    if (!segmentFormMap.hasOwnProperty(chkSeg)) continue;
+                    var chkList = segmentFormMap[chkSeg];
+                    for (var chkI = 0; chkI < chkList.length; chkI++) {
+                        var chkKey = getFormDataKey(chkSeg, chkList[chkI].value, chkList[chkI].index);
+                        if (chkKey === selectedFormKey) {
+                            stillExists = true;
+                            break;
+                        }
+                    }
+                    if (stillExists) break;
+                }
+                if (!stillExists) {
+                    selectedFormKey = null;
+                    renderTimePanel({}, null);
+                }
+            }
+            saveSession();
+            renderCenterPanel(centerSearch.value);
+            runAutoValidation();
+            log("BPL: clear existing complete - " + removedCount + " non-updated auto-populated forms removed");
+        });
+        legendRow.appendChild(clearExistingBtn);
+
+        var collectExistingBtn = document.createElement("button");
+        collectExistingBtn.textContent = "\uD83D\uDD04 Collect Existing";
+        collectExistingBtn.title = "Re-scan SA table and fill center panel with new forms (skips updated auto-populated forms)";
+        collectExistingBtn.style.cssText = "padding:5px 12px;border-radius:4px;border:1px solid #2980b9;background:#1a2a3a;color:#5dade2;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;";
+        collectExistingBtn.addEventListener("mouseenter", function() {
+            this.style.background = "#1a3a4a";
+            this.style.borderColor = "#3498db";
+        });
+        collectExistingBtn.addEventListener("mouseleave", function() {
+            this.style.background = "#1a2a3a";
+            this.style.borderColor = "#2980b9";
+        });
+        collectExistingBtn.addEventListener("click", function() {
+            // Check if there are any non-updated auto-populated forms
+            var hasNonUpdatedAuto = false;
+            for (var cSeg in segmentFormMap) {
+                if (!segmentFormMap.hasOwnProperty(cSeg)) continue;
+                var fList = segmentFormMap[cSeg];
+                for (var fi = 0; fi < fList.length; fi++) {
+                    var fEntry = fList[fi];
+                    var fk = getFormDataKey(cSeg, fEntry.value, fEntry.index);
+                    var fd = formDataStore[fk] || getDefaultFormData();
+                    var isAuto = fEntry.autoPopulated || fd.autoPopulated;
+                    if (isAuto && !fd.modified) {
+                        hasNonUpdatedAuto = true;
+                        break;
+                    }
+                }
+                if (hasNonUpdatedAuto) break;
+            }
+            if (hasNonUpdatedAuto) {
+                alert("Cannot Collect Existing while there are non-updated auto-populated forms.\n\nPlease use 'Clear Existing' first to remove them, or modify them so they are marked as updated.");
+                log("BPL: collect existing blocked - non-updated auto-populated forms exist");
+                return;
+            }
+
+            log("BPL: collect existing started");
+
+            // Build a set of updated auto-populated form identities (segment + studyEvent)
+            // to avoid re-adding duplicates
+            var updatedAutoKeys = {};
+            for (var uSeg in segmentFormMap) {
+                if (!segmentFormMap.hasOwnProperty(uSeg)) continue;
+                var uList = segmentFormMap[uSeg];
+                for (var ui = 0; ui < uList.length; ui++) {
+                    var uEntry = uList[ui];
+                    var uKey = getFormDataKey(uSeg, uEntry.value, uEntry.index);
+                    var uData = formDataStore[uKey] || getDefaultFormData();
+                    var uIsAuto = uEntry.autoPopulated || uData.autoPopulated;
+                    if (uIsAuto && uData.modified) {
+                        // Build identity key from segment value + original study event text + form text
+                        // Use original study event if available, otherwise current
+                        var origEvText = "";
+                        if (uData.originalValues && uData.originalValues.studyEventText) {
+                            origEvText = uData.originalValues.studyEventText;
+                        } else if (uData.studyEvents && uData.studyEvents.length > 0) {
+                            origEvText = uData.studyEvents[0].text;
+                        }
+                        var identityKey = uSeg + "|" + normalizeSAText(origEvText) + "|" + normalizeSAText(uEntry.text);
+                        updatedAutoKeys[identityKey] = true;
+                        // Also add key with current study event in case it was changed
+                        if (uData.studyEvents && uData.studyEvents.length > 0) {
+                            var currEvText = uData.studyEvents[0].text;
+                            var identityKey2 = uSeg + "|" + normalizeSAText(currEvText) + "|" + normalizeSAText(uEntry.text);
+                            updatedAutoKeys[identityKey2] = true;
+                        }
+                    }
+                }
+            }
+
+            // Re-scan the SA table
+            var freshScan = scanExistingBPLTableEnhanced();
+            var freshItems = freshScan.saTableItems || [];
+            log("BPL: collect existing - fresh scan found " + freshItems.length + " items");
+
+            var addedCount = 0;
+            var skippedCount = 0;
+            for (var t = 0; t < freshItems.length; t++) {
+                var saItem = freshItems[t];
+                // Find matching segment value
+                var matchedSegVal = null;
+                for (var s = 0; s < segments.length; s++) {
+                    if (normalizeSAText(segments[s].text) === saItem.segment) {
+                        matchedSegVal = segments[s].value;
+                        break;
+                    }
+                }
+                if (!matchedSegVal) continue;
+
+                // Check if this item already exists as an updated auto-populated form
+                var matchedFormText = saItem.form;
+                // Try to resolve form text from forms dropdown
+                var resolvedFormText = matchedFormText;
+                if (forms && forms.length > 0) {
+                    var saFormNorm = normalizeSAText(saItem.form).toLowerCase();
+                    for (var fmi = 0; fmi < forms.length; fmi++) {
+                        if (normalizeSAText(forms[fmi].text).toLowerCase() === saFormNorm) {
+                            resolvedFormText = forms[fmi].text;
+                            break;
+                        }
+                    }
+                }
+
+                var checkKey = matchedSegVal + "|" + normalizeSAText(saItem.studyEvent) + "|" + normalizeSAText(resolvedFormText);
+                if (updatedAutoKeys[checkKey]) {
+                    skippedCount++;
+                    log("BPL: collect existing - skipping updated auto-populated form: " + saItem.segment + "|" + saItem.studyEvent + "|" + saItem.form);
+                    continue;
+                }
+
+                // Check if this exact item already exists in segmentFormMap (any form, not just auto)
+                var existingForms = segmentFormMap[matchedSegVal] || [];
+                var alreadyExists = false;
+                for (var ef = 0; ef < existingForms.length; ef++) {
+                    var efKey = getFormDataKey(matchedSegVal, existingForms[ef].value, existingForms[ef].index);
+                    var efData = formDataStore[efKey];
+                    if (!efData) continue;
+                    if (efData.studyEvents && efData.studyEvents.length > 0) {
+                        var evText = normalizeSAText(efData.studyEvents[0].text);
+                        var formTextNorm = normalizeSAText(existingForms[ef].text);
+                        var saTpCleaned = saItem.timepointCleaned || "";
+                        var efTpCleaned = efData.timepointCleaned || "";
+                        if (evText === saItem.studyEvent && formTextNorm === saItem.form && efTpCleaned === saTpCleaned) {
+                            alreadyExists = true;
+                            break;
+                        }
+                    }
+                }
+                if (alreadyExists) {
+                    skippedCount++;
+                    continue;
+                }
+
+                // Add this item as a new auto-populated form
+                formInstanceCounter++;
+                var newIndex = formInstanceCounter;
+                var matchedFormVal = null;
+                var matchedEvVal = null;
+                var matchedEvText = saItem.studyEvent;
+                if (forms && forms.length > 0) {
+                    var saFormNorm2 = normalizeSAText(saItem.form).toLowerCase();
+                    for (var fmi2 = 0; fmi2 < forms.length; fmi2++) {
+                        if (normalizeSAText(forms[fmi2].text).toLowerCase() === saFormNorm2) {
+                            matchedFormVal = forms[fmi2].value;
+                            resolvedFormText = forms[fmi2].text;
+                            break;
+                        }
+                    }
+                }
+                if (studyEvents && studyEvents.length > 0) {
+                    var saEvNorm = normalizeSAText(saItem.studyEvent).toLowerCase();
+                    for (var evi = 0; evi < studyEvents.length; evi++) {
+                        if (normalizeSAText(studyEvents[evi].text).toLowerCase() === saEvNorm) {
+                            matchedEvVal = studyEvents[evi].value;
+                            matchedEvText = studyEvents[evi].text;
+                            break;
+                        }
+                    }
+                }
+
+                var segRefDateTime = "N/A";
+                if (segmentOffsets && segmentOffsets[saItem.segment]) {
+                    segRefDateTime = segmentOffsets[saItem.segment].referenceDateTime || "N/A";
+                }
+
+                existingForms.push({
+                    value: matchedFormVal || saItem.form,
+                    text: resolvedFormText,
+                    index: newIndex,
+                    autoPopulated: true
+                });
+                segmentFormMap[matchedSegVal] = existingForms;
+
+                var tpDays = 0, tpHours = 0, tpMinutes = 0, tpSeconds = 0;
+                var tpCleaned = (saItem.timepointCleaned || "").replace(/[*\-()]/g, "").trim();
+                if (tpCleaned.length > 0) {
+                    var tpParts = tpCleaned.split(":");
+                    if (tpParts.length >= 1) {
+                        var totalH = parseInt(tpParts[0]) || 0;
+                        tpDays = Math.floor(totalH / 24);
+                        tpHours = totalH % 24;
+                    }
+                    if (tpParts.length >= 2) {
+                        tpMinutes = parseInt(tpParts[1]) || 0;
+                    }
+                    if (tpParts.length >= 3) {
+                        tpSeconds = parseInt(tpParts[2]) || 0;
+                    }
+                }
+
+                var newKey = getFormDataKey(matchedSegVal, matchedFormVal || saItem.form, newIndex);
+                formDataStore[newKey] = {
+                    days: tpDays,
+                    hours: tpHours,
+                    minutes: tpMinutes,
+                    seconds: tpSeconds,
+                    hidden: saItem.hidden || false,
+                    mandatory: true,
+                    enforce: false,
+                    preWindow: "",
+                    postWindow: "",
+                    refActivity: saItem.refActivity || false,
+                    preReference: saItem.preReference || false,
+                    studyEvents: [{
+                        value: matchedEvVal || saItem.studyEvent,
+                        text: matchedEvText
+                    }],
+                    autoPopulated: true,
+                    modified: false,
+                    editHref: saItem.editHref || "",
+                    saRowIndex: saItem.saRowIndex,
+                    originalValues: {
+                        days: tpDays,
+                        hours: tpHours,
+                        minutes: tpMinutes,
+                        seconds: tpSeconds,
+                        hidden: saItem.hidden || false,
+                        mandatory: true,
+                        enforce: false,
+                        preWindow: "",
+                        postWindow: "",
+                        refActivity: saItem.refActivity || false,
+                        preReference: saItem.preReference || false,
+                        studyEventText: matchedEvText
+                    },
+                    timepointRaw: saItem.timepointRaw || "",
+                    timepointCleaned: saItem.timepointCleaned || "",
+                    timepointDisplay: saItem.timepointDisplay || "",
+                    segmentRefDateTime: segRefDateTime,
+                    exampleTime: bplComputeExampleTime(segRefDateTime, saItem.timepointCleaned || "", saItem.preReference || false)
+                };
+                addedCount++;
+            }
+
+            // Also update existing items with fresh SA data (editHref, saRowIndex)
+            try {
+                localStorage.setItem(STORAGE_BPL_EXISTING, JSON.stringify(freshScan.existingKeys || []));
+                localStorage.setItem(STORAGE_BPL_SA_TABLE_DATA, JSON.stringify(freshScan));
+            } catch (e) {}
+
+            saveSession();
+            renderCenterPanel(centerSearch.value);
+            runAutoValidation();
+            log("BPL: collect existing complete - " + addedCount + " forms added, " + skippedCount + " skipped");
+        });
+        legendRow.appendChild(collectExistingBtn);
 
         var bottomRow = document.createElement("div");
         bottomRow.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:12px;";
@@ -17854,7 +18411,7 @@
                     var fEntry = fList[fi3];
                     var fk = getFormDataKey(sv, fEntry.value, fEntry.index);
                     var fd = formDataStore[fk] || getDefaultFormData();
-                    var isAuto = fEntry.autoPopulated || fd.autoPopulated;
+                                        var isAuto = fEntry.autoPopulated || fd.autoPopulated;
                     if (isAuto && !fd.modified) {
                         log("BPL: skipping unmodified auto-populated item " + fEntry.text + " in segment " + sText);
                         continue;
@@ -17877,11 +18434,16 @@
                         if (statusIcons2) {
                             labelStr2 = labelStr2 + " - " + statusIcons2;
                         }
+                        var evVal2 = evts2.length > 0 ? evts2[0].value : "";
                         updateItems.push({
                             segmentValue: sv,
                             segmentText: sText,
+                            eventValue: evVal2,
+                            eventText: evText2,
                             formValue: fEntry.value,
                             formText: fEntry.text,
+                            formIndex: fEntry.index,
+                            formKey: fk,
                             timeOffset: timeOffset2,
                             hidden: fd.hidden,
                             mandatory: fd.mandatory,
@@ -17956,6 +18518,7 @@
                 log("BPL: cancelled before add process");
                 return;
             }
+
             if (updateItems.length > 0 && mappedItems.length > 0) {
                 startBPLUpdateThenAddProcess(updateItems, mappedItems);
             } else if (updateItems.length > 0) {
@@ -18100,6 +18663,7 @@
             var success = 0;
             var failed = 0;
             var duplicate = 0;
+            var skipped = 0;
             for (var i = 0; i < mappedItems.length; i++) {
                 var s = mappedItems[i].status;
                 if (s === "Pending") {
@@ -18112,6 +18676,8 @@
                     failed = failed + 1;
                 } else if (s === "Duplicate") {
                     duplicate = duplicate + 1;
+                } else if (s === "Skipped") {
+                    skipped = skipped + 1;
                 }
             }
             summaryDiv.innerHTML = "";
@@ -18121,7 +18687,8 @@
                 { label: "In Progress", value: processing, color: "#9df" },
                 { label: "Success", value: success, color: "#4f4" },
                 { label: "Failed", value: failed, color: "#f44" },
-                { label: "Duplicate", value: duplicate, color: "#ff4" }
+                { label: "Duplicate", value: duplicate, color: "#ff4" },
+                { label: "Skipped", value: skipped, color: "#f90" }
             ];
             for (var j = 0; j < items.length; j++) {
                 var cell = document.createElement("div");
@@ -18172,6 +18739,8 @@
                     row.style.background = "#3a1a1a";
                 } else if (item.status === "Processing") {
                     row.style.background = "#1a2a3a";
+                } else if (item.status === "Skipped") {
+                    row.style.background = "#3a2a1a";
                 } else {
                     row.style.background = "#222";
                 }
@@ -18191,6 +18760,8 @@
                     statusSpan.style.color = "#f44";
                 } else if (item.status === "Processing") {
                     statusSpan.style.color = "#9df";
+                } else if (item.status === "Skipped") {
+                    statusSpan.style.color = "#f90";
                 } else {
                     statusSpan.style.color = "#aaa";
                 }
@@ -18331,8 +18902,7 @@
         log("PLAP Builder: selected value " + resolvedValue + " in " + selectId);
         return true;
     }
-
-        async function startBPLUpdateProcess(updateItems) {
+    async function startBPLUpdateProcess(updateItems) {
         log("BPL Update: starting update process for " + updateItems.length + " modified items");
 
         var progressContent = createBPLProgressPopup(updateItems);
@@ -18419,6 +18989,53 @@
 
                 if (BPL_CANCELLED) {
                     break;
+                }
+
+                // Check if studyEvent or form dropdowns are disabled — if so, skip this form
+                var studyEventSel = document.getElementById("studyEvent");
+                var formSel = document.getElementById("form");
+                if ((studyEventSel && studyEventSel.disabled) || (formSel && formSel.disabled)) {
+                    log("BPL Update: studyEvent or form dropdown is disabled, skipping item " + item.label);
+                    // Find and click Cancel button
+                    var cancelBtns = modal.querySelectorAll('button[data-dismiss="modal"]');
+                    var cancelClicked = false;
+                    for (var ci = 0; ci < cancelBtns.length; ci++) {
+                        var btnText = cancelBtns[ci].textContent.trim().toLowerCase();
+                        if (btnText.indexOf("cancel") !== -1 || cancelBtns[ci].classList.contains("default")) {
+                            cancelBtns[ci].click();
+                            cancelClicked = true;
+                            log("BPL Update: Cancel button clicked");
+                            break;
+                        }
+                    }
+                    if (!cancelClicked && cancelBtns.length > 0) {
+                        cancelBtns[0].click();
+                        cancelClicked = true;
+                        log("BPL Update: fallback Cancel button clicked");
+                    }
+                    if (!cancelClicked) {
+                        var closeModalBtn = modal.querySelector(".close, [data-dismiss='modal']");
+                        if (closeModalBtn) {
+                            closeModalBtn.click();
+                            log("BPL Update: close button clicked as fallback");
+                        }
+                    }
+                    await waitForSAModalClose(5000);
+                    item.status = "Skipped";
+                    progressContent.updateItem(idx, "Skipped");
+                    await sleep(500);
+                    continue;
+                }
+
+                // Update study event dropdown if item has a new event value
+                if (item.eventValue && studyEventSel && !studyEventSel.disabled) {
+                    log("BPL Update: selecting study event " + item.eventText + " (value: " + item.eventValue + ")");
+                    await selectBPLSelect2Value("studyEvent", item.eventValue);
+                    await sleep(500);
+
+                    if (BPL_CANCELLED) {
+                        break;
+                    }
                 }
 
                 var hiddenCheckboxEl = document.querySelector("#uniform-hidden span input#hidden.checkbox");
@@ -18598,6 +19215,38 @@
             progressContent.updateStatus("Updates completed!");
             progressContent.setComplete();
             log("BPL Update: all update items processed");
+
+            // Remove successfully updated auto-populated forms from session
+            // so they don't get re-pulled as stale duplicates in the next session
+            var removedFromSession = 0;
+            for (var ri = 0; ri < updateItems.length; ri++) {
+                var rItem = updateItems[ri];
+                if (rItem.status !== "Success") continue;
+                if (!rItem.formKey) continue;
+
+                // Remove from formDataStore
+                if (formDataStore[rItem.formKey]) {
+                    delete formDataStore[rItem.formKey];
+                    log("BPL Update: removed successfully updated form from session store: " + rItem.formKey);
+                }
+
+                // Remove from segmentFormMap
+                var rSegForms = segmentFormMap[rItem.segmentValue] || [];
+                for (var rfi = 0; rfi < rSegForms.length; rfi++) {
+                    var rKey = getFormDataKey(rItem.segmentValue, rSegForms[rfi].value, rSegForms[rfi].index);
+                    if (rKey === rItem.formKey) {
+                        rSegForms.splice(rfi, 1);
+                        removedFromSession++;
+                        log("BPL Update: removed form entry from segmentFormMap at index " + rfi);
+                        break;
+                    }
+                }
+                segmentFormMap[rItem.segmentValue] = rSegForms;
+            }
+            if (removedFromSession > 0) {
+                saveSession();
+                log("BPL Update: session saved after removing " + removedFromSession + " successfully updated forms");
+            }
         }
     }
 
@@ -18615,6 +19264,9 @@
             BPL_PROGRESS_POPUP_REF = null;
         }
 
+        // Reset BPL_CANCELLED since the programmatic .close() above triggers
+        // the popup's onClose callback which sets BPL_CANCELLED = true.
+        // The update phase already completed successfully at this point.
         BPL_CANCELLED = false;
 
         await sleep(1000);
@@ -18929,7 +19581,7 @@
             return;
         }
 
-        var collecting = createCollectingOverlay("Collecting data", "Scanning table\u2026");
+        var collecting = createCollectingOverlay("Collecting data", "Scanning activity plans\u2026");
 
         var enhancedScan = scanExistingBPLTableEnhanced();
         var existingItems = enhancedScan.existingKeys || [];
