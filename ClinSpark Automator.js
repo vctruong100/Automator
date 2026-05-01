@@ -5961,6 +5961,9 @@
         var selectedFormKey = null;
         var formInstanceCounter = 0;
         var copiedForm = null;
+        var copiedAllForms = null;
+        var copiedAllSourceSegment = null;
+        var copiedStudyEvent = null;
         var segmentCollapseStates = {};
 
         var bplHideExisting = false;
@@ -6282,8 +6285,30 @@
                     continue;
                 }
                 var evItem = document.createElement("div");
-                evItem.style.cssText = "padding:8px 10px;margin-bottom:4px;border:1px solid #555;border-radius:5px;background:#2a2a2a;cursor:grab;color:#fff;font-size:13px;font-weight:500;transition:all 0.2s ease;box-shadow:0 1px 3px rgba(0,0,0,0.2);";
-                evItem.textContent = ev.text;
+                evItem.style.cssText = "display:flex;align-items:center;gap:4px;padding:8px 10px;margin-bottom:4px;border:1px solid #555;border-radius:5px;background:#2a2a2a;cursor:grab;color:#fff;font-size:13px;font-weight:500;transition:all 0.2s ease;box-shadow:0 1px 3px rgba(0,0,0,0.2);";
+                var evTextSpan = document.createElement("span");
+                evTextSpan.textContent = ev.text;
+                evTextSpan.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+                evItem.appendChild(evTextSpan);
+                var evCopyBtn = document.createElement("button");
+                evCopyBtn.textContent = "\u{1F4CB}";
+                evCopyBtn.title = "Copy this study event";
+                evCopyBtn.style.cssText = "padding:2px 5px;border-radius:3px;border:1px solid #555;background:#333;color:#fff;font-size:10px;cursor:pointer;flex-shrink:0;";
+                evCopyBtn.draggable = false;
+                evCopyBtn.addEventListener("click", (function(val, txt) {
+                    return function(e) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        copiedStudyEvent = { value: val, text: txt };
+                        log("BPL: copied study event " + txt);
+                        showCopyToast("Copied: " + txt);
+                    };
+                })(ev.value, ev.text));
+                evCopyBtn.addEventListener("dragstart", function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                });
+                evItem.appendChild(evCopyBtn);
                 evItem.draggable = true;
                 evItem.dataset.eventValue = ev.value;
                 evItem.dataset.eventText = ev.text;
@@ -6437,6 +6462,21 @@
                 preReference: false,
                 studyEvents: []
             };
+        }
+
+        function showCopyToast(message) {
+            var toast = document.createElement("div");
+            toast.textContent = message || "Copied!";
+            toast.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#27ae60;color:#fff;font-size:13px;padding:6px 16px;border-radius:6px;z-index:999999;pointer-events:none;opacity:1;transition:opacity 0.5s ease;box-shadow:0 2px 8px rgba(0,0,0,0.3);";
+            document.body.appendChild(toast);
+            setTimeout(function() {
+                toast.style.opacity = "0";
+            }, 1200);
+            setTimeout(function() {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 1700);
         }
 
         function getSegmentRefDateTime(segVal) {
@@ -6860,6 +6900,113 @@
                 var segLabel = document.createElement("span");
                 segLabel.textContent = seg.text + " (" + segFormCount + " form" + (segFormCount !== 1 ? "s" : "") + ")";
                 segLabel.style.cssText = "font-weight:600;font-size:13px;flex:1;";
+                var copyAllBtn = document.createElement("button");
+                copyAllBtn.textContent = "\u{1F4CB} Copy All";
+                copyAllBtn.style.cssText = "padding:3px 8px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:11px;cursor:pointer;";
+                copyAllBtn.dataset.segmentValue = seg.value;
+                copyAllBtn.addEventListener("click", (function(segVal) {
+                    return function(e) {
+                        e.stopPropagation();
+                        var forms = segmentFormMap[segVal] || [];
+                        if (forms.length === 0) {
+                            log("BPL: copy all attempted but segment " + segVal + " has no forms");
+                            return;
+                        }
+                        copiedAllForms = [];
+                        copiedAllSourceSegment = segVal;
+                        for (var ci = 0; ci < forms.length; ci++) {
+                            var fk = getFormDataKey(segVal, forms[ci].value, forms[ci].index);
+                            var d = formDataStore[fk] || getDefaultFormData();
+                            copiedAllForms.push({
+                                formValue: forms[ci].value,
+                                formText: forms[ci].text,
+                                days: d.days || 0,
+                                hours: d.hours || 0,
+                                minutes: d.minutes || 0,
+                                seconds: d.seconds || 0,
+                                hidden: d.hidden || false,
+                                mandatory: d.mandatory !== false,
+                                enforce: d.enforce || false,
+                                preWindow: d.preWindow || "",
+                                postWindow: d.postWindow || "",
+                                refActivity: d.refActivity || false,
+                                preReference: d.preReference || false
+                            });
+                        }
+                        log("BPL: copied all " + copiedAllForms.length + " forms from segment " + segVal);
+                        showCopyToast("Copied " + copiedAllForms.length + " form" + (copiedAllForms.length !== 1 ? "s" : "") + "!");
+                    };
+                })(seg.value));
+                var pasteAllBtn = document.createElement("button");
+                pasteAllBtn.textContent = "\u{1F4CB} Paste All";
+                pasteAllBtn.style.cssText = "padding:3px 8px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:11px;cursor:pointer;";
+                pasteAllBtn.dataset.segmentValue = seg.value;
+                pasteAllBtn.addEventListener("click", (function(segVal) {
+                    return function() {
+                        if (!copiedAllForms || copiedAllForms.length === 0) {
+                            log("BPL: paste all attempted but no forms copied with Copy All");
+                            return;
+                        }
+                        if (copiedAllSourceSegment === segVal) {
+                            log("BPL: paste all cannot be used on the same segment");
+                            alert("Cannot paste into the same segment that was copied from.");
+                            return;
+                        }
+                        var existingForms = segmentFormMap[segVal] || [];
+                        var pastedCount = 0;
+                        var skippedCount = 0;
+                        for (var pi = 0; pi < copiedAllForms.length; pi++) {
+                            var cf = copiedAllForms[pi];
+                            var isDuplicate = false;
+                            for (var ei = 0; ei < existingForms.length; ei++) {
+                                if (existingForms[ei].text === cf.formText) {
+                                    var eKey = getFormDataKey(segVal, existingForms[ei].value, existingForms[ei].index);
+                                    var eData = formDataStore[eKey] || getDefaultFormData();
+                                    if ((eData.days || 0) === cf.days && (eData.hours || 0) === cf.hours && (eData.minutes || 0) === cf.minutes && (eData.seconds || 0) === cf.seconds && (eData.preReference || false) === cf.preReference) {
+                                        isDuplicate = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (isDuplicate) {
+                                skippedCount++;
+                                log("BPL: paste all skipping duplicate form " + cf.formText);
+                                continue;
+                            }
+                            formInstanceCounter = formInstanceCounter + 1;
+                            var newIndex = formInstanceCounter;
+                            existingForms.push({
+                                value: cf.formValue,
+                                text: cf.formText,
+                                index: newIndex
+                            });
+                            var newKey = getFormDataKey(segVal, cf.formValue, newIndex);
+                            var pastedData = getDefaultFormData();
+                            pastedData.days = cf.days;
+                            pastedData.hours = cf.hours;
+                            pastedData.minutes = cf.minutes;
+                            pastedData.seconds = cf.seconds;
+                            pastedData.hidden = cf.hidden;
+                            pastedData.mandatory = cf.mandatory;
+                            pastedData.enforce = cf.enforce;
+                            pastedData.preWindow = cf.preWindow;
+                            pastedData.postWindow = cf.postWindow;
+                            pastedData.refActivity = cf.refActivity;
+                            pastedData.preReference = cf.preReference;
+                            pastedData.studyEvents = [];
+                            var segRef = getSegmentRefDateTime(segVal);
+                            pastedData.segmentRefDateTime = segRef;
+                            var tpStr = bplFormatTimePoint(pastedData.days || 0, pastedData.hours || 0, pastedData.minutes || 0, pastedData.seconds || 0, false);
+                            pastedData.exampleTime = bplComputeExampleTime(segRef, tpStr, pastedData.preReference || false);
+                            formDataStore[newKey] = pastedData;
+                            pastedCount++;
+                        }
+                        segmentFormMap[segVal] = existingForms;
+                        log("BPL: paste all completed - pasted " + pastedCount + " forms, skipped " + skippedCount + " duplicates into segment " + segVal);
+                        renderCenterPanel(centerSearch.value);
+                        runAutoValidation();
+                    };
+                })(seg.value));
                 var sortBtn = document.createElement("button");
                 sortBtn.textContent = "\u2195 Sort";
                 sortBtn.style.cssText = "padding:3px 8px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:11px;cursor:pointer;";
@@ -6943,6 +7090,8 @@
                 });
                 segHeaderDiv.appendChild(segCb);
                 segHeaderDiv.appendChild(segLabel);
+                segHeaderDiv.appendChild(copyAllBtn);
+                segHeaderDiv.appendChild(pasteAllBtn);
                 segHeaderDiv.appendChild(sortBtn);
                 segHeaderDiv.appendChild(collapseBtn);
                 segHeaderDiv.appendChild(pasteBtn);
@@ -7125,6 +7274,32 @@
                             evTag.appendChild(evRemoveBtn);
                             eventDropBox.appendChild(evTag);
                         }
+                        var evPasteIcon = document.createElement("span");
+                        evPasteIcon.textContent = "\u{1F4CB}";
+                        evPasteIcon.title = "Paste copied study event";
+                        evPasteIcon.style.cssText = "cursor:pointer;font-size:9px;flex-shrink:0;opacity:0.5;padding:1px 2px;border-radius:2px;";
+                        evPasteIcon.addEventListener("mouseenter", function() { this.style.opacity = "1"; this.style.background = "rgba(122,122,255,0.2)"; });
+                        evPasteIcon.addEventListener("mouseleave", function() { this.style.opacity = "0.5"; this.style.background = ""; });
+                        evPasteIcon.addEventListener("click", (function(fk, isAuto) {
+                            return function(e) {
+                                e.stopPropagation();
+                                if (!copiedStudyEvent) {
+                                    log("BPL: paste event attempted but no study event copied");
+                                    return;
+                                }
+                                var d = formDataStore[fk];
+                                if (!d) {
+                                    d = getDefaultFormData();
+                                }
+                                d.studyEvents = [{ value: copiedStudyEvent.value, text: copiedStudyEvent.text }];
+                                if (isAuto) d.modified = true;
+                                formDataStore[fk] = d;
+                                log("BPL: pasted study event " + copiedStudyEvent.text + " on form " + fk);
+                                renderCenterPanel(centerSearch.value);
+                                runAutoValidation();
+                            };
+                        })(fKey, isAutoPopulated));
+                        eventDropBox.appendChild(evPasteIcon);
                         eventDropBox.addEventListener("dragover", function(e) {
                             var hasEvent = false;
                             if (e.dataTransfer.types) {
@@ -7299,6 +7474,7 @@
                                     preReference: d.preReference || false
                                 };
                                 log("BPL: copied form " + ft + " from segment " + sv + " (key " + fk + ")");
+                                showCopyToast("Copied: " + ft);
                                 renderCenterPanel(centerSearch.value);
                             };
                         })(seg.value, fEntry.value, fEntry.text, fKey));
@@ -7426,7 +7602,7 @@
             this.style.borderColor = "#c0392b";
         });
         clearAllBtn.addEventListener("click", function() {
-            var msg = "This will remove ALL configured Segments and Forms from the PLAP Builder.\n\nAll form assignments, study event selections, and time-relative settings will be permanently cleared.\n\nAlready-added Activity Plan items in the system will NOT be affected.\n\nAre you sure you want to clear everything?";
+            var msg = "This will remove ALL Segments and Forms from the PLAP Builder. Including the existing forms from the table, the newly added forms, and the updated forms.\n\nAll form assignments, study event selections, and time-relative settings will be cleared.\n\nAre you sure you want to clear everything?";
             if (!confirm(msg)) {
                 log("BPL: clear all cancelled by user");
                 return;
@@ -7444,6 +7620,9 @@
             formInstanceCounter = 0;
             selectedFormKey = null;
             copiedForm = null;
+            copiedAllForms = null;
+            copiedAllSourceSegment = null;
+            copiedStudyEvent = null;
             clearBPLSessionStateWithBackup();
             renderCenterPanel(centerSearch.value);
             renderTimePanel({}, null);

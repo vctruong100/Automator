@@ -565,5 +565,12 @@
     "tags": ["Edit Check"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Difference%20between%20Start%20Time%20and%20Collection%20Time%20%28Minutes%20Only%29.md",
     "updated": "2026-04-10"
+  },
+  {
+    "id": "M-084",
+    "title": "Last Meal Time v2",
+    "tags": ["Edit Check"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Last%20Meal%20Time%20v2.md",
+    "updated": "2026-05-01"
   }
 ]
