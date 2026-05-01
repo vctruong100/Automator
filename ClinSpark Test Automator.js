@@ -15718,20 +15718,31 @@
                 if (!efData) {
                     continue;
                 }
+                var formText = normalizeSAText(existingForms[ef].text);
+                if (formText !== saItem.form) {
+                    continue;
+                }
+                var efTpCleaned = efData.timepointCleaned || "";
+                var saTpCleaned = saItem.timepointCleaned || "";
+                if (efTpCleaned !== saTpCleaned) {
+                    continue;
+                }
                 if (efData.studyEvents && efData.studyEvents.length > 0) {
                     var evText = normalizeSAText(efData.studyEvents[0].text);
-                    var formText = normalizeSAText(existingForms[ef].text);
-                    if (evText === saItem.studyEvent && formText === saItem.form) {
-                        var efTpCleaned = efData.timepointCleaned || "";
-                        var saTpCleaned = saItem.timepointCleaned || "";
-                        if (efTpCleaned === saTpCleaned) {
-                            if (efData.autoPopulated) {
-                                existingAutoIdx = ef;
-                            } else {
-                                existingSessionIdx = ef;
-                            }
-                            break;
+                    if (evText === saItem.studyEvent) {
+                        if (efData.autoPopulated) {
+                            existingAutoIdx = ef;
+                        } else {
+                            existingSessionIdx = ef;
                         }
+                        break;
+                    }
+                }
+                if (efData.autoPopulated && efData.modified && efData.originalValues && efData.originalValues.studyEventText) {
+                    var origEvText = normalizeSAText(efData.originalValues.studyEventText);
+                    if (origEvText === saItem.studyEvent) {
+                        existingAutoIdx = ef;
+                        break;
                     }
                 }
             }
@@ -16841,13 +16852,16 @@
                     preWindow: data.preWindow || "",
                     postWindow: data.postWindow || "",
                     refActivity: !!data.refActivity,
-                    preReference: !!data.preReference
+                    preReference: !!data.preReference,
+                    studyEventText: (data.studyEvents && data.studyEvents.length > 0) ? (data.studyEvents[0].text || "") : ""
                 };
                 log("BPL: created missing originalValues for auto-populated form " + key);
             }
 
             if (data.autoPopulated && data.originalValues) {
                 var orig = data.originalValues;
+                var currentEvText = (data.studyEvents && data.studyEvents.length > 0) ? (data.studyEvents[0].text || "") : "";
+                var originalEvText = orig.studyEventText || "";
                 var isModified = (
                     (data.days || 0) !== (orig.days || 0) ||
                     (data.hours || 0) !== (orig.hours || 0) ||
@@ -16859,7 +16873,8 @@
                     (data.preWindow || "") !== (orig.preWindow || "") ||
                     (data.postWindow || "") !== (orig.postWindow || "") ||
                     !!data.refActivity !== !!orig.refActivity ||
-                    !!data.preReference !== !!orig.preReference
+                    !!data.preReference !== !!orig.preReference ||
+                    currentEvText !== originalEvText
                 );
                 if (isModified !== data.modified) {
                     data.modified = isModified;

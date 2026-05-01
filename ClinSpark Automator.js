@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.4.9
+// @version     2.5.0
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -119,6 +119,13 @@
     var STUDY_EVENT_NO_MATCH_TITLE = "Find Study Events";
     var STUDY_EVENT_NO_MATCH_MESSAGE = "No study event is found.";
 
+    var STORAGE_FIND_COMBINED_PENDING = "activityPlanState.findCombined.pending";
+    var STORAGE_FIND_COMBINED_FORM_KEYWORDS = "activityPlanState.findCombined.formKeywords";
+    var STORAGE_FIND_COMBINED_EVENT_KEYWORDS = "activityPlanState.findCombined.eventKeywords";
+    var STORAGE_FIND_COMBINED_SUBJECTS = "activityPlanState.findCombined.subjects";
+    var STORAGE_FIND_COMBINED_STATUS_VALUES = "activityPlanState.findCombined.statusValues";
+    var STORAGE_FIND_COMBINED_TARGET_PAGE = "activityPlanState.findCombined.targetPage";
+    var DC_SUBJECT_URL = "https://cenexel.clinspark.com/secure/datacollection/subject";
 
     const STORAGE_PANEL_HIDDEN = "activityPlanState.panel.hidden";
     const STORAGE_PANEL_HOTKEY = "activityPlanState.panel.hotkey";
@@ -5384,20 +5391,31 @@
                 if (!efData) {
                     continue;
                 }
+                var formText = normalizeSAText(existingForms[ef].text);
+                if (formText !== saItem.form) {
+                    continue;
+                }
+                var efTpCleaned = efData.timepointCleaned || "";
+                var saTpCleaned = saItem.timepointCleaned || "";
+                if (efTpCleaned !== saTpCleaned) {
+                    continue;
+                }
                 if (efData.studyEvents && efData.studyEvents.length > 0) {
                     var evText = normalizeSAText(efData.studyEvents[0].text);
-                    var formText = normalizeSAText(existingForms[ef].text);
-                    if (evText === saItem.studyEvent && formText === saItem.form) {
-                        var efTpCleaned = efData.timepointCleaned || "";
-                        var saTpCleaned = saItem.timepointCleaned || "";
-                        if (efTpCleaned === saTpCleaned) {
-                            if (efData.autoPopulated) {
-                                existingAutoIdx = ef;
-                            } else {
-                                existingSessionIdx = ef;
-                            }
-                            break;
+                    if (evText === saItem.studyEvent) {
+                        if (efData.autoPopulated) {
+                            existingAutoIdx = ef;
+                        } else {
+                            existingSessionIdx = ef;
                         }
+                        break;
+                    }
+                }
+                if (efData.autoPopulated && efData.modified && efData.originalValues && efData.originalValues.studyEventText) {
+                    var origEvText = normalizeSAText(efData.originalValues.studyEventText);
+                    if (origEvText === saItem.studyEvent) {
+                        existingAutoIdx = ef;
+                        break;
                     }
                 }
             }
@@ -5833,6 +5851,12 @@
                         log("BPL: restore skipping removed form " + sf.text + " (value=" + sf.value + ") in segment " + segVal);
                         continue;
                     }
+                    var oldKey = segVal + "|" + sf.value + "|" + sf.index;
+                    var fd = savedData[oldKey];
+                    if (fd && fd.autoPopulated && fd.modified) {
+                        log("BPL: restore skipping modified auto-populated form " + sf.text + " (key=" + oldKey + ") - SA table will provide current values");
+                        continue;
+                    }
                     validForms.push({
                         value: sf.value,
                         text: sf.text,
@@ -5842,8 +5866,6 @@
                     if (sf.index > maxIndex) {
                         maxIndex = sf.index;
                     }
-                    var oldKey = segVal + "|" + sf.value + "|" + sf.index;
-                    var fd = savedData[oldKey];
                     if (fd) {
                         var filteredEvents = [];
                         var savedEvents = fd.studyEvents || [];
@@ -6508,12 +6530,15 @@
                     preWindow: data.preWindow || "",
                     postWindow: data.postWindow || "",
                     refActivity: !!data.refActivity,
-                    preReference: !!data.preReference
+                    preReference: !!data.preReference,
+                    studyEventText: (data.studyEvents && data.studyEvents.length > 0) ? (data.studyEvents[0].text || "") : ""
                 };
                 log("BPL: created missing originalValues for auto-populated form " + key);
             }
             if (data.autoPopulated && data.originalValues) {
                 var orig = data.originalValues;
+                var currentEvText = (data.studyEvents && data.studyEvents.length > 0) ? (data.studyEvents[0].text || "") : "";
+                var originalEvText = orig.studyEventText || "";
                 var isModified = (
                     (data.days || 0) !== (orig.days || 0) ||
                     (data.hours || 0) !== (orig.hours || 0) ||
@@ -6525,7 +6550,8 @@
                     (data.preWindow || "") !== (orig.preWindow || "") ||
                     (data.postWindow || "") !== (orig.postWindow || "") ||
                     !!data.refActivity !== !!orig.refActivity ||
-                    !!data.preReference !== !!orig.preReference
+                    !!data.preReference !== !!orig.preReference ||
+                    currentEvText !== originalEvText
                 );
                 if (isModified !== data.modified) {
                     data.modified = isModified;
@@ -7036,131 +7062,125 @@
                         var eventDropBox = document.createElement("div");
                         eventDropBox.style.cssText = "min-width:80px;max-width:140px;min-height:24px;padding:2px 4px;border:1px dashed #555;border-radius:3px;background:#1a1a1a;display:flex;flex-wrap:wrap;gap:2px;align-items:center;flex-shrink:0;";
                         eventDropBox.dataset.formKey = fKey;
-                        if (fEvents.length === 0 && !isAutoPopulated) {
+                        if (fEvents.length === 0) {
                             var evPlaceholder = document.createElement("span");
                             evPlaceholder.textContent = "\u2B07 Event";
                             evPlaceholder.style.cssText = "color:#666;font-size:9px;padding:1px;";
                             eventDropBox.appendChild(evPlaceholder);
-                        } else if (fEvents.length === 0 && isAutoPopulated) {
-                            var evPlaceholderAuto = document.createElement("span");
-                            evPlaceholderAuto.textContent = "[Auto]";
-                            evPlaceholderAuto.style.cssText = "color:#887700;font-size:9px;padding:1px;";
-                            eventDropBox.appendChild(evPlaceholderAuto);
                         } else {
                             var evTag = document.createElement("span");
-                            evTag.style.cssText = "display:inline-flex;align-items:center;gap:2px;padding:1px 4px;background:" + (isAutoPopulated ? "#4a4a2a" : "#3a3a5a") + ";border-radius:3px;font-size:9px;color:#ccc;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" + (isAutoPopulated ? "cursor:default;" : "cursor:grab;");
+                            evTag.style.cssText = "display:inline-flex;align-items:center;gap:2px;padding:1px 4px;background:" + (isAutoPopulated ? "#4a4a2a" : "#3a3a5a") + ";border-radius:3px;font-size:9px;color:#ccc;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:grab;";
                             evTag.textContent = fEvents[0].text;
                             evTag.title = fEvents[0].text;
-                            if (!isAutoPopulated) {
-                                evTag.draggable = true;
-                                evTag.dataset.eventValue = fEvents[0].value;
-                                evTag.dataset.eventText = fEvents[0].text;
-                                evTag.dataset.sourceFormKey = fKey;
-                                evTag.addEventListener("dragstart", (function(fk, evVal, evText) {
-                                    return function(e) {
-                                        e.stopPropagation();
-                                        e.dataTransfer.setData("application/x-bpl-event", JSON.stringify({
-                                            value: evVal,
-                                            text: evText
-                                        }));
-                                        e.dataTransfer.setData("application/x-bpl-event-source", fk);
-                                        e.dataTransfer.effectAllowed = "copyMove";
-                                        this.style.opacity = "0.5";
-                                    };
-                                })(fKey, fEvents[0].value, fEvents[0].text));
-                                evTag.addEventListener("dragend", (function(fk) {
-                                    return function(e) {
-                                        this.style.opacity = "1";
-                                        if (e.dataTransfer.dropEffect === "none") {
-                                            var d = formDataStore[fk];
-                                            if (d && d.studyEvents) {
-                                                d.studyEvents = [];
-                                                formDataStore[fk] = d;
-                                            }
-                                            log("BPL: event removed from form " + fk + " (dropped outside valid target)");
-                                            renderCenterPanel(centerSearch.value);
-                                            runAutoValidation();
-                                        }
-                                    };
-                                })(fKey));
-                                var evRemoveBtn = document.createElement("span");
-                                evRemoveBtn.textContent = "\u00D7";
-                                evRemoveBtn.style.cssText = "cursor:pointer;color:#ff6b6b;font-weight:bold;font-size:11px;margin-left:1px;flex-shrink:0;";
-                                evRemoveBtn.dataset.formKey = fKey;
-                                evRemoveBtn.addEventListener("click", (function(fk) {
-                                    return function(e) {
-                                        e.stopPropagation();
+                            evTag.draggable = true;
+                            evTag.dataset.eventValue = fEvents[0].value;
+                            evTag.dataset.eventText = fEvents[0].text;
+                            evTag.dataset.sourceFormKey = fKey;
+                            evTag.addEventListener("dragstart", (function(fk, evVal, evText) {
+                                return function(e) {
+                                    e.stopPropagation();
+                                    e.dataTransfer.setData("application/x-bpl-event", JSON.stringify({
+                                        value: evVal,
+                                        text: evText
+                                    }));
+                                    e.dataTransfer.setData("application/x-bpl-event-source", fk);
+                                    e.dataTransfer.effectAllowed = "copyMove";
+                                    this.style.opacity = "0.5";
+                                };
+                            })(fKey, fEvents[0].value, fEvents[0].text));
+                            evTag.addEventListener("dragend", (function(fk, isAuto) {
+                                return function(e) {
+                                    this.style.opacity = "1";
+                                    if (e.dataTransfer.dropEffect === "none") {
                                         var d = formDataStore[fk];
                                         if (d && d.studyEvents) {
                                             d.studyEvents = [];
+                                            if (isAuto) d.modified = true;
                                             formDataStore[fk] = d;
                                         }
-                                        log("BPL: removed study event from form " + fk);
+                                        log("BPL: event removed from form " + fk + " (dropped outside valid target)");
                                         renderCenterPanel(centerSearch.value);
                                         runAutoValidation();
-                                    };
-                                })(fKey));
-                                evTag.appendChild(evRemoveBtn);
-                            }
-                            eventDropBox.appendChild(evTag);
-                        }
-                        if (!isAutoPopulated) {
-                            eventDropBox.addEventListener("dragover", function(e) {
-                                var hasEvent = false;
-                                if (e.dataTransfer.types) {
-                                    for (var t = 0; t < e.dataTransfer.types.length; t++) {
-                                        if (e.dataTransfer.types[t] === "application/x-bpl-event") {
-                                            hasEvent = true;
-                                            break;
-                                        }
-                                    }
-                                }
-                                if (hasEvent) {
-                                    e.preventDefault();
-                                    e.dataTransfer.dropEffect = "copy";
-                                    this.style.borderColor = "#7a7aff";
-                                    this.style.background = "#2a2a4a";
-                                }
-                            });
-                            eventDropBox.addEventListener("dragleave", function() {
-                                this.style.borderColor = "#555";
-                                this.style.background = "#1a1a1a";
-                            });
-                            eventDropBox.addEventListener("drop", (function(fk) {
-                                return function(e) {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    this.style.borderColor = "#555";
-                                    this.style.background = "#1a1a1a";
-                                    var evJson = e.dataTransfer.getData("application/x-bpl-event");
-                                    if (!evJson) {
-                                        return;
-                                    }
-                                    try {
-                                        var evData = JSON.parse(evJson);
-                                        var d = formDataStore[fk];
-                                        if (!d) {
-                                            d = getDefaultFormData();
-                                        }
-                                        d.studyEvents = [{
-                                            value: evData.value,
-                                            text: evData.text
-                                        }];
-                                        formDataStore[fk] = d;
-                                        log("BPL: set study event " + evData.text + " on form " + fk);
-                                        renderCenterPanel(centerSearch.value);
-                                        runAutoValidation();
-                                    } catch (err) {
-                                        log("BPL: event drop error " + err);
                                     }
                                 };
-                            })(fKey));
+                            })(fKey, isAutoPopulated));
+                            var evRemoveBtn = document.createElement("span");
+                            evRemoveBtn.textContent = "\u00D7";
+                            evRemoveBtn.style.cssText = "cursor:pointer;color:#ff6b6b;font-weight:bold;font-size:11px;margin-left:1px;flex-shrink:0;";
+                            evRemoveBtn.dataset.formKey = fKey;
+                            evRemoveBtn.addEventListener("click", (function(fk, isAuto) {
+                                return function(e) {
+                                    e.stopPropagation();
+                                    var d = formDataStore[fk];
+                                    if (d && d.studyEvents) {
+                                        d.studyEvents = [];
+                                        if (isAuto) d.modified = true;
+                                        formDataStore[fk] = d;
+                                    }
+                                    log("BPL: removed study event from form " + fk);
+                                    renderCenterPanel(centerSearch.value);
+                                    runAutoValidation();
+                                };
+                            })(fKey, isAutoPopulated));
+                            evTag.appendChild(evRemoveBtn);
+                            eventDropBox.appendChild(evTag);
                         }
+                        eventDropBox.addEventListener("dragover", function(e) {
+                            var hasEvent = false;
+                            if (e.dataTransfer.types) {
+                                for (var t = 0; t < e.dataTransfer.types.length; t++) {
+                                    if (e.dataTransfer.types[t] === "application/x-bpl-event") {
+                                        hasEvent = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (hasEvent) {
+                                e.preventDefault();
+                                e.dataTransfer.dropEffect = "copy";
+                                this.style.borderColor = "#7a7aff";
+                                this.style.background = "#2a2a4a";
+                            }
+                        });
+                        eventDropBox.addEventListener("dragleave", function() {
+                            this.style.borderColor = "#555";
+                            this.style.background = "#1a1a1a";
+                        });
+                        eventDropBox.addEventListener("drop", (function(fk, isAuto) {
+                            return function(e) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                this.style.borderColor = "#555";
+                                this.style.background = "#1a1a1a";
+                                var evJson = e.dataTransfer.getData("application/x-bpl-event");
+                                if (!evJson) {
+                                    return;
+                                }
+                                try {
+                                    var evData = JSON.parse(evJson);
+                                    var d = formDataStore[fk];
+                                    if (!d) {
+                                        d = getDefaultFormData();
+                                    }
+                                    d.studyEvents = [{
+                                        value: evData.value,
+                                        text: evData.text
+                                    }];
+                                    if (isAuto) d.modified = true;
+                                    formDataStore[fk] = d;
+                                    log("BPL: set study event " + evData.text + " on form " + fk);
+                                    renderCenterPanel(centerSearch.value);
+                                    runAutoValidation();
+                                } catch (err) {
+                                    log("BPL: event drop error " + err);
+                                }
+                            };
+                        })(fKey, isAutoPopulated));
                         var formLabel = document.createElement("span");
                         formLabel.style.cssText = "flex:1;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;min-width:0;" + (isAutoPopulated ? "color:#ccaa44;" : "");
                         formLabel.title = bplBuildFormLabel(seg.text, fEvents, fEntry.text, fData2);
                         formLabel.textContent = formLabel.title;
-                        if (!isAutoPopulated && hasMissingEvents) {
+                        if (hasMissingEvents && (!isAutoPopulated || isModifiedAuto)) {
                             formLabel.style.color = "#ff8888";
                         }
                         formLabel.addEventListener("click", (function(k) {
@@ -7846,6 +7866,8 @@
                             eventText: evText2,
                             formValue: fEntry.value,
                             formText: fEntry.text,
+                            formIndex: fEntry.index,
+                            formKey: fk,
                             timeOffset: timeOffset2,
                             hidden: fd.hidden,
                             mandatory: fd.mandatory,
@@ -8617,6 +8639,38 @@
             progressContent.updateStatus("Updates completed!");
             progressContent.setComplete();
             log("BPL Update: all update items processed");
+
+            // Remove successfully updated auto-populated forms from session
+            // so they don't get re-pulled as stale duplicates in the next session
+            var removedFromSession = 0;
+            for (var ri = 0; ri < updateItems.length; ri++) {
+                var rItem = updateItems[ri];
+                if (rItem.status !== "Success") continue;
+                if (!rItem.formKey) continue;
+
+                // Remove from formDataStore
+                if (formDataStore[rItem.formKey]) {
+                    delete formDataStore[rItem.formKey];
+                    log("BPL Update: removed successfully updated form from session store: " + rItem.formKey);
+                }
+
+                // Remove from segmentFormMap
+                var rSegForms = segmentFormMap[rItem.segmentValue] || [];
+                for (var rfi = 0; rfi < rSegForms.length; rfi++) {
+                    var rKey = getFormDataKey(rItem.segmentValue, rSegForms[rfi].value, rSegForms[rfi].index);
+                    if (rKey === rItem.formKey) {
+                        rSegForms.splice(rfi, 1);
+                        removedFromSession++;
+                        log("BPL Update: removed form entry from segmentFormMap at index " + rfi);
+                        break;
+                    }
+                }
+                segmentFormMap[rItem.segmentValue] = rSegForms;
+            }
+            if (removedFromSession > 0) {
+                saveSession();
+                log("BPL Update: session saved after removing " + removedFromSession + " successfully updated forms");
+            }
         }
     }
 
@@ -14464,8 +14518,7 @@
         { id: "Parse Deviation", label: "Parse Deviation" },
         { id: "Import I/E", label: "Import I/E" },
         { id: "Find Adverse Event", label: "Find Adverse Event" },
-        { id: "Find Form", label: "Find Form" },
-        { id: "Find Study Events", label: "Find Study Events" },
+        { id: "Find Form & Events", label: "Find Form & Events" },
         { id: "Set Visibility Condition", label: "Set Visibility Condition" },
         { id: "Item Method Forms", label: "Item Method Forms" },
         { id: "Cohort Eligibility", label: "Cohort Eligibility" },
@@ -21178,6 +21231,622 @@
             localStorage.removeItem(STORAGE_FIND_STUDY_EVENT_SUBJECT);
             log("Find Study Events: post-reload processing completed");
         }, 200);
+    }
+
+    //==========================
+    // FIND FORM & EVENTS (COMBINED)
+    //==========================
+
+    function showFindFormAndEventsPopup(prefillSubject, onDone) {
+        log("Find Form & Events: showing popup");
+        var container = document.createElement("div");
+        container.style.display = "grid";
+        container.style.gridTemplateRows = "auto auto auto auto auto auto";
+        container.style.gap = "10px";
+
+        // Row 1: Form Keywords (textarea)
+        var row1 = document.createElement("div");
+        row1.style.display = "grid";
+        row1.style.gridTemplateColumns = "160px 1fr";
+        row1.style.alignItems = "start";
+        row1.style.gap = "8px";
+        var label1 = document.createElement("div");
+        label1.textContent = "Form Keywords";
+        label1.style.fontWeight = "600";
+        label1.style.paddingTop = "6px";
+        var inputFormKeywords = document.createElement("textarea");
+        inputFormKeywords.placeholder = "One keyword per line (optional)";
+        inputFormKeywords.rows = 3;
+        inputFormKeywords.style.cssText = "width:100%;box-sizing:border-box;padding:8px;border-radius:6px;border:1px solid #444;background:#1a1a1a;color:#fff;resize:vertical;font-family:inherit;font-size:13px;";
+        row1.appendChild(label1);
+        row1.appendChild(inputFormKeywords);
+        container.appendChild(row1);
+
+        // Row 2: Study Event Keywords (textarea)
+        var row2 = document.createElement("div");
+        row2.style.display = "grid";
+        row2.style.gridTemplateColumns = "160px 1fr";
+        row2.style.alignItems = "start";
+        row2.style.gap = "8px";
+        var label2 = document.createElement("div");
+        label2.textContent = "Study Event Keywords";
+        label2.style.fontWeight = "600";
+        label2.style.paddingTop = "6px";
+        var inputEventKeywords = document.createElement("textarea");
+        inputEventKeywords.placeholder = "One keyword per line (optional)";
+        inputEventKeywords.rows = 3;
+        inputEventKeywords.style.cssText = "width:100%;box-sizing:border-box;padding:8px;border-radius:6px;border:1px solid #444;background:#1a1a1a;color:#fff;resize:vertical;font-family:inherit;font-size:13px;";
+        row2.appendChild(label2);
+        row2.appendChild(inputEventKeywords);
+        container.appendChild(row2);
+
+        // Row 3: Subject Identifiers (textarea)
+        var row3 = document.createElement("div");
+        row3.style.display = "grid";
+        row3.style.gridTemplateColumns = "160px 1fr";
+        row3.style.alignItems = "start";
+        row3.style.gap = "8px";
+        var label3 = document.createElement("div");
+        label3.textContent = "Subject Identifiers";
+        label3.style.fontWeight = "600";
+        label3.style.paddingTop = "6px";
+        var inputSubjects = document.createElement("textarea");
+        inputSubjects.placeholder = "One subject per line (optional)";
+        inputSubjects.rows = 3;
+        inputSubjects.style.cssText = "width:100%;box-sizing:border-box;padding:8px;border-radius:6px;border:1px solid #444;background:#1a1a1a;color:#fff;resize:vertical;font-family:inherit;font-size:13px;";
+        row3.appendChild(label3);
+        row3.appendChild(inputSubjects);
+        container.appendChild(row3);
+
+        // Row 4: Item Group Data checkboxes
+        var row4 = document.createElement("div");
+        row4.style.display = "grid";
+        row4.style.gridTemplateColumns = "160px 1fr";
+        row4.style.alignItems = "center";
+        row4.style.gap = "8px";
+        var labelIG = document.createElement("div");
+        labelIG.textContent = "Item Group Data";
+        labelIG.style.fontWeight = "600";
+        var igWrap = document.createElement("div");
+        igWrap.style.display = "inline-flex";
+        igWrap.style.gap = "12px";
+        var igC = document.createElement("label");
+        var igCBox = document.createElement("input");
+        igCBox.type = "checkbox";
+        igCBox.value = "Complete";
+        igC.appendChild(igCBox);
+        igC.appendChild(document.createTextNode(" Complete"));
+        var igI = document.createElement("label");
+        var igIBox = document.createElement("input");
+        igIBox.type = "checkbox";
+        igIBox.value = "Incomplete";
+        igI.appendChild(igIBox);
+        igI.appendChild(document.createTextNode(" Incomplete"));
+        var igN = document.createElement("label");
+        var igNBox = document.createElement("input");
+        igNBox.type = "checkbox";
+        igNBox.value = "Nonconformant";
+        igN.appendChild(igNBox);
+        igN.appendChild(document.createTextNode(" Nonconformant"));
+        igWrap.appendChild(igC);
+        igWrap.appendChild(igI);
+        igWrap.appendChild(igN);
+        row4.appendChild(labelIG);
+        row4.appendChild(igWrap);
+        container.appendChild(row4);
+
+        // Row 5: Form Data checkboxes
+        var row5 = document.createElement("div");
+        row5.style.display = "grid";
+        row5.style.gridTemplateColumns = "160px 1fr";
+        row5.style.alignItems = "center";
+        row5.style.gap = "8px";
+        var labelFD = document.createElement("div");
+        labelFD.textContent = "Form Data";
+        labelFD.style.fontWeight = "600";
+        var fdWrap = document.createElement("div");
+        fdWrap.style.display = "inline-flex";
+        fdWrap.style.gap = "12px";
+        var fdNC = document.createElement("label");
+        var fdNCBox = document.createElement("input");
+        fdNCBox.type = "checkbox";
+        fdNCBox.value = "formDataNotCanceled";
+        fdNC.appendChild(fdNCBox);
+        fdNC.appendChild(document.createTextNode(" Not Canceled"));
+        var fdTM = document.createElement("label");
+        var fdTMBox = document.createElement("input");
+        fdTMBox.type = "checkbox";
+        fdTMBox.value = "timedAndMissed";
+        fdTM.appendChild(fdTMBox);
+        fdTM.appendChild(document.createTextNode(" Timed and Missed"));
+        fdWrap.appendChild(fdNC);
+        fdWrap.appendChild(fdTM);
+        row5.appendChild(labelFD);
+        row5.appendChild(fdWrap);
+        container.appendChild(row5);
+
+        // Restore saved checkbox prefs
+        try {
+            var prevRaw = localStorage.getItem(STORAGE_FIND_COMBINED_STATUS_VALUES);
+            if (prevRaw) {
+                var prevArr = JSON.parse(prevRaw);
+                if (Array.isArray(prevArr) && prevArr.length > 0) {
+                    igCBox.checked = prevArr.indexOf("Complete") >= 0;
+                    igIBox.checked = prevArr.indexOf("Incomplete") >= 0;
+                    igNBox.checked = prevArr.indexOf("Nonconformant") >= 0;
+                    fdNCBox.checked = prevArr.indexOf("formDataNotCanceled") >= 0;
+                    fdTMBox.checked = prevArr.indexOf("timedAndMissed") >= 0;
+                    log("Find Form & Events: restored checkbox prefs count=" + String(prevArr.length));
+                }
+            }
+        } catch (e) {
+            log("Find Form & Events: error restoring checkbox prefs");
+        }
+
+        // Prefill subject
+        if (prefillSubject && prefillSubject.length > 0) {
+            inputSubjects.value = prefillSubject;
+            log("Find Form & Events: subject prefilled='" + String(prefillSubject) + "'");
+        }
+
+        // Error message area
+        var errorDiv = document.createElement("div");
+        errorDiv.style.cssText = "display:none;color:#ff6b6b;font-size:12px;padding:4px 0;";
+        container.appendChild(errorDiv);
+
+        // Button row
+        var btnRow = document.createElement("div");
+        btnRow.style.display = "inline-flex";
+        btnRow.style.justifyContent = "flex-end";
+        btnRow.style.gap = "8px";
+        var clearIdBtn = document.createElement("button");
+        clearIdBtn.textContent = "Clear All";
+        clearIdBtn.style.cssText = "background:#777;color:#fff;border:none;border-radius:6px;padding:8px 12px;cursor:pointer;";
+        var cancelBtn = document.createElement("button");
+        cancelBtn.textContent = "Cancel";
+        cancelBtn.style.cssText = "background:#333;color:#fff;border:none;border-radius:6px;padding:8px 12px;cursor:pointer;";
+        var okBtn = document.createElement("button");
+        okBtn.textContent = "Continue";
+        okBtn.style.cssText = "background:#0b82ff;color:#fff;border:none;border-radius:6px;padding:8px 12px;cursor:pointer;";
+        btnRow.appendChild(clearIdBtn);
+        btnRow.appendChild(cancelBtn);
+        btnRow.appendChild(okBtn);
+        container.appendChild(btnRow);
+
+        var popup = createPopup({ title: "Find Form & Events", content: container, width: "600px", height: "auto" });
+
+        window.setTimeout(function () {
+            try { inputFormKeywords.focus(); } catch (e) {}
+        }, 50);
+
+        function parseTextareaLines(val) {
+            var lines = (val || "").split("\n");
+            var out = [];
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i].trim();
+                if (line.length > 0) out.push(line);
+            }
+            return out;
+        }
+
+        function gatherStatusSelections() {
+            var out = [];
+            if (igCBox && igCBox.checked) out.push("Complete");
+            if (igIBox && igIBox.checked) out.push("Incomplete");
+            if (igNBox && igNBox.checked) out.push("Nonconformant");
+            if (fdNCBox && fdNCBox.checked) out.push("formDataNotCanceled");
+            if (fdTMBox && fdTMBox.checked) out.push("timedAndMissed");
+            return out;
+        }
+
+        function doContinue() {
+            var formKws = parseTextareaLines(inputFormKeywords.value);
+            var eventKws = parseTextareaLines(inputEventKeywords.value);
+            var subjects = parseTextareaLines(inputSubjects.value);
+            if (formKws.length === 0 && eventKws.length === 0 && subjects.length === 0) {
+                errorDiv.textContent = "At least one Form Keyword, Study Event Keyword, or Subject Identifier is required.";
+                errorDiv.style.display = "block";
+                return;
+            }
+            errorDiv.style.display = "none";
+            var statuses = gatherStatusSelections();
+            try {
+                if (statuses.length > 0) {
+                    localStorage.setItem(STORAGE_FIND_COMBINED_STATUS_VALUES, JSON.stringify(statuses));
+                } else {
+                    localStorage.removeItem(STORAGE_FIND_COMBINED_STATUS_VALUES);
+                }
+            } catch (e) {}
+            log("Find Form & Events: continue - forms=" + formKws.length + " events=" + eventKws.length + " subjects=" + subjects.length + " statuses=" + statuses.length);
+            if (popup && popup.close) popup.close();
+            if (typeof onDone === "function") {
+                onDone({ formKeywords: formKws, eventKeywords: eventKws, subjects: subjects, statuses: statuses });
+            }
+        }
+
+        function keyHandler(e) {
+            var code = e.key || e.code || "";
+            if (code === "Escape" || code === "Esc") {
+                log("Find Form & Events: Esc pressed; closing");
+                if (popup && popup.close) popup.close();
+                document.removeEventListener("keydown", keyHandler, true);
+                if (typeof onDone === "function") onDone(null);
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        }
+        document.addEventListener("keydown", keyHandler, true);
+
+        clearIdBtn.addEventListener("click", function () {
+            inputFormKeywords.value = "";
+            inputEventKeywords.value = "";
+            inputSubjects.value = "";
+            igCBox.checked = false;
+            igIBox.checked = false;
+            igNBox.checked = false;
+            fdNCBox.checked = false;
+            fdTMBox.checked = false;
+            errorDiv.style.display = "none";
+            log("Find Form & Events: all fields cleared");
+        });
+
+        cancelBtn.addEventListener("click", function () {
+            log("Find Form & Events: popup canceled");
+            if (popup && popup.close) popup.close();
+            document.removeEventListener("keydown", keyHandler, true);
+            if (typeof onDone === "function") onDone(null);
+        });
+
+        okBtn.addEventListener("click", function () {
+            document.removeEventListener("keydown", keyHandler, true);
+            doContinue();
+        });
+    }
+
+    function findCombinedMatchesOptions(selectEl, keywords) {
+        if (!selectEl || !keywords || keywords.length === 0) return 0;
+        var ops = selectEl.querySelectorAll("option");
+        var selectedCount = 0;
+        for (var i = 0; i < ops.length; i++) {
+            var optText = (ops[i].textContent || "") + "";
+            for (var k = 0; k < keywords.length; k++) {
+                if (formMatchContainsAllTokens(optText, keywords[k])) {
+                    ops[i].selected = true;
+                    selectedCount++;
+                    break;
+                }
+            }
+        }
+        if (selectedCount > 0) {
+            var ev = new Event("change", { bubbles: true });
+            selectEl.dispatchEvent(ev);
+        }
+        return selectedCount;
+    }
+
+    function findCombinedMatchSubjects(selectEl, subjects) {
+        if (!selectEl || !subjects || subjects.length === 0) return 0;
+        var ops = selectEl.querySelectorAll("option");
+        var selectedCount = 0;
+        for (var i = 0; i < ops.length; i++) {
+            var optText = (ops[i].textContent || "") + "";
+            var optVal = (ops[i].value || "") + "";
+            var optNorm = aeNormalize(optText);
+            for (var s = 0; s < subjects.length; s++) {
+                var subjNorm = aeNormalize(subjects[s]);
+                if (subjNorm.length === 0) continue;
+                if (optNorm === subjNorm || optNorm.indexOf(subjNorm) >= 0 || optVal === subjects[s]) {
+                    ops[i].selected = true;
+                    selectedCount++;
+                    break;
+                }
+            }
+        }
+        if (selectedCount > 0) {
+            var ev = new Event("change", { bubbles: true });
+            selectEl.dispatchEvent(ev);
+        }
+        return selectedCount;
+    }
+
+    function applyCombinedStatusOnDCSubject(statuses) {
+        if (!statuses || statuses.length === 0) return;
+        var sel = document.getElementById("formDataStatus");
+        if (!sel) {
+            log("Find Form & Events: formDataStatus select not found on DC subject page");
+            return;
+        }
+        // Map data/list status values to DC subject page values
+        var dcMap = {
+            "Complete": "DataCollectionStatus_Complete",
+            "Incomplete": "DataCollectionStatus_Incomplete",
+            "Nonconformant": "DataCollectionStatus_Nonconformant",
+            "timedAndMissed": "State_timedAndMissed"
+        };
+        var ops = sel.querySelectorAll("option");
+        var count = 0;
+        for (var i = 0; i < ops.length; i++) {
+            var ov = (ops[i].value || "") + "";
+            for (var s = 0; s < statuses.length; s++) {
+                var mapped = dcMap[statuses[s]] || "";
+                if (mapped && ov === mapped) {
+                    ops[i].selected = true;
+                    count++;
+                    break;
+                }
+            }
+        }
+        if (count > 0) {
+            var ev = new Event("change", { bubbles: true });
+            sel.dispatchEvent(ev);
+        }
+        log("Find Form & Events: DC subject status applied count=" + count);
+    }
+
+    function processFindCombinedDirectDCSubject(formKeywords, eventKeywords, statuses) {
+        log("Find Form & Events: processing on DC subject page");
+        var t = 0;
+        var r = setInterval(function () {
+            t++;
+            if (t > 120) {
+                clearInterval(r);
+                log("Find Form & Events: timeout waiting for DC subject controls");
+                return;
+            }
+            var eventSel = document.getElementById("studyEventId");
+            var formSel = document.getElementById("filterFormId");
+            if (!eventSel && !formSel) return;
+
+            clearInterval(r);
+
+            // Clear & fill study events
+            if (eventSel && eventKeywords.length > 0) {
+                clearSelect2ChoicesByContainerId("s2id_studyEventId");
+                deselectAllOptionsBySelect(eventSel);
+                var evCount = 0;
+                var eops = eventSel.querySelectorAll("option");
+                for (var ei = 0; ei < eops.length; ei++) {
+                    var eTxt = (eops[ei].textContent || "") + "";
+                    for (var ek = 0; ek < eventKeywords.length; ek++) {
+                        if (studyEventMatchContainsAllTokens(eTxt, eventKeywords[ek])) {
+                            eops[ei].selected = true;
+                            evCount++;
+                            break;
+                        }
+                    }
+                }
+                if (evCount > 0) {
+                    var ev1 = new Event("change", { bubbles: true });
+                    eventSel.dispatchEvent(ev1);
+                }
+                log("Find Form & Events: DC subject study events selected count=" + evCount);
+            }
+
+            // Clear & fill forms
+            if (formSel && formKeywords.length > 0) {
+                clearSelect2ChoicesByContainerId("s2id_filterFormId");
+                deselectAllOptionsBySelect(formSel);
+                var fCount = 0;
+                var fops = formSel.querySelectorAll("option");
+                for (var fi = 0; fi < fops.length; fi++) {
+                    var fTxt = (fops[fi].textContent || "") + "";
+                    for (var fk = 0; fk < formKeywords.length; fk++) {
+                        if (formMatchContainsAllTokens(fTxt, formKeywords[fk])) {
+                            fops[fi].selected = true;
+                            fCount++;
+                            break;
+                        }
+                    }
+                }
+                if (fCount > 0) {
+                    var ev2 = new Event("change", { bubbles: true });
+                    formSel.dispatchEvent(ev2);
+                }
+                log("Find Form & Events: DC subject forms selected count=" + fCount);
+            }
+
+            // Apply status
+            applyCombinedStatusOnDCSubject(statuses);
+
+            // Click search
+            var searchBtn = document.getElementById("dataSearchButton");
+            if (!searchBtn) searchBtn = document.querySelector("button[type='submit'], input[type='submit']");
+            if (searchBtn) {
+                searchBtn.click();
+                log("Find Form & Events: DC subject Search button clicked");
+            } else {
+                log("Find Form & Events: DC subject Search button not found");
+            }
+
+            log("Find Form & Events: DC subject processing completed");
+        }, 200);
+    }
+
+    function processFindCombinedDirectList(formKeywords, eventKeywords, subjects, statuses) {
+        log("Find Form & Events: processing on data/list page");
+        var t = 0;
+        var r = setInterval(function () {
+            t++;
+            if (t > 120) {
+                clearInterval(r);
+                log("Find Form & Events: timeout waiting for list controls");
+                return;
+            }
+            var formsSel = document.getElementById("formIds");
+            var eventsSel = document.getElementById("studyEventIds");
+            var formsBoxReady = document.getElementById("s2id_formIds");
+            if (!formsSel && !eventsSel) return;
+            if (formsSel && !formsBoxReady) return;
+
+            clearInterval(r);
+
+            // Reset
+            resetStudyEventsOnList();
+            resetStatusValuesOnList();
+
+            // Apply statuses
+            if (statuses && statuses.length > 0) {
+                applyStatusValuesOnList(statuses);
+            }
+
+            // Fill forms
+            if (formsSel && formKeywords.length > 0) {
+                clearSelect2ChoicesByContainerId("s2id_formIds");
+                deselectAllOptionsBySelect(formsSel);
+                var fCount = findCombinedMatchesOptions(formsSel, formKeywords);
+                log("Find Form & Events: list forms selected count=" + fCount);
+                if (fCount === 0) {
+                    log("Find Form & Events: no forms matched any keyword");
+                }
+            }
+
+            // Fill study events
+            if (eventsSel && eventKeywords.length > 0) {
+                clearSelect2ChoicesByContainerId("s2id_studyEventIds");
+                deselectAllOptionsBySelect(eventsSel);
+                var eCount = 0;
+                var eops = eventsSel.querySelectorAll("option");
+                for (var ei = 0; ei < eops.length; ei++) {
+                    var eTxt = (eops[ei].textContent || "") + "";
+                    for (var ek = 0; ek < eventKeywords.length; ek++) {
+                        if (studyEventMatchContainsAllTokens(eTxt, eventKeywords[ek])) {
+                            eops[ei].selected = true;
+                            eCount++;
+                            break;
+                        }
+                    }
+                }
+                if (eCount > 0) {
+                    var ev1 = new Event("change", { bubbles: true });
+                    eventsSel.dispatchEvent(ev1);
+                }
+                log("Find Form & Events: list study events selected count=" + eCount);
+            }
+
+            // Fill subjects
+            var subjSel = document.getElementById("subjectIds");
+            if (subjSel && subjects.length > 0) {
+                var sCount = findCombinedMatchSubjects(subjSel, subjects);
+                log("Find Form & Events: list subjects selected count=" + sCount);
+            }
+
+            // Click search
+            var searchBtn = document.getElementById("dataSearchButton");
+            if (searchBtn) {
+                searchBtn.click();
+                log("Find Form & Events: list Search button clicked");
+            } else {
+                log("Find Form & Events: list Search button not found");
+            }
+
+            log("Find Form & Events: list processing completed");
+        }, 200);
+    }
+
+    function processFindCombinedOnList() {
+        var pending = localStorage.getItem(STORAGE_FIND_COMBINED_PENDING);
+        if (!pending || pending !== "1") return;
+
+        var formKeywords = [];
+        var eventKeywords = [];
+        var subjects = [];
+        var statuses = [];
+        try {
+            var fkRaw = localStorage.getItem(STORAGE_FIND_COMBINED_FORM_KEYWORDS);
+            if (fkRaw) formKeywords = JSON.parse(fkRaw);
+            var ekRaw = localStorage.getItem(STORAGE_FIND_COMBINED_EVENT_KEYWORDS);
+            if (ekRaw) eventKeywords = JSON.parse(ekRaw);
+            var sjRaw = localStorage.getItem(STORAGE_FIND_COMBINED_SUBJECTS);
+            if (sjRaw) subjects = JSON.parse(sjRaw);
+            var stRaw = localStorage.getItem(STORAGE_FIND_COMBINED_STATUS_VALUES);
+            if (stRaw) statuses = JSON.parse(stRaw);
+        } catch (e) {
+            log("Find Form & Events: error reading stored combined state");
+        }
+
+        // Clear pending flags
+        localStorage.removeItem(STORAGE_FIND_COMBINED_PENDING);
+        localStorage.removeItem(STORAGE_FIND_COMBINED_FORM_KEYWORDS);
+        localStorage.removeItem(STORAGE_FIND_COMBINED_EVENT_KEYWORDS);
+        localStorage.removeItem(STORAGE_FIND_COMBINED_SUBJECTS);
+        localStorage.removeItem(STORAGE_FIND_COMBINED_TARGET_PAGE);
+
+        var targetPage = localStorage.getItem(STORAGE_FIND_COMBINED_TARGET_PAGE) || "list";
+        log("Find Form & Events: post-reload processing started targetPage=" + targetPage);
+
+        if (location.pathname.indexOf("/datacollection/subject") >= 0) {
+            processFindCombinedDirectDCSubject(formKeywords, eventKeywords, statuses);
+        } else {
+            processFindCombinedDirectList(formKeywords, eventKeywords, subjects, statuses);
+        }
+    }
+
+    function processFindCombinedOnDCSubject() {
+        var pending = localStorage.getItem(STORAGE_FIND_COMBINED_PENDING);
+        if (!pending || pending !== "1") return;
+        var target = localStorage.getItem(STORAGE_FIND_COMBINED_TARGET_PAGE) || "";
+        if (target !== "dcsubject") return;
+
+        var formKeywords = [];
+        var eventKeywords = [];
+        var statuses = [];
+        try {
+            var fkRaw = localStorage.getItem(STORAGE_FIND_COMBINED_FORM_KEYWORDS);
+            if (fkRaw) formKeywords = JSON.parse(fkRaw);
+            var ekRaw = localStorage.getItem(STORAGE_FIND_COMBINED_EVENT_KEYWORDS);
+            if (ekRaw) eventKeywords = JSON.parse(ekRaw);
+            var stRaw = localStorage.getItem(STORAGE_FIND_COMBINED_STATUS_VALUES);
+            if (stRaw) statuses = JSON.parse(stRaw);
+        } catch (e) {
+            log("Find Form & Events: error reading stored combined state for DC subject");
+        }
+
+        // Clear pending flags
+        localStorage.removeItem(STORAGE_FIND_COMBINED_PENDING);
+        localStorage.removeItem(STORAGE_FIND_COMBINED_FORM_KEYWORDS);
+        localStorage.removeItem(STORAGE_FIND_COMBINED_EVENT_KEYWORDS);
+        localStorage.removeItem(STORAGE_FIND_COMBINED_SUBJECTS);
+        localStorage.removeItem(STORAGE_FIND_COMBINED_TARGET_PAGE);
+
+        log("Find Form & Events: post-reload processing on DC subject page");
+        processFindCombinedDirectDCSubject(formKeywords, eventKeywords, statuses);
+    }
+
+    function openFindFormAndEvents() {
+        log("Find Form & Events: starting");
+        var prefill = findSubjectIdentifierForFindForm();
+        showFindFormAndEventsPopup(prefill, function (userInput) {
+            if (userInput === null) {
+                log("Find Form & Events: canceled by user; stopping");
+                return;
+            }
+            var formKws = userInput.formKeywords || [];
+            var eventKws = userInput.eventKeywords || [];
+            var subjects = userInput.subjects || [];
+            var statuses = userInput.statuses || [];
+
+            var onDCSubject = location.pathname.indexOf("/datacollection/subject") >= 0;
+            var onDataList = location.pathname === "/secure/study/data/list";
+
+            if (onDCSubject) {
+                // Process directly on DC subject page (subject ignored on this page)
+                log("Find Form & Events: processing on current DC subject page");
+                processFindCombinedDirectDCSubject(formKws, eventKws, statuses);
+            } else if (onDataList) {
+                // Process directly on data/list page
+                log("Find Form & Events: processing on current data/list page");
+                processFindCombinedDirectList(formKws, eventKws, subjects, statuses);
+            } else {
+                // Redirect to data/list page
+                log("Find Form & Events: not on target page, saving state and redirecting to data/list");
+                localStorage.setItem(STORAGE_FIND_COMBINED_PENDING, "1");
+                localStorage.setItem(STORAGE_FIND_COMBINED_FORM_KEYWORDS, JSON.stringify(formKws));
+                localStorage.setItem(STORAGE_FIND_COMBINED_EVENT_KEYWORDS, JSON.stringify(eventKws));
+                localStorage.setItem(STORAGE_FIND_COMBINED_SUBJECTS, JSON.stringify(subjects));
+                localStorage.setItem(STORAGE_FIND_COMBINED_TARGET_PAGE, "list");
+                window.location.href = FORM_LIST_URL;
+            }
+        });
     }
 
     //==========================
@@ -30440,29 +31109,17 @@
         findAeBtn.style.cursor = "pointer";
         findAeBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
         findAeBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
-        var findFormBtn = document.createElement("button");
-        findFormBtn.textContent = "Find Form";
-        findFormBtn.style.background = "#4a90e2";
-        findFormBtn.style.color = "#fff";
-        findFormBtn.style.border = "none";
-        findFormBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
-        findFormBtn.style.padding = scale(BUTTON_PADDING_PX);
-        findFormBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        findFormBtn.style.cursor = "pointer";
-        findFormBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
-        findFormBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
-
-        var findStudyEventsBtn = document.createElement("button");
-        findStudyEventsBtn.textContent = "Find Study Events";
-        findStudyEventsBtn.style.background = "#4a90e2";
-        findStudyEventsBtn.style.color = "#fff";
-        findStudyEventsBtn.style.border = "none";
-        findStudyEventsBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
-        findStudyEventsBtn.style.padding = scale(BUTTON_PADDING_PX);
-        findStudyEventsBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
-        findStudyEventsBtn.style.cursor = "pointer";
-        findStudyEventsBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
-        findStudyEventsBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+        var findFormAndEventsBtn = document.createElement("button");
+        findFormAndEventsBtn.textContent = "Find Form & Events";
+        findFormAndEventsBtn.style.background = "#4a90e2";
+        findFormAndEventsBtn.style.color = "#fff";
+        findFormAndEventsBtn.style.border = "none";
+        findFormAndEventsBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        findFormAndEventsBtn.style.padding = scale(BUTTON_PADDING_PX);
+        findFormAndEventsBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
+        findFormAndEventsBtn.style.cursor = "pointer";
+        findFormAndEventsBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
+        findFormAndEventsBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
 
         var importFromLibBtn = document.createElement("button");
         importFromLibBtn.textContent = "Import From Library";
@@ -30732,7 +31389,7 @@
 
         // Apply glassmorphism theme to all panel buttons if glass theme is active
         if (glass) {
-            var allPanelBtns = [svcBtn, runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, importFromLibBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, bplBtn, importEligBtn, findAeBtn, findFormBtn, findStudyEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, editStudyEventsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn];
+            var allPanelBtns = [svcBtn, runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, importFromLibBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, bplBtn, importEligBtn, findAeBtn, findFormAndEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, editStudyEventsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn];
             for (var gi = 0; gi < allPanelBtns.length; gi++) {
                 var gb = allPanelBtns[gi];
                 gb.className = "ie-btn-primary";
@@ -30761,8 +31418,7 @@
             { el: parseDeviationBtn, label: "Parse Deviation" },
             { el: importEligBtn, label: "Import I/E" },
             { el: findAeBtn, label: "Find Adverse Event" },
-            { el: findFormBtn, label: "Find Form" },
-            { el: findStudyEventsBtn, label: "Find Study Events" },
+            { el: findFormAndEventsBtn, label: "Find Form & Events" },
             { el: parseMethodBtn, label: "Item Method Forms" },
             { el: openEligBtn, label: "Cohort Eligibility" },
             { el: subjectEligBtn, label: "Subject Eligibility" },
@@ -30919,11 +31575,8 @@
         findAeBtn.addEventListener("click", function () {
             openAndLocateAdverseEvent();
         });
-        findFormBtn.addEventListener("click", function () {
-            openFindForm();
-        });
-        findStudyEventsBtn.addEventListener("click", function () {
-            openFindStudyEvents();
+        findFormAndEventsBtn.addEventListener("click", function () {
+            openFindFormAndEvents();
         });
 
         openEligBtn.addEventListener("click", function () {
