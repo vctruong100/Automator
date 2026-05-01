@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.5.1
+// @version     2.5.2
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -5721,8 +5721,56 @@
             errors.push("Multiple Reference Activities found in " + refActivitySegmentCount + " segment" + (refActivitySegmentCount > 1 ? "s" : "") + ". Only one per Segment is allowed.");
             log("BPL: validation error - " + refActivitySegmentCount + " segments with multiple reference activities");
         }
+        var dupKeys = bplFindDuplicates(segments, segmentFormMap, formDataStore, segmentCheckboxStates);
+        var dupCount = Object.keys(dupKeys).length;
+        if (dupCount > 0) {
+            errors.push("Duplicate forms detected (" + dupCount + " form" + (dupCount > 1 ? "s" : "") + " with same name, study event, and time reference in the same segment).");
+            log("BPL: validation error - " + dupCount + " duplicate forms found");
+        }
         log("BPL: validation complete, " + errors.length + " error(s)");
         return errors;
+    }
+
+    function bplFindDuplicates(segments, segmentFormMap, formDataStore, segmentCheckboxStates) {
+        var duplicateKeys = {};
+        for (var si = 0; si < segments.length; si++) {
+            var sv = segments[si].value;
+            if (!segmentCheckboxStates[sv]) {
+                continue;
+            }
+            var fList = segmentFormMap[sv] || [];
+            if (fList.length < 2) {
+                continue;
+            }
+            var signatureMap = {};
+            for (var fi = 0; fi < fList.length; fi++) {
+                var fEntry = fList[fi];
+                var fk = sv + "|" + fEntry.value + "|" + fEntry.index;
+                var fd = formDataStore[fk];
+                if (!fd) {
+                    continue;
+                }
+                var evts = fd.studyEvents || [];
+                if (evts.length === 0) {
+                    continue;
+                }
+                var evKey = evts[0].value || evts[0].text || "";
+                var timeKey = (fd.days || 0) + ":" + (fd.hours || 0) + ":" + (fd.minutes || 0) + ":" + (fd.seconds || 0) + ":" + (fd.preReference ? "pre" : "post");
+                var sig = fEntry.text + "|" + evKey + "|" + timeKey;
+                if (!signatureMap[sig]) {
+                    signatureMap[sig] = [];
+                }
+                signatureMap[sig].push(fk);
+            }
+            for (var sig2 in signatureMap) {
+                if (signatureMap.hasOwnProperty(sig2) && signatureMap[sig2].length > 1) {
+                    for (var di = 0; di < signatureMap[sig2].length; di++) {
+                        duplicateKeys[signatureMap[sig2][di]] = true;
+                    }
+                }
+            }
+        }
+        return duplicateKeys;
     }
 
     function saveBPLSessionState(segmentFormMap, formDataStore, segmentCheckboxStates, formInstanceCounter) {
@@ -5984,6 +6032,8 @@
             }
         } catch (e) {}
         log("BPL: showUpdatedOnly initial state = " + bplShowUpdatedOnly);
+
+        var bplShowDuplicatesOnly = false;
 
         var bplHideKeybind = "F4";
         try {
@@ -6835,6 +6885,7 @@
             saveFormDataFromPanel(selectedFormKey);
             var scrollTop = centerBody.scrollTop;
             centerBody.innerHTML = "";
+            var bplDuplicateKeys = bplFindDuplicates(segments, segmentFormMap, formDataStore, segmentCheckboxStates);
             var filterLower = (filter || "").toLowerCase();
             for (var si2 = 0; si2 < segments.length; si2++) {
                 var seg = segments[si2];
@@ -6888,6 +6939,21 @@
                         }
                     }
                     if (!hasVisibleForm) {
+                        continue;
+                    }
+                }
+                if (bplShowDuplicatesOnly) {
+                    var segFormsForDup = segmentFormMap[seg.value] || [];
+                    var hasDupForm = false;
+                    for (var sdfi = 0; sdfi < segFormsForDup.length; sdfi++) {
+                        var sdfEntry = segFormsForDup[sdfi];
+                        var sdfKey = getFormDataKey(seg.value, sdfEntry.value, sdfEntry.index);
+                        if (bplDuplicateKeys[sdfKey]) {
+                            hasDupForm = true;
+                            break;
+                        }
+                    }
+                    if (!hasDupForm) {
                         continue;
                     }
                 }
@@ -7242,6 +7308,9 @@
                         if (matchingFormIndices !== null && matchingFormIndices.indexOf(fi) === -1) {
                             continue;
                         }
+                        if (bplShowDuplicatesOnly && !bplDuplicateKeys[fKey]) {
+                            continue;
+                        }
                         var formRow = document.createElement("div");
                         var isSelected = (fKey === selectedFormKey);
                         var hasMissingEvents = (fEvents.length === 0);
@@ -7257,17 +7326,28 @@
                                 rowBg = "#2a2a1a";
                             }
                         }
+                        var isDuplicate = !!bplDuplicateKeys[fKey];
                         if (isSelected) {
                             rowBorderColor = isModifiedAuto ? "#2d8a2d" : "#7a7aff";
                             rowBg = isAutoPopulated ? "#3a3a3a" : "#3a3a5a";
+                            if (isDuplicate) {
+                                rowBorderColor = "#cc3333";
+                                rowBg = "#4a2a2a";
+                            }
+                        } else if (isDuplicate) {
+                            rowBorderColor = "#aa4444";
+                            rowBg = "#3a2a2a";
                         } else if (!isAutoPopulated && hasMissingEvents) {
                             rowBorderColor = "#aa4444";
                             rowBg = "#3a2a2a";
                         }
                         var autoPopBorderLeft = "";
-                        formRow.style.cssText = "display:flex;align-items:center;gap:6px;padding:5px 8px;margin-bottom:4px;border:1px solid " + rowBorderColor + ";border-radius:5px;background:" + rowBg + ";transition:all 0.15s ease;" + autoPopBorderLeft;
                         if (isAutoPopulated) {
-                            autoPopBorderLeft = isModifiedAuto ? "border-left:3px solid #4caf50;" : "border-left:3px solid #d4a017;";
+                            if (isDuplicate) {
+                                autoPopBorderLeft = "border-left:3px solid #cc3333;";
+                            } else {
+                                autoPopBorderLeft = isModifiedAuto ? "border-left:3px solid #4caf50;" : "border-left:3px solid #d4a017;";
+                            }
                         }
                         formRow.style.cssText = "display:flex;align-items:center;gap:6px;padding:5px 8px;margin-bottom:4px;border:1px solid " + rowBorderColor + ";border-radius:5px;background:" + rowBg + ";transition:all 0.15s ease;" + autoPopBorderLeft;
                         if (isAutoPopulated && !isModifiedAuto) {
@@ -8013,6 +8093,34 @@
             log("BPL: collect existing complete - " + addedCount + " forms added, " + skippedCount + " skipped");
         });
         legendRow.appendChild(collectExistingBtn);
+
+        var viewDuplicatesBtn = document.createElement("button");
+        viewDuplicatesBtn.textContent = "\u26A0 View Duplicates";
+        viewDuplicatesBtn.title = "Toggle filter to show only duplicate forms in the center panel";
+        function updateViewDuplicatesBtnStyle() {
+            if (bplShowDuplicatesOnly) {
+                viewDuplicatesBtn.style.cssText = "padding:5px 12px;border-radius:4px;border:1px solid #e74c3c;background:#e74c3c;color:#fff;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;";
+            } else {
+                viewDuplicatesBtn.style.cssText = "padding:5px 12px;border-radius:4px;border:1px solid #c0392b;background:#2a1a1a;color:#ff6b6b;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;";
+            }
+        }
+        updateViewDuplicatesBtnStyle();
+        viewDuplicatesBtn.addEventListener("mouseenter", function() {
+            if (!bplShowDuplicatesOnly) {
+                this.style.background = "#3a1a1a";
+                this.style.borderColor = "#e74c3c";
+            }
+        });
+        viewDuplicatesBtn.addEventListener("mouseleave", function() {
+            updateViewDuplicatesBtnStyle();
+        });
+        viewDuplicatesBtn.addEventListener("click", function() {
+            bplShowDuplicatesOnly = !bplShowDuplicatesOnly;
+            updateViewDuplicatesBtnStyle();
+            renderCenterPanel(centerSearch.value);
+            log("BPL: View Duplicates toggled " + (bplShowDuplicatesOnly ? "ON" : "OFF"));
+        });
+        legendRow.appendChild(viewDuplicatesBtn);
 
         var bottomRow = document.createElement("div");
         bottomRow.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:12px;";
