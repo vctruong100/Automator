@@ -40,17 +40,6 @@ const hrAttachedItem = [
     "🧮 HR AVERAGE:"
 ]
 
-// Replace codelist 
-const attachedItemCodeList = [
-    "⭕Pending Results",
-    "✅ Within Protocol Range",
-    "🛑 Out of protocol range, SF",
-    "❗Out of Normal Range",
-    "✅ Within Normal Range",
-    " Yes, within normal range",
-    "No",
-]
-
 // Inclusive (edit)
 var sys_min_range = 90;
 var sys_max_range = 169;
@@ -100,7 +89,6 @@ else if ( // IR
 ) return itemJson.item.codeListItems[0]; // Within Normal Range
 
 return itemJson.item.codeListItems[4];
-
 
 function populateList(form, targetItem, attachedItem) {
     var itemGroups = form.form.itemGroups;

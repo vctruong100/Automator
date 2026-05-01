@@ -20,12 +20,6 @@ const screeningBMI_Form = [
     "📏 BM_BODY MEASUREMENTS (HEIGHT / WEIGHT / BMI)"
 ];
 
-// Replace the Yes or No codelist value
-const attachedItemCodeList = [
-    "Yes",
-    "NO, SF",
-]
-
 // inclusive
 var BMI_lower_range = 18;
 var BMI_upper_range = 30;
@@ -65,8 +59,8 @@ bmi = Math.round((weight / (heightMtr * heightMtr)) * factor) / factor;
 
 log();
 
-if (BMI_lower_range <= bmi && bmi <= BMI_upper_range) return attachedItemCodeList[0];
-else if (bmi < BMI_lower_range || bmi > BMI_upper_range) return attachedItemCodeList[1];
+if (BMI_lower_range <= bmi && bmi <= BMI_upper_range) return item.codeListItems[0].codedValue; // return Yes
+else if (bmi < BMI_lower_range || bmi > BMI_upper_range) return item.codeListItems[1].codedValue; // return No, SF
 
 return null;
 

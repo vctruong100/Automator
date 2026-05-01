@@ -14,13 +14,6 @@ const QRSitems = [
     "QRS_Protocol"
 ];
 
-// Replace codelist value
-const attachedItemCodeList = [
-    "⭕Pending Results",
-    "✅ Within Protocol Range",
-    "🛑 Out of protocol range, SF"
-]
-
 // Inclusive
 var QTcF_max_range = 450;
 var QRS_max_range = 120;
@@ -42,10 +35,10 @@ QRSavg = calculateAverage(QRSlist);
 
 log();
 
-if (QTcFlist.length !== QTcFmaxCount || QRSlist.length !== QRSmaxCount) return attachedItemCodeList[0];
+if (QTcFlist.length !== QTcFmaxCount || QRSlist.length !== QRSmaxCount) return itemJson.item.codeListItems[0].codedValue; // return pending result
 
-if (QTcFavg > QTcF_max_range || QRSavg > QRS_max_range) return attachedItemCodeList[2];
-else if (QTcFavg <= QTcF_max_range || QRSavg > QRS_max_range) return attachedItemCodeList[1];
+if (QTcFavg > QTcF_max_range || QRSavg > QRS_max_range) return itemJson.item.codeListItems[2].codedValue; // return out of protocol range
+else if (QTcFavg <= QTcF_max_range || QRSavg > QRS_max_range) return itemJson.item.codeListItems[1].codedValue; // Within protocol range
 
 return attachedItemCodeList[0];
 

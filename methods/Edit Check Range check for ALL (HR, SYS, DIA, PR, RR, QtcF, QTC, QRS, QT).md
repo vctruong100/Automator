@@ -39,9 +39,6 @@ const QtcFRangeMale = [380, 450];
 const QtcFRangeFemale = [380, 470];
 const QtRange = [400, 500];
 
-const errorMsg = "OOR, Repeat"; // Custom Error Message
-const RepeatErrorMsg = "OOR, SF"; // Custom Repeat Error Message
-
 // ======== Don't modify ========
 const item = itemJson.item;
 const isMale = formJson.form.subject.volunteer.sexMale;
@@ -58,7 +55,6 @@ if (QTC.indexOf(item.name) !== -1) return checkRange(QtcRange, isRepeat);
 if (QtcF.indexOf(item.name) !== -1) return checkRange(isMale ? QtcFRangeMale : QtcFRangeFemale, isRepeat);
 if (QT.indexOf(item.name) !== -1) return checkRange(QtRange, isRepeat);
 
-customErrorMessage(errorMsg);
 return false;
 
 function checkRange(range, isRepeat) {

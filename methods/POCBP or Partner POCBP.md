@@ -19,18 +19,18 @@ const pulledItemCodeList = [
 
 const gender = formJson.form.subject.volunteer.sexMale;
 
-if (gender) return attachedItemCodeList[1];
+if (gender) return itemJson.item.codeListItems[1].codedValue; // return no
 
 var form = pullForm(studyEvent, formName);
 if (!form) return null;
 
 var POCBP = pullItemFromForm(form, itemName);
-if (!POCBP) return null;
+if (!POCBP || POCBP.value == null) return null;
 
 log();
 
-if (POCBP == pulledItemCodeList[0]) return attachedItemCodeList[0];
-else if (POCBP == pulledItemCodeList[1]) return attachedItemCodeList[1]
+if (POCBP.value == POCBP.codeListItems[0].codedValue) return itemJson.item.codeListItems[0].codedValue; // return yes
+else if (POCBP.value == POCBP.codeListItems[1].codedValue) return itemJson.item.codeListItems[1].codedValue; // return no
 return null;
 
 function log() {
@@ -57,7 +57,7 @@ function pullItemFromForm(form, targetItem) {
         if (!group || group.canceled) continue;
         for (j = 0; j < group.items.length; j++) {
             item = group.items[j];
-            if (targetItem.indexOf(item.name) !== -1 && item.value !== null) return item.value;
+            if (targetItem.indexOf(item.name) !== -1 && item.value !== null) return item;
         }
     }
     return null;

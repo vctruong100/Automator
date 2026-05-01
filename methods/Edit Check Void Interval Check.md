@@ -1,7 +1,3 @@
-const item = itemJson.item;
-const studyevent = formJson.form.studyEventName;
-const form = formJson.form;
-
 const allForms = [
     "(*) 💧 -2 to 0 hr Urine Interval v3", // 0
     "(*)💧0 to 4 hr Urine Interval v4",// 1
@@ -51,6 +47,10 @@ const studyEvents = [
     "72 to 96 hrs",
 ]
 
+const item = itemJson.item;
+const studyevent = formJson.form.studyEventName;
+const form = formJson.form;
+
 const sameFormDifference = 15;
 const prevFormDifference = 15;
 
@@ -94,13 +94,13 @@ logger("End Time: " + formatDateTimeByType(endTime));
 const differenceMs =  collectedTimeMs - endTimeMs;
 logger(differenceMs)
 if (differenceMs < 0) {
-    customErrorMessage("Difference between Void time and Interval time is less than 0.")
+    customErrorMessage("Out of Window")
     return false;
 }
 const differenceInMins = Math.abs(Math.floor(differenceMs / (1000 * 60)))
 
 if(differenceInMins > sameFormDifference){
-    customErrorMessage("Difference between Void time and Interval is more than 15 minutes.");
+    customErrorMessage("Out of Window");
     return false;
 }
 
@@ -114,13 +114,12 @@ var prevEndTimeMs = prevEndTime.dateValueMs;
 var differenceMs2 = collectedTimeMs - prevEndTimeMs;
 logger(differenceMs2);
 if (differenceMs2 < 0) {
-    customErrorMessage("Difference between Void time and Interval time is less than 0.")
     return false;
 }
 
 const differenceInMins2 = Math.abs(Math.floor(differenceMs2 / (1000 * 60)))
 if(differenceInMins2 < prevFormDifference){
-    customErrorMessage("Void Time is within 15 minutes of previous interval '" + prevFormName + "'");
+    customErrorMessage("Out of Window");
     return false;
 }
 

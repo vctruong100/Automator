@@ -23,23 +23,12 @@ const tempItems = [
     "ORAL_TEMP",
 ]
 
-// Replace
-const attachedItemCodeList = [
-    "⭕Pending Results",
-    "✅ Within Protocol Range",
-    "🛑 Out of protocol range, SF",
-    "❗Out of Normal Range",
-    "✅ Within Normal Range",
-    " Yes, within normal range",
-    "No",
-]
-
 // Inclusive (Edit)
 var sys_min_range = 90;
 var sys_max_range = 169;
 
 var dia_min_range = 50
-var dia_max_range = 99;
+var dia_max_range = 99;7
 
 var hr_min_range = 60;
 var hr_max_range = 100;

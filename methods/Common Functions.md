@@ -82,38 +82,20 @@ function pullItemFromForm(form, targetItem) {
 //Use this to get item from same item group:
 function getItemGroupID(form) {
     for (var i = 0; i < form.form.itemGroups.length; i++) {
-    var group = form.form.itemGroups[i];
-    var items = group.items;
-    if (!items || items.length < 1) continue;
-
-    for (var j = 0; j < items.length; j++) {
-        var it = items[j];
-        if (it.id === item.id) {
-            groupid = group.id;
-            break;
-        }
-    }
-    if (groupid) break;
-    }
-}
-
-function getItemValueFromSameGroup(form, itemName) {
-    var value = null;
-    for (var i = 0; i < form.itemGroups.length; i++) {
-        var group = form.itemGroups[i];
-        if (group.id !== groupid) continue;
-
+        var group = form.form.itemGroups[i];
         var items = group.items;
+        if (!items || items.length < 1) continue;
+
         for (var j = 0; j < items.length; j++) {
-            var item = items[j];
-            if (item && item.name === itemName) {
-                value = item.value;
-                if (value && value !== null) return value;
+            var it = items[j];
+            if (it.id === item.id) {
+                return group.id;
             }
         }
     }
-    return null; 
+    return null;
 }
+
 
 function checkForm(studyevent, form) {
     var arrayForms = findFormData(studyevent, form);

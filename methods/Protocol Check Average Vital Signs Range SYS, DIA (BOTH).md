@@ -71,9 +71,9 @@ var diaAvg = calculateAverage(dialist, sigfig);
 logger("Sys: " + sysAvg);
 logger("Dia: " + diaAvg);
 
-if (sysAvg >= sysAvg_maxRange || diaAvg >= diaAvg_maxRange) return "Yes";
+if (sysAvg >= sysAvg_maxRange || diaAvg >= diaAvg_maxRange) return item.codeListItems[1].codedValue; // return yes
 
-return "No";
+return item.codeListItems[2].codedValue; // return no
 
 function populateList(form, targetItem, attachedItem) {
     var itemGroups = form.form.itemGroups;

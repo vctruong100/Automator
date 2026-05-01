@@ -1,5 +1,23 @@
-const errorMsg = "OOR, Repeat"; // Custom Error Message
-const RepeatErrorMsg = "OOR, INVESTIGATOR ASSESS"; // Custom Repeat Error Message
+// Just copy and paste the code. No need to do anything.
+// Acceptable Item Name Format:
+// "Heart Rate (60-100)"
+// "Temp (36.5 - 37.5)"
+// "BP 90-140"
+// "Glucose (<= 140)"
+// "Weight (> 50)"
+// "HR (>=60)"
+// "Temp (< 38)"
+// "BP (I: >=90, P: <=140)"
+// "Temp (36.5 to 37.5)"
+// "Temp (36.5–37.5)"
+// "Temp (≤37.5)"
+// "Temp (≥36.5)"
+// "Temp (36.5 °C - 37.5 °C)"
+// "QTcF (M: 350-450, F: 360-460)"
+// "QTc (male <=450, female <=470)"
+// "QTcF (m 350-450; f 360-460)"
+
+// Item names must have range inside parenthesis (). There must be a number.
 
 // =======================
 var item = itemJson.item;

@@ -22,19 +22,19 @@ const gender = formJson.form.subject.volunteer.sexMale;
 const age = formJson.form.subject.volunteer.age;
 logger(age);
 logger(gender);
-if (gender) return "None";
+if (gender) return itemJson.item.codeListItems[3].codedValue; // return None
 
 var form = pullForm(studyEvent, formNames);
 if (!form) return null;
 
 var childbearing = pullItemFromForm(form, childbearingItem);
-if (childbearing && childbearing.value !== null && childbearing.value == "Y") return "Pregnancy";
+if (childbearing && childbearing.value !== null && childbearing.value == childbearing.codeListItems[0].codedValue) return itemJson.item.codeListItems[0].codedValue; // if childbearing = Yes, return
 
 var status = pullItemFromForm(form, statusItem);
-if (status && status.value !== null && (status.value == status.codeListItems[2].codedValue)) return "None";
-else if (status && status.value !== null) return "Pregnancy";
+if (status && status.value !== null && (status.value == status.codeListItems[2].codedValue)) return itemJson.item.codeListItems[3].codedValue; // return None
+else if (status && status.value !== null) return itemJson.item.codeListItems[0]; // return pregnancy for other status
 
-return "None";
+return itemJson.item.codeListItems[3].codedValue; // return none
 
 function log() {
     logger("Childbearing: " + childbearing);
