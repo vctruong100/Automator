@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.5.2
+// @version     2.5.4
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -5536,7 +5536,8 @@
                     postWindow: "",
                     refActivity: saItem.refActivity || false,
                     preReference: saItem.preReference || false,
-                    studyEventText: matchedEvText
+                    studyEventText: matchedEvText,
+                    studyEventValue: matchedEvVal || saItem.studyEvent || ""
                 },
                 timepointRaw: saItem.timepointRaw || "",
                 timepointCleaned: saItem.timepointCleaned || "",
@@ -6634,7 +6635,8 @@
                     postWindow: data.postWindow || "",
                     refActivity: !!data.refActivity,
                     preReference: !!data.preReference,
-                    studyEventText: (data.studyEvents && data.studyEvents.length > 0) ? (data.studyEvents[0].text || "") : ""
+                    studyEventText: (data.studyEvents && data.studyEvents.length > 0) ? (data.studyEvents[0].text || "") : "",
+                    studyEventValue: (data.studyEvents && data.studyEvents.length > 0) ? (data.studyEvents[0].value || "") : ""
                 };
                 log("BPL: created missing originalValues for auto-populated form " + key);
             }
@@ -7649,8 +7651,67 @@
                         iconsLabel.style.cssText = "font-size:11px;flex-shrink:0;white-space:nowrap;";
                         formRow.appendChild(iconsLabel);
                         formRow.appendChild(timeRefLabel);
+                        var undoFormBtn = document.createElement("button");
+                        undoFormBtn.textContent = "\u21A9";
+                        if (isAutoPopulated && isModifiedAuto && fData2.originalValues) {
+                            undoFormBtn.title = "Undo changes to this auto-populated form";
+                            undoFormBtn.style.cssText = "padding:2px 5px;border-radius:3px;border:1px solid #e67e22;background:#3a2a1a;color:#f0a040;font-size:12px;font-weight:bold;cursor:pointer;flex-shrink:0;";
+                            undoFormBtn.addEventListener("mouseenter", function() {
+                                this.style.background = "#4a3a2a";
+                                this.style.borderColor = "#f39c12";
+                            });
+                            undoFormBtn.addEventListener("mouseleave", function() {
+                                this.style.background = "#3a2a1a";
+                                this.style.borderColor = "#e67e22";
+                            });
+                            undoFormBtn.addEventListener("click", (function(fk) {
+                                return function(e) {
+                                    e.stopPropagation();
+                                    var d = formDataStore[fk];
+                                    if (!d || !d.originalValues) {
+                                        log("BPL: undo attempted but no originalValues for " + fk);
+                                        return;
+                                    }
+                                    var orig = d.originalValues;
+                                    d.days = orig.days || 0;
+                                    d.hours = orig.hours || 0;
+                                    d.minutes = orig.minutes || 0;
+                                    d.seconds = orig.seconds || 0;
+                                    d.hidden = !!orig.hidden;
+                                    d.mandatory = orig.mandatory !== false;
+                                    d.enforce = !!orig.enforce;
+                                    d.preWindow = orig.preWindow || "";
+                                    d.postWindow = orig.postWindow || "";
+                                    d.refActivity = !!orig.refActivity;
+                                    d.preReference = !!orig.preReference;
+                                    if (orig.studyEventText) {
+                                        d.studyEvents = [{ value: orig.studyEventValue || "", text: orig.studyEventText }];
+                                    } else {
+                                        d.studyEvents = [];
+                                    }
+                                    d.modified = false;
+                                    var keyParts = fk.split("|");
+                                    var segRefDT = getSegmentRefDateTime(keyParts[0]);
+                                    d.segmentRefDateTime = segRefDT;
+                                    var tpStrUndo = bplFormatTimePoint(d.days, d.hours, d.minutes, d.seconds, false);
+                                    d.exampleTime = bplComputeExampleTime(segRefDT, tpStrUndo, d.preReference);
+                                    formDataStore[fk] = d;
+                                    log("BPL: undone changes for auto-populated form " + fk);
+                                    if (selectedFormKey === fk) {
+                                        loadFormDataToPanel(fk);
+                                    }
+                                    renderCenterPanel(centerSearch.value);
+                                    runAutoValidation();
+                                };
+                            })(fKey));
+                        } else {
+                            undoFormBtn.style.cssText = "padding:2px 5px;border-radius:3px;border:none;background:transparent;color:#555;font-size:12px;font-weight:bold;cursor:default;flex-shrink:0;opacity:0.2;";
+                            undoFormBtn.disabled = true;
+                            undoFormBtn.title = isAutoPopulated ? "No changes to undo" : "Undo is only available for auto-populated forms";
+                        }
                         formRow.appendChild(arrowUpBtn);
                         formRow.appendChild(arrowDownBtn);
+                        formRow.appendChild(undoFormBtn);
                         formRow.appendChild(copyFormBtn);
                         formRow.appendChild(removeFormBtn);
                         formDropArea.appendChild(formRow);
@@ -8070,7 +8131,8 @@
                         postWindow: "",
                         refActivity: saItem.refActivity || false,
                         preReference: saItem.preReference || false,
-                        studyEventText: matchedEvText
+                        studyEventText: matchedEvText,
+                        studyEventValue: matchedEvVal || saItem.studyEvent || ""
                     },
                     timepointRaw: saItem.timepointRaw || "",
                     timepointCleaned: saItem.timepointCleaned || "",
@@ -8295,6 +8357,10 @@
                 BPL_POPUP_REF.close();
                 BPL_POPUP_REF = null;
             }
+            // Reset BPL_CANCELLED since the programmatic .close() above triggers
+            // the popup's onClose callback which sets BPL_CANCELLED = true.
+            // This close is intentional (Confirm was clicked), not a user cancel.
+            BPL_CANCELLED = false;
             if (BPL_CANCELLED) {
                 log("BPL: cancelled before add process");
                 return;
@@ -9005,24 +9071,6 @@
                 if (rItem.status !== "Success") continue;
                 if (!rItem.formKey) continue;
 
-                // Remove from formDataStore
-                if (formDataStore[rItem.formKey]) {
-                    delete formDataStore[rItem.formKey];
-                    log("BPL Update: removed successfully updated form from session store: " + rItem.formKey);
-                }
-
-                // Remove from segmentFormMap
-                var rSegForms = segmentFormMap[rItem.segmentValue] || [];
-                for (var rfi = 0; rfi < rSegForms.length; rfi++) {
-                    var rKey = getFormDataKey(rItem.segmentValue, rSegForms[rfi].value, rSegForms[rfi].index);
-                    if (rKey === rItem.formKey) {
-                        rSegForms.splice(rfi, 1);
-                        removedFromSession++;
-                        log("BPL Update: removed form entry from segmentFormMap at index " + rfi);
-                        break;
-                    }
-                }
-                segmentFormMap[rItem.segmentValue] = rSegForms;
             }
             if (removedFromSession > 0) {
                 saveSession();
