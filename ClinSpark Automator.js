@@ -206,7 +206,7 @@
     var GENDER_CONTROL_CLASS = "ieGenderControl";
     var CODE_VIEW_DUP_TOGGLE_BUTTON_ID = "ieCodeViewDupToggle";
 
-    
+
     var BARCODE_SELECTORS = {
         featureButtonTarget: '.main-gui-panel',
         presenceCheckAnyIcon: 'i.fa-barcode, i.fa.fa-barcode',
@@ -290,6 +290,964 @@
     var PULL_LAB_BARCODE_STATUS_MAP = {};
 
 
+    //==========================
+    // DOWNLOAD DTS REPORT FEATURE
+    //==========================
+
+    var DTS_REPORT_POPUP_REF = null;
+    var DTS_PROGRESS_POPUP_REF = null;
+    var DTS_SUMMARY_POPUP_REF = null;
+    var DTS_REPORT_PATH = "/secure/study/report/list";
+    var DTS_REPORT_TYPE_VALUE = "clinicalCSV";
+    var DTS_REPORT_TYPE_LABEL = "Clinical Data Text (Delimited)";
+    var DTS_REPORT_DIV_ID = "reportDiv_16";
+    var DTS_SELECT_ID = "transferReportType_16";
+    var DTS_GENERATE_BTN_ID = "reportGenerateButton_16";
+    var DTS_RESULT_TAB_ID = "resultTab";
+    var DTS_RESULT_TBODY_ID = "reportRequestsTbody";
+    var DTS_STUDY_CHANGER_ID = "studyIdChanger";
+
+    var STORAGE_DTS_STATE = "activityPlanState.dts.state";
+    var RUNMODE_DTS = "dtsDownload";
+
+    function dtsGetReportUrl() {
+        var host = location.hostname;
+        if (host.indexOf("cenexeltest") !== -1) {
+            return "https://cenexeltest.clinspark.com" + DTS_REPORT_PATH;
+        }
+        return "https://cenexel.clinspark.com" + DTS_REPORT_PATH;
+    }
+
+    function dtsSaveState(state) {
+        try {
+            localStorage.setItem(STORAGE_DTS_STATE, JSON.stringify(state));
+            localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_DTS);
+        } catch (e) { log("DTS: failed to save state: " + String(e)); }
+    }
+
+    function dtsLoadState() {
+        try {
+            var raw = localStorage.getItem(STORAGE_DTS_STATE);
+            if (!raw) return null;
+            return JSON.parse(raw);
+        } catch (e) { return null; }
+    }
+
+    function dtsClearState() {
+        try {
+            localStorage.removeItem(STORAGE_DTS_STATE);
+            localStorage.removeItem(STORAGE_RUN_MODE);
+        } catch (e) {}
+    }
+
+    function dtsShowError(title, msg) {
+        var glass = isGlassTheme();
+        var overlay = document.createElement("div");
+        overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.65);z-index:2000000;display:flex;align-items:center;justify-content:center;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;";
+        var box = document.createElement("div");
+        box.style.cssText = "background:" + (glass ? "rgba(15,10,40,0.92)" : "#181818") + ";border:1px solid " + (glass ? "rgba(255,255,255,0.25)" : "#444") + ";border-radius:12px;padding:28px 32px;max-width:460px;width:90%;box-shadow:0 12px 40px rgba(0,0,0,0.5);display:flex;flex-direction:column;gap:16px;";
+        var ttl = document.createElement("div");
+        ttl.textContent = title;
+        ttl.style.cssText = "color:#ef4444;font-size:17px;font-weight:700;";
+        var body = document.createElement("div");
+        body.textContent = msg;
+        body.style.cssText = "color:" + (glass ? "rgba(255,255,255,0.85)" : "#ccc") + ";font-size:14px;line-height:1.5;";
+        var okBtn = document.createElement("button");
+        okBtn.textContent = "OK";
+        okBtn.style.cssText = "background:#1a7abf;color:#fff;border:none;border-radius:7px;padding:9px 28px;font-size:14px;font-weight:600;cursor:pointer;align-self:flex-end;";
+        okBtn.addEventListener("click", function() { overlay.remove(); });
+        box.appendChild(ttl);
+        box.appendChild(body);
+        box.appendChild(okBtn);
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+    }
+
+    function dtsCollectStudyOptions() {
+        var sel = document.getElementById(DTS_STUDY_CHANGER_ID);
+        if (!sel) return null;
+        var opts = sel.querySelectorAll("option");
+        var studies = [];
+        for (var i = 0; i < opts.length; i++) {
+            var val = (opts[i].value || "").trim();
+            var txt = (opts[i].textContent || opts[i].innerText || "").trim();
+            if (val && txt) {
+                studies.push({ value: val, text: txt });
+            }
+        }
+        return studies;
+    }
+
+    async function dtsSelectStudy(studyValue) {
+        var sel = document.getElementById(DTS_STUDY_CHANGER_ID);
+        if (!sel) return false;
+        sel.value = studyValue;
+        sel.dispatchEvent(new Event("change", { bubbles: true }));
+        try {
+            if (window.jQuery) window.jQuery("#" + DTS_STUDY_CHANGER_ID).trigger("change");
+        } catch(e) {}
+        return true;
+    }
+
+    async function dtsWaitForPageReady(timeoutMs) {
+        var start = Date.now();
+        timeoutMs = timeoutMs || 20000;
+        while (Date.now() - start < timeoutMs) {
+            if (document.readyState === "complete") {
+                await sleep(600);
+                if (document.readyState === "complete") return true;
+            }
+            await sleep(250);
+        }
+        return false;
+    }
+
+    async function dtsWaitForStudyChanger(timeoutMs) {
+        var start = Date.now();
+        timeoutMs = timeoutMs || 15000;
+        while (Date.now() - start < timeoutMs) {
+            var sel = document.getElementById(DTS_STUDY_CHANGER_ID);
+            if (sel) return sel;
+            await sleep(300);
+        }
+        return null;
+    }
+
+    async function dtsWaitForReportTab(timeoutMs) {
+        var start = Date.now();
+        timeoutMs = timeoutMs || 15000;
+        while (Date.now() - start < timeoutMs) {
+            var tab = document.getElementById("report_tab");
+            if (tab) return true;
+            await sleep(300);
+        }
+        return false;
+    }
+
+    async function dtsWaitForResultsTable(timeoutMs) {
+        var start = Date.now();
+        timeoutMs = timeoutMs || 15000;
+        while (Date.now() - start < timeoutMs) {
+            var tbody = document.getElementById(DTS_RESULT_TBODY_ID);
+            if (tbody && tbody.querySelector("tr")) return tbody;
+            await sleep(400);
+        }
+        return null;
+    }
+
+    function dtsFormatElapsed(ms) {
+        var totalSec = Math.floor(ms / 1000);
+        var m = Math.floor(totalSec / 60);
+        var s = totalSec % 60;
+        return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+    }
+
+    function dtsCreateStudySelectionPanel(studies, onConfirm) {
+        var glass = isGlassTheme();
+        var container = document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;gap:12px;padding:4px;";
+
+        var topBar = document.createElement("div");
+        topBar.style.cssText = "display:flex;gap:8px;margin-bottom:2px;";
+
+        function makeTopBtn(label, bg, hoverBg) {
+            var b = document.createElement("button");
+            b.textContent = label;
+            b.style.cssText = "background:" + bg + ";color:#fff;border:none;border-radius:6px;padding:6px 16px;font-size:13px;font-weight:600;cursor:pointer;transition:background 0.15s;";
+            b.addEventListener("mouseenter", function() { b.style.background = hoverBg; });
+            b.addEventListener("mouseleave", function() { b.style.background = bg; });
+            return b;
+        }
+
+        var selectAllBtn = makeTopBtn("Select All", "#1a7abf", "#155e96");
+        var unselectAllBtn = makeTopBtn("Unselect All", "#555", "#333");
+        topBar.appendChild(selectAllBtn);
+        topBar.appendChild(unselectAllBtn);
+        container.appendChild(topBar);
+
+        var listWrap = document.createElement("div");
+        listWrap.style.cssText = "max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;border:1px solid " + (glass ? "rgba(255,255,255,0.15)" : "#333") + ";border-radius:8px;padding:8px;background:" + (glass ? "rgba(15,10,40,0.4)" : "#111") + ";";
+
+        var checkboxes = [];
+
+        function updateConfirmBtn() {
+            var anyChecked = checkboxes.some(function(cb) { return cb.checked; });
+            confirmBtn.disabled = !anyChecked;
+            confirmBtn.style.opacity = anyChecked ? "1" : "0.45";
+            confirmBtn.style.cursor = anyChecked ? "pointer" : "not-allowed";
+        }
+
+        for (var si = 0; si < studies.length; si++) {
+            (function(study) {
+                var row = document.createElement("label");
+                row.style.cssText = "display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:6px;cursor:pointer;transition:background 0.12s;color:" + (glass ? "#fff" : "#ddd") + ";font-size:13px;";
+                row.addEventListener("mouseenter", function() { row.style.background = glass ? "rgba(255,255,255,0.07)" : "#222"; });
+                row.addEventListener("mouseleave", function() { row.style.background = ""; });
+                var cb = document.createElement("input");
+                cb.type = "checkbox";
+                cb.value = study.value;
+                cb.style.cssText = "width:16px;height:16px;cursor:pointer;accent-color:#1a7abf;flex-shrink:0;";
+                cb.addEventListener("change", updateConfirmBtn);
+                checkboxes.push(cb);
+                var lbl = document.createElement("span");
+                lbl.textContent = study.text;
+                lbl.style.cssText = "flex:1;word-break:break-word;";
+                row.appendChild(cb);
+                row.appendChild(lbl);
+                listWrap.appendChild(row);
+            })(studies[si]);
+        }
+
+        container.appendChild(listWrap);
+
+        selectAllBtn.addEventListener("click", function() {
+            checkboxes.forEach(function(cb) { cb.checked = true; });
+            updateConfirmBtn();
+        });
+        unselectAllBtn.addEventListener("click", function() {
+            checkboxes.forEach(function(cb) { cb.checked = false; });
+            updateConfirmBtn();
+        });
+
+        var footer = document.createElement("div");
+        footer.style.cssText = "display:flex;justify-content:flex-end;padding-top:4px;";
+
+        var confirmBtn = document.createElement("button");
+        confirmBtn.textContent = "Confirm";
+        confirmBtn.disabled = true;
+        confirmBtn.style.cssText = "background:#10b981;color:#fff;border:none;border-radius:7px;padding:9px 28px;font-size:14px;font-weight:700;cursor:not-allowed;opacity:0.45;transition:background 0.15s,opacity 0.15s;";
+        confirmBtn.addEventListener("mouseenter", function() { if (!confirmBtn.disabled) confirmBtn.style.background = "#059669"; });
+        confirmBtn.addEventListener("mouseleave", function() { if (!confirmBtn.disabled) confirmBtn.style.background = "#10b981"; });
+        confirmBtn.addEventListener("click", function() {
+            if (confirmBtn.disabled) return;
+            var selected = [];
+            for (var ci = 0; ci < checkboxes.length; ci++) {
+                if (checkboxes[ci].checked) {
+                    var val = checkboxes[ci].value;
+                    var study = studies.find(function(s) { return s.value === val; });
+                    if (study) selected.push(study);
+                }
+            }
+            if (selected.length === 0) return;
+            if (DTS_REPORT_POPUP_REF) { try { DTS_REPORT_POPUP_REF.close(); } catch(e) {} DTS_REPORT_POPUP_REF = null; }
+            onConfirm(selected);
+        });
+
+        footer.appendChild(confirmBtn);
+        container.appendChild(footer);
+
+        return container;
+    }
+
+    function dtsCreateProgressPanel(selectedStudies) {
+        var glass = isGlassTheme();
+        var statusMap = {};
+        var errorMap = {};
+        var rowEls = {};
+
+        var container = document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;gap:14px;padding:4px;min-width:0;";
+
+        var overallWrap = document.createElement("div");
+        overallWrap.style.cssText = "display:flex;flex-direction:column;gap:5px;";
+        var overallLabel = document.createElement("div");
+        overallLabel.style.cssText = "font-size:12px;color:" + (glass ? "rgba(255,255,255,0.6)" : "#888") + ";font-weight:600;letter-spacing:0.04em;text-transform:uppercase;";
+        overallLabel.textContent = "Overall Progress";
+        var overallBar = document.createElement("div");
+        overallBar.style.cssText = "height:10px;background:" + (glass ? "rgba(255,255,255,0.12)" : "#222") + ";border-radius:5px;overflow:hidden;";
+        var overallFill = document.createElement("div");
+        overallFill.style.cssText = "height:100%;width:0%;background:linear-gradient(90deg,#1a7abf,#10b981);border-radius:5px;transition:width 0.4s;";
+        overallBar.appendChild(overallFill);
+        var overallText = document.createElement("div");
+        overallText.style.cssText = "font-size:12px;color:" + (glass ? "rgba(255,255,255,0.75)" : "#aaa") + ";text-align:right;";
+        overallText.textContent = "0 / " + selectedStudies.length;
+        overallWrap.appendChild(overallLabel);
+        overallWrap.appendChild(overallBar);
+        overallWrap.appendChild(overallText);
+        container.appendChild(overallWrap);
+
+        var timerEl = document.createElement("div");
+        timerEl.style.cssText = "font-size:12px;color:" + (glass ? "rgba(255,255,255,0.6)" : "#888") + ";text-align:right;font-variant-numeric:tabular-nums;";
+        timerEl.textContent = "Elapsed: 00:00";
+        container.appendChild(timerEl);
+
+        var studyListWrap = document.createElement("div");
+        studyListWrap.style.cssText = "display:flex;flex-direction:column;gap:3px;max-height:320px;overflow-y:auto;border:1px solid " + (glass ? "rgba(255,255,255,0.12)" : "#2a2a2a") + ";border-radius:8px;padding:6px;background:" + (glass ? "rgba(15,10,40,0.35)" : "#0e0e0e") + ";";
+
+        var STATUS_COLORS = {
+            "Pending":              glass ? "rgba(255,255,255,0.45)" : "#888",
+            "Loading Study":        "#f59e0b",
+            "Navigating to Reports":"#f59e0b",
+            "Generating Report":    "#a78bfa",
+            "Waiting for Report":   "#a78bfa",
+            "Downloading":          "#38bdf8",
+            "Completed":            "#10b981",
+            "Failed":               "#ef4444"
+        };
+
+        for (var si = 0; si < selectedStudies.length; si++) {
+            (function(study, idx) {
+                var row = document.createElement("div");
+                row.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px;border-radius:5px;background:" + (glass ? "rgba(255,255,255,0.04)" : "#161616") + ";";
+                var nameEl = document.createElement("div");
+                nameEl.textContent = study.text;
+                nameEl.style.cssText = "flex:1;font-size:12px;color:" + (glass ? "#fff" : "#ccc") + ";word-break:break-word;min-width:0;";
+                var statusEl = document.createElement("div");
+                statusEl.textContent = "Pending";
+                statusEl.style.cssText = "font-size:11px;font-weight:700;white-space:nowrap;color:" + STATUS_COLORS["Pending"] + ";flex-shrink:0;";
+                row.appendChild(nameEl);
+                row.appendChild(statusEl);
+                studyListWrap.appendChild(row);
+                statusMap[study.value] = "Pending";
+                rowEls[study.value] = statusEl;
+            })(selectedStudies[si], si);
+        }
+
+        container.appendChild(studyListWrap);
+
+        var summaryWrap = document.createElement("div");
+        summaryWrap.id = "dtsSummarySection";
+        summaryWrap.style.cssText = "display:none;flex-direction:column;gap:6px;border-top:1px solid " + (glass ? "rgba(255,255,255,0.12)" : "#2a2a2a") + ";padding-top:10px;";
+        container.appendChild(summaryWrap);
+
+        var doneCount = 0;
+
+        function updateStatus(studyValue, newStatus, errorMsg) {
+            statusMap[studyValue] = newStatus;
+            if (errorMsg) errorMap[studyValue] = errorMsg;
+            var el = rowEls[studyValue];
+            if (el) {
+                el.textContent = newStatus;
+                el.style.color = STATUS_COLORS[newStatus] || "#aaa";
+            }
+            if (newStatus === "Completed" || newStatus === "Failed") {
+                doneCount++;
+            }
+            var pct = Math.round((doneCount / selectedStudies.length) * 100);
+            overallFill.style.width = pct + "%";
+            overallText.textContent = doneCount + " / " + selectedStudies.length;
+        }
+
+        var timerStart = Date.now();
+        var timerInterval = setInterval(function() {
+            timerEl.textContent = "Elapsed: " + dtsFormatElapsed(Date.now() - timerStart);
+        }, 1000);
+
+        function stopTimer() { clearInterval(timerInterval); }
+
+        function showSummary(results, totalMs) {
+            stopTimer();
+            summaryWrap.style.display = "flex";
+            var successes = results.filter(function(r) { return r.status === "Completed"; }).length;
+            var failures = results.filter(function(r) { return r.status === "Failed"; }).length;
+            var sumHeader = document.createElement("div");
+            sumHeader.style.cssText = "font-size:13px;font-weight:700;color:" + (glass ? "#fff" : "#ddd") + ";";
+            sumHeader.textContent = "Summary";
+            summaryWrap.appendChild(sumHeader);
+            var sumStats = document.createElement("div");
+            sumStats.style.cssText = "font-size:12px;color:" + (glass ? "rgba(255,255,255,0.75)" : "#aaa") + ";display:flex;gap:16px;";
+            var sc = document.createElement("span"); sc.textContent = "\u2713 " + successes + " completed"; sc.style.color = "#10b981"; sumStats.appendChild(sc);
+            var fc = document.createElement("span"); fc.textContent = "\u2717 " + failures + " failed"; fc.style.color = "#ef4444"; sumStats.appendChild(fc);
+            var tc = document.createElement("span"); tc.textContent = "\u23F1 " + dtsFormatElapsed(totalMs); tc.style.color = glass ? "rgba(255,255,255,0.55)" : "#777"; sumStats.appendChild(tc);
+            summaryWrap.appendChild(sumStats);
+            results.forEach(function(r) {
+                if (r.status === "Failed" && r.error) {
+                    var errRow = document.createElement("div");
+                    errRow.style.cssText = "font-size:11px;color:#ef4444;word-break:break-word;";
+                    errRow.textContent = "\u2717 " + r.text + ": " + r.error;
+                    summaryWrap.appendChild(errRow);
+                }
+            });
+        }
+
+        return { container: container, updateStatus: updateStatus, showSummary: showSummary, stopTimer: stopTimer };
+    }
+
+    async function runDownloadDtsReport() {
+        log("DTS: starting Download DTS Report");
+
+        var studies = dtsCollectStudyOptions();
+        if (!studies) {
+            dtsShowError("Download DTS Report", "Could not find the study dropdown (id: studyIdChanger). Please make sure you are on a ClinSpark page where the study selector is present.");
+            log("DTS: studyIdChanger not found");
+            return;
+        }
+        if (studies.length === 0) {
+            dtsShowError("Download DTS Report", "The study dropdown was found but contains no valid study options. Please switch to a study and try again.");
+            log("DTS: no valid study options found");
+            return;
+        }
+
+        log("DTS: found " + studies.length + " studies");
+
+        var selectionContent = dtsCreateStudySelectionPanel(studies, function(selected) {
+            log("DTS: user confirmed " + selected.length + " studies");
+            var initialState = {
+                phase: "generate",
+                studyIndex: 0,
+                step: "select_study",
+                selectedStudies: selected,
+                results: selected.map(function(s) { return { value: s.value, text: s.text, status: "Pending", error: null, genTime: null }; }),
+                startTime: Date.now()
+            };
+            dtsSaveState(initialState);
+            log("DTS: saved initial state, starting state machine");
+            dtsRunStateMachine(initialState);
+        });
+
+        DTS_REPORT_POPUP_REF = createPopup({
+            title: "Download DTS Report",
+            description: "Select studies to download Clinical Data Text (Delimited) reports",
+            content: selectionContent,
+            width: "520px",
+            height: "auto",
+            maxHeight: "85vh",
+            onClose: function() {
+                log("DTS: selection panel closed without confirming");
+                DTS_REPORT_POPUP_REF = null;
+            }
+        });
+    }
+
+    function dtsCreateProgressPopup(state, progressUI) {
+        if (DTS_PROGRESS_POPUP_REF) { try { DTS_PROGRESS_POPUP_REF.close(); } catch(e) {} DTS_PROGRESS_POPUP_REF = null; }
+        DTS_PROGRESS_POPUP_REF = createPopup({
+            title: "Download DTS Report \u2014 Progress",
+            description: "Processing " + state.selectedStudies.length + " " + (state.selectedStudies.length === 1 ? "study" : "studies"),
+            content: progressUI.container,
+            width: "580px",
+            height: "auto",
+            maxHeight: "88vh",
+            onClose: function() {
+                log("DTS: progress panel closed by user — cancelling automation");
+                progressUI.stopTimer();
+                DTS_PROGRESS_POPUP_REF = null;
+                dtsClearState();
+            }
+        });
+        for (var ri = 0; ri < state.results.length; ri++) {
+            var r = state.results[ri];
+            if (r.status && r.status !== "Pending") {
+                progressUI.updateStatus(r.value, r.status, r.error || null);
+            }
+        }
+    }
+
+    async function dtsRunStateMachine(state) {
+        var reportUrl = dtsGetReportUrl();
+
+        var progressUI = dtsCreateProgressPanel(state.selectedStudies);
+        dtsCreateProgressPopup(state, progressUI);
+
+        while (true) {
+            var runModeCheck = null;
+            try { runModeCheck = localStorage.getItem(STORAGE_RUN_MODE); } catch(e) {}
+            if (runModeCheck !== RUNMODE_DTS) {
+                log("DTS: run mode cleared (user cancelled); stopping state machine");
+                progressUI.stopTimer();
+                return;
+            }
+
+            if (state.phase === "complete") {
+                var totalMs = Date.now() - state.startTime;
+                log("DTS: all studies processed in " + dtsFormatElapsed(totalMs));
+
+                var finalResults = state.results.map(function(r) {
+                    return {
+                        value: r.value,
+                        text: r.text,
+                        status: (r.status === "WaitingForReport") ? "Failed" : r.status,
+                        error: r.error
+                    };
+                });
+
+                progressUI.showSummary(finalResults, totalMs);
+                dtsShowFinalSummary(finalResults, totalMs);
+                dtsClearState();
+                return;
+            }
+
+            // === GENERATE PHASE ===
+            if (state.phase === "generate") {
+                if (state.studyIndex >= state.selectedStudies.length) {
+                    log("DTS: Phase 1 complete — all reports generated, switching to download phase");
+                    state.phase = "download";
+                    state.studyIndex = 0;
+                    state.step = "select_study";
+                    dtsSaveState(state);
+                    continue;
+                }
+
+                var study = state.selectedStudies[state.studyIndex];
+                var result = state.results[state.studyIndex];
+
+                if (result.status === "Failed") {
+                    log("DTS: [generate] skipping already-failed study: " + study.text);
+                    state.studyIndex++;
+                    state.step = "select_study";
+                    dtsSaveState(state);
+                    continue;
+                }
+
+                // --- Step: select_study ---
+                if (state.step === "select_study") {
+                    log("DTS: [generate] processing study: " + study.text + " (value=" + study.value + ")");
+                    progressUI.updateStatus(study.value, "Loading Study");
+
+                    try {
+                        var changerEl = await dtsWaitForStudyChanger(8000);
+                        if (!changerEl) {
+                            result.status = "Failed";
+                            result.error = "Study dropdown not found after page load";
+                            progressUI.updateStatus(study.value, "Failed", result.error);
+                            log("DTS: [generate] " + study.text + " — study changer not found");
+                            state.studyIndex++;
+                            state.step = "select_study";
+                            dtsSaveState(state);
+                            continue;
+                        }
+                        log("DTS: [generate] waiting for page to reload for study: " + study.text);
+                        state.step = "navigate_reports";
+                        result.status = "Loading Study";
+                        dtsSaveState(state);
+
+                        changerEl.value = study.value;
+                        changerEl.dispatchEvent(new Event("change", { bubbles: true }));
+                        try { if (window.jQuery) window.jQuery("#" + DTS_STUDY_CHANGER_ID).trigger("change"); } catch(e) {}
+
+                        await sleep(1200);
+                        var ready = await dtsWaitForPageReady(18000);
+                        if (!ready) {
+                            result.status = "Failed";
+                            result.error = "Page did not finish loading after study switch";
+                            progressUI.updateStatus(study.value, "Failed", result.error);
+                            log("DTS: [generate] " + study.text + " — page load timeout");
+                            state.studyIndex++;
+                            state.step = "select_study";
+                            dtsSaveState(state);
+                            continue;
+                        }
+                        await sleep(500);
+                    } catch(selErr) {
+                        result.status = "Failed";
+                        result.error = "Error selecting study: " + String(selErr);
+                        progressUI.updateStatus(study.value, "Failed", result.error);
+                        log("DTS: [generate] " + study.text + " — select exception: " + String(selErr));
+                        state.studyIndex++;
+                        state.step = "select_study";
+                        dtsSaveState(state);
+                        continue;
+                    }
+                }
+
+                // --- Step: navigate_reports ---
+                if (state.step === "navigate_reports") {
+                    progressUI.updateStatus(study.value, "Navigating to Reports");
+                    result.status = "Navigating to Reports";
+                    state.step = "on_reports";
+                    dtsSaveState(state);
+
+                    log("DTS: [generate] navigating to report URL: " + reportUrl);
+                    location.href = reportUrl;
+                    return;
+                }
+
+                // --- Step: on_reports ---
+                if (state.step === "on_reports") {
+                    log("DTS: [generate] resumed on reports page for: " + study.text);
+                    progressUI.updateStatus(study.value, "Generating Report");
+
+                    try {
+                        var tabReady = await dtsWaitForReportTab(12000);
+                        if (!tabReady) {
+                            result.status = "Failed";
+                            result.error = "report_tab container not found on Reports page";
+                            progressUI.updateStatus(study.value, "Failed", result.error);
+                            log("DTS: [generate] " + study.text + " — report_tab not found");
+                            state.studyIndex++;
+                            state.step = "select_study";
+                            dtsSaveState(state);
+                            continue;
+                        }
+                        await sleep(400);
+
+                        var reportDiv = document.getElementById(DTS_REPORT_DIV_ID);
+                        if (!reportDiv) {
+                            result.status = "Failed";
+                            result.error = "reportDiv_16 not found on Reports page";
+                            progressUI.updateStatus(study.value, "Failed", result.error);
+                            log("DTS: [generate] " + study.text + " — reportDiv_16 not found");
+                            state.studyIndex++;
+                            state.step = "select_study";
+                            dtsSaveState(state);
+                            continue;
+                        }
+
+                        var formBody = reportDiv.querySelector(".form-body");
+                        var typeSelect = reportDiv.querySelector("#" + DTS_SELECT_ID);
+                        if (!typeSelect) typeSelect = reportDiv.querySelector("select[id='" + DTS_SELECT_ID + "']");
+                        if (!typeSelect) {
+                            result.status = "Failed";
+                            result.error = "transferReportType_16 select not found in reportDiv_16";
+                            progressUI.updateStatus(study.value, "Failed", result.error);
+                            log("DTS: [generate] " + study.text + " — transferReportType_16 not found");
+                            state.studyIndex++;
+                            state.step = "select_study";
+                            dtsSaveState(state);
+                            continue;
+                        }
+
+                        var hasClinicalsCSV = false;
+                        var opts = typeSelect.querySelectorAll("option");
+                        for (var oi = 0; oi < opts.length; oi++) {
+                            if (opts[oi].value === DTS_REPORT_TYPE_VALUE) { hasClinicalsCSV = true; break; }
+                        }
+                        if (!hasClinicalsCSV) {
+                            result.status = "Failed";
+                            result.error = "Option 'clinicalCSV' not found in transferReportType_16";
+                            progressUI.updateStatus(study.value, "Failed", result.error);
+                            log("DTS: [generate] " + study.text + " — clinicalCSV option not found");
+                            state.studyIndex++;
+                            state.step = "select_study";
+                            dtsSaveState(state);
+                            continue;
+                        }
+
+                        typeSelect.value = DTS_REPORT_TYPE_VALUE;
+                        typeSelect.dispatchEvent(new Event("change", { bubbles: true }));
+                        try { if (window.jQuery) window.jQuery("#" + DTS_SELECT_ID).trigger("change"); } catch(e) {}
+                        await sleep(300);
+
+                        progressUI.updateStatus(study.value, "Generating Report");
+                        result.genTime = Date.now();
+
+                        var generateBtn = reportDiv.querySelector("#" + DTS_GENERATE_BTN_ID);
+                        if (!generateBtn) generateBtn = document.getElementById(DTS_GENERATE_BTN_ID);
+                        if (!generateBtn) {
+                            result.status = "Failed";
+                            result.error = "Generate button (reportGenerateButton_16) not found";
+                            progressUI.updateStatus(study.value, "Failed", result.error);
+                            log("DTS: [generate] " + study.text + " — generate button not found");
+                            state.studyIndex++;
+                            state.step = "select_study";
+                            dtsSaveState(state);
+                            continue;
+                        }
+
+                        log("DTS: [generate] clicking Generate for: " + study.text);
+                        generateBtn.click();
+                        await sleep(800);
+
+                        progressUI.updateStatus(study.value, "Waiting for Report");
+                        result.status = "WaitingForReport";
+                        log("DTS: [generate] generation initiated for: " + study.text + " at t=" + result.genTime);
+
+                        state.studyIndex++;
+                        state.step = "select_study";
+                        dtsSaveState(state);
+                        continue;
+
+                    } catch(genErr) {
+                        result.status = "Failed";
+                        result.error = "Unexpected error during generation: " + String(genErr);
+                        progressUI.updateStatus(study.value, "Failed", result.error);
+                        log("DTS: [generate] " + study.text + " — exception: " + String(genErr));
+                        state.studyIndex++;
+                        state.step = "select_study";
+                        dtsSaveState(state);
+                        continue;
+                    }
+                }
+            }
+
+            // === DOWNLOAD PHASE ===
+            if (state.phase === "download") {
+                if (state.studyIndex >= state.selectedStudies.length) {
+                    log("DTS: Phase 2 complete — all downloads processed");
+                    state.phase = "complete";
+                    dtsSaveState(state);
+                    continue;
+                }
+
+                var dStudy = state.selectedStudies[state.studyIndex];
+                var dResult = state.results[state.studyIndex];
+
+                if (dResult.status === "Failed") {
+                    log("DTS: [download] skipping " + dStudy.text + " (already failed in generation phase)");
+                    state.studyIndex++;
+                    state.step = "select_study";
+                    dtsSaveState(state);
+                    continue;
+                }
+
+                // --- Step: select_study ---
+                if (state.step === "select_study") {
+                    log("DTS: [download] processing study: " + dStudy.text);
+                    progressUI.updateStatus(dStudy.value, "Loading Study");
+
+                    try {
+                        var dChangerEl = await dtsWaitForStudyChanger(8000);
+                        if (!dChangerEl) {
+                            dResult.status = "Failed";
+                            dResult.error = "Study dropdown not found during download phase";
+                            progressUI.updateStatus(dStudy.value, "Failed", dResult.error);
+                            log("DTS: [download] " + dStudy.text + " — study changer not found");
+                            state.studyIndex++;
+                            state.step = "select_study";
+                            dtsSaveState(state);
+                            continue;
+                        }
+                        state.step = "navigate_reports";
+                        dResult.status = "Loading Study";
+                        dtsSaveState(state);
+
+                        dChangerEl.value = dStudy.value;
+                        dChangerEl.dispatchEvent(new Event("change", { bubbles: true }));
+                        try { if (window.jQuery) window.jQuery("#" + DTS_STUDY_CHANGER_ID).trigger("change"); } catch(e) {}
+
+                        await sleep(1200);
+                        var dReady = await dtsWaitForPageReady(18000);
+                        if (!dReady) {
+                            dResult.status = "Failed";
+                            dResult.error = "Page did not load after study re-select (download phase)";
+                            progressUI.updateStatus(dStudy.value, "Failed", dResult.error);
+                            state.studyIndex++;
+                            state.step = "select_study";
+                            dtsSaveState(state);
+                            continue;
+                        }
+                        await sleep(500);
+                    } catch(dSelErr) {
+                        dResult.status = "Failed";
+                        dResult.error = "Error selecting study for download: " + String(dSelErr);
+                        progressUI.updateStatus(dStudy.value, "Failed", dResult.error);
+                        log("DTS: [download] " + dStudy.text + " — select exception: " + String(dSelErr));
+                        state.studyIndex++;
+                        state.step = "select_study";
+                        dtsSaveState(state);
+                        continue;
+                    }
+                }
+
+                // --- Step: navigate_reports ---
+                if (state.step === "navigate_reports") {
+                    progressUI.updateStatus(dStudy.value, "Navigating to Reports");
+                    dResult.status = "Navigating to Reports";
+                    state.step = "on_reports";
+                    dtsSaveState(state);
+
+                    log("DTS: [download] navigating to report URL: " + reportUrl);
+                    location.href = reportUrl;
+                    return;
+                }
+
+                // --- Step: on_reports ---
+                if (state.step === "on_reports") {
+                    log("DTS: [download] resumed on reports page for: " + dStudy.text);
+                    progressUI.updateStatus(dStudy.value, "Waiting for Report");
+
+                    try {
+                        var dTabReady = await dtsWaitForReportTab(12000);
+                        if (!dTabReady) {
+                            dResult.status = "Failed";
+                            dResult.error = "report_tab not found (download phase)";
+                            progressUI.updateStatus(dStudy.value, "Failed", dResult.error);
+                            state.studyIndex++;
+                            state.step = "select_study";
+                            dtsSaveState(state);
+                            continue;
+                        }
+                        await sleep(400);
+
+                        var resultTabEl = document.getElementById(DTS_RESULT_TAB_ID);
+                        if (!resultTabEl) resultTabEl = document.querySelector("a[id='" + DTS_RESULT_TAB_ID + "']");
+                        if (resultTabEl) {
+                            resultTabEl.click();
+                            log("DTS: [download] clicked Results tab for: " + dStudy.text);
+                        } else {
+                            log("DTS: [download] resultTab not found by ID, trying anchor text");
+                            var allAnchors = document.querySelectorAll("a");
+                            for (var ai = 0; ai < allAnchors.length; ai++) {
+                                if ((allAnchors[ai].textContent || "").trim().toLowerCase() === "results") {
+                                    allAnchors[ai].click();
+                                    break;
+                                }
+                            }
+                        }
+
+                        await sleep(800);
+
+                        var tbody = await dtsWaitForResultsTable(20000);
+                        if (!tbody) {
+                            dResult.status = "Failed";
+                            dResult.error = "Results table (reportRequestsTbody) did not load within timeout";
+                            progressUI.updateStatus(dStudy.value, "Failed", dResult.error);
+                            log("DTS: [download] " + dStudy.text + " — results table timeout");
+                            state.studyIndex++;
+                            state.step = "select_study";
+                            dtsSaveState(state);
+                            continue;
+                        }
+
+                        var rows = tbody.querySelectorAll("tr");
+                        var targetRow = null;
+                        var genTimeThreshold = dResult.genTime ? (dResult.genTime - 120000) : 0;
+
+                        for (var ri = 0; ri < rows.length; ri++) {
+                            var rowText = (rows[ri].textContent || "").toLowerCase();
+                            var hasTransfer = rowText.indexOf("transfer") !== -1;
+                            var hasClinical = rowText.indexOf("clinical") !== -1 || rowText.indexOf("csv") !== -1 || rowText.indexOf("delimited") !== -1;
+                            if (hasTransfer || hasClinical) {
+                                targetRow = rows[ri];
+                                break;
+                            }
+                        }
+                        if (!targetRow && rows.length > 0) {
+                            targetRow = rows[0];
+                            log("DTS: [download] " + dStudy.text + " — using first row as fallback");
+                        }
+
+                        if (!targetRow) {
+                            dResult.status = "Failed";
+                            dResult.error = "No report rows found in results table";
+                            progressUI.updateStatus(dStudy.value, "Failed", dResult.error);
+                            log("DTS: [download] " + dStudy.text + " — no rows in results table");
+                            state.studyIndex++;
+                            state.step = "select_study";
+                            dtsSaveState(state);
+                            continue;
+                        }
+
+                        progressUI.updateStatus(dStudy.value, "Downloading");
+                        var downloadLink = targetRow.querySelector("a[href*='download'], a[href*='Download']");
+                        if (!downloadLink) {
+                            var rowLinks = targetRow.querySelectorAll("a");
+                            for (var li2 = 0; li2 < rowLinks.length; li2++) {
+                                var lt = (rowLinks[li2].textContent || "").trim().toLowerCase();
+                                if (lt === "download" || lt.indexOf("download") !== -1) {
+                                    downloadLink = rowLinks[li2];
+                                    break;
+                                }
+                            }
+                        }
+                        if (!downloadLink) {
+                            var maxRefreshRetries = 60;
+                            if (!state.refreshCount) state.refreshCount = 0;
+                            if (state.refreshCount >= maxRefreshRetries) {
+                                dResult.status = "Failed";
+                                dResult.error = "Download link not found after " + maxRefreshRetries + " refresh attempts (~5 min)";
+                                progressUI.updateStatus(dStudy.value, "Failed", dResult.error);
+                                log("DTS: [download] " + dStudy.text + " — download link not found after max retries");
+                                state.refreshCount = 0;
+                                state.studyIndex++;
+                                state.step = "select_study";
+                                dtsSaveState(state);
+                                continue;
+                            }
+                            state.refreshCount++;
+                            progressUI.updateStatus(dStudy.value, "Waiting for Report (retry " + state.refreshCount + ")");
+                            log("DTS: [download] " + dStudy.text + " — download link not ready, refreshing in 5s (attempt " + state.refreshCount + "/" + maxRefreshRetries + ")");
+                            state.step = "on_reports";
+                            dtsSaveState(state);
+                            await sleep(5000);
+                            location.href = reportUrl;
+                            return;
+                        }
+
+                        log("DTS: [download] clicking download link for: " + dStudy.text);
+                        downloadLink.click();
+                        await sleep(2500);
+
+                        dResult.status = "Completed";
+                        progressUI.updateStatus(dStudy.value, "Completed");
+                        log("DTS: [download] completed: " + dStudy.text);
+
+                        state.refreshCount = 0;
+                        state.studyIndex++;
+                        state.step = "select_study";
+                        dtsSaveState(state);
+                        continue;
+
+                    } catch(dlErr) {
+                        dResult.status = "Failed";
+                        dResult.error = "Unexpected error during download: " + String(dlErr);
+                        progressUI.updateStatus(dStudy.value, "Failed", dResult.error);
+                        log("DTS: [download] " + dStudy.text + " — exception: " + String(dlErr));
+                        state.studyIndex++;
+                        state.step = "select_study";
+                        dtsSaveState(state);
+                        continue;
+                    }
+                }
+            }
+        }
+    }
+
+    function dtsShowFinalSummary(results, totalMs) {
+        var glass = isGlassTheme();
+        var successes = results.filter(function(r) { return r.status === "Completed"; }).length;
+        var failures = results.filter(function(r) { return r.status === "Failed"; }).length;
+
+        var container = document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;gap:12px;padding:4px;";
+
+        var statsRow = document.createElement("div");
+        statsRow.style.cssText = "display:flex;gap:14px;align-items:center;flex-wrap:wrap;";
+        function statBadge(label, val, color) {
+            var b = document.createElement("div");
+            b.style.cssText = "background:" + color + ";border-radius:6px;padding:6px 14px;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:70px;";
+            var n = document.createElement("div"); n.textContent = String(val); n.style.cssText = "font-size:22px;font-weight:800;color:#fff;line-height:1;";
+            var l = document.createElement("div"); l.textContent = label; l.style.cssText = "font-size:10px;color:rgba(255,255,255,0.8);font-weight:600;letter-spacing:0.04em;text-transform:uppercase;";
+            b.appendChild(n); b.appendChild(l); return b;
+        }
+        statsRow.appendChild(statBadge("Completed", successes, "#10b981"));
+        statsRow.appendChild(statBadge("Failed", failures, "#ef4444"));
+        statsRow.appendChild(statBadge("Total Time", dtsFormatElapsed(totalMs), "#1a7abf"));
+        container.appendChild(statsRow);
+
+        var listWrap = document.createElement("div");
+        listWrap.style.cssText = "display:flex;flex-direction:column;gap:4px;max-height:340px;overflow-y:auto;";
+
+        results.forEach(function(r) {
+            var row = document.createElement("div");
+            var isOk = r.status === "Completed";
+            row.style.cssText = "display:flex;align-items:flex-start;gap:10px;padding:7px 10px;border-radius:6px;background:" + (glass ? "rgba(255,255,255,0.04)" : "#161616") + ";border-left:3px solid " + (isOk ? "#10b981" : "#ef4444") + ";";
+            var icon = document.createElement("div");
+            icon.textContent = isOk ? "\u2713" : "\u2717";
+            icon.style.cssText = "color:" + (isOk ? "#10b981" : "#ef4444") + ";font-weight:800;font-size:14px;flex-shrink:0;margin-top:1px;";
+            var info = document.createElement("div");
+            info.style.cssText = "display:flex;flex-direction:column;gap:2px;min-width:0;";
+            var nameEl = document.createElement("div");
+            nameEl.textContent = r.text;
+            nameEl.style.cssText = "font-size:13px;color:" + (glass ? "#fff" : "#ddd") + ";font-weight:600;word-break:break-word;";
+            info.appendChild(nameEl);
+            if (!isOk && r.error) {
+                var errEl = document.createElement("div");
+                errEl.textContent = r.error;
+                errEl.style.cssText = "font-size:11px;color:#f87171;word-break:break-word;";
+                info.appendChild(errEl);
+            }
+            row.appendChild(icon);
+            row.appendChild(info);
+            listWrap.appendChild(row);
+        });
+
+        container.appendChild(listWrap);
+
+        if (DTS_SUMMARY_POPUP_REF) { try { DTS_SUMMARY_POPUP_REF.close(); } catch(e) {} }
+
+        DTS_SUMMARY_POPUP_REF = createPopup({
+            title: "Download DTS Report \u2014 Complete",
+            description: successes + " of " + results.length + " studies downloaded successfully",
+            content: container,
+            width: "520px",
+            height: "auto",
+            maxHeight: "85vh",
+            onClose: function() {
+                DTS_SUMMARY_POPUP_REF = null;
+            }
+        });
+    }
     //==========================
     // SET VISIBILITY CONDITION FEATURE
     //==========================
@@ -2782,7 +3740,7 @@
             }
         }
     }
-    
+
     function createCollectingOverlay(title, message) {
 
         var overlay = document.createElement("div");
@@ -3009,7 +3967,7 @@
         }
         return results;
     }
-    
+
     // ---- IFL Persistence helpers ----
     function ifl_saveImportState(obj) {
         try {localStorage.setItem(IFL_STORAGE_IMPORT_STATE, JSON.stringify(obj)); } catch(e) {}
@@ -3041,7 +3999,7 @@
     }
 
     // ---- IFL itemGroupsDiv helpers ----
-    
+
     async function ifl_waitForItemGroupsDiv(timeoutMs) {
         var start = Date.now();
         var max = timeoutMs || IFL_ITEMGROUPS_TIMEOUT;
@@ -3112,7 +4070,7 @@
         log("IFL: collected " + groups.length + " item groups with " + groups.reduce(function(s, g) { return s + g.items.length; }, 0) + " total items");
         return groups;
     }
-    
+
     async function ifl_syncModalToForm(item) {
         // Open modal if not open
         var modalBody = document.querySelector(".modal-body");
@@ -3122,25 +4080,25 @@
             var opened = await ifl_openImportModal();
             if (!opened) { log("IFL: sync — failed to open modal"); return null; }
         }
-    
+
         // Select study
         var ss = document.getElementById(IFL_STUDY_SELECT_ID);
         if (!ss) return null;
         ss.value = item.studyValue;
         ifl_triggerChange(ss);
         await sleep(300);
-    
+
         // Wait for form dropdown
         var populated = await ifl_waitForFormOptions(IFL_FORM_POPULATE_TIMEOUT);
         if (!populated) { log("IFL: sync — form dropdown did not populate"); return null; }
-    
+
         // Select form
         var fs = document.getElementById(IFL_FORM_SELECT_ID);
         if (!fs) return null;
         fs.value = item.formValue;
         ifl_triggerChange(fs);
         await sleep(500);
-    
+
         // Wait for itemGroupsDiv to populate so we can apply changes
         var igDiv = await ifl_waitForItemGroupsDiv(IFL_ITEMGROUPS_TIMEOUT);
         if (!igDiv) {
@@ -3148,7 +4106,7 @@
             await ifl_closeImportModal();
             return [];
         }
-    
+
         var groups = ifl_collectItemGroups();
 
         // Close modal after collecting — Bootstrap focus trap blocks inputs outside
@@ -3906,7 +4864,7 @@
                                 iconE1.title = fi2.lockOnSave ? "Locked - double click to unlock" : "Unlocked - double-clock to lock";
                                 log("IFL: lock toggled");
                             };
-                        })(fItem, lockIcon)); 
+                        })(fItem, lockIcon));
 
                         var cb = document.createElement("input");
                         cb.type = "checkbox";
@@ -4765,7 +5723,7 @@
     // configure per-form time relative settings, then automatically populating and submitting them.
     //==========================
 
-    
+
     function SABuilderFunctions() {}
 
     var STORAGE_BPL_EXISTING = "activityPlanState.bpl.existing";
@@ -12882,7 +13840,7 @@
     //==================================================
     // Pull Lab Barcode Feature
     //==================================================
-    // 
+    //
     //==================================================
     function setAriaBusyOn() {
         log("[PullLabBarcode] setAriaBusyOn: setting aria-busy on body");
@@ -15100,6 +16058,7 @@
         { id: "Subject Eligibility", label: "Subject Eligibility" },
         { id: "Parse Study Event", label: "Parse Study Event" },
         { id: "Edit Study Events List", label: "Edit Study Events List" },
+        { id: "Download DTS Report", label: "Download DTS Report" },
         { id: "Pause", label: "Pause" },
         { id: "Clear Logs", label: "Clear Logs" },
         { id: "Hide Logs", label: "Hide Logs" }
@@ -22018,11 +22977,7 @@
             var formKws = parseTextareaLines(inputFormKeywords.value);
             var eventKws = parseTextareaLines(inputEventKeywords.value);
             var subjects = parseTextareaLines(inputSubjects.value);
-            if (formKws.length === 0 && eventKws.length === 0 && subjects.length === 0) {
-                errorDiv.textContent = "At least one Form Keyword, Study Event Keyword, or Subject Identifier is required.";
-                errorDiv.style.display = "block";
-                return;
-            }
+
             errorDiv.style.display = "none";
             var statuses = gatherStatusSelections();
             try {
@@ -31962,9 +32917,28 @@
             await runSetVisibilityCondition();
         });
 
+        var downloadDtsBtn = document.createElement("button");
+        downloadDtsBtn.textContent = "Download DTS Report";
+        downloadDtsBtn.style.background = "#1a7abf";
+        downloadDtsBtn.style.color = "#fff";
+        downloadDtsBtn.style.border = "none";
+        downloadDtsBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        downloadDtsBtn.style.padding = scale(BUTTON_PADDING_PX);
+        downloadDtsBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
+        downloadDtsBtn.style.cursor = "pointer";
+        downloadDtsBtn.style.fontWeight = "500";
+        downloadDtsBtn.style.transition = "background 0.2s";
+        downloadDtsBtn.onmouseenter = function() { this.style.background = "#155e96"; };
+        downloadDtsBtn.onmouseleave = function() { this.style.background = "#1a7abf"; };
+        downloadDtsBtn.addEventListener("click", async function() {
+            log("Download DTS Report: button clicked");
+            await runDownloadDtsReport();
+        });
+
+
         // Apply glassmorphism theme to all panel buttons if glass theme is active
         if (glass) {
-            var allPanelBtns = [svcBtn, runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, importFromLibBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, bplBtn, importEligBtn, findAeBtn, findFormAndEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, editStudyEventsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn];
+            var allPanelBtns = [svcBtn, runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, importFromLibBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, bplBtn, importEligBtn, findAeBtn, findFormAndEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, editStudyEventsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn, downloadDtsBtn];
             for (var gi = 0; gi < allPanelBtns.length; gi++) {
                 var gb = allPanelBtns[gi];
                 gb.className = "ie-btn-primary";
@@ -32000,6 +32974,7 @@
             { el: parseStudyEventBtn, label: "Parse Study Event" },
             { el: editStudyEventsBtn, label: "Edit Study Events List" },
             { el: svcBtn, label: "Set Visibility Condition" },
+            { el: downloadDtsBtn, label: "Download DTS Report" },
             { el: pauseBtn, label: "Pause" },
             { el: clearLogsBtn, label: "Clear Logs" },
             { el: toggleLogsBtn, label: "Hide Logs" }
@@ -32496,7 +33471,17 @@
 
             return;
         }
-
+        if (runModeRaw === RUNMODE_DTS) {
+            var dtsState = dtsLoadState();
+            if (dtsState) {
+                log("DTS: resuming automation after page reload — phase=" + dtsState.phase + " step=" + dtsState.step + " studyIndex=" + dtsState.studyIndex);
+                setTimeout(function() { dtsRunStateMachine(dtsState); }, 2000);
+            } else {
+                log("DTS: run mode set but no state found; clearing");
+                dtsClearState();
+            }
+            return;
+        }
     }
 
     if (document.readyState === "loading") {
