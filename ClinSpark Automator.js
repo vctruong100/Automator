@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.5.4
+// @version     2.5.5
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -6666,6 +6666,37 @@
             formDataStore[key] = data;
         }
 
+        function createBPLApplyTimeInput(labelText, id, onApply) {
+            var row = document.createElement("div");
+            row.style.cssText = "display:flex;flex-direction:column;gap:2px;";
+
+            var lbl = document.createElement("label");
+            lbl.textContent = labelText;
+            lbl.style.cssText = "font-size:11px;color:#aaa;";
+
+            var wrap = document.createElement("div");
+            wrap.style.cssText = "display:flex;gap:6px;";
+
+            var input = document.createElement("input");
+            input.type = "text";
+            input.id = id;
+            input.style.cssText = "flex:1;padding:6px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;font-size:12px;box-sizing:border-box;";
+
+            var btn = document.createElement("button");
+            btn.textContent = "Apply";
+            btn.style.cssText = "padding:6px 10px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:12px;cursor:pointer;";
+
+            btn.addEventListener("click", function() {
+                onApply(input.value || "");
+            });
+
+            wrap.appendChild(input);
+            wrap.appendChild(btn);
+            row.appendChild(lbl);
+            row.appendChild(wrap);
+            return row;
+        }
+
         function createBPLTimeInput(labelText, id, max) {
             var row = document.createElement("div");
             row.style.cssText = "display:flex;flex-direction:column;gap:2px;";
@@ -6765,6 +6796,7 @@
                     var rfData = formDataStore[rfKey];
                     if (rfData && rfData.refActivity) {
                         segmentHasOtherRefActivity = true;
+                        log("Days " + rfData.days + ", Hours " + rfData.hours + ", Minutes " + rfData.minutes + ", Seconds: " + rfData.seconds);
                         break;
                     }
                 }
@@ -6780,6 +6812,33 @@
             timeBody.appendChild(createBPLTimeInput("Hours", "bplHours", 23));
             timeBody.appendChild(createBPLTimeInput("Minutes", "bplMinutes", 59));
             timeBody.appendChild(createBPLTimeInput("Seconds", "bplSeconds", 59));
+            var applyTimeSection = document.createElement("div");
+            applyTimeSection.style.cssText = "margin-top:10px;padding-top:8px;border-top:1px solid #333;";
+            var applyTimeLbl = document.createElement("label");
+            applyTimeLbl.textContent = "Apply Time Calculation";
+            applyTimeLbl.style.cssText = "font-size:11px;color:#aaa;display:block;margin-bottom:4px;";
+            applyTimeSection.appendChild(applyTimeLbl);
+            var applyTimeRow = document.createElement("div");
+            applyTimeRow.style.cssText = "display:flex;align-items:center;gap:4px;";
+            var applyTimeInput = document.createElement("input");
+            applyTimeInput.type = "text";
+            applyTimeInput.id = "bplApplyTimeCalc";
+            applyTimeInput.placeholder = "HH:MM:SS, HH:MM, or minutes";
+            applyTimeInput.style.cssText = "padding:6px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;flex:1;font-size:12px;box-sizing:border-box;";
+            var applyBtn = document.createElement("button");
+            applyBtn.textContent = "Apply";
+            applyBtn.id = "bplApplyTimeBtn";
+            applyBtn.style.cssText = "padding:6px 10px;border-radius:4px;border:1px solid #007bff;background:#007bff;color:#fff;font-size:11px;cursor:pointer;white-space:nowrap;";
+            var undoBtnEl = document.createElement("button");
+            undoBtnEl.textContent = "Undo";
+            undoBtnEl.id = "bplUndoTimeBtn";
+            undoBtnEl.disabled = !data._preApplyState;
+            undoBtnEl.style.cssText = data._preApplyState ? "padding:6px 10px;border-radius:4px;border:1px solid #dc3545;background:#dc3545;color:#fff;font-size:11px;cursor:pointer;white-space:nowrap;" : "padding:6px 10px;border-radius:4px;border:1px solid #555;background:#333;color:#888;font-size:11px;cursor:not-allowed;white-space:nowrap;";
+            applyTimeRow.appendChild(applyTimeInput);
+            applyTimeRow.appendChild(applyBtn);
+            applyTimeRow.appendChild(undoBtnEl);
+            applyTimeSection.appendChild(applyTimeRow);
+            timeBody.appendChild(applyTimeSection);
             var daysEl = document.getElementById("bplDays");
             var hoursEl = document.getElementById("bplHours");
             var minutesEl = document.getElementById("bplMinutes");
@@ -6803,6 +6862,117 @@
             }
             if (postWindowEl) {
                 postWindowEl.value = data.postWindow || "";
+            }
+            var applyTimeBtnEl = document.getElementById("bplApplyTimeBtn");
+            var undoTimeBtnEl = document.getElementById("bplUndoTimeBtn");
+            if (applyTimeBtnEl) {
+                applyTimeBtnEl.addEventListener("click", function() {
+                    var atInput = document.getElementById("bplApplyTimeCalc");
+                    var inputVal = atInput ? atInput.value.trim() : "";
+                    if (!inputVal) return;
+                    var refActCb = document.getElementById("bplRefActivity");
+                    if (refActCb && refActCb.checked) {
+                        alert("Cannot apply time calculation to the reference activity itself.");
+                        return;
+                    }
+                    var refDateTimeStr = data.segmentRefDateTime;
+                    if (!refDateTimeStr || refDateTimeStr === "N/A") {
+                        var kp = key.split("|");
+                        refDateTimeStr = getSegmentRefDateTime(kp[0]);
+                    }
+                    if (!refDateTimeStr || refDateTimeStr === "N/A") {
+                        alert("No reference activity time available for this segment.");
+                        return;
+                    }
+                    var dEl = document.getElementById("bplDays");
+                    var hEl = document.getElementById("bplHours");
+                    var mEl = document.getElementById("bplMinutes");
+                    var sEl = document.getElementById("bplSeconds");
+                    var prEl = document.getElementById("bplPreReference");
+                    data._preApplyState = {
+                        days: dEl ? dEl.value : "0",
+                        hours: hEl ? hEl.value : "0",
+                        minutes: mEl ? mEl.value : "0",
+                        seconds: sEl ? sEl.value : "0",
+                        preReference: prEl ? prEl.checked : false
+                    };
+                    var isMinutesOnly = /^-?\d+$/.test(inputVal);
+                    if (isMinutesOnly) {
+                        var totalMin = parseInt(inputVal);
+                        var isNeg = totalMin < 0;
+                        totalMin = Math.abs(totalMin);
+                        var cDays = Math.floor(totalMin / 1440);
+                        var leftover = totalMin % 1440;
+                        var cHours = Math.floor(leftover / 60);
+                        var cMinutes = leftover % 60;
+                        if (prEl) prEl.checked = isNeg;
+                        if (dEl) dEl.value = String(cDays);
+                        if (hEl) hEl.value = String(cHours);
+                        if (mEl) mEl.value = String(cMinutes);
+                        if (sEl) sEl.value = "0";
+                    } else {
+                        var refDate = bplParseClinSparkDateTime(refDateTimeStr);
+                        if (!refDate) {
+                            alert("Could not parse reference activity time.");
+                            return;
+                        }
+                        var tp = inputVal.split(":");
+                        var inH = parseInt(tp[0]) || 0;
+                        var inM = tp.length >= 2 ? (parseInt(tp[1]) || 0) : 0;
+                        var inS = tp.length >= 3 ? (parseInt(tp[2]) || 0) : 0;
+                        var refH = refDate.getHours();
+                        var refM = refDate.getMinutes();
+                        var refS = refDate.getSeconds();
+                        var inputTotalSec = (inH * 3600) + (inM * 60) + inS;
+                        var refTotalSec = (refH * 3600) + (refM * 60) + refS;
+                        var diffSec = inputTotalSec - refTotalSec;
+                        var isPreRef = diffSec < 0;
+                        diffSec = Math.abs(diffSec);
+                        var cD = Math.floor(diffSec / 86400);
+                        diffSec = diffSec % 86400;
+                        var cH = Math.floor(diffSec / 3600);
+                        diffSec = diffSec % 3600;
+                        var cMi = Math.floor(diffSec / 60);
+                        var cS = diffSec % 60;
+                        if (prEl) prEl.checked = isPreRef;
+                        if (dEl) dEl.value = String(cD);
+                        if (hEl) hEl.value = String(cH);
+                        if (mEl) mEl.value = String(cMi);
+                        if (sEl) sEl.value = String(cS);
+                    }
+                    var uBtn = document.getElementById("bplUndoTimeBtn");
+                    if (uBtn) {
+                        uBtn.disabled = false;
+                        uBtn.style.cssText = "padding:6px 10px;border-radius:4px;border:1px solid #dc3545;background:#dc3545;color:#fff;font-size:11px;cursor:pointer;white-space:nowrap;";
+                    }
+                    saveFormDataFromPanel(selectedFormKey);
+                    renderCenterPanel(centerSearch.value);
+                    runAutoValidation();
+                });
+            }
+            if (undoTimeBtnEl) {
+                undoTimeBtnEl.addEventListener("click", function() {
+                    if (!data._preApplyState) return;
+                    var dEl = document.getElementById("bplDays");
+                    var hEl = document.getElementById("bplHours");
+                    var mEl = document.getElementById("bplMinutes");
+                    var sEl = document.getElementById("bplSeconds");
+                    var prEl = document.getElementById("bplPreReference");
+                    if (dEl) dEl.value = data._preApplyState.days;
+                    if (hEl) hEl.value = data._preApplyState.hours;
+                    if (mEl) mEl.value = data._preApplyState.minutes;
+                    if (sEl) sEl.value = data._preApplyState.seconds;
+                    if (prEl) prEl.checked = data._preApplyState.preReference;
+                    data._preApplyState = null;
+                    var uBtn = document.getElementById("bplUndoTimeBtn");
+                    if (uBtn) {
+                        uBtn.disabled = true;
+                        uBtn.style.cssText = "padding:6px 10px;border-radius:4px;border:1px solid #555;background:#333;color:#888;font-size:11px;cursor:not-allowed;white-space:nowrap;";
+                    }
+                    saveFormDataFromPanel(selectedFormKey);
+                    renderCenterPanel(centerSearch.value);
+                    runAutoValidation();
+                });
             }
             if (segmentHasOtherRefActivity && !data.refActivity) {
                 var refActEl = document.getElementById("bplRefActivity");
