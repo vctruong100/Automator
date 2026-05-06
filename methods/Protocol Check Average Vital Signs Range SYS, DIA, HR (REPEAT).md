@@ -85,28 +85,30 @@ try {
     logger("Sys: " + sys);
     logger("Dia: " + dia);
     logger("HR: " + hr);
-logger("Dia: " + dia);
-logger("HR: " + hr);
 
-if (pending) return attachedItemCodeList[0];
-if (
-    sys > sys_max_range ||
-    sys < sys_min_range ||
-    dia > dia_max_range ||
-    dia < dia_min_range ||
-    hr > hr_max_range ||
-    hr < hr_min_range
-) return attachedItemCodeList[2]; // Out of Normal Range
-else if ( // IR
-    sys <= sys_max_range &&
-    sys >= sys_min_range &&
-    dia <= dia_max_range &&
-    dia >= dia_min_range &&
-    hr <= hr_max_range &&
-    hr >= hr_min_range
-) return attachedItemCodeList[1]; // Within Normal Range
+    if (pending) return item.codeListItems[0].codedValue; // pending
+    if (
+        sys > sys_max_range ||
+        sys < sys_min_range ||
+        dia > dia_max_range ||
+        dia < dia_min_range ||
+        hr > hr_max_range ||
+        hr < hr_min_range
+    ) return item.codeListItems[2].codedValue; // Out of Normal Range
+    else if ( // IR
+        sys <= sys_max_range &&
+        sys >= sys_min_range &&
+        dia <= dia_max_range &&
+        dia >= dia_min_range &&
+        hr <= hr_max_range &&
+        hr >= hr_min_range
+    ) return item.codeListItems[1].codedValue; // Within Normal Range
 
-return attachedItemCodeList[0];
+    return item.codeListItems[0].codedValue;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function populateList(form, targetItem, attachedItem) {
     var itemGroups = form.form.itemGroups;

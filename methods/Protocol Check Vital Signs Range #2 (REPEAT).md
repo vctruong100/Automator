@@ -35,41 +35,46 @@ var hr_max_range = 100;
 // ======== Don't modify ========
 var item = itemJson.item;
 
-var isRepeat = isItemInRepeat(formJson);
+try {
+    var isRepeat = isItemInRepeat(formJson);
 
-if (isRepeat) {
-    var sys = pullItemFromLast(formJson, sysItems);
-    var dia = pullItemFromLast(formJson, diaItems);
-    var hr = pullItemFromLast(formJson, hrItems);
+    if (isRepeat) {
+        var sys = pullItemFromLast(formJson, sysItems);
+        var dia = pullItemFromLast(formJson, diaItems);
+        var hr = pullItemFromLast(formJson, hrItems);
+    }
+    else {
+        var sys = pullItemFromFirst(formJson, sysItems);
+        var dia = pullItemFromFirst(formJson, diaItems);
+        var hr = pullItemFromFirst(formJson, hrItems);
+    }
+
+    log();
+
+    if (!sys || sys === null || !dia || dia == null || !hr || hr == null) return itemJson.item.codeListItems[4];
+    // OOR
+    if (
+        sys > sys_max_range ||
+        sys < sys_min_range ||
+        dia > dia_max_range ||
+        dia < dia_min_range ||
+        hr > hr_max_range ||
+        hr < hr_min_range
+    ) return itemJson.item.codeListItems[1]; // Out of Protocol Range
+    else if ( // IR
+        sys <= sys_max_range &&
+        sys >= sys_min_range && 
+        dia <= dia_max_range &&
+        dia >= dia_min_range &&
+        hr <= hr_max_range &&
+        hr >= hr_min_range
+    ) return itemJson.item.codeListItems[0]; // Within Normal Range
+
+    return itemJson.item.codeListItems[4];
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
 }
-else {
-    var sys = pullItemFromFirst(formJson, sysItems);
-    var dia = pullItemFromFirst(formJson, diaItems);
-    var hr = pullItemFromFirst(formJson, hrItems);
-}
-
-log();
-
-if (!sys || sys === null || !dia || dia == null || !hr || hr == null) return itemJson.item.codeListItems[4];
-// OOR
-if (
-    sys > sys_max_range ||
-    sys < sys_min_range ||
-    dia > dia_max_range ||
-    dia < dia_min_range ||
-    hr > hr_max_range ||
-    hr < hr_min_range
-) return itemJson.item.codeListItems[1]; // Out of Protocol Range
-else if ( // IR
-    sys <= sys_max_range &&
-    sys >= sys_min_range && 
-    dia <= dia_max_range &&
-    dia >= dia_min_range &&
-    hr <= hr_max_range &&
-    hr >= hr_min_range
-) return itemJson.item.codeListItems[0]; // Within Normal Range
-
-return itemJson.item.codeListItems[4];
 
 function log() {
     logger("sys: " + sys);
