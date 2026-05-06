@@ -11,16 +11,17 @@ const itemName = [
     "BMI_HEIGHT"
 ]
 
-var form = pullForm(studyevent, formName);
-if (!form) return null;
+try {
+    var form = pullForm(studyevent, formName);
+    if (!form) return null;
 
-var height = pullItemFromForm(form, itemName);
-log();
+    var height = pullItemFromForm(form, itemName);
+    log();
 
-return height;
-
-function log() {
-    logger("Height: " + height);
+    return height;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
 }
 
 function pullForm(studyeventList, formNameList) {

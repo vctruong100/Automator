@@ -7,23 +7,28 @@ const emptyJugItem = [
 const item = itemJson.item;
 var groupid = null;
 
-getItemGroupID(formJson.form);
+try {
+    getItemGroupID(formJson.form);
 
-const urineJug = getItemValueFromSameGroup(formJson.form, urineJugItem);
-const voidJug = getItemValueFromSameGroup(formJson.form, emptyJugItem);
+    const urineJug = getItemValueFromSameGroup(formJson.form, urineJugItem);
+    const voidJug = getItemValueFromSameGroup(formJson.form, emptyJugItem);
 
-const sigfig = item.significantDigits;
+    const sigfig = item.significantDigits;
 
-var weight = (urineJug - voidJug).toFixed(0);
-if (!weight) return null;
+    var weight = (urineJug - voidJug).toFixed(0);
+    if (!weight) return null;
 
-var volume = weight / 1.02;
-if (!volume) return null;
+    var volume = weight / 1.02;
+    if (!volume) return null;
 
-var tween = volume / 10;
-if (tween) return tween.toFixed(sigfig);
+    var tween = volume / 10;
+    if (tween) return tween.toFixed(sigfig);
 
-return null;
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function getItemGroupID(form) {
     for (var i = 0; i < form.itemGroups.length; i++) {

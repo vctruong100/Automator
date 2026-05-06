@@ -16,10 +16,15 @@ const itemName = [
     "Repeat QTcF"
 ];
 
-var form = pullForm(studyevent, formName);
-if (!form) return null;
+try {
+    var form = pullForm(studyevent, formName);
+    if (!form) return null;
 
-return pullItemFromForm(form, itemName);
+    return pullItemFromForm(form, itemName);
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;

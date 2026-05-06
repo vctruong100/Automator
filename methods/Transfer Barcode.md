@@ -9,7 +9,12 @@ const itemNames = [
     
 ]
 
-return parseItemContext(itemNames);
+try {
+    return parseItemContext(itemNames);
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function parseItemContext(item) {
     for (var i = 0; i < item.length; i++) {

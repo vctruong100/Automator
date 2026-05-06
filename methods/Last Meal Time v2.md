@@ -18,31 +18,36 @@ const mealForms = [
     'STOP BREAKFAST', "Breakfast End", "BREAKFAST END",
 ];
 
-var parsedEvent = null;
-var lowerEvent = currentEvent ? currentEvent.toLowerCase() : "";
+try {
+    var parsedEvent = null;
+    var lowerEvent = currentEvent ? currentEvent.toLowerCase() : "";
 
-// Filter study event names
-for (var key in studyevents) {
-    if (lowerEvent.indexOf(key.toLowerCase()) !== -1) {
-        parsedEvent = key;
-        break;
+    // Filter study event names
+    for (var key in studyevents) {
+        if (lowerEvent.indexOf(key.toLowerCase()) !== -1) {
+            parsedEvent = key;
+            break;
+        }
     }
-}
-logger("Parsed event: " + parsedEvent)
-if (!parsedEvent) return null;
+    logger("Parsed event: " + parsedEvent)
+    if (!parsedEvent) return null;
 
-const prevEvent = studyevents[parsedEvent];
-logger("Previous event: " + prevEvent);
-var form = pullForm([prevEvent], mealForms);
-if (!form) {
-    var preprevEvent = studyevents[prevEvent]; 
-    form = pullForm([preprevEvent], mealForms)
-}
-if (!form) return null;
-var mealTime = form.form.itemGroups[0].items[0].value;
-if (mealTime && mealTime !== null) return mealTime;
+    const prevEvent = studyevents[parsedEvent];
+    logger("Previous event: " + prevEvent);
+    var form = pullForm([prevEvent], mealForms);
+    if (!form) {
+        var preprevEvent = studyevents[prevEvent]; 
+        form = pullForm([preprevEvent], mealForms)
+    }
+    if (!form) return null;
+    var mealTime = form.form.itemGroups[0].items[0].value;
+    if (mealTime && mealTime !== null) return mealTime;
 
-return null;
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;

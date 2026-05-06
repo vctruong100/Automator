@@ -25,20 +25,25 @@ const item = itemJson.item;
 const sexMale = formJson.form.subject.volunteer.sexMale;
 var diff = 0;
 
-logger("Is it male: " + sexMale);
-logger("Qtcf value: " + item.value);
-if (item.value > maxRange) return log("500", item.value);
-else if (sexMale && item.value > maleRange) return log("male", item.value);
-else if (!sexMale && item.value > femaleRange) return log("female", item.value);
+try {
+    logger("Is it male: " + sexMale);
+    logger("Qtcf value: " + item.value);
+    if (item.value > maxRange) return log("500", item.value);
+    else if (sexMale && item.value > maleRange) return log("male", item.value);
+    else if (!sexMale && item.value > femaleRange) return log("female", item.value);
 
-var form = pullForm(baselineEvent, baselineForm);
-if (!form) return null;
-var baseline = pullItemFromForm(form, baselineItem);
-logger("Baseline: " + baseline);
+    var form = pullForm(baselineEvent, baselineForm);
+    if (!form) return null;
+    var baseline = pullItemFromForm(form, baselineItem);
+    logger("Baseline: " + baseline);
 
-if (checkBaseline(itemJson.item.value)) return log("base", diff);
+    if (checkBaseline(itemJson.item.value)) return log("base", diff);
 
-return true;
+    return true;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function log(type, val)  {
     if (type == "500") {

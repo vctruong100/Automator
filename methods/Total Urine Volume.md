@@ -23,14 +23,19 @@ const mealForms = [
     'STOP BREAKFAST', "Breakfast End",
 ];
 
-const prevEvent = studyevents[currentEvent];
-var form = pullForm([prevEvent], mealForms);
-if (!form) return null;
+try {
+    const prevEvent = studyevents[currentEvent];
+    var form = pullForm([prevEvent], mealForms);
+    if (!form) return null;
 
-var mealTime = form.form.itemGroups[0].items[0].value;
-if (mealTime && mealTime !== null) return mealTime;
+    var mealTime = form.form.itemGroups[0].items[0].value;
+    if (mealTime && mealTime !== null) return mealTime;
 
-return null;
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;

@@ -14,28 +14,33 @@ const difference = 60;
 const item = itemJson.item;
 var groupid = null;
 
-getItemGroupID(formJson.form);
-var pcvoid = getItemValueFromSameGroup(formJson, pcvoidItem);
+try {
+    getItemGroupID(formJson.form);
+    var pcvoid = getItemValueFromSameGroup(formJson, pcvoidItem);
 
-const enteredTime = getItemValueFromSameGroup(formJson, enteredTimeItem);
-if (!pcvoid || pcvoid == null || !enteredTime || enteredTime == null) return null;
+    const enteredTime = getItemValueFromSameGroup(formJson, enteredTimeItem);
+    if (!pcvoid || pcvoid == null || !enteredTime || enteredTime == null) return null;
 
-var pcvoidMs = pcvoid.dateValueMs;
-var collectedTimeMs = enteredTime.dateValueMs;
+    var pcvoidMs = pcvoid.dateValueMs;
+    var collectedTimeMs = enteredTime.dateValueMs;
 
-var differenceMs = collectedTimeMs - pcvoidMs;
-logger(differenceMs)
-if (differenceMs < 0) {
-    return attachedCodeList[0]; // return YES
+    var differenceMs = collectedTimeMs - pcvoidMs;
+    logger(differenceMs)
+    if (differenceMs < 0) {
+        return attachedCodeList[0]; // return YES
+    }
+    var differenceInMins = Math.abs(Math.floor(differenceMs / (1000 * 60)))
+
+    logger(differenceInMins)
+    if(differenceInMins >= difference){
+        return attachedCodeList[0]; // return YES
+    }
+
+    return attachedCodeList[1]; // return NO
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
 }
-var differenceInMins = Math.abs(Math.floor(differenceMs / (1000 * 60)))
-
-logger(differenceInMins)
-if(differenceInMins >= difference){
-    return attachedCodeList[0]; // return YES
-}
-
-return attachedCodeList[1]; // return NO
 
 function getItemGroupID(form) {
     for (var i = 0; i < form.itemGroups.length; i++) {

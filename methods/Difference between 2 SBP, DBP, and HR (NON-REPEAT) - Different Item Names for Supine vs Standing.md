@@ -59,22 +59,27 @@ var hrStanding = null;
 
 const item = itemJson.item;
 
-logger("Attached item: " + item.name);
-if (sysAttachedItem.indexOf(item.name) !== -1) {
-    sysSemi = pullLastItemFromForm(formJson, sysItem);
-    sysStanding = pullFirstItemFromForm(formJson, sysStandingItem);
-    return checkDifference(sysDifferenceRange, sysSemi, sysStanding);
-} else if (diaAttachedItem.indexOf(item.name) !== -1) {
-    diaSemi = pullLastItemFromForm(formJson, diaItem);
-    diaStanding = pullFirstItemFromForm(formJson, diaStandingItem);
-    return checkDifference(diaDifferenceRange, diaSemi, diaStanding);
-} else if (hrAttachedItem.indexOf(item.name) !== -1) {
-    hrSemi = pullLastItemFromForm(formJson, hrItem);
-    hrStanding = pullFirstItemFromForm(formJson, hrStandingItem);
-    return checkDifference(hrDifferenceRange, hrSemi, hrStanding);
-}
+try {
+    logger("Attached item: " + item.name);
+    if (sysAttachedItem.indexOf(item.name) !== -1) {
+        sysSemi = pullLastItemFromForm(formJson, sysItem);
+        sysStanding = pullFirstItemFromForm(formJson, sysStandingItem);
+        return checkDifference(sysDifferenceRange, sysSemi, sysStanding);
+    } else if (diaAttachedItem.indexOf(item.name) !== -1) {
+        diaSemi = pullLastItemFromForm(formJson, diaItem);
+        diaStanding = pullFirstItemFromForm(formJson, diaStandingItem);
+        return checkDifference(diaDifferenceRange, diaSemi, diaStanding);
+    } else if (hrAttachedItem.indexOf(item.name) !== -1) {
+        hrSemi = pullLastItemFromForm(formJson, hrItem);
+        hrStanding = pullFirstItemFromForm(formJson, hrStandingItem);
+        return checkDifference(hrDifferenceRange, hrSemi, hrStanding);
+    }
 
-return null;
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function checkDifference(range, semi, standing) {
     logger("Semi: " + semi);

@@ -1,14 +1,20 @@
 const item = itemJson.item;
-const itemGroupName = getItemGroupName(formJson);
 
-if (containsValue(itemGroupName, "self-collection") || containsValue(itemGroupName, "pg dna")) {
-    if (containsValue(item.value, "t")) {
-        customErrorMessage("Barcode cannot contain 'T'")
-        return false;
+try {
+    const itemGroupName = getItemGroupName(formJson);
+
+    if (containsValue(itemGroupName, "self-collection") || containsValue(itemGroupName, "pg dna")) {
+        if (containsValue(item.value, "t")) {
+            customErrorMessage("Barcode cannot contain 'T'")
+            return false;
+        }
     }
-}
 
-return true;
+    return true;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function getItemGroupName(form) {
     for (var i = 0; i < form.form.itemGroups.length; i++) {

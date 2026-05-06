@@ -20,21 +20,27 @@ const statusItem = [
 
 const gender = formJson.form.subject.volunteer.sexMale;
 const age = formJson.form.subject.volunteer.age;
-logger(age);
-logger(gender);
-if (gender) return "None";
 
-var form = pullForm(studyEvent, formNames);
-if (!form) return null;
+try {
+    logger(age);
+    logger(gender);
+    if (gender) return "None";
 
-var childbearing = pullItemFromForm(form, childbearingItem);
-if (childbearing && childbearing.value !== null && childbearing.value == "Y") return "Pregnancy";
+    var form = pullForm(studyEvent, formNames);
+    if (!form) return null;
 
-var status = pullItemFromForm(form, statusItem);
-if (status && status.value !== null && (status.value == status.codeListItems[2].codedValue)) return "FSH";
-else if (status && status.value !== null) return "Pregnancy";
+    var childbearing = pullItemFromForm(form, childbearingItem);
+    if (childbearing && childbearing.value !== null && childbearing.value == "Y") return "Pregnancy";
 
-return "None";
+    var status = pullItemFromForm(form, statusItem);
+    if (status && status.value !== null && (status.value == status.codeListItems[2].codedValue)) return "FSH";
+    else if (status && status.value !== null) return "Pregnancy";
+
+    return "None";
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function log() {
     logger("Childbearing: " + childbearing);

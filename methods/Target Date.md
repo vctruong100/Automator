@@ -30,30 +30,35 @@ const range = {
     "V6 (Within 4 weeks)": 28
 };
 
-var form = pullForm(formNames, studyEventNames);
-var day1Date = pullItemFromForm(form, startDateItem);
-if (!day1Date || day1Date == null) return true;
+try {
+    var form = pullForm(formNames, studyEventNames);
+    var day1Date = pullItemFromForm(form, startDateItem);
+    if (!day1Date || day1Date == null) return true;
 
-var day1DateMs = isoToLocalMidnight(day1Date.value);
-var day1Dateformat = msToDate(day1DateMs);
+    var day1DateMs = isoToLocalMidnight(day1Date.value);
+    var day1Dateformat = msToDate(day1DateMs);
 
-var addDays = map[studyEvent];
-var allowedRange = range[studyEvent];
-if (!addDays || addDays == null || addDays == -1) return true;
+    var addDays = map[studyEvent];
+    var allowedRange = range[studyEvent];
+    if (!addDays || addDays == null || addDays == -1) return true;
 
-var targetMs = day1DateMs + addDays * 86400000;
+    var targetMs = day1DateMs + addDays * 86400000;
 
-var allowedRangeMs = allowedRange * 86400000;
+    var allowedRangeMs = allowedRange * 86400000;
 
-var targetDateformat = msToDate(targetMs);
-var minTargeDateformat = msToDate(targetMs - allowedRangeMs);
-var maxTargetDateformat = msToDate(targetMs + allowedRangeMs);
+    var targetDateformat = msToDate(targetMs);
+    var minTargeDateformat = msToDate(targetMs - allowedRangeMs);
+    var maxTargetDateformat = msToDate(targetMs + allowedRangeMs);
 
-log();
+    log();
 
-var rangeDateString = minTargeDateformat + " - " + maxTargetDateformat;
+    var rangeDateString = minTargeDateformat + " - " + maxTargetDateformat;
 
-return rangeDateString;
+    return rangeDateString;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function log() {
     logger("Study event: " + studyEvent);

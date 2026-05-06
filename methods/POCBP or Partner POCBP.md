@@ -19,19 +19,24 @@ const pulledItemCodeList = [
 
 const gender = formJson.form.subject.volunteer.sexMale;
 
-if (gender) return itemJson.item.codeListItems[1].codedValue; // return no
+try {
+    if (gender) return itemJson.item.codeListItems[1].codedValue; // return no
 
-var form = pullForm(studyEvent, formName);
-if (!form) return null;
+    var form = pullForm(studyEvent, formName);
+    if (!form) return null;
 
-var POCBP = pullItemFromForm(form, itemName);
-if (!POCBP || POCBP.value == null) return null;
+    var POCBP = pullItemFromForm(form, itemName);
+    if (!POCBP || POCBP.value == null) return null;
 
-log();
+    log();
 
-if (POCBP.value == POCBP.codeListItems[0].codedValue) return itemJson.item.codeListItems[0].codedValue; // return yes
-else if (POCBP.value == POCBP.codeListItems[1].codedValue) return itemJson.item.codeListItems[1].codedValue; // return no
-return null;
+    if (POCBP.value == POCBP.codeListItems[0].codedValue) return itemJson.item.codeListItems[0].codedValue; // return yes
+    else if (POCBP.value == POCBP.codeListItems[1].codedValue) return itemJson.item.codeListItems[1].codedValue; // return no
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function log() {
     logger("POCBP: " + POCBP);

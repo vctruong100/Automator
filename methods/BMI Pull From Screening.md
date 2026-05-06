@@ -11,10 +11,15 @@ const itemName = [
     "VS_BMI"    
 ]
 
-var form = pullForm(studyEventNames, bmiForms);
-if (!form) return null;
+try {
+    var form = pullForm(studyEventNames, bmiForms);
+    if (!form) return null;
 
-return pullItemFromForm(form, itemName);
+    return pullItemFromForm(form, itemName);
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;

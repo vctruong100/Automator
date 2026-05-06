@@ -10,13 +10,19 @@ const maleRange = 450;
 const femaleRange = 470;
 
 const sexMale = formJson.form.subject.volunteer.sexMale;
-var qtcf = pullItemFromForm(formJson, qtcfItems);
 
-logger("Is it male: " + sexMale);
-logger("Qtcf value: " + item.value);
-if ((sexMale && item.value > maleRange) || (!sexMale && item.value > femaleRange)) return yesCodeList;
+try {
+    var qtcf = pullItemFromForm(formJson, qtcfItems);
 
-return noCodeList;
+    logger("Is it male: " + sexMale);
+    logger("Qtcf value: " + item.value);
+    if ((sexMale && item.value > maleRange) || (!sexMale && item.value > femaleRange)) return yesCodeList;
+
+    return noCodeList;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;

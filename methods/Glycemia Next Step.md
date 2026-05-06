@@ -2,34 +2,31 @@ const itemName = [
     "Glucometer Reading"    
 ]
 const item = itemJson.item;
-var result = getItemGroupID(formJson);
-var groupid = result[0];
-var itemGroupKey = result[1]
-logger("groupid: " + groupid)
-logger("Item Group Key: " + itemGroupKey);
+try {
+    var result = getItemGroupID(formJson);
+    var groupid = result[0];
+    var itemGroupKey = result[1]
+    logger("groupid: " + groupid)
+    logger("Item Group Key: " + itemGroupKey);
 
-var glycemia = parseInt(pullItemFromForm(formJson, itemName, groupid));
+    var glycemia = parseInt(pullItemFromForm(formJson, itemName, groupid));
 
-logger("Glycemia: " + glycemia)
-if (itemGroupKey && parseInt(itemGroupKey) > 1) {
-    try {
+    logger("Glycemia: " + glycemia)
+    if (itemGroupKey && parseInt(itemGroupKey) > 1) {
         if (glycemia <= 80) return "Repeat 15g of Glucose IV in Bolus.";
         else return "Provide a carbohydrate-rich meal if the study participant can safely eat (eg. bread meal). Monitor the glycemia every 30 to 60 minutes until study particiapnt has a glycemia of > 80mg/dl for at least 4 hours"
-    } catch (e) {
-        return null;
     }
-}
-else {
-    try {
+    else {
         if (glycemia <= 70) return "Proceed to IV Protocol.";
         else if (glycemia > 70 && glycemia <= 80) return "Recheck after 15 minutes, and repeat administration of +/- 15g of oral glucose if the study participant can safely swallow."
         else if (glycemia > 80) return "Provide a carbohydrate-rich meal (eg., bread meal) to prevent recurrence. If symptoms ongoing, continue glucose monitoring. If not, stop monitoring."
-    } catch (e) {
-        return null;
     }
-}
 
-return null;
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function getItemGroupID(form) {
     for (var i = 0; i < form.form.itemGroups.length; i++) {

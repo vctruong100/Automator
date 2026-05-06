@@ -21,43 +21,49 @@
 
 // =======================
 var item = itemJson.item;
-logger("Item name: " + item.name);
-logger("Value: " + item.value);
-var groupName = getItemGroupName(formJson);
-var isRepeat = containsValue(groupName, "repeat");
-var isQtcOrQTcF = containsValue(item.name, "qtcf") || containsValue(item.name, "qtc");
-var isMale = formJson.form.subject.volunteer.sexMale;
 
-logger("Is repeat: " + isRepeat + ", Is Male: " + isMale + ", is isQtcOrQTcF: " + isQtcOrQTcF);
+try {
+    logger("Item name: " + item.name);
+    logger("Value: " + item.value);
+    var groupName = getItemGroupName(formJson);
+    var isRepeat = containsValue(groupName, "repeat");
+    var isQtcOrQTcF = containsValue(item.name, "qtcf") || containsValue(item.name, "qtc");
+    var isMale = formJson.form.subject.volunteer.sexMale;
 
-if (isQtcOrQTcF) {   
-    var qtcfDict = parseMultiRange(item.name);
-    logger(JSON.stringify(qtcfDict, null, 2))
-    var range;
-    
-    if (isMale && qtcfDict.male) {
-        range = qtcfDict.male;
-    } else if (!isMale && qtcfDict.female) {
-        range = qtcfDict.female;
+    logger("Is repeat: " + isRepeat + ", Is Male: " + isMale + ", is isQtcOrQTcF: " + isQtcOrQTcF);
+
+    if (isQtcOrQTcF) {   
+        var qtcfDict = parseMultiRange(item.name);
+        logger(JSON.stringify(qtcfDict, null, 2))
+        var range;
+        
+        if (isMale && qtcfDict.male) {
+            range = qtcfDict.male;
+        } else if (!isMale && qtcfDict.female) {
+            range = qtcfDict.female;
+        } else {
+            range = qtcfDict.default;
+        }
+        
+        if (!range) return true;
+        
+        var min = range[0];
+        var max = range[1];
+        
+        if (!checkRange(isRepeat, min, max)) return false;
     } else {
-        range = qtcfDict.default;
+        var minMax = parseRange(item.name);
+        var min = minMax[0];
+        var max = minMax[1];
+        logger("Range: " + min + " - " + max);
+        if (!checkRange(isRepeat, min, max)) return false;
     }
-    
-    if (!range) return true;
-    
-    var min = range[0];
-    var max = range[1];
-    
-    if (!checkRange(isRepeat, min, max)) return false;
-} else {
-    var minMax = parseRange(item.name);
-    var min = minMax[0];
-    var max = minMax[1];
-    logger("Range: " + min + " - " + max);
-    if (!checkRange(isRepeat, min, max)) return false;
-}
 
-return true;
+    return true;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function checkRange(repeat, min, max) {
     if (repeat && (item.value < min || item.value > max)) {

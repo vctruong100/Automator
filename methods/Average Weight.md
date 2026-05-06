@@ -10,15 +10,20 @@ var maxCount = 0;
 var list = [];
 var avg = 0;
 
-list = populateList(formJson, itemList, list);
+try {
+    list = populateList(formJson, itemList, list);
 
-avg = calculateAverage(list, sigfig);
-logger("List: " + list);
-logger("List length: " + list.length)
-logger("Max count: " + maxCount);
-logger("Average: " + avg)
-if (list.length === maxCount) return (avg).toFixed(sigfig);
-return null;
+    avg = calculateAverage(list, sigfig);
+    logger("List: " + list);
+    logger("List length: " + list.length)
+    logger("Max count: " + maxCount);
+    logger("Average: " + avg)
+    if (list.length === maxCount) return (avg).toFixed(sigfig);
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function populateList(form, targetItem) {
     var itemGroups = form.form.itemGroups;

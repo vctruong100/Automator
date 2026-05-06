@@ -17,18 +17,23 @@ const valueItem = [
     "LDL-C Value at Week 8",
 ]
 
-var form = pullForm(studyEventNames, formName);
-if (!form) return null;
+try {
+    var form = pullForm(studyEventNames, formName);
+    if (!form) return null;
 
-const item = itemJson.item;
-var groupName, groupID = getItemGroupName(formJson);
+    const item = itemJson.item;
+    var groupName, groupID = getItemGroupName(formJson);
 
-var baseline = pullItemFromForm(form, baselineItem, null);
-var value = pullItemFromForm(formJson, valueItem, groupID);
+    var baseline = pullItemFromForm(form, baselineItem, null);
+    var value = pullItemFromForm(formJson, valueItem, groupID);
 
-if (!baseline || baseline == null || !value || value == null) return null;
+    if (!baseline || baseline == null || !value || value == null) return null;
 
-return String(calculateReduction(baseline, value));
+    return String(calculateReduction(baseline, value));
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function calculateReduction(baseline, value) {
     var parsedBaseline = parseInt(baseline);

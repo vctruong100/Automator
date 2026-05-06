@@ -55,40 +55,45 @@ var item = itemJson.item;
 const sigfig = itemJson.item.significantDigits;
 var pending = false;
 
-logger("Attached item: " + item.name);
+try {
+    logger("Attached item: " + item.name);
 
-var syslist = populateList(formJson, sysItem, sysAttachedItem)
-var dialist = populateList(formJson, dbpItems, dbpAttachedItem)
-var hrlist = populateList(formJson, hrItem, hrAttachedItem);
+    var syslist = populateList(formJson, sysItem, sysAttachedItem)
+    var dialist = populateList(formJson, dbpItems, dbpAttachedItem)
+    var hrlist = populateList(formJson, hrItem, hrAttachedItem);
 
-var sys = calculateAverage(syslist, sigfig);
-var dia = calculateAverage(dialist, sigfig);
-var hr = calculateAverage(hrlist, sigfig);
+    var sys = calculateAverage(syslist, sigfig);
+    var dia = calculateAverage(dialist, sigfig);
+    var hr = calculateAverage(hrlist, sigfig);
 
-logger("Sys: " + sys);
-logger("Dia: " + dia);
-logger("HR: " + hr);
+    logger("Sys: " + sys);
+    logger("Dia: " + dia);
+    logger("HR: " + hr);
 
-if (pending) return itemJson.item.codeListItems[4];
-// OOR
-if (
-    sys > sys_max_range ||
-    sys < sys_min_range ||
-    dia > dia_max_range ||
-    dia < dia_min_range ||
-    hr > hr_max_range ||
-    hr < hr_min_range
-) return itemJson.item.codeListItems[1]; // Out of Protocol Range
-else if ( // IR
-    sys <= sys_max_range &&
-    sys >= sys_min_range && 
-    dia <= dia_max_range &&
-    dia >= dia_min_range &&
-    hr <= hr_max_range &&
-    hr >= hr_min_range
-) return itemJson.item.codeListItems[0]; // Within Normal Range
+    if (pending) return itemJson.item.codeListItems[4];
+    // OOR
+    if (
+        sys > sys_max_range ||
+        sys < sys_min_range ||
+        dia > dia_max_range ||
+        dia < dia_min_range ||
+        hr > hr_max_range ||
+        hr < hr_min_range
+    ) return itemJson.item.codeListItems[1]; // Out of Protocol Range
+    else if ( // IR
+        sys <= sys_max_range &&
+        sys >= sys_min_range && 
+        dia <= dia_max_range &&
+        dia >= dia_min_range &&
+        hr <= hr_max_range &&
+        hr >= hr_min_range
+    ) return itemJson.item.codeListItems[0]; // Within Normal Range
 
-return itemJson.item.codeListItems[4];
+    return itemJson.item.codeListItems[4];
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function populateList(form, targetItem, attachedItem) {
     var itemGroups = form.form.itemGroups;

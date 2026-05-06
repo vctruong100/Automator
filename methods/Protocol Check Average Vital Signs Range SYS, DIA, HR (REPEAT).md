@@ -71,17 +71,20 @@ var item = itemJson.item;
 const sigfig = itemJson.item.significantDigits;
 var pending = false;
 
-logger("Attached item: " + item.name);
+try {
+    logger("Attached item: " + item.name);
 
-var syslist = populateList(formJson, sysItem, sysAttachedItem)
-var dialist = populateList(formJson, dbpItems, dbpAttachedItem)
-var hrlist = populateList(formJson, hrItem, hrAttachedItem);
+    var syslist = populateList(formJson, sysItem, sysAttachedItem)
+    var dialist = populateList(formJson, dbpItems, dbpAttachedItem)
+    var hrlist = populateList(formJson, hrItem, hrAttachedItem);
 
-var sys = calculateAverage(syslist, sigfig);
-var dia = calculateAverage(dialist, sigfig);
-var hr = calculateAverage(hrlist, sigfig);
+    var sys = calculateAverage(syslist, sigfig);
+    var dia = calculateAverage(dialist, sigfig);
+    var hr = calculateAverage(hrlist, sigfig);
 
-logger("Sys: " + sys);
+    logger("Sys: " + sys);
+    logger("Dia: " + dia);
+    logger("HR: " + hr);
 logger("Dia: " + dia);
 logger("HR: " + hr);
 

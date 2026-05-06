@@ -17,17 +17,22 @@ const heightItemList = [
 const sigfig = itemJson.item.significantDigits;
 const maxCount = 2; 
 
-var form = pullForm(screeningStudyEvent, screeningBMI_Form);
-if (!form) return null;
+try {
+    var form = pullForm(screeningStudyEvent, screeningBMI_Form);
+    if (!form) return null;
 
-var height = pullItemFromForm(form, heightItemList);
-var waist = calculateAverage(populateList(formJson, waistItemList), sigfig);
+    var height = pullItemFromForm(form, heightItemList);
+    var waist = calculateAverage(populateList(formJson, waistItemList), sigfig);
 
-log();
+    log();
 
-if (height && waist && height !== null && waist !== null) return (waist / height).toFixed(sigfig);
+    if (height && waist && height !== null && waist !== null) return (waist / height).toFixed(sigfig);
 
-return null;
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function log() {
     logger("Max count: " + maxCount);

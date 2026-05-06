@@ -31,65 +31,70 @@ var QtCount = 0;
 var QTcFcount = 0;
 var HRcount = 0;
 
-var isRepeat = false;
-var groupName = getItemGroupName(formJson);
-logger("Group Name: " + groupName)
-if (groupName) {
-    isRepeat = containsValue(groupName, "repeat")
-}
+try {
+    var isRepeat = false;
+    var groupName = getItemGroupName(formJson);
+    logger("Group Name: " + groupName)
+    if (groupName) {
+        isRepeat = containsValue(groupName, "repeat")
+    }
 
-if (isRepeat) {
-    PRlist = populateListLastToFirst(formJson, PRitem, PRattach);
-    QRSlist = populateListLastToFirst(formJson, QRSitem, QRSattach);
-    Qtlist = populateListLastToFirst(formJson, Qtitem, QTattach);
-    QTcFlist = populateListLastToFirst(formJson, QTcFitem, QTcFattach);
-    HRlist = populateListLastToFirst(formJson, HRitem, HRattach);
-}
-else {
-    PRlist = populateList(formJson, PRitem, PRattach);
-    QRSlist = populateList(formJson, QRSitem, QRSattach);
-    Qtlist = populateList(formJson, Qtitem, QTattach);
-    QTcFlist = populateList(formJson, QTcFitem, QTcFattach);
-    HRlist = populateList(formJson, HRitem, HRattach);
-}
+    if (isRepeat) {
+        PRlist = populateListLastToFirst(formJson, PRitem, PRattach);
+        QRSlist = populateListLastToFirst(formJson, QRSitem, QRSattach);
+        Qtlist = populateListLastToFirst(formJson, Qtitem, QTattach);
+        QTcFlist = populateListLastToFirst(formJson, QTcFitem, QTcFattach);
+        HRlist = populateListLastToFirst(formJson, HRitem, HRattach);
+    }
+    else {
+        PRlist = populateList(formJson, PRitem, PRattach);
+        QRSlist = populateList(formJson, QRSitem, QRSattach);
+        Qtlist = populateList(formJson, Qtitem, QTattach);
+        QTcFlist = populateList(formJson, QTcFitem, QTcFattach);
+        HRlist = populateList(formJson, HRitem, HRattach);
+    }
 
 
-logger("Is it a repeat? " + isRepeat);
-logger("PRlist: " + PRlist);
-logger("QRSlist: " + QRSlist);
-logger("Qtlist: " + Qtlist);
-logger("QTcFlist: " + QTcFlist);
-logger("HRlist: " + HRlist);
+    logger("Is it a repeat? " + isRepeat);
+    logger("PRlist: " + PRlist);
+    logger("QRSlist: " + QRSlist);
+    logger("Qtlist: " + Qtlist);
+    logger("QTcFlist: " + QTcFlist);
+    logger("HRlist: " + HRlist);
 
-var avgPR = calculateAverage(PRlist);
-var avgQRS = calculateAverage(QRSlist);
-var avgQT = calculateAverage(Qtlist);
-var avgQTcF = calculateAverage(QTcFlist);
-var avgHR = calculateAverage(HRlist);
+    var avgPR = calculateAverage(PRlist);
+    var avgQRS = calculateAverage(QRSlist);
+    var avgQT = calculateAverage(Qtlist);
+    var avgQTcF = calculateAverage(QTcFlist);
+    var avgHR = calculateAverage(HRlist);
 
-logger("Average PR: " + avgPR);
-logger("AVerage QRS: " + avgQRS);
-logger("Average QT: " + avgQT);
-logger("Average QtcF: " + avgQTcF);
-logger("Average HR: " + avgHR);
+    logger("Average PR: " + avgPR);
+    logger("AVerage QRS: " + avgQRS);
+    logger("Average QT: " + avgQT);
+    logger("Average QtcF: " + avgQTcF);
+    logger("Average HR: " + avgHR);
 
-if (PRattach.indexOf(item.name) !== -1) {
-    return avgPR;
-}
-if (QRSattach.indexOf(item.name) !== -1) {
-    return avgQRS;
-}
-if (QTcFattach.indexOf(item.name) !== -1) {
-    return avgQTcF;
-}
-if (QTattach.indexOf(item.name) !== -1) {
-    return avgQT;
-}
-if (HRattach.indexOf(item.name) !== -1) {
-    return avgHR;
-}
+    if (PRattach.indexOf(item.name) !== -1) {
+        return avgPR;
+    }
+    if (QRSattach.indexOf(item.name) !== -1) {
+        return avgQRS;
+    }
+    if (QTcFattach.indexOf(item.name) !== -1) {
+        return avgQTcF;
+    }
+    if (QTattach.indexOf(item.name) !== -1) {
+        return avgQT;
+    }
+    if (HRattach.indexOf(item.name) !== -1) {
+        return avgHR;
+    }
 
-return null;
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function containsValue(input, keyword) {
     if (input == null) {

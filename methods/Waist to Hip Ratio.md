@@ -15,14 +15,19 @@ const heightItemList = [
 const sigfig = itemJson.item.significantDigits;
 const maxCount = 2; 
 
-var waist = calculateAverage(populateList(formJson, waistItemList), sigfig);
-var hip = calculateAverage(populateList(formJson, hipItemList), sigfig);
+try {
+    var waist = calculateAverage(populateList(formJson, waistItemList), sigfig);
+    var hip = calculateAverage(populateList(formJson, hipItemList), sigfig);
 
-log();
+    log();
 
-if (hip && waist && hip !== null && waist !== null) return (waist / hip).toFixed(sigfig);
+    if (hip && waist && hip !== null && waist !== null) return (waist / hip).toFixed(sigfig);
 
-return null;
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function log() {
     logger("Max count: " + maxCount);

@@ -57,73 +57,78 @@ const prevFormDifference = 15;
 var prevForm = null;
 var prevEndTime = null;
 
-var normalizedMaps = {};
-for (var key in formMaps) {
-    normalizedMaps[normalize(key)] = formMaps[key];
-}
+try {
+    var normalizedMaps = {};
+    for (var key in formMaps) {
+        normalizedMaps[normalize(key)] = formMaps[key];
+    }
 
-var endTime = pullItemFromForm(formJson, afterDoseItem)
+    var endTime = pullItemFromForm(formJson, afterDoseItem)
 
-if (form.name != allForms[1]) {
-    logger("Form name: " + form.name);
-    var prevFormName = normalizedMaps[normalize(form.name)];
-    logger("Previous Form Name: " + prevFormName);
-    prevForm = pullForm(studyEvents, [prevFormName]);
-    if (!prevForm) {
-        customErrorMessage("Could not detect " + prevFormName);
+    if (form.name != allForms[1]) {
+        logger("Form name: " + form.name);
+        var prevFormName = normalizedMaps[normalize(form.name)];
+        logger("Previous Form Name: " + prevFormName);
+        prevForm = pullForm(studyEvents, [prevFormName]);
+        if (!prevForm) {
+            customErrorMessage("Could not detect " + prevFormName);
+            return false;
+        }
+        prevEndTime = pullItemFromForm(prevForm, afterDoseItem);
+    }
+
+    var collectedTimeMs = null;
+    if (!item || item.dateValueMs == null || item.dateValueMs == undefined) {
+        var voidTime = pullItemFromForm(formJson, attachedItemName);
+        collectedTimeMs = voidTime.dateValueMs;
+    }
+    else {
+        var voidTime = item;
+        var collectedTimeMs = item.dateValueMs;
+    }
+    logger(voidTime.name)
+    var endTimeMs = endTime.dateValueMs;
+
+    logger("Collected Time: "  + formatDateTimeByType(voidTime));
+    logger("End Time: " + formatDateTimeByType(endTime));
+
+    const differenceMs =  collectedTimeMs - endTimeMs;
+    logger(differenceMs)
+    if (differenceMs < 0) {
+        customErrorMessage("Out of Window")
         return false;
     }
-    prevEndTime = pullItemFromForm(prevForm, afterDoseItem);
-}
+    const differenceInMins = Math.abs(Math.floor(differenceMs / (1000 * 60)))
 
-var collectedTimeMs = null;
-if (!item || item.dateValueMs == null || item.dateValueMs == undefined) {
-    var voidTime = pullItemFromForm(formJson, attachedItemName);
-    collectedTimeMs = voidTime.dateValueMs;
-}
-else {
-    var voidTime = item;
-    var collectedTimeMs = item.dateValueMs;
-}
-logger(voidTime.name)
-var endTimeMs = endTime.dateValueMs;
+    if(differenceInMins > sameFormDifference){
+        customErrorMessage("Out of Window");
+        return false;
+    }
 
-logger("Collected Time: "  + formatDateTimeByType(voidTime));
-logger("End Time: " + formatDateTimeByType(endTime));
+    if (form.name === allForms[1]) return true;
 
-const differenceMs =  collectedTimeMs - endTimeMs;
-logger(differenceMs)
-if (differenceMs < 0) {
-    customErrorMessage("Out of Window")
-    return false;
+    if (!prevEndTime) {
+        customErrorMessage("Could not determine previous interval end time.");
+        return false;
+    }
+    var prevEndTimeMs = prevEndTime.dateValueMs;
+    var differenceMs2 = collectedTimeMs - prevEndTimeMs;
+    logger(differenceMs2);
+    if (differenceMs2 < 0) {
+        return false;
+    }
+
+    const differenceInMins2 = Math.abs(Math.floor(differenceMs2 / (1000 * 60)))
+    if(differenceInMins2 < prevFormDifference){
+        customErrorMessage("Out of Window");
+        return false;
+    }
+
+    return true;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
 }
-const differenceInMins = Math.abs(Math.floor(differenceMs / (1000 * 60)))
-
-if(differenceInMins > sameFormDifference){
-    customErrorMessage("Out of Window");
-    return false;
-}
-
-if (form.name === allForms[1]) return true;
-
-if (!prevEndTime) {
-    customErrorMessage("Could not determine previous interval end time.");
-    return false;
-}
-var prevEndTimeMs = prevEndTime.dateValueMs;
-var differenceMs2 = collectedTimeMs - prevEndTimeMs;
-logger(differenceMs2);
-if (differenceMs2 < 0) {
-    return false;
-}
-
-const differenceInMins2 = Math.abs(Math.floor(differenceMs2 / (1000 * 60)))
-if(differenceInMins2 < prevFormDifference){
-    customErrorMessage("Out of Window");
-    return false;
-}
-
-return true;
 
 function normalize(str) {
     return str.replace(/\s+/g, " ").trim();

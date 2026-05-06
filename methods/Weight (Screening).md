@@ -11,16 +11,17 @@ const itemName = [
     "VS_WEIGHT",
 ]
 
-var form = pullForm(studyevent, formName);
-if (!form) return null;
+try {
+    var form = pullForm(studyevent, formName);
+    if (!form) return null;
 
-var weight = pullItemFromForm(form, itemName);
-log();
+    var weight = pullItemFromForm(form, itemName);
+    log();
 
-return weight;
-
-function log() {
-    logger("weight: " + weight);
+    return weight;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
 }
 
 function pullForm(studyeventList, formNameList) {

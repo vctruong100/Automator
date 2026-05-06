@@ -50,21 +50,26 @@ var maxCount = 3;
 var list = [];
 var avg = 0;
 
-logger("Attached item: " + item.name);
-if (sysAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, sysItem, sysAttachedItem)) {
-    avg = calculateAverage(list, sigfig);
-    if (list.length >= maxCount) return (avg).toFixed(sigfig);
-}
+try {
+    logger("Attached item: " + item.name);
+    if (sysAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, sysItem, sysAttachedItem)) {
+        avg = calculateAverage(list, sigfig);
+        if (list.length >= maxCount) return (avg).toFixed(sigfig);
+    }
 
-if (dbpAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, dbpItems, dbpAttachedItem)) {
-    avg = calculateAverage(list, sigfig);
-    if (list.length >= maxCount) return (avg).toFixed(sigfig);
+    if (dbpAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, dbpItems, dbpAttachedItem)) {
+        avg = calculateAverage(list, sigfig);
+        if (list.length >= maxCount) return (avg).toFixed(sigfig);
+    }
+    if (hrAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, hrItem, hrAttachedItem)) {
+        avg = calculateAverage(list, sigfig);
+        if (list.length >= maxCount) return (avg).toFixed(sigfig);
+    }
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
 }
-if (hrAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, hrItem, hrAttachedItem)) {
-    avg = calculateAverage(list, sigfig);
-    if (list.length >= maxCount) return (avg).toFixed(sigfig);
-}
-return null;
 
 function log() {
     logger("List: " + list);

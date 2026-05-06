@@ -13,15 +13,20 @@ var maxCount = 0;
 var list = [];
 var avg = 0;
 
-list = populateList(formJson, itemList, list);
+try {
+    list = populateList(formJson, itemList, list);
 
-avg = calculateAverage(list, sigfig);
-logger("List: " + list);
-logger("List length: " + list.length)
-logger("Max count: " + maxCount);
-logger("Average: " + avg)
-if (list.length === maxCount) return (avg).toFixed(sigfig);
-return null;
+    avg = calculateAverage(list, sigfig);
+    logger("List: " + list);
+    logger("List length: " + list.length)
+    logger("Max count: " + maxCount);
+    logger("Average: " + avg)
+    if (list.length === maxCount) return (avg).toFixed(sigfig);
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function populateList(form, targetItem, ilist) {
     var itemGroups = form.form.itemGroups;
@@ -83,15 +88,20 @@ const pulledItemCodeList = [
     "L",
 ]
 
-var form = pullForm(studyevent, formName);
+try {
+    var form = pullForm(studyevent, formName);
 
-if (!form) return null;
+    if (!form) return null;
 
-var arm = pullItemFromForm(form, itemName);
-if (arm == pulledItemCodeList[0]) return attachedItemCodeList[0];
-else if (arm == pulledItemCodeList[1]) return attachedItemCodeList[1];
+    var arm = pullItemFromForm(form, itemName);
+    if (arm == pulledItemCodeList[0]) return attachedItemCodeList[0];
+    else if (arm == pulledItemCodeList[1]) return attachedItemCodeList[1];
 
-return arm;
+    return arm;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;

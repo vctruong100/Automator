@@ -52,28 +52,33 @@ const diaAvg_maxRange = 100;
 var item = itemJson.item;
 const sigfig = itemJson.item.significantDigits;
 
-var repeat = pullItemFromForm(formJson, repeatItem);
-logger("Repeat: " + repeat);
-var isRepeat = containsValue(repeat, "yes");
+try {
+    var repeat = pullItemFromForm(formJson, repeatItem);
+    logger("Repeat: " + repeat);
+    var isRepeat = containsValue(repeat, "yes");
 
-if (isRepeat) {
-    var syslist = populateListRepeat(formJson, sysItem, sysAttachedItem)
-    var dialist = populateListRepeat(formJson, dbpItems, dbpAttachedItem)
+    if (isRepeat) {
+        var syslist = populateListRepeat(formJson, sysItem, sysAttachedItem)
+        var dialist = populateListRepeat(formJson, dbpItems, dbpAttachedItem)
+    }
+    else {
+        var syslist = populateListNonRepeat(formJson, sysItem, sysAttachedItem)
+        var dialist = populateListNonRepeat(formJson, dbpItems, dbpAttachedItem)
+    }
+
+    var sysAvg = calculateAverage(syslist, sigfig);
+    var diaAvg = calculateAverage(dialist, sigfig);
+
+    logger("Sys: " + sysAvg);
+    logger("Dia: " + diaAvg);
+
+    if (sysAvg >= sysAvg_maxRange || diaAvg >= diaAvg_maxRange) return item.codeListItems[1].codedValue; // return yes
+
+    return item.codeListItems[2].codedValue; // return no
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
 }
-else {
-    var syslist = populateListNonRepeat(formJson, sysItem, sysAttachedItem)
-    var dialist = populateListNonRepeat(formJson, dbpItems, dbpAttachedItem)
-}
-
-var sysAvg = calculateAverage(syslist, sigfig);
-var diaAvg = calculateAverage(dialist, sigfig);
-
-logger("Sys: " + sysAvg);
-logger("Dia: " + diaAvg);
-
-if (sysAvg >= sysAvg_maxRange || diaAvg >= diaAvg_maxRange) return item.codeListItems[1].codedValue; // return yes
-
-return item.codeListItems[2].codedValue; // return no
 
 function populateList(form, targetItem, attachedItem) {
     var itemGroups = form.form.itemGroups;

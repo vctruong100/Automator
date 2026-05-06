@@ -30,27 +30,32 @@ var wtmaxCount = 2;
 var wtlist = [];
 var wtavg = 0;
 
-htlist = populateList(formJson, heightitemList, htmaxCount);
-htavg = calculateAverage(htlist, sigfig);
+try {
+    htlist = populateList(formJson, heightitemList, htmaxCount);
+    htavg = calculateAverage(htlist, sigfig);
 
-wtlist = populateList(formJson, weightitemList, wtmaxCount);
-wtavg = calculateAverage(wtlist, sigfig);
+    wtlist = populateList(formJson, weightitemList, wtmaxCount);
+    wtavg = calculateAverage(wtlist, sigfig);
 
-logger(htavg);
-logger(wtavg);
+    logger(htavg);
+    logger(wtavg);
 
-if (htlist.length !== htmaxCount && wtlist.length !== wtmaxCount) return null;
+    if (htlist.length !== htmaxCount && wtlist.length !== wtmaxCount) return null;
 
-var heightMtr = htavg / 100;
+    var heightMtr = htavg / 100;
 
-var factor = Math.pow(10, sigfig);
-bmi = Math.round((wtavg / (heightMtr * heightMtr)) * factor) / factor;
+    var factor = Math.pow(10, sigfig);
+    bmi = Math.round((wtavg / (heightMtr * heightMtr)) * factor) / factor;
 
-log();
+    log();
 
-if (bmi) return bmi.toFixed(sigfig);
+    if (bmi) return bmi.toFixed(sigfig);
 
-return null;
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function log() {
     logger("Height in meter: " + heightMtr)

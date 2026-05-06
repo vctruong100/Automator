@@ -27,28 +27,33 @@ var weightList = [];
 var heightAvg = 0;
 var weightAvg = 0;
 
-heightList = populateList(formJson, heightItemList);
-weightList = populateList(formJson, weightItemList);
+try {
+    heightList = populateList(formJson, heightItemList);
+    weightList = populateList(formJson, weightItemList);
 
-heightAvg = calculateAverage(heightList, sigfig);
-weightAvg = calculateAverage(weightList, sigfig);
-logger("Height List: " + heightList);
-logger("Weight List: " + weightList);
+    heightAvg = calculateAverage(heightList, sigfig);
+    weightAvg = calculateAverage(weightList, sigfig);
+    logger("Height List: " + heightList);
+    logger("Weight List: " + weightList);
 
-logger("Height List length: " + heightList.length);
-logger("Weight List length: " + weightList.length)
+    logger("Height List length: " + heightList.length);
+    logger("Weight List length: " + weightList.length)
 
-logger("Max count: " + maxCount);
-logger("Height Average: " + heightAvg);
-logger("Weight Average: " + weightAvg);
+    logger("Max count: " + maxCount);
+    logger("Height Average: " + heightAvg);
+    logger("Weight Average: " + weightAvg);
 
-if (heightAttachedItem.indexOf(item.name) !== -1) {
-    return heightAvg;
+    if (heightAttachedItem.indexOf(item.name) !== -1) {
+        return heightAvg;
+    }
+    if (weightAttachedItem.indexOf(item.name) !== -1) {
+        return weightAvg;
+    }
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
 }
-if (weightAttachedItem.indexOf(item.name) !== -1) {
-    return weightAvg;
-}
-return null;
 
 function populateList(form, targetItem) {
     var itemGroups = form.form.itemGroups;

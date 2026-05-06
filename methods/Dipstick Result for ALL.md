@@ -1,24 +1,30 @@
 var itemid = itemJson.item.id;
-var item = pullItemFromForm(formJson);
-logger("Item name: " + item.name + ", value: " + item.value);
 
-var normalizedItem = item.name.trim().toLowerCase();
-if (normalizedItem.indexOf("ph") !== -1) {
-    if (item.value == item.codeListItems[6].codedValue) return "YES";
-    else return "NO";
-}
-if (normalizedItem.indexOf("gravity") !== -1) {
-    if (item.value == item.codeListItems[0].codedValue) return "YES";
-    else return "NO";
-}
-if (normalizedItem.indexOf("urobilinogen") !== -1) {
-    if (item.value == item.codeListItems[0].codedValue || item.value == item.codeListItems[1].codedValue) return "NO";
-}
-if (item.value == item.codeListItems[0].codedValue) return "NO";
+try {
+    var item = pullItemFromForm(formJson);
+    logger("Item name: " + item.name + ", value: " + item.value);
 
-if (!item || item.value == null) return "NO";
+    var normalizedItem = item.name.trim().toLowerCase();
+    if (normalizedItem.indexOf("ph") !== -1) {
+        if (item.value == item.codeListItems[6].codedValue) return "YES";
+        else return "NO";
+    }
+    if (normalizedItem.indexOf("gravity") !== -1) {
+        if (item.value == item.codeListItems[0].codedValue) return "YES";
+        else return "NO";
+    }
+    if (normalizedItem.indexOf("urobilinogen") !== -1) {
+        if (item.value == item.codeListItems[0].codedValue || item.value == item.codeListItems[1].codedValue) return "NO";
+    }
+    if (item.value == item.codeListItems[0].codedValue) return "NO";
 
-return "YES";
+    if (!item || item.value == null) return "NO";
+
+    return "YES";
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function pullItemFromForm(form) {
     var itemGroups = form.form.itemGroups;

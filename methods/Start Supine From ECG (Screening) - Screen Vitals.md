@@ -19,20 +19,25 @@ const ecgFormNames = [
   "⚡ SCREEN 12-LEAD ECG TRIPLICATE V2.0",
 ];
 
-var confirmation = pullItemFromForm(formJson, confirmationItems)
+try {
+    var confirmation = pullItemFromForm(formJson, confirmationItems)
 
-if (!confirmation || confirmation == null) return "N/A";
-if (confirmation == "YES") return "N/A";
+    if (!confirmation || confirmation == null) return "N/A";
+    if (confirmation == "YES") return "N/A";
 
-form = pullForm(studyevent, ecgFormNames);
-if (!form) return "N/A";
+    form = pullForm(studyevent, ecgFormNames);
+    if (!form) return "N/A";
 
-var result = pullItemFromForm(form, item);
-if (!result || result == null) return "N/A";
+    var result = pullItemFromForm(form, item);
+    if (!result || result == null) return "N/A";
 
-log();
+    log();
 
-return formatDate(result);
+    return formatDate(result);
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function log() {
     logger("Study event: " + studyEventName);

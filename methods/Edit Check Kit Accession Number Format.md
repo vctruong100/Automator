@@ -1,6 +1,11 @@
 const value = itemJson.item.value;
 
-return isValidFormat(value);
+try {
+    return isValidFormat(value);
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function isValidFormat(value)
 {

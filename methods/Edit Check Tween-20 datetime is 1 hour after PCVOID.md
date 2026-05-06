@@ -11,32 +11,37 @@ const item = itemJson.item;
 const difference = 60;
 var groupid = null;
 
-getItemGroupID(formJson.form);
-var pcvoid = getItemValueFromSameGroup(formJson.form, pcvoidItem);
-if (!pcvoid || pcvoid == null) return null;
+try {
+    getItemGroupID(formJson.form);
+    var pcvoid = getItemValueFromSameGroup(formJson.form, pcvoidItem);
+    if (!pcvoid || pcvoid == null) return null;
 
-var pcvoidMs = pcvoid.dateValueMs;
-const collectedTimeMs = item.dateValueMs;
+    var pcvoidMs = pcvoid.dateValueMs;
+    const collectedTimeMs = item.dateValueMs;
 
-logger("pcvoidMs Time: "  + formatDateTime(pcvoid.value));
-logger("collected time: " + formatDateTime(item.value));
+    logger("pcvoidMs Time: "  + formatDateTime(pcvoid.value));
+    logger("collected time: " + formatDateTime(item.value));
 
-const differenceMs = collectedTimeMs - pcvoidMs;
-logger(differenceMs)
-if (differenceMs < 0) {
-    customErrorMessage("Selected time is less than previous PCVoid time. Previous PCVoid Time: " + formatDateTime(pcvoid.value))
-    return false;
+    const differenceMs = collectedTimeMs - pcvoidMs;
+    logger(differenceMs)
+    if (differenceMs < 0) {
+        customErrorMessage("Selected time is less than previous PCVoid time. Previous PCVoid Time: " + formatDateTime(pcvoid.value))
+        return false;
+    }
+    const differenceInMins = Math.abs(Math.floor(differenceMs / (1000 * 60)))
+
+    logger(differenceInMins)
+    if(differenceInMins >= difference){
+        customErrorMessage("Selected time is more than previous PCVoid time. Previous PCVoid Time: " + formatDateTime(pcvoid.value))
+        return false;
+    }
+
+    customErrorMessage("Difference is out of range: " + Math.abs(differenceInMins) + ", Previous PCVoid Time: " + formatDateTime(pcvoid.value));
+    return true;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
 }
-const differenceInMins = Math.abs(Math.floor(differenceMs / (1000 * 60)))
-
-logger(differenceInMins)
-if(differenceInMins >= difference){
-    customErrorMessage("Selected time is more than previous PCVoid time. Previous PCVoid Time: " + formatDateTime(pcvoid.value))
-    return false;
-}
-
-customErrorMessage("Difference is out of range: " + Math.abs(differenceInMins) + ", Previous PCVoid Time: " + formatDateTime(pcvoid.value));
-return true;
 
 function formatDateTime(isoString) {
     if (!isoString) return "";

@@ -24,18 +24,23 @@ var maxCount = 3; // max number of qtcf items
 var qtcfOOR = false;
 var list = [];
 
-var form = pullForm(baselineFormStudyEvents, baselineForms);
-if (!form) return true;
-var baseline = pullItemFromForm(form, baselineItem);
+try {
+    var form = pullForm(baselineFormStudyEvents, baselineForms);
+    if (!form) return true;
+    var baseline = pullItemFromForm(form, baselineItem);
 
-list = populateList(formJson, qtcfItems, list);
+    list = populateList(formJson, qtcfItems, list);
 
-if (list.length < 3 || !baseline || baseline == null) return null;
+    if (list.length < 3 || !baseline || baseline == null) return null;
 
-var result = calculateAverageOOR();
-log()
+    var result = calculateAverageOOR();
+    log()
 
-return result;
+    return result;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function log() {
     logger("Baseline: " + baseline);

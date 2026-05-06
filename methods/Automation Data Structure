@@ -1,0 +1,132 @@
+logger(JSON.stringify(message))
+{
+  "type": "com.iqvia.clinspark.messaging.messages.ItemDataSavedMessage",
+  "studyId": 1,
+  "subjectId": 687,
+  "formId": 2277,
+  "formName": "? DEMOGRAPHICS (STANDARD) V1.0",
+  "formDataId": 226982,
+  "applicationUserName": "v.truong",
+  "reasonForChange": null,
+  "itemDataInfo": [
+    {
+      "itemDataId": 2392543,
+      "itemGroupDataId": 543857,
+      "itemRefId": 20375,
+      "name": "DM Date of Birth",
+      "value": "18Jan1976",
+      "dataCollectionStatus": "Complete",
+      "reasonForChange": "importing from volunteer record",
+      "unit": null,
+      "parameterName": null,
+      "hardUpper": null,
+      "hardLower": null,
+      "softUpper": null,
+      "softLower": null
+    },
+    {
+      "itemDataId": 2392544,
+      "itemGroupDataId": 543857,
+      "itemRefId": 20376,
+      "name": "DM Sex at Birth",
+      "value": "MALE",
+      "dataCollectionStatus": "Complete",
+      "reasonForChange": "importing from volunteer record",
+      "unit": null,
+      "parameterName": null,
+      "hardUpper": null,
+      "hardLower": null,
+      "softUpper": null,
+      "softLower": null
+    },
+    {
+      "itemDataId": 2392545,
+      "itemGroupDataId": 543857,
+      "itemRefId": 20377,
+      "name": "What is the subject's year of birth?",
+      "value": "50",
+      "dataCollectionStatus": "Complete",
+      "reasonForChange": "importing from volunteer record",
+      "unit": null,
+      "parameterName": null,
+      "hardUpper": null,
+      "hardLower": null,
+      "softUpper": null,
+      "softLower": null
+    },
+    {
+      "itemDataId": 2392546,
+      "itemGroupDataId": 543857,
+      "itemRefId": 20378,
+      "name": "DM Ethnicity",
+      "value": "NOT HISPANIC OR LATINO",
+      "dataCollectionStatus": "Complete",
+      "reasonForChange": "importing from volunteer record",
+      "unit": null,
+      "parameterName": null,
+      "hardUpper": null,
+      "hardLower": null,
+      "softUpper": null,
+      "softLower": null
+    }
+  ]
+}
+
+// logger(JSON.stringify(message, null, 2));
+
+if (!isEcoaMeasurementCollectionMessage(message)) {
+    logger('Not an eCOA measurement collection message, skipping');
+    return false;
+}
+
+// Condition helpers
+var conditions = [];
+
+function addCondition(oid, name) {
+    var exists = false;
+
+    for (var i = 0; i < conditions.length; i++) {
+        if (conditions[i].conditionOID === oid) {
+            exists = true;
+            break;
+        }
+    }
+
+    if (!exists) {
+        conditions.push({
+            conditionOID: oid,
+            conditionName: name
+        });
+    }
+}
+
+function parameter(name) {
+    for (var i = 0; i < message.itemDataInfo.length; i++) {
+        var itemData = message.itemDataInfo[i];
+
+        if (itemData.parameterName === name) {
+            return itemData;
+        }
+    }
+    return null;
+}
+
+// Evaluations
+var systolic = parameter('Systolic');
+if (systolic && systolic.value < 80) {
+    addCondition('LS1', 'Low systolic');
+}
+
+var diastolic = parameter('Diastolic');
+if (diastolic && diastolic.value < 50) {
+    addCondition('LD1', 'Low diastolic');
+}
+
+if (conditions.length === 0) {
+    logger('No conditions found');
+    return false;
+}
+
+ctx.conditions = conditions;
+return true;
+

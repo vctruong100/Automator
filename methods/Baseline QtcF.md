@@ -13,10 +13,15 @@ const baselineItem = [
 // ======== Don't modify ========
 const sigfig = itemJson.item.significantDigits;
 
-var form = pullForm(baselineStudyEvent, baselineFormName);
-if (!form) return null;
+try {
+    var form = pullForm(baselineStudyEvent, baselineFormName);
+    if (!form) return null;
 
-return (pullItemFromForm(form, baselineItem)).toFixed(sigfig);
+    return (pullItemFromForm(form, baselineItem)).toFixed(sigfig);
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function pullForm(studyeventList, formNameList) {
     for (var i = 0; i < studyeventList.length; i++) {

@@ -10477,7 +10477,7 @@
                     break;
                 }
 
-                var closed = await waitForSAModalClose(10000);
+                var closed = await waitForSAModalClose(20000);
                 if (!closed) {
                     log("PLAP Builder: modal did not close");
                     item.status = "Failed";

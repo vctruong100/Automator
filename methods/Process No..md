@@ -9,17 +9,18 @@ const itemName = [
     "Process No.",
 ]
 
-var form = pullForm(studyevent, formName);
-if (!form) return null;
+try {
+    var form = pullForm(studyevent, formName);
+    if (!form) return null;
 
-var result = pullItemFromForm(form, itemName);
+    var result = pullItemFromForm(form, itemName);
 
-log()
+    log()
 
-return result;
-
-function log() {
-    logger("Process No: " + result);
+    return result;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
 }
 
 function pullForm(studyeventList, formNameList) {

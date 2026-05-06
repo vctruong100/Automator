@@ -7,16 +7,21 @@ const emptyJugItem = [
 
 const sigfig = itemJson.item.significantDigits;
 
-var urineJug = pullItemFromForm(formJson, urineJugItem);
-var voidJug = pullItemFromForm(formJson, emptyJugItem);
+try {
+    var urineJug = pullItemFromForm(formJson, urineJugItem);
+    var voidJug = pullItemFromForm(formJson, emptyJugItem);
 
-var total = (urineJug - voidJug);
+    var total = (urineJug - voidJug);
 
-if (total) return total.toFixed(sigfig);
+    if (total) return total.toFixed(sigfig);
 
-if (total == 0) return (0).toFixed(sigfig);
+    if (total == 0) return (0).toFixed(sigfig);
 
-return null;
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;

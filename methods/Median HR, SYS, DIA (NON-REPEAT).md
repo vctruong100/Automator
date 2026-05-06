@@ -37,25 +37,30 @@ var hrMaxCount = 3;
 const item = itemJson.item;
 const sigfig = item.significantDigits;
 
-if (HRAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, hrItem, HRAttachedItem, hrMaxCount)) {
-    median = calculateMedian(list, sigfig);
-    log()
-    return (median).toFixed(sigfig);
-}
+try {
+    if (HRAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, hrItem, HRAttachedItem, hrMaxCount)) {
+        median = calculateMedian(list, sigfig);
+        log()
+        return (median).toFixed(sigfig);
+    }
 
-if (sysAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, sysItem, sysAttachedItem, sysMaxCount)) {
-    median = calculateMedian(list, sigfig);
-    log()
-    return (median).toFixed(sigfig);
-}
+    if (sysAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, sysItem, sysAttachedItem, sysMaxCount)) {
+        median = calculateMedian(list, sigfig);
+        log()
+        return (median).toFixed(sigfig);
+    }
 
-if (diaAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, diaItem, diaAttachedItem, diaMaxCount)) {
-    median = calculateMedian(list, sigfig);
-    log()
-    return (median).toFixed(sigfig);
-}
+    if (diaAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, diaItem, diaAttachedItem, diaMaxCount)) {
+        median = calculateMedian(list, sigfig);
+        log()
+        return (median).toFixed(sigfig);
+    }
 
-return null;
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
 
 function log() {
     logger("List: " + list);

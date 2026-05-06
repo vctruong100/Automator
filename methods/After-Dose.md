@@ -16,29 +16,36 @@ const doseItem = [
 const item = itemJson.item;
 const studyevent = formJson.form.studyEventName;
 const form = formJson.form;
+try {
+    var upperInterval = getUpperIntervalValue(studyevent);
+    if (upperInterval) {
+        upperInterval = parseInt(upperInterval);
+    }
+    logger("Upper interval: " + upperInterval);
 
-var upperInterval = getUpperIntervalValue(studyevent);
-if (upperInterval) {
-    upperInterval = parseInt(upperInterval);
+    var doseForm = pullForm(doseStudyEvent, doseForms);
+    if (!doseForm) return null;
+
+    var doseTime = pullItemFromForm(doseForm, doseItem);
+    var doseTimeMs = parseDateTime(doseTime);
+
+    logger("Dose Time: " + formatDateTimeByType(doseTime));
+
+    var intervalMs = upperInterval * 3600000;
+    var endTimeMs = doseTimeMs + intervalMs;
+
+    var endDate = new Date(endTimeMs);
+    var formatted = formatDateObject(endDate);
+    var converted = convertToOriginalFormat(formatted);
+
+    logger("End Time: " + formatDateObject(endDate));
+    logger("Converted End Time: " + converted);
+
+    return converted;
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
 }
-logger("Upper interval: " + upperInterval)
-var doseForm = pullForm(doseStudyEvent, doseForms);
-if (!doseForm) return null;
-var doseTime = pullItemFromForm(doseForm, doseItem)
-var doseTimeMs = parseDateTime(doseTime);
-
-logger("Dose Time: "  + formatDateTimeByType(doseTime));
-
-var intervalMs = upperInterval * 3600000;
-var endTimeMs = doseTimeMs + intervalMs;
-
-var endDate = new Date(endTimeMs);
-var formatted = formatDateObject(endDate);
-var converted = convertToOriginalFormat(formatted)
-logger("End Time: " + formatDateObject(endDate));
-logger("Converted End Time: " + converted);
-
-return converted;
 
 function convertToOriginalFormat(displayString) {
     if (!displayString) return "";
