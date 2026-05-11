@@ -36,9 +36,13 @@ var bmi = 0;
 
 try {
     var form = pullForm(screeningStudyEvent, screeningBMI_Form);
-    if (!form) return null;
-    height = pullItemFromForm(form, heightitemList);
-
+    if (!form) {
+        height = pullItemFromForm(formJson, heightitemList);
+    }
+    else {
+        height = pullItemFromForm(form, heightitemList);
+    }
+    
     var maxCount = 0; 
     var list = [];
     var avg = 0;

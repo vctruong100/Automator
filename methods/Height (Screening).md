@@ -16,7 +16,6 @@ try {
     if (!form) return null;
 
     var height = pullItemFromForm(form, itemName);
-    log();
 
     return height;
 } catch (e) {
