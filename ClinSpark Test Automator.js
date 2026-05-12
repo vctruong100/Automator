@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 4.0.7
+// @version 4.0.8
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -5764,13 +5764,16 @@
         setEpochIndex(idx);
 
         if (idx >= queue.length) {
-            // All epochs done — route to ICF Barcode as final step.
-            // The ICF handler gracefully skips if consent is already filled
-            // and handles the "all done" cleanup when no more epochs remain.
-            setRunMode("consentmid");
-            updateRunAllPopupStatus("Running ICF Barcode");
-            log("All epochs processed; routing to ICF Barcode as final step");
-            location.href = STUDY_SHOW_URL + "?autoconsent=1";
+            // All epochs done — ICF Barcode already ran after Screening epoch; just complete.
+            clearEpochQueueState();
+            clearRunMode();
+            updateRunAllPopupStatus("Run All Complete");
+            log("All epochs processed; Run All complete");
+            try {
+                localStorage.removeItem(STORAGE_RUN_ALL_POPUP);
+                if (RUN_ALL_POPUP_REF && RUN_ALL_POPUP_REF.close) { RUN_ALL_POPUP_REF.close(); }
+                RUN_ALL_POPUP_REF = null;
+            } catch (e) {}
             return;
         }
 
@@ -22524,7 +22527,7 @@
             await sleep(300);
 
             // Check for form order modal first (may appear before or after barcode modal)
-            var formOrderDiv = await waitForSelector("#requireFormOrderDiv", 6000);
+            var formOrderDiv = document.getElementById("requireFormOrderDiv");
             var formOrderVisible = false;
             if (formOrderDiv) {
                 formOrderVisible = isFormOrderModalVisible();
@@ -22538,7 +22541,7 @@
             }
 
             // Check for barcode modal (may appear before or after form order modal)
-            var barcodeDiv = await waitForSelector("#requireSubjectBarcodeVerifyDiv", 6000);
+            var barcodeDiv = document.getElementById("requireSubjectBarcodeVerifyDiv");
             var barcodeVisible = false;
             if (barcodeDiv) {
                 barcodeVisible = isBarcodeVerifyModalVisible();
@@ -22584,19 +22587,32 @@
             setFormValueMode(formValueMode);
             await runFormAutomationV2();
 
-            var closeSpan = await waitForSelector("span[data-dismiss='modal']", 8000);
-            if (closeSpan) {
-                log("CollectAll: clicking Close span after form processing");
-                closeSpan.click();
+            var openModalAfterRun = document.querySelector(".modal.in, .modal.show");
+            if (!openModalAfterRun) {
+                log("CollectAll: no modal open after form processing; skipping close wait");
             } else {
-                log("CollectAll: Close span not found; attempting to ensure modal is closed");
-            }
+                var closeBtn = openModalAfterRun.querySelector(
+                    "span[data-dismiss='modal'], button[data-dismiss='modal'], a[data-dismiss='modal'], .modal-header .close, button.close, a.close"
+                );
+                if (!closeBtn) {
+                    closeBtn = await waitForSelector(
+                        "span[data-dismiss='modal'], button[data-dismiss='modal'], a[data-dismiss='modal'], .modal-header .close, button.close, a.close",
+                        1500
+                    );
+                }
+                if (closeBtn) {
+                    log("CollectAll: clicking Close button after form processing");
+                    closeBtn.click();
+                } else {
+                    log("CollectAll: Close button not found; attempting to ensure modal is closed");
+                }
 
-            var closed = await waitForAnyModalToClose(3000);
-            if (!closed) {
-                log("CollectAll: modal did not close within timeout; proceeding to rescan");
-            } else {
-                log("CollectAll: modal closed; waiting for table refresh");
+                var closed = await waitForAnyModalToClose(3000);
+                if (!closed) {
+                    log("CollectAll: modal did not close within timeout; proceeding to rescan");
+                } else {
+                    log("CollectAll: modal closed; waiting for table refresh");
+                }
             }
 
             // Add form to list after collection
