@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 4.0.8
+// @version 4.0.9
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -315,7 +315,7 @@
         waitProgressPanelMs: 10000,
         waitCollectIconsMs: 8000,
         waitModalOpenMs: 8000,
-        waitModalCloseMs: 6000,
+        waitModalCloseMs: 15000,
         waitSettleMs: 200,
         waitVerifyIconMs: 1200,
         idleBetweenItemsMs: 120,
@@ -6584,6 +6584,26 @@
         return result;
     }
 
+    async function waitForModalCloseOrVerified(iconEl, timeoutMs) {
+        var start = Date.now();
+        var max = typeof timeoutMs === "number" ? timeoutMs : BARCODE_TIMEOUTS.waitModalCloseMs;
+        while (Date.now() - start < max) {
+            var modal = document.querySelector(BARCODE_SELECTORS.bootboxVisibleModal);
+            if (!modal) { return true; }
+            var st = window.getComputedStyle(modal);
+            if (st.display === "none" || st.visibility === "hidden" || st.opacity === "0") { return true; }
+            if (iconEl && document.body.contains(iconEl)) {
+                var tipNow = iconEl.getAttribute(BARCODE_SELECTORS.tooltipAttr) || "";
+                if (iconEl.classList.contains(BARCODE_SELECTORS.verifiedClass) || BARCODE_REGEX.verifiedPrefix.test(tipNow)) {
+                    log("[PullLabBarcode] waitForModalCloseOrVerified: icon verified; treating as closed");
+                    return true;
+                }
+            }
+            await sleep(150);
+        }
+        return false;
+    }
+
     async function openBarcodeModalAndFill(iconObj) {
         log("[PullLabBarcode] openBarcodeModalAndFill: starting for barcode='" + iconObj.barcode + "'");
         var attempts = 0;
@@ -6597,13 +6617,6 @@
 
             attempts = attempts + 1;
             log("[PullLabBarcode] openBarcodeModalAndFill: attempt " + String(attempts) + "/" + String(maxAttempts));
-
-            var existingModal = document.querySelector(BARCODE_SELECTORS.bootboxVisibleModal);
-            if (existingModal) {
-                log("[PullLabBarcode] openBarcodeModalAndFill: existing modal detected, waiting for it to close");
-                await waitUntilHidden(BARCODE_SELECTORS.bootboxVisibleModal, BARCODE_TIMEOUTS.waitModalCloseMs);
-                await sleep(BARCODE_TIMEOUTS.waitSettleMs);
-            }
 
             var currentIcon = iconObj.el;
             if (!currentIcon || !document.body.contains(currentIcon)) {
@@ -6635,37 +6648,55 @@
                 return "already_verified";
             }
 
-            log("[PullLabBarcode] openBarcodeModalAndFill: clicking icon");
-            try {
-                currentIcon.click();
-            } catch (clickErr) {
-                log("[PullLabBarcode] openBarcodeModalAndFill: click error " + String(clickErr));
-                if (attempts < maxAttempts) {
-                    await sleep(BARCODE_TIMEOUTS.waitSettleMs);
-                    continue;
-                }
-                return false;
+            // If a bootbox is already open with an input, use it directly instead of clicking icon again
+            var existingModal = document.querySelector(BARCODE_SELECTORS.bootboxVisibleModal);
+            var modalInput = null;
+            if (existingModal) {
+                modalInput = existingModal.querySelector(BARCODE_SELECTORS.modalInput);
+                if (!modalInput) { modalInput = document.querySelector(BARCODE_SELECTORS.modalInput); }
             }
 
-            log("[PullLabBarcode] openBarcodeModalAndFill: waiting for modal input");
-            var modalInput = await waitForSelector(BARCODE_SELECTORS.modalInput, BARCODE_TIMEOUTS.waitModalOpenMs);
-            if (!modalInput) {
-                log("[PullLabBarcode] openBarcodeModalAndFill: modal input not found after waiting");
-                if (attempts < maxAttempts) {
+            if (existingModal && modalInput) {
+                log("[PullLabBarcode] openBarcodeModalAndFill: existing open modal with input; using directly");
+            } else {
+                // Dismiss any stale modal without an input before clicking the icon
+                if (existingModal) {
+                    log("[PullLabBarcode] openBarcodeModalAndFill: stale modal (no input) detected; dismissing");
+                    var dismissBtn = existingModal.querySelector(".bootbox-close-button, button[data-dismiss='modal'], .close");
+                    if (dismissBtn) {
+                        dismissBtn.click();
+                    } else {
+                        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+                    }
+                    await waitUntilHidden(BARCODE_SELECTORS.bootboxVisibleModal, 2000);
                     await sleep(BARCODE_TIMEOUTS.waitSettleMs);
-                    continue;
                 }
-                return false;
-            }
 
-            var visibleModal = document.querySelector(BARCODE_SELECTORS.bootboxVisibleModal);
-            if (!visibleModal) {
-                log("[PullLabBarcode] openBarcodeModalAndFill: modal container not visible");
-                if (attempts < maxAttempts) {
-                    await sleep(BARCODE_TIMEOUTS.waitSettleMs);
-                    continue;
+                log("[PullLabBarcode] openBarcodeModalAndFill: clicking icon");
+                try {
+                    currentIcon.click();
+                } catch (clickErr) {
+                    log("[PullLabBarcode] openBarcodeModalAndFill: click error " + String(clickErr));
+                    if (attempts < maxAttempts) { await sleep(BARCODE_TIMEOUTS.waitSettleMs); continue; }
+                    return false;
                 }
-                return false;
+
+                log("[PullLabBarcode] openBarcodeModalAndFill: waiting for modal");
+                var visibleModal = await waitForSelector(BARCODE_SELECTORS.bootboxVisibleModal, BARCODE_TIMEOUTS.waitModalOpenMs);
+                if (!visibleModal) {
+                    log("[PullLabBarcode] openBarcodeModalAndFill: modal did not appear");
+                    if (attempts < maxAttempts) { await sleep(BARCODE_TIMEOUTS.waitSettleMs); continue; }
+                    return false;
+                }
+
+                modalInput = visibleModal.querySelector(BARCODE_SELECTORS.modalInput);
+                if (!modalInput) { modalInput = document.querySelector(BARCODE_SELECTORS.modalInput); }
+                if (!modalInput) {
+                    log("[PullLabBarcode] openBarcodeModalAndFill: modal input not found");
+                    if (attempts < maxAttempts) { await sleep(BARCODE_TIMEOUTS.waitSettleMs); continue; }
+                    return false;
+                }
+                existingModal = visibleModal;
             }
 
             log("[PullLabBarcode] openBarcodeModalAndFill: filling input with '" + iconObj.barcode + "'");
@@ -6676,17 +6707,15 @@
                 modalInput.dispatchEvent(new Event("change", { bubbles: true }));
             } catch (fillErr) {
                 log("[PullLabBarcode] openBarcodeModalAndFill: fill error " + String(fillErr));
-                if (attempts < maxAttempts) {
-                    await sleep(BARCODE_TIMEOUTS.waitSettleMs);
-                    continue;
-                }
+                if (attempts < maxAttempts) { await sleep(BARCODE_TIMEOUTS.waitSettleMs); continue; }
                 return false;
             }
 
             await sleep(BARCODE_TIMEOUTS.waitSettleMs);
 
             log("[PullLabBarcode] openBarcodeModalAndFill: looking for confirm button");
-            var confirmBtn = document.querySelector(BARCODE_SELECTORS.modalConfirmPrimary);
+            var confirmBtn = existingModal.querySelector(BARCODE_SELECTORS.modalConfirmPrimary);
+            if (!confirmBtn) { confirmBtn = document.querySelector(BARCODE_SELECTORS.modalConfirmPrimary); }
             if (!confirmBtn) {
                 log("[PullLabBarcode] openBarcodeModalAndFill: primary confirm not found, trying fallback");
                 var allPrimaryBtns = document.querySelectorAll(BARCODE_SELECTORS.modalAnyPrimary);
@@ -6704,10 +6733,7 @@
 
             if (!confirmBtn) {
                 log("[PullLabBarcode] openBarcodeModalAndFill: no confirm button found");
-                if (attempts < maxAttempts) {
-                    await sleep(BARCODE_TIMEOUTS.waitSettleMs);
-                    continue;
-                }
+                if (attempts < maxAttempts) { await sleep(BARCODE_TIMEOUTS.waitSettleMs); continue; }
                 return false;
             }
 
@@ -6716,20 +6742,15 @@
                 confirmBtn.click();
             } catch (confirmErr) {
                 log("[PullLabBarcode] openBarcodeModalAndFill: confirm click error " + String(confirmErr));
-                if (attempts < maxAttempts) {
-                    await sleep(BARCODE_TIMEOUTS.waitSettleMs);
-                    continue;
-                }
+                if (attempts < maxAttempts) { await sleep(BARCODE_TIMEOUTS.waitSettleMs); continue; }
                 return false;
             }
 
             log("[PullLabBarcode] openBarcodeModalAndFill: waiting for modal to close");
-            var closed = await waitUntilHidden(BARCODE_SELECTORS.bootboxVisibleModal, BARCODE_TIMEOUTS.waitModalCloseMs);
+            var closed = await waitForModalCloseOrVerified(currentIcon, BARCODE_TIMEOUTS.waitModalCloseMs);
             if (!closed) {
                 log("[PullLabBarcode] openBarcodeModalAndFill: modal did not close in time");
-                if (attempts < maxAttempts) {
-                    continue;
-                }
+                if (attempts < maxAttempts) { continue; }
                 return false;
             }
 
