@@ -30,7 +30,6 @@ const range = {
     "V6 (Within 4 weeks)": 28
 };
 
-
 // ======== Don't modify ========
 const studyEvent = formJson.form.studyEventName;
 const item = itemJson.item;

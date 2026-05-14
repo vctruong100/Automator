@@ -50,16 +50,9 @@
   },
   {
     "id": "M-008",
-    "title": "Difference between 2 SBP, DBP, and HR (NON-REPEAT) - Different Item Names for Supine vs Standing",
+    "title": "Difference between 2 SBP, DBP, and HR - Different Item Names for Supine vs Standing",
     "tags": ["Difference", "Vitals", "NON-REPEAT"],
-    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Difference%20between%202%20SBP%2C%20DBP%2C%20and%20HR%20(NON-REPEAT)%20-%20Different%20Item%20Names%20for%20Supine%20vs%20Standing.md",
-    "updated": "2026-03-13"
-  },
-  {
-    "id": "M-009",
-    "title": "Difference between 2 SBP, DBP, and HR (REPEAT) - Different Item Names for Supine vs Standing",
-    "tags": ["Difference", "Vitals", "REPEAT"],
-    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Difference%20between%202%20SBP%2C%20DBP%2C%20and%20HR%20(REPEAT)%20-%20Different%20Item%20Names%20for%20Supine%20vs%20Standing.md",
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Difference%20between%202%20SBP%2C%20DBP%2C%20and%20HR%20-%20Different%20Item%20Names%20for%20Supine%20vs%20Standing.md",
     "updated": "2026-03-13"
   },
   {
@@ -428,16 +421,9 @@
   },
   {
     "id": "M-066",
-    "title": "Difference between 2 SBP, DBP, and HR (NON-REPEAT) - SAME Item Names for Supine vs Standing",
+    "title": "Difference between 2 SBP, DBP, and HR - SAME Item Names for Supine vs Standing",
     "tags": ["Edit", "Check"],
-    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Difference%20between%202%20SBP%2C%20DBP%2C%20and%20HR%20(NON-REPEAT)%20-%20SAME%20Item%20Names%20for%20Supine%20vs%20Standing.md",
-    "updated": "2026-03-13"
-  },
-  {
-    "id": "M-067",
-    "title": "Difference between 2 SBP, DBP, and HR (REPEAT) - SAME Item Names for Supine vs Standing",
-    "tags": ["Edit", "Check"],
-    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Difference%20between%202%20SBP%2C%20DBP%2C%20and%20HR%20(REPEAT)%20-%20SAME%20Item%20Names%20for%20Supine%20vs%20Standing.md",
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Difference%20between%202%20SBP%2C%20DBP%2C%20and%20HR%20-%20SAME%20Item%20Names%20for%20Supine%20vs%20Standing.md",
     "updated": "2026-03-13"
   },
   {
@@ -557,6 +543,13 @@
     "title": "Last Meal Time v2",
     "tags": ["Edit Check"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Last%20Meal%20Time%20v2.md",
+    "updated": "2026-05-01"
+  },
+  {
+    "id": "M-085",
+    "title": "Edit Check Visit Window Target Date V2",
+    "tags": ["Edit Check"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Visit%20Window%20Target%20Date%20V2.md",
     "updated": "2026-05-01"
   }
 ]
