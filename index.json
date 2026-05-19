@@ -551,5 +551,19 @@
     "tags": ["Edit Check"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Visit%20Window%20Target%20Date%20V2.md",
     "updated": "2026-05-01"
+  },
+  {
+    "id": "M-086",
+    "title": "Edit Check Check if collected date is future",
+    "tags": ["Edit Check"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Check%20if%20collected%20date%20is%20future%20date.md",
+    "updated": "2026-05-15"
+  },
+  {
+    "id": "M-087",
+    "title": "Edit Check Sample is Out of Window",
+    "tags": ["Edit Check"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Sample%20is%20Out%20of%20Window.md",
+    "updated": "2026-05-15"
   }
 ]

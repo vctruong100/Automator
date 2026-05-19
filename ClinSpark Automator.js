@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.5.5
+// @version     2.5.6
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -33290,6 +33290,9 @@
 
         // Resume Edit Study Events after page reload (Add Batch triggers reload)
         editSE_resumeAfterReload();
+
+        // Resume Import from Library after page reload (save may trigger full page redirect)
+        ifl_resumeImport();
 
         parseDeviationCheckOnPageLoad();
 
