@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.5.6
+// @version     2.5.7
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -16039,6 +16039,7 @@
     var STORAGE_BUTTON_VISIBILITY = "activityPlanState.buttonVisibility";
     var STORAGE_BUTTON_LAYOUT = "activityPlanState.buttonLayout";
     var SETTINGS_MODAL_OPEN = false;
+    var HELP_MODAL_OPEN = false;
 
     var PANEL_BUTTON_DEFS = [
         { id: "Pull Barcode", label: "Pull Barcode" },
@@ -16171,6 +16172,210 @@
             }
         }
         return true;
+    }
+
+    function openHelpPopup() {
+        if (HELP_MODAL_OPEN) return null;
+        HELP_MODAL_OPEN = true;
+
+        var _g = (getThemeMode() === THEME_MODE_GLASS);
+        var tc = {
+            containerBg: _g ? "linear-gradient(135deg,#667eea 0%,#764ba2 100%)" : "#1a1a1a",
+            headerBg: _g ? "rgba(255,255,255,0.1)" : "#222",
+            headerBorder: _g ? "rgba(255,255,255,0.2)" : "#333",
+            sectionBorder: _g ? "rgba(255,255,255,0.15)" : "#2a2a2a",
+            closeBg: _g ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.1)",
+            textSec: _g ? "rgba(255,255,255,0.9)" : "#ccc",
+            textMuted: _g ? "rgba(255,255,255,0.65)" : "#999",
+            cardBg: _g ? "rgba(255,255,255,0.07)" : "#1f1f1f",
+            cardBorder: _g ? "rgba(255,255,255,0.14)" : "#2e2e2e",
+            cardHover: _g ? "rgba(255,255,255,0.13)" : "#272727",
+            inputBg: _g ? "rgba(15,10,40,0.6)" : "#2a2a2a",
+            inputBorder: _g ? "rgba(255,255,255,0.28)" : "#444",
+            inputText: _g ? "#e0e0ff" : "#fff",
+            accentColor: _g ? "#a78bfa" : "#7c6ddb",
+            sectionLabelBg: _g ? "rgba(255,255,255,0.1)" : "#252525"
+        };
+
+        var helpSections = [
+            {
+                title: "Data Collection",
+                features: [
+                    { label: "Pull Barcode", desc: "Automatically fills in the subject barcode for a subject. It reads the barcode value and enters it into the required field — no manual typing needed." },
+                    { label: "Pull Lab Barcode", desc: "Scans all barcode fields on the current data collection page and fills each one in automatically. Every barcode is entered and confirmed one by one, saving significant time during lab sample processing." }
+                ]
+            },
+            {
+                title: "CRF Design & Library",
+                features: [
+                    { label: "PLAP Builder", desc: "The Procedure Log Activity Plan Builder. Drag forms into segments, assign study events and time references, then let the automator fill in and submit all procedure log entries for you." },
+                    { label: "Import From Library", desc: "Opens a side-by-side tool to import forms from the study library into your current study. Select the study and form, and the automator handles the import and save steps." },
+                    { label: "Archive/Update Forms", desc: "Batch archives or renames forms in the study library across multiple studies at once. Useful when form names are being updated or forms need to be archived." },
+                    { label: "Copy Activity Forms", desc: "Copies scheduled activity forms from one study to another, carrying over their structure and settings." },
+                    { label: "Search Methods", desc: "Opens up the method library that contains all coded methods/edit checks." },
+                    { label: "Parse Deviation", desc: "Input the subject number. Automatically navigate to Study -> Data page, input the subject number and deviation forms, and parse it for copy." },
+                    { label: "Import I/E", desc: "Automatically map I/E items to the correct Activity Plan -> Forms -> Items" },
+                    { label: "Set Visibility Condition", desc: "Sets show/hide conditions on scheduled activity forms. You map each form to the item and value that controls when it appears, and the automator saves each condition for you." },
+                    { label: "Item Method Forms", desc: "Locates all forms that contain a specific calculation method item and navigates to their data pages so you can review or edit them." },
+                    { label: "Parse Study Event", desc: "Navigates to and collects data from study events in the study library — useful for reviewing or exporting study event information." },
+                    { label: "Edit Study Events List", desc: "Manage the study events list in the library. Add new study events, rename existing ones, reorder the list, and save all changes in one batch operation." }
+                ]
+            },
+            {
+                title: "Navigation",
+                features: [
+                    { label: "Find Adverse Event", desc: "Jumps directly to the Adverse Event data page for a specific subject. Enter a Subject Identifier and the automator navigates to the right page — no manual searching needed." },
+                    { label: "Find Form & Events", desc: "Navigates directly to a form or study event data page. Enter a keyword (part of the form or event name) and an optional subject identifier, and the automator takes you there automatically." }
+                ]
+            },
+            {
+                title: "Eligibility",
+                features: [
+                    { label: "Cohort Eligibility", desc: "Runs eligibility checks for all subjects in a cohort. Reviews each subject's data against the study's inclusion/exclusion criteria and displays a pass/fail summary for the whole group." },
+                    { label: "Subject Eligibility", desc: "Runs eligibility checks for a single subject. Enter a subject identifier and the automator evaluates all eligibility criteria, reporting a result for each one." }
+                ]
+            },
+            {
+                title: "Reports",
+                features: [
+                    { label: "Download DTS Report", desc: "Automatically generates and downloads Clinical Data Text (Delimited) reports for one or more selected studies. Handles all navigation, report generation, and download steps without manual work." }
+                ]
+            },
+            {
+                title: "Panel Controls",
+                features: [
+                    { label: "Pause", desc: "Pauses any automation that is currently running. Click again to resume. Helpful when you need to briefly halt a long process without canceling it entirely." },
+                    { label: "Clear Logs", desc: "Clears all entries from the activity log panel, giving you a fresh view of new activity." },
+                    { label: "Hide Logs", desc: "Toggles the activity log panel on or off. Use this to free up screen space when the log is not needed." }
+                ]
+            }
+        ];
+
+        var overlay = document.createElement("div");
+        overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:30000;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;";
+
+        var container = document.createElement("div");
+        container.setAttribute("role", "dialog");
+        container.setAttribute("aria-modal", "true");
+        container.style.cssText = "background:" + tc.containerBg + ";border-radius:12px;padding:0;width:580px;max-width:94%;box-shadow:0 15px 35px rgba(0,0,0,0.4);display:flex;flex-direction:column;max-height:90vh;";
+
+        function doClose() {
+            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            HELP_MODAL_OPEN = false;
+            document.removeEventListener("keydown", handleHelpKey);
+        }
+
+        overlay.addEventListener("click", function(e) { if (e.target === overlay) doClose(); });
+
+        var modalHeader = document.createElement("div");
+        modalHeader.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid " + tc.headerBorder + ";background:" + tc.headerBg + ";border-radius:12px 12px 0 0;flex-shrink:0;";
+
+        var titleWrap = document.createElement("div");
+        titleWrap.style.cssText = "display:flex;align-items:center;gap:8px;";
+
+        var titleBadge = document.createElement("span");
+        titleBadge.textContent = "?";
+        titleBadge.style.cssText = "background:" + tc.accentColor + ";color:#fff;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;";
+
+        var titleText = document.createElement("h3");
+        titleText.textContent = "Help Guide";
+        titleText.style.cssText = "margin:0;color:white;font-size:16px;font-weight:600;";
+
+        titleWrap.appendChild(titleBadge);
+        titleWrap.appendChild(titleText);
+
+        var modalClose = document.createElement("button");
+        modalClose.innerHTML = "\u2715";
+        modalClose.setAttribute("type", "button");
+        modalClose.style.cssText = "background:" + tc.closeBg + ";border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all 0.3s ease;";
+        modalClose.onmouseover = function() { modalClose.style.background = "rgba(255,67,54,0.8)"; };
+        modalClose.onmouseout = function() { modalClose.style.background = tc.closeBg; };
+        modalClose.addEventListener("click", doClose);
+
+        modalHeader.appendChild(titleWrap);
+        modalHeader.appendChild(modalClose);
+
+        var searchWrap = document.createElement("div");
+        searchWrap.style.cssText = "padding:10px 16px;border-bottom:1px solid " + tc.sectionBorder + ";flex-shrink:0;";
+
+        var searchInput = document.createElement("input");
+        searchInput.type = "text";
+        searchInput.setAttribute("placeholder", "Search features\u2026");
+        searchInput.style.cssText = "width:100%;box-sizing:border-box;padding:8px 12px;background:" + tc.inputBg + ";border:1px solid " + tc.inputBorder + ";border-radius:6px;color:" + tc.inputText + ";font-size:13px;outline:none;";
+        searchWrap.appendChild(searchInput);
+
+        var modalBody = document.createElement("div");
+        modalBody.style.cssText = "padding:12px 16px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:14px;";
+
+        function renderHelpSections(filterText) {
+            modalBody.innerHTML = "";
+            var fl = (filterText || "").trim().toLowerCase();
+            var hasAny = false;
+            for (var si = 0; si < helpSections.length; si++) {
+                var sec = helpSections[si];
+                var vis = [];
+                for (var fi = 0; fi < sec.features.length; fi++) {
+                    var f = sec.features[fi];
+                    if (!fl || f.label.toLowerCase().indexOf(fl) !== -1 || f.desc.toLowerCase().indexOf(fl) !== -1) vis.push(f);
+                }
+                if (vis.length === 0) continue;
+                hasAny = true;
+                var secEl = document.createElement("div");
+                var secLabel = document.createElement("div");
+                secLabel.textContent = sec.title.toUpperCase();
+                secLabel.style.cssText = "padding:5px 10px;background:" + tc.sectionLabelBg + ";border-radius:5px;margin-bottom:6px;font-size:10px;font-weight:700;letter-spacing:0.9px;color:" + tc.textSec + ";";
+                secEl.appendChild(secLabel);
+                for (var vi = 0; vi < vis.length; vi++) {
+                    (function(feat) {
+                        var card = document.createElement("div");
+                        card.style.cssText = "padding:10px 12px;background:" + tc.cardBg + ";border:1px solid " + tc.cardBorder + ";border-radius:8px;margin-bottom:5px;transition:background 0.15s;";
+                        card.addEventListener("mouseenter", function() { this.style.background = tc.cardHover; });
+                        card.addEventListener("mouseleave", function() { this.style.background = tc.cardBg; });
+                        var lbl = document.createElement("div");
+                        lbl.textContent = feat.label;
+                        lbl.style.cssText = "color:white;font-size:13px;font-weight:600;margin-bottom:4px;";
+                        var descEl = document.createElement("div");
+                        descEl.textContent = feat.desc;
+                        descEl.style.cssText = "color:" + tc.textMuted + ";font-size:12px;line-height:1.55;";
+                        card.appendChild(lbl);
+                        card.appendChild(descEl);
+                        secEl.appendChild(card);
+                    })(vis[vi]);
+                }
+                modalBody.appendChild(secEl);
+            }
+            if (!hasAny) {
+                var noRes = document.createElement("div");
+                noRes.textContent = "No features match your search.";
+                noRes.style.cssText = "color:" + (_g ? "rgba(255,255,255,0.45)" : "#666") + ";font-size:13px;text-align:center;padding:28px 0;";
+                modalBody.appendChild(noRes);
+            }
+        }
+
+        searchInput.addEventListener("input", function() { renderHelpSections(this.value); });
+
+        var modalFooter = document.createElement("div");
+        modalFooter.style.cssText = "padding:10px 16px;border-top:1px solid " + tc.sectionBorder + ";flex-shrink:0;display:flex;justify-content:flex-end;";
+
+        var footerCloseBtn = document.createElement("button");
+        footerCloseBtn.textContent = "Close";
+        footerCloseBtn.style.cssText = "background:" + tc.closeBg + ";border:1px solid " + tc.headerBorder + ";color:white;padding:7px 22px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;transition:background 0.2s;";
+        footerCloseBtn.onmouseover = function() { footerCloseBtn.style.background = "rgba(255,255,255,0.2)"; };
+        footerCloseBtn.onmouseout = function() { footerCloseBtn.style.background = tc.closeBg; };
+        footerCloseBtn.addEventListener("click", doClose);
+        modalFooter.appendChild(footerCloseBtn);
+
+        container.appendChild(modalHeader);
+        container.appendChild(searchWrap);
+        container.appendChild(modalBody);
+        container.appendChild(modalFooter);
+        overlay.appendChild(container);
+        document.body.appendChild(overlay);
+
+        renderHelpSections("");
+
+        function handleHelpKey(e) { if (e.key === "Escape") doClose(); }
+        document.addEventListener("keydown", handleHelpKey);
     }
 
     function openSettingsPopup() {
@@ -32587,7 +32792,27 @@
             openSettingsPopup();
         });
 
+        var helpBtn = document.createElement("button");
+        helpBtn.textContent = "?";
+        helpBtn.title = "Help Guide";
+        helpBtn.style.background = "transparent";
+        helpBtn.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
+        helpBtn.style.border = "none";
+        helpBtn.style.cursor = "pointer";
+        helpBtn.style.fontSize = scale(16);
+        helpBtn.style.padding = "4px 6px";
+        helpBtn.style.borderRadius = "4px";
+        helpBtn.style.display = "flex";
+        helpBtn.style.alignItems = "center";
+        helpBtn.style.justifyContent = "center";
+        helpBtn.style.fontWeight = "700";
+        helpBtn.addEventListener("click", function() {
+            if (HELP_MODAL_OPEN) { return; }
+            openHelpPopup();
+        });
+
         rightControls.appendChild(settingsBtn);
+        rightControls.appendChild(helpBtn);
         rightControls.appendChild(collapseBtn);
         rightControls.appendChild(closeBtn);
 

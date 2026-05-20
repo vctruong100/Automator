@@ -2,22 +2,14 @@
 
 // Add item names
 // items to pull for calculation
-const PRitem = ["PR", "PR V4", "🟢 PR (100-250) ms",];
-const QRSitem = ["QRS", "QRS V4", "🟢 QRS (50-150)",];
-const Qtitem = ["QT", "QT V4", "🟢 QT (250-500) ms",];
-const QTcFitem = ["QTcF", "QTcF V4", "🟢 QTcF (250 - 500) ms",];
-const HRitem = ["RATE", "RATE V4", "🟢 HR (30 - 200)",];
-const QtcBitem = ["🟢 QTcB (I: >470)",]
-const RRitem = ["🟢 RR (I: 120-200)"];
+const sysItem = ["SYS (60 - 200) mmHg", "SYS (I: 90 - 150)"];
+const diaItem = ["DIA (40 - 110) mmHg", "DIA (I: 50 - 100)",];
+const hrItem = ["HR (50 - 100) bpm"];
 
 // items to attach
-const PRattach = ["avg_PR", "PR AVERAGE (100-250)",];
-const QRSattach = ["avg_QRS", "QRS AVERAGE (50-150)",];
-const QTcFattach = ["avg_QTcf", "QTcF AVERAGE (250-500)",];
-const QTattach = ["Avg_QT", "QT AVERAGE (250-500)",];
-const HRattach = ["HR", "Avg_HR", "HR AVERAGE (30- 200)",];
-const QtcBattach = ["QTcB AVERAGE (I: >470)"]
-const RRattach = ["RR AVERAGE (I: 120-200)"];
+const sysAttach = ["SYS MEAN AVERAGE"];
+const diaAttach = ["DIA MEAN AVERAGE"];
+const hrAttach = ["HR MEAN AVERAGE"];
 
 // ======== Don't modify ========
 var form = formJson.form;
@@ -31,46 +23,26 @@ try {
         isRepeat = containsValue(groupName, "repeat")
     }
 
-    var PRlist = populateList(formJson, PRitem, PRattach, isRepeat);
-    var QRSlist = populateList(formJson, QRSitem, QRSattach, isRepeat);
-    var Qtlist = populateList(formJson, Qtitem, QTattach, isRepeat);
-    var QTcFlist = populateList(formJson, QTcFitem, QTcFattach, isRepeat);
-    var HRlist = populateList(formJson, HRitem, HRattach, isRepeat);
-    var QTcBlist = populateList(formJson, QtcBitem, QtcBattach, isRepeat);
-    var RRlist = populateList(formJson, RRitem, RRattach, isRepeat);
+    var sysList = populateList(formJson, sysItem, sysAttach, isRepeat);
+    var diaList = populateList(formJson, diaItem, diaAttach, isRepeat);
+    var hrList = populateList(formJson, hrItem, hrAttach, isRepeat);
 
     logger("Is it a repeat? " + isRepeat);
-    logger("PRlist: " + PRlist);
-    logger("QRSlist: " + QRSlist);
-    logger("Qtlist: " + Qtlist);
-    logger("QTcFlist: " + QTcFlist);
-    logger("HRlist: " + HRlist);
-    logger("QTcBlist: " + QTcBlist);
-    logger("RRlist: " + RRlist);
+    logger("sysList: " + sysList);
+    logger("diaList: " + diaList);
+    logger("hrList: " + hrList);
     
-    var avgPR = calculateAverage(PRlist);
-    var avgQRS = calculateAverage(QRSlist);
-    var avgQT = calculateAverage(Qtlist);
-    var avgQTcF = calculateAverage(QTcFlist);
-    var avgHR = calculateAverage(HRlist);
-    var avgQtcB = calculateAverage(QTcBlist);
-    var avgRR = calculateAverage(RRlist);
+    var avgSys = calculateAverage(sysList);
+    var avgDia = calculateAverage(diaList);
+    var avgHR = calculateAverage(hrList);
     
-    logger("Average PR: " + avgPR);
-    logger("AVerage QRS: " + avgQRS);
-    logger("Average QT: " + avgQT);
-    logger("Average QtcF: " + avgQTcF);
-    logger("Average HR: " + avgHR);
-    logger("Average QtcB: " + avgQtcB);
-    logger("Average RR: " + avgRR);
+    logger("Average PR: " + avgSys);
+    logger("AVerage QRS: " + avgDia);
+    logger("Average QT: " + avgHR);
     
-    if (PRattach.indexOf(item.name) !== -1) return avgPR;
-    if (QRSattach.indexOf(item.name) !== -1) return avgQRS;
-    if (QTcFattach.indexOf(item.name) !== -1) return avgQTcF;
-    if (QTattach.indexOf(item.name) !== -1) return avgQT;
-    if (HRattach.indexOf(item.name) !== -1) return avgHR;
-    if (QtcBattach.indexOf(item.name) !== -1) return avgQtcB;
-    if (RRattach.indexOf(item.name) !== -1) return avgRR;
+    if (sysAttach.indexOf(item.name) !== -1) return avgSys;
+    if (diaAttach.indexOf(item.name) !== -1) return avgDia;
+    if (hrAttach.indexOf(item.name) !== -1) return avgHR;
     
     return null;
 } catch (e) {

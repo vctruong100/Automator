@@ -15,10 +15,10 @@
   },
   {
     "id": "M-003",
-    "title": "Average DBP or DIA, SBP or SYS, Heart Rate (NON-REPEAT)",
-    "tags": ["Average", "Vitals", "NON-REPEAT"],
-    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20DBP%20or%20DIA%2C%20SBP%20or%20SYS%2C%20Heart%20Rate%20(NON-REPEAT).md",
-    "updated": "2026-03-04"
+    "title": "Average DIA, SYS, Heart Rate",
+    "tags": ["Average", "Vitals"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20DIA,%20SYS,%20Heart%20Rate.md",
+    "updated": "2026-05-20"
   },
   {
     "id": "M-004",
@@ -565,5 +565,12 @@
     "tags": ["Edit Check"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Sample%20is%20Out%20of%20Window.md",
     "updated": "2026-05-15"
+  },
+  {
+    "id": "M-088",
+    "title": "Unique Incremental ID Number",
+    "tags": ["IQVIA"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Unique%20Incremental%20ID%20Number.md",
+    "updated": "2026-05-20"
   }
 ]

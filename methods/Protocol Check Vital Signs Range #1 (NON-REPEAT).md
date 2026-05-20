@@ -1,54 +1,34 @@
-// Add item names (for different naming conventions)
 const sysItems = [
-    "SYS",
-    "SYS (1 of 3)",
+    "SYS (60 - 200) mmHg",
 ];
 
 const diaItems = [
-    "DIA",
-    "DIA (1 of 3)",
+    "DIA (40 - 110) mmHg",
 ];
 
 const hrItems = [
-    "HR",
-    "HR (1 of 3)",
+    "HR (50 - 100) bpm",
 ]
 
-const rrItems = [
-    "RR",
-]
+// Inclusive
+var sys_min_range = 60;
+var sys_max_range = 200;
 
-const tempItems = [
-    "ORAL TEMP (35.8C - 37.6C)",
-    "ORAL_TEMP",
-]
+var dia_min_range = 40
+var dia_max_range = 110;
 
-// Inclusive (Edit)
-var sys_min_range = 90;
-var sys_max_range = 169;
-
-var dia_min_range = 50
-var dia_max_range = 99;7
-
-var hr_min_range = 60;
+var hr_min_range = 50;
 var hr_max_range = 100;
 
 // ======== Don't modify ========
 var item = itemJson.item;
 
 try {
-    var isRepeat = isItemInRepeat(formJson);
-
-    if (isRepeat) {
-        var sys = pullItemFromLast(formJson, sysItems);
-        var dia = pullItemFromLast(formJson, diaItems);
-        var hr = pullItemFromLast(formJson, hrItems);
-    }
-    else {
-        var sys = pullItemFromFirst(formJson, sysItems);
-        var dia = pullItemFromFirst(formJson, diaItems);
-        var hr = pullItemFromFirst(formJson, hrItems);
-    }
+    var groupid = getItemGroupID(formJson);
+    
+    var sys = pullItemFromForm(formJson, sysItems, groupid);
+    var dia = pullItemFromForm(formJson, diaItems, groupid);
+    var hr = pullItemFromForm(formJson, hrItems, groupid);
 
     log();
 
@@ -114,37 +94,34 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     return keepers;
 }
 
-function pullItemFromLast(form, targetItem) {
+function pullItemFromForm(form, targetItem, groupid) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
     
 	if (!itemGroups || itemGroups.length < 1) return null;
     
-    for (i = itemGroups.length - 1; i >= 0; i--) {
-        group = itemGroups[i];
-        if (!group || group.canceled) continue;
-        for (j = group.items.length - 1; j >= 0; j--) {
-            item = group.items[j];
-            if (targetItem.indexOf(item.name) !== -1 && item.value !== null) return item.value;
+    if (repeat) {
+        for (i = itemGroups.length - 1; i >= 0; i--) {
+            group = itemGroups[i];
+            if (!group || group.canceled) continue;
+            if (group.id !== groupid) continue;
+            for (j = group.items.length - 1; j >= 0; j--) {
+                item = group.items[j];
+                if (targetItem.indexOf(item.name) !== -1 && item.value !== null) return item.value;
+            }
         }
     }
-    return null;
-}
+    else {
+        for (i = 0; i < itemGroups.length; i++) {
+            group = itemGroups[i];
+            if (!group || group.canceled) continue;
+            for (j = 0; j < group.items.length; j++) {
+                item = group.items[j];
+                if (targetItem.indexOf(item.name) !== -1 && item.value !== null) return item.value;
+            }
+        }
+    }
 
-function pullItemFromFirst(form, targetItem) {
-    var itemGroups = form.form.itemGroups;
-    var group, items, item, i, j, value;
-    
-	if (!itemGroups || itemGroups.length < 1) return null;
-    
-    for (i = 0; i < itemGroups.length; i++) {
-        group = itemGroups[i];
-        if (!group || group.canceled) continue;
-        for (j = 0; j < group.items.length; j++) {
-            item = group.items[j];
-            if (targetItem.indexOf(item.name) !== -1 && item.value !== null) return item.value;
-        }
-    }
     return null;
 }
 
@@ -174,18 +151,9 @@ function isItemInRepeat(form) {
         for (var j = 0; j < items.length; j++) {
             var it = items[j];
             if (it.id === item.id) {
-                if (containsRepeat(group.name)) return true;
+                return group.id;
             }
         }
     }
     return false;
-}
-
-function containsRepeat(input) {
-    if (input == null) {
-        return false;
-    }
-
-    var value = input.toString().toLowerCase();
-    return value.indexOf("repeat") !== -1;
 }

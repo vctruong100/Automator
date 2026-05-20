@@ -57,14 +57,8 @@ try {
     logger("Repeat: " + repeat);
     var isRepeat = containsValue(repeat, "yes");
 
-    if (isRepeat) {
-        var syslist = populateListRepeat(formJson, sysItem, sysAttachedItem)
-        var dialist = populateListRepeat(formJson, dbpItems, dbpAttachedItem)
-    }
-    else {
-        var syslist = populateListNonRepeat(formJson, sysItem, sysAttachedItem)
-        var dialist = populateListNonRepeat(formJson, dbpItems, dbpAttachedItem)
-    }
+    var syslist = populateListRepeat(formJson, sysItem, sysAttachedItem, isRepeat)
+    var dialist = populateListRepeat(formJson, dbpItems, dbpAttachedItem, isRepeat)
 
     var sysAvg = calculateAverage(syslist, sigfig);
     var diaAvg = calculateAverage(dialist, sigfig);
@@ -78,29 +72,6 @@ try {
 } catch (e) {
     logger("Error in main execution logic: " + e.message);
     return null;
-}
-
-function populateList(form, targetItem, attachedItem) {
-    var itemGroups = form.form.itemGroups;
-    var group, items, item, i, j, value;
-    var list = [];
-    var count = 0;
-	if (!itemGroups || itemGroups.length < 1) return null;
-    
-    for (i = 0; i < itemGroups.length; i++) {
-        group = itemGroups[i];
-        if (!group || group.canceled) continue;
-        for (j = 0; j < group.items.length; j++) {
-            item = group.items[j];
-            if (attachedItem.indexOf(item.name) !== -1) return list;
-            if (item && targetItem.indexOf(item.name) !== -1) {
-                if (item.value !== null && !isNaN(item.value) && item.value !== "") {
-                    list.push(parseInt(item.value));
-                }
-            }
-        }
-    }
-    return list;
 }
 
 function pullItemFromForm(form, targetItem) {
@@ -145,22 +116,38 @@ function containsValue(input, keyword) {
     return value.indexOf(keyword) !== -1;
 }
 
-function populateListNonRepeat(form, targetItem, attachedItem) {
+function populateList(form, targetItem, attachedItem, repeat) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
     var list = [];
     var maxCount = 3;
 	if (!itemGroups || itemGroups.length < 1) return null;
     
-    for (i = 0; i < itemGroups.length; i++) {
-        group = itemGroups[i];
-        if (!group || group.canceled) continue;
-        for (j = 0; j < group.items.length; j++) {
-            item = group.items[j];
-            if (item && targetItem.indexOf(item.name) !== -1) {
-                if (item.value !== null && !isNaN(item.value) && item.value !== "") {
-                    list.push(parseInt(item.value));
-                    if (list.length >= 3) return list;
+    if (repeat) {
+        for (i = itemGroups.length - 1; i >= 0; i--) {
+            group = itemGroups[i];
+            if (!group || group.canceled) continue;
+            for (j = group.items.length - 1; j >= 0; j--) {
+                item = group.items[j];
+                if (item && targetItem.indexOf(item.name) !== -1) {
+                    if (item.value !== null && !isNaN(item.value) && item.value !== "") {
+                        list.push(parseInt(item.value));
+                        if (list.length >= 3) return list;
+                    }
+                }
+            }
+        }
+    else {
+        for (i = 0; i < itemGroups.length; i++) {
+            group = itemGroups[i];
+            if (!group || group.canceled) continue;
+            for (j = 0; j < group.items.length; j++) {
+                item = group.items[j];
+                if (item && targetItem.indexOf(item.name) !== -1) {
+                    if (item.value !== null && !isNaN(item.value) && item.value !== "") {
+                        list.push(parseInt(item.value));
+                        if (list.length >= 3) return list;
+                    }
                 }
             }
         }
