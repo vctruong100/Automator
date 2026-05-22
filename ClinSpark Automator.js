@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.5.7
+// @version     2.5.8
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -16060,6 +16060,7 @@
         { id: "Parse Study Event", label: "Parse Study Event" },
         { id: "Edit Study Events List", label: "Edit Study Events List" },
         { id: "Download DTS Report", label: "Download DTS Report" },
+        { id: "Print Barcodes", label: "Print Barcodes" },
         { id: "Pause", label: "Pause" },
         { id: "Clear Logs", label: "Clear Logs" },
         { id: "Hide Logs", label: "Hide Logs" }
@@ -16178,25 +16179,6 @@
         if (HELP_MODAL_OPEN) return null;
         HELP_MODAL_OPEN = true;
 
-        var _g = (getThemeMode() === THEME_MODE_GLASS);
-        var tc = {
-            containerBg: _g ? "linear-gradient(135deg,#667eea 0%,#764ba2 100%)" : "#1a1a1a",
-            headerBg: _g ? "rgba(255,255,255,0.1)" : "#222",
-            headerBorder: _g ? "rgba(255,255,255,0.2)" : "#333",
-            sectionBorder: _g ? "rgba(255,255,255,0.15)" : "#2a2a2a",
-            closeBg: _g ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.1)",
-            textSec: _g ? "rgba(255,255,255,0.9)" : "#ccc",
-            textMuted: _g ? "rgba(255,255,255,0.65)" : "#999",
-            cardBg: _g ? "rgba(255,255,255,0.07)" : "#1f1f1f",
-            cardBorder: _g ? "rgba(255,255,255,0.14)" : "#2e2e2e",
-            cardHover: _g ? "rgba(255,255,255,0.13)" : "#272727",
-            inputBg: _g ? "rgba(15,10,40,0.6)" : "#2a2a2a",
-            inputBorder: _g ? "rgba(255,255,255,0.28)" : "#444",
-            inputText: _g ? "#e0e0ff" : "#fff",
-            accentColor: _g ? "#a78bfa" : "#7c6ddb",
-            sectionLabelBg: _g ? "rgba(255,255,255,0.1)" : "#252525"
-        };
-
         var helpSections = [
             {
                 title: "Data Collection",
@@ -16252,12 +16234,12 @@
         ];
 
         var overlay = document.createElement("div");
-        overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:30000;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;";
+        overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:30000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;";
 
-        var container = document.createElement("div");
-        container.setAttribute("role", "dialog");
-        container.setAttribute("aria-modal", "true");
-        container.style.cssText = "background:" + tc.containerBg + ";border-radius:12px;padding:0;width:580px;max-width:94%;box-shadow:0 15px 35px rgba(0,0,0,0.4);display:flex;flex-direction:column;max-height:90vh;";
+        var modal = document.createElement("div");
+        modal.setAttribute("role", "dialog");
+        modal.setAttribute("aria-modal", "true");
+        modal.style.cssText = "background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);border-radius:16px;box-shadow:0 25px 60px rgba(0,0,0,0.5);width:90vw;max-width:720px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;border:1px solid rgba(102,126,234,0.4);";
 
         function doClose() {
             if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
@@ -16267,45 +16249,33 @@
 
         overlay.addEventListener("click", function(e) { if (e.target === overlay) doClose(); });
 
-        var modalHeader = document.createElement("div");
-        modalHeader.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid " + tc.headerBorder + ";background:" + tc.headerBg + ";border-radius:12px 12px 0 0;flex-shrink:0;";
+        var mHeader = document.createElement("div");
+        mHeader.style.cssText = "padding:20px 24px;background:rgba(102,126,234,0.15);border-bottom:1px solid rgba(102,126,234,0.3);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;";
 
-        var titleWrap = document.createElement("div");
-        titleWrap.style.cssText = "display:flex;align-items:center;gap:8px;";
+        var mTitle = document.createElement("div");
+        mTitle.innerHTML = "<span style='font-size:20px;font-weight:700;color:white;'>ClinSpark Automator</span><span style='font-size:14px;color:rgba(255,255,255,0.6);margin-left:10px;'>Help Guide</span>";
 
-        var titleBadge = document.createElement("span");
-        titleBadge.textContent = "?";
-        titleBadge.style.cssText = "background:" + tc.accentColor + ";color:#fff;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;";
-
-        var titleText = document.createElement("h3");
-        titleText.textContent = "Help Guide";
-        titleText.style.cssText = "margin:0;color:white;font-size:16px;font-weight:600;";
-
-        titleWrap.appendChild(titleBadge);
-        titleWrap.appendChild(titleText);
-
-        var modalClose = document.createElement("button");
-        modalClose.innerHTML = "\u2715";
-        modalClose.setAttribute("type", "button");
-        modalClose.style.cssText = "background:" + tc.closeBg + ";border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all 0.3s ease;";
-        modalClose.onmouseover = function() { modalClose.style.background = "rgba(255,67,54,0.8)"; };
-        modalClose.onmouseout = function() { modalClose.style.background = tc.closeBg; };
-        modalClose.addEventListener("click", doClose);
-
-        modalHeader.appendChild(titleWrap);
-        modalHeader.appendChild(modalClose);
+        var closeX = document.createElement("button");
+        closeX.innerHTML = "\u2715";
+        closeX.setAttribute("type", "button");
+        closeX.style.cssText = "background:rgba(255,255,255,0.1);border:none;color:white;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px;flex-shrink:0;transition:background 0.2s;";
+        closeX.onmouseover = function() { closeX.style.background = "rgba(255,67,54,0.7)"; };
+        closeX.onmouseout = function() { closeX.style.background = "rgba(255,255,255,0.1)"; };
+        closeX.addEventListener("click", doClose);
+        mHeader.appendChild(mTitle);
+        mHeader.appendChild(closeX);
 
         var searchWrap = document.createElement("div");
-        searchWrap.style.cssText = "padding:10px 16px;border-bottom:1px solid " + tc.sectionBorder + ";flex-shrink:0;";
+        searchWrap.style.cssText = "padding:16px 24px;background:rgba(0,0,0,0.2);border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;";
 
         var searchInput = document.createElement("input");
         searchInput.type = "text";
         searchInput.setAttribute("placeholder", "Search features\u2026");
-        searchInput.style.cssText = "width:100%;box-sizing:border-box;padding:8px 12px;background:" + tc.inputBg + ";border:1px solid " + tc.inputBorder + ";border-radius:6px;color:" + tc.inputText + ";font-size:13px;outline:none;";
+        searchInput.style.cssText = "width:100%;box-sizing:border-box;background:rgba(255,255,255,0.08);border:1px solid rgba(102,126,234,0.4);color:white;border-radius:8px;padding:10px 14px;font-size:14px;outline:none;";
         searchWrap.appendChild(searchInput);
 
         var modalBody = document.createElement("div");
-        modalBody.style.cssText = "padding:12px 16px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:14px;";
+        modalBody.style.cssText = "overflow-y:auto;padding:20px 24px;flex:1;";
 
         function renderHelpSections(filterText) {
             modalBody.innerHTML = "";
@@ -16320,34 +16290,35 @@
                 }
                 if (vis.length === 0) continue;
                 hasAny = true;
-                var secEl = document.createElement("div");
-                var secLabel = document.createElement("div");
-                secLabel.textContent = sec.title.toUpperCase();
-                secLabel.style.cssText = "padding:5px 10px;background:" + tc.sectionLabelBg + ";border-radius:5px;margin-bottom:6px;font-size:10px;font-weight:700;letter-spacing:0.9px;color:" + tc.textSec + ";";
-                secEl.appendChild(secLabel);
+                var secTitle = document.createElement("div");
+                secTitle.textContent = sec.title;
+                secTitle.style.cssText = "color:rgba(120,140,255,1);font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px;";
+                modalBody.appendChild(secTitle);
+                var grid = document.createElement("div");
+                grid.style.cssText = "display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:24px;";
                 for (var vi = 0; vi < vis.length; vi++) {
                     (function(feat) {
                         var card = document.createElement("div");
-                        card.style.cssText = "padding:10px 12px;background:" + tc.cardBg + ";border:1px solid " + tc.cardBorder + ";border-radius:8px;margin-bottom:5px;transition:background 0.15s;";
-                        card.addEventListener("mouseenter", function() { this.style.background = tc.cardHover; });
-                        card.addEventListener("mouseleave", function() { this.style.background = tc.cardBg; });
+                        card.style.cssText = "background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:14px 16px;transition:border-color 0.2s;";
+                        card.onmouseover = function() { card.style.borderColor = "rgba(102,126,234,0.6)"; };
+                        card.onmouseout = function() { card.style.borderColor = "rgba(255,255,255,0.12)"; };
                         var lbl = document.createElement("div");
                         lbl.textContent = feat.label;
-                        lbl.style.cssText = "color:white;font-size:13px;font-weight:600;margin-bottom:4px;";
+                        lbl.style.cssText = "color:white;font-size:14px;font-weight:600;margin-bottom:6px;";
                         var descEl = document.createElement("div");
                         descEl.textContent = feat.desc;
-                        descEl.style.cssText = "color:" + tc.textMuted + ";font-size:12px;line-height:1.55;";
+                        descEl.style.cssText = "color:rgba(255,255,255,0.65);font-size:12px;line-height:1.5;";
                         card.appendChild(lbl);
                         card.appendChild(descEl);
-                        secEl.appendChild(card);
+                        grid.appendChild(card);
                     })(vis[vi]);
                 }
-                modalBody.appendChild(secEl);
+                modalBody.appendChild(grid);
             }
             if (!hasAny) {
                 var noRes = document.createElement("div");
                 noRes.textContent = "No features match your search.";
-                noRes.style.cssText = "color:" + (_g ? "rgba(255,255,255,0.45)" : "#666") + ";font-size:13px;text-align:center;padding:28px 0;";
+                noRes.style.cssText = "color:rgba(255,255,255,0.5);text-align:center;padding:40px;";
                 modalBody.appendChild(noRes);
             }
         }
@@ -16355,24 +16326,23 @@
         searchInput.addEventListener("input", function() { renderHelpSections(this.value); });
 
         var modalFooter = document.createElement("div");
-        modalFooter.style.cssText = "padding:10px 16px;border-top:1px solid " + tc.sectionBorder + ";flex-shrink:0;display:flex;justify-content:flex-end;";
+        modalFooter.style.cssText = "padding:14px 24px;background:rgba(0,0,0,0.2);border-top:1px solid rgba(255,255,255,0.08);flex-shrink:0;display:flex;justify-content:flex-end;";
 
         var footerCloseBtn = document.createElement("button");
         footerCloseBtn.textContent = "Close";
-        footerCloseBtn.style.cssText = "background:" + tc.closeBg + ";border:1px solid " + tc.headerBorder + ";color:white;padding:7px 22px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;transition:background 0.2s;";
-        footerCloseBtn.onmouseover = function() { footerCloseBtn.style.background = "rgba(255,255,255,0.2)"; };
-        footerCloseBtn.onmouseout = function() { footerCloseBtn.style.background = tc.closeBg; };
+        footerCloseBtn.style.cssText = "background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border:none;color:white;padding:10px 28px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;";
         footerCloseBtn.addEventListener("click", doClose);
         modalFooter.appendChild(footerCloseBtn);
 
-        container.appendChild(modalHeader);
-        container.appendChild(searchWrap);
-        container.appendChild(modalBody);
-        container.appendChild(modalFooter);
-        overlay.appendChild(container);
+        modal.appendChild(mHeader);
+        modal.appendChild(searchWrap);
+        modal.appendChild(modalBody);
+        modal.appendChild(modalFooter);
+        overlay.appendChild(modal);
         document.body.appendChild(overlay);
 
         renderHelpSections("");
+        setTimeout(function() { searchInput.focus(); }, 50);
 
         function handleHelpKey(e) { if (e.key === "Escape") doClose(); }
         document.addEventListener("keydown", handleHelpKey);
@@ -32324,6 +32294,1036 @@
         log("[EditSE] Table sort complete. Persisted: " + saved);
     }
 
+    //==========================
+    // PRINT BARCODES FEATURE
+    //==========================
+
+    var PRINT_BARCODES_POPUP_REF = null;
+    var PRINT_BARCODES_RUNNING = false;
+    var PRINT_BARCODES_CANCELLED = false;
+    var PRINT_BARCODES_BG_IFRAME = null;
+    var PRINT_BARCODES_SUBJECT_NUM = "";
+    var PRINT_BARCODES_EPOCH_COHORT_PAIRS = [];
+    var STORAGE_PRINT_BARCODES_CONFIG = "activityPlanState.printBarcodes.config";
+
+    var PB_SUBJECTS_LIST_URL = "https://cenexel.clinspark.com/secure/study/subjects/list";
+    var PB_LABEL_URL = "https://cenexel.clinspark.com/secure/barcodeprinting/labels";
+    var PB_BARCODE_URL = "https://cenexel.clinspark.com/secure/barcodeprinting/subjects";
+
+    var PB_LABEL_TEMPLATES = [
+        "GenX", "GenX Small", "GenX Mini", "Brady", "Zebra", "Dymo", "Avery"
+    ];
+
+    var PB_TRANSFER_ACTIONS = [
+        "Include Transfer Labels",
+        "Exclude Transfer Label",
+        "Only Generate Transfer Label"
+    ];
+
+    function pbLoadConfig() {
+        try {
+            var raw = localStorage.getItem(STORAGE_PRINT_BARCODES_CONFIG);
+            if (raw) return JSON.parse(raw);
+        } catch (e) {}
+        return null;
+    }
+
+    function pbSaveConfig(config) {
+        try { localStorage.setItem(STORAGE_PRINT_BARCODES_CONFIG, JSON.stringify(config)); } catch (e) {}
+    }
+
+    function pbNormalizeSubjectNum(s) {
+        return (s || "").replace(/\s+/g, "").toLowerCase();
+    }
+
+    function pbGetIframe() {
+        if (PRINT_BARCODES_BG_IFRAME && PRINT_BARCODES_BG_IFRAME.parentNode) return PRINT_BARCODES_BG_IFRAME;
+        var existing = document.getElementById("pb_bg_iframe");
+        if (existing) { PRINT_BARCODES_BG_IFRAME = existing; return PRINT_BARCODES_BG_IFRAME; }
+        PRINT_BARCODES_BG_IFRAME = document.createElement("iframe");
+        PRINT_BARCODES_BG_IFRAME.id = "pb_bg_iframe";
+        PRINT_BARCODES_BG_IFRAME.style.cssText = "position:fixed;bottom:0;left:0;width:1px;height:1px;border:none;opacity:0;pointer-events:none;z-index:-1;";
+        document.body.appendChild(PRINT_BARCODES_BG_IFRAME);
+        return PRINT_BARCODES_BG_IFRAME;
+    }
+
+    function pbRemoveIframe() {
+        if (PRINT_BARCODES_BG_IFRAME) {
+            try { if (PRINT_BARCODES_BG_IFRAME.parentNode) PRINT_BARCODES_BG_IFRAME.parentNode.removeChild(PRINT_BARCODES_BG_IFRAME); } catch (e) {}
+            PRINT_BARCODES_BG_IFRAME = null;
+        }
+        var ex = document.getElementById("pb_bg_iframe");
+        if (ex) { try { ex.remove(); } catch(e) {} }
+    }
+
+    async function pbNavigateIframe(iframe, url) {
+        iframe.src = url;
+        return await pbWaitForIframeReady(iframe, 25000);
+    }
+
+    async function pbWaitForIframeReady(iframe, timeoutMs) {
+        var start = Date.now();
+        timeoutMs = timeoutMs || 25000;
+        while (Date.now() - start < timeoutMs) {
+            try {
+                var doc = iframe.contentDocument || iframe.contentWindow.document;
+                if (doc && doc.readyState === "complete" && doc.body) {
+                    await sleep(400);
+                    var doc2 = iframe.contentDocument || iframe.contentWindow.document;
+                    if (doc2 && doc2.readyState === "complete") return true;
+                }
+            } catch (e) {}
+            await sleep(300);
+        }
+        return false;
+    }
+
+    async function pbWaitForElement(iframeDoc, selector, timeoutMs) {
+        var start = Date.now();
+        timeoutMs = timeoutMs || 15000;
+        while (Date.now() - start < timeoutMs) {
+            try {
+                var el = iframeDoc.querySelector(selector);
+                if (el) return el;
+            } catch (e) {}
+            await sleep(300);
+        }
+        return null;
+    }
+
+    // Fast-path: fetch the subjects list HTML server-side and parse it directly.
+    // Returns the matching <tr> element, or null if not found or fetch fails.
+    async function pbFetchSubjectRow(subjectNum) {
+        try {
+            var resp = await fetch(PB_SUBJECTS_LIST_URL, { method: "GET", credentials: "include", headers: { "Accept": "text/html,*/*" } });
+            if (!resp.ok) { log("PrintBarcodes: fetch status " + resp.status); return null; }
+            var html = await resp.text();
+            var parser = new DOMParser();
+            var doc = parser.parseFromString(html, "text/html");
+            var row = pbFindSubjectRowInDoc(doc, subjectNum);
+            if (row) log("PrintBarcodes: fetch fast-path found subject row");
+            else log("PrintBarcodes: fetch fast-path returned page but subject not in first page (rows: " + doc.querySelectorAll("#subjectTableBody tr").length + ")");
+            return row;
+        } catch(e) {
+            log("PrintBarcodes: fetch fast-path error: " + String(e));
+            return null;
+        }
+    }
+
+    // Returns true if filtering succeeded, false if #subjectId Select2 is not present on the page.
+    async function pbSelect2FilterSubject(iframeDoc, iframeWin, subjectNum) {
+        // Locate the Select2 container generated for #subjectId.
+        // Select2 v3 produces #s2id_subjectId; v4 places a sibling container next to the hidden input.
+        var s2Container = iframeDoc.querySelector("#s2id_subjectId, .select2-container[id*='subjectId'], .select2-container[aria-owns*='subjectId']");
+        if (!s2Container) {
+            var hiddenInput = iframeDoc.getElementById("subjectId");
+            if (hiddenInput) {
+                var sib = hiddenInput.previousElementSibling || hiddenInput.nextElementSibling;
+                if (sib && sib.className && sib.className.match(/select2/i)) s2Container = sib;
+            }
+        }
+        if (!s2Container) return false; // Not present on this page — caller should try another strategy
+
+        var clickTarget = s2Container.querySelector(".select2-choice, .select2-selection, a.select2-choice") || s2Container;
+        clickTarget.click();
+        await sleep(250);
+
+        iframeDoc = iframeWin.document;
+
+        var s2Search = iframeDoc.querySelector(".select2-drop .select2-input, .select2-dropdown .select2-search__field, .select2-search input");
+        if (!s2Search) return false;
+
+        s2Search.focus();
+        s2Search.value = subjectNum;
+        s2Search.dispatchEvent(new Event("input", { bubbles: true }));
+        s2Search.dispatchEvent(new Event("keyup",  { bubbles: true }));
+        try { if (iframeWin.jQuery) iframeWin.jQuery(s2Search).trigger("input").trigger("keyup"); } catch(e) {}
+        await sleep(700); // Wait for AJAX results
+
+        iframeDoc = iframeWin.document;
+
+        var results = iframeDoc.querySelectorAll(".select2-results li.select2-result, .select2-results__options .select2-results__option");
+        var normalTarget = pbNormalizeSubjectNum(subjectNum);
+        var clicked = false;
+        for (var i = 0; i < results.length; i++) {
+            var rt = results[i].textContent || "";
+            if (/no results|searching/i.test(rt)) continue;
+            if (pbNormalizeSubjectNum(rt).indexOf(normalTarget) !== -1) { results[i].click(); clicked = true; break; }
+        }
+        if (!clicked) {
+            for (var j = 0; j < results.length; j++) {
+                var ft = (results[j].textContent || "").trim();
+                if (ft && !/no results|searching/i.test(ft)) { results[j].click(); clicked = true; break; }
+            }
+        }
+        if (!clicked) return false;
+
+        await sleep(500);
+        return true;
+    }
+
+    // iframeOrDoc: pass the iframe element so the doc reference is refreshed each poll.
+    // Falls back to treating it as an iframeDoc if .contentDocument is undefined.
+    async function pbWaitForTableRows(iframeOrDoc, tbodySelector, timeoutMs) {
+        var start = Date.now();
+        timeoutMs = timeoutMs || 18000;
+        var selectors = tbodySelector
+            ? [tbodySelector, "#subjectTableBody", "table.dataTable tbody", "#subjectTable tbody", "table tbody[id]"]
+            : ["#subjectTableBody", "table.dataTable tbody", "#subjectTable tbody", "table tbody[id]"];
+        while (Date.now() - start < timeoutMs) {
+            try {
+                var doc = (iframeOrDoc.contentDocument || (iframeOrDoc.contentWindow && iframeOrDoc.contentWindow.document)) || iframeOrDoc;
+                if (doc && doc.readyState === "complete") {
+                    for (var si = 0; si < selectors.length; si++) {
+                        var tbody = doc.querySelector(selectors[si]);
+                        if (!tbody) continue;
+                        var rows = tbody.querySelectorAll("tr");
+                        if (rows.length === 0) continue;
+                        // DataTables "no records" / "loading" uses exactly 1 row with a colspan td.
+                        // If we have more than 1 row it is always real subject data.
+                        if (rows.length > 1) {
+                            if (si > 0) log("PrintBarcodes: found rows via fallback selector: " + selectors[si]);
+                            return true;
+                        }
+                        // Single row: check the full row text (not just first cell — first cell is a checkbox)
+                        var rowText = (rows[0].textContent || "").trim().toLowerCase();
+                        if (rowText && rowText.indexOf("no matching") === -1 && rowText.indexOf("no data") === -1 && rowText.indexOf("loading") === -1 && rowText.indexOf("processing") === -1) {
+                            if (si > 0) log("PrintBarcodes: found single row via fallback selector: " + selectors[si]);
+                            return true;
+                        }
+                    }
+                }
+            } catch (e) {}
+            await sleep(300);
+        }
+        // Diagnostic: log what's on the page to help debug future failures
+        try {
+            var dbgDoc = (iframeOrDoc.contentDocument || (iframeOrDoc.contentWindow && iframeOrDoc.contentWindow.document)) || iframeOrDoc;
+            if (dbgDoc) {
+                var tbodies = dbgDoc.querySelectorAll("tbody");
+                log("PrintBarcodes: table wait timeout. Found " + tbodies.length + " tbody elements. Title: " + dbgDoc.title);
+                for (var ti = 0; ti < Math.min(tbodies.length, 4); ti++) {
+                    log("  tbody[" + ti + "] id=" + (tbodies[ti].id || "(none)") + " rows=" + tbodies[ti].querySelectorAll("tr").length);
+                }
+            }
+        } catch (e) {}
+        return false;
+    }
+
+    function pbSelectByValue(iframeDoc, iframeWin, selectEl, value) {
+        selectEl.value = value;
+        selectEl.dispatchEvent(new Event("change", { bubbles: true }));
+        try { if (iframeWin && iframeWin.jQuery) iframeWin.jQuery(selectEl).trigger("change"); } catch (e) {}
+    }
+
+    function pbSelectByText(iframeDoc, iframeWin, selectEl, text) {
+        var opts = selectEl.querySelectorAll("option");
+        var lc = (text || "").toLowerCase().trim();
+        for (var i = 0; i < opts.length; i++) {
+            var t = (opts[i].textContent || opts[i].innerText || "").toLowerCase().trim();
+            if (t === lc || t.indexOf(lc) !== -1 || lc.indexOf(t) !== -1) {
+                pbSelectByValue(iframeDoc, iframeWin, selectEl, opts[i].value);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function pbCollectEpochCohortFromRow(row) {
+        var results = [];
+        var seen = {};
+        function tryAdd(epoch, cohort) {
+            var key = epoch + "|" + cohort;
+            if (!seen[key]) { seen[key] = true; results.push({ epoch: epoch, cohort: cohort }); }
+        }
+        var allEls = row.querySelectorAll("span, div, td, li");
+        for (var i = 0; i < allEls.length; i++) {
+            var text = (allEls[i].textContent || "").trim();
+            var m = text.match(/\(([^,)]+),\s*([^)]+)\)/);
+            if (m) tryAdd(m[1].trim(), m[2].trim());
+        }
+        var cells = row.querySelectorAll("td");
+        for (var ci = 0; ci < cells.length; ci++) {
+            var lines = (cells[ci].textContent || "").split(/[\n\r]/);
+            for (var li = 0; li < lines.length; li++) {
+                var m2 = lines[li].trim().match(/\(([^,)]+),\s*([^)]+)\)/);
+                if (m2) tryAdd(m2[1].trim(), m2[2].trim());
+            }
+        }
+        return results;
+    }
+
+    function pbFindSubjectRowInDoc(iframeDoc, subjectNum) {
+        var tbody = iframeDoc.getElementById("subjectTableBody");
+        if (!tbody) return null;
+        var normalizedSubject = pbNormalizeSubjectNum(subjectNum);
+        var rows = tbody.querySelectorAll("tr");
+        for (var i = 0; i < rows.length; i++) {
+            var cells = rows[i].querySelectorAll("td");
+            for (var j = 0; j < cells.length; j++) {
+                if (pbNormalizeSubjectNum(cells[j].textContent || "").indexOf(normalizedSubject) !== -1) return rows[i];
+            }
+            if (pbNormalizeSubjectNum(rows[i].textContent || "").indexOf(normalizedSubject) !== -1) return rows[i];
+        }
+        return null;
+    }
+
+    function pbRestoreConfig(savedConfig, newPairs) {
+        if (!savedConfig || !newPairs || newPairs.length === 0) return null;
+        var epoch = savedConfig.epoch || "";
+        var cohort = savedConfig.cohort || "";
+        for (var i = 0; i < newPairs.length; i++) {
+            if (newPairs[i].epoch === epoch && newPairs[i].cohort === cohort) {
+                return Object.assign({}, savedConfig, { epoch: epoch, cohort: cohort });
+            }
+        }
+        for (var j = 0; j < newPairs.length; j++) {
+            if (newPairs[j].epoch === epoch) {
+                return Object.assign({}, savedConfig, { epoch: epoch, cohort: newPairs[j].cohort });
+            }
+        }
+        return Object.assign({}, savedConfig, { epoch: "", cohort: "" });
+    }
+
+    function pbSetApplyStatus(el, type, msg) {
+        el.style.display = "block";
+        el.textContent = msg;
+        var colors = { info: { bg: "rgba(74,159,212,0.09)", border: "#4a9fd4", text: "#bfdbfe" },
+                       success: { bg: "rgba(34,197,94,0.09)", border: "#22c55e", text: "#bbf7d0" },
+                       error: { bg: "rgba(239,68,68,0.09)", border: "#ef4444", text: "#fca5a5" } };
+        var c = colors[type] || colors.info;
+        el.style.cssText = "display:block;margin-top:8px;padding:7px 11px;border-radius:6px;font-size:12px;font-weight:500;line-height:1.5;background:" + c.bg + ";border-left:3px solid " + c.border + ";color:" + c.text + ";";
+    }
+
+    function pbBuildLabelConfigUI(epochCohortPairs, restoredConfig, glass) {
+        var BG = glass ? "rgba(255,255,255,0.05)" : "#1c1c1c";
+        var BDR = glass ? "rgba(255,255,255,0.12)" : "#2e2e2e";
+        var TXT = glass ? "#f0f0f0" : "#e2e2e2";
+        var LBL = glass ? "rgba(255,255,255,0.8)" : "#d0d0d0";
+        var INP_BG = glass ? "rgba(255,255,255,0.07)" : "#252525";
+        var SECTION_BDR = glass ? "rgba(255,255,255,0.08)" : "#282828";
+        var ACCENT = "#4a9fd4";
+
+        var container = document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;gap:0;font-size:13px;";
+
+        function makeSection(title) {
+            var sec = document.createElement("div");
+            sec.style.cssText = "border-top:1px solid " + SECTION_BDR + ";padding:12px 0 4px 0;";
+            var hdr = document.createElement("div");
+            hdr.textContent = title;
+            hdr.style.cssText = "font-size:10px;font-weight:700;color:" + ACCENT + ";text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px;";
+            sec.appendChild(hdr);
+            return sec;
+        }
+
+        function makeSelect(options, defaultVal) {
+            var sel = document.createElement("select");
+            sel.style.cssText = "background:" + INP_BG + ";color:" + TXT + ";border:1px solid " + BDR + ";border-radius:6px;padding:6px 8px;font-size:13px;width:100%;outline:none;cursor:pointer;color-scheme:dark;";
+            for (var i = 0; i < options.length; i++) {
+                var opt = document.createElement("option");
+                var v = (options[i].value !== undefined) ? options[i].value : options[i];
+                var t = (options[i].text !== undefined) ? options[i].text : options[i];
+                opt.value = v; opt.textContent = t;
+                opt.style.cssText = "background:" + INP_BG + ";color:" + TXT + ";";
+                if (v === defaultVal) opt.selected = true;
+                sel.appendChild(opt);
+            }
+            return sel;
+        }
+
+        function makeInput(val, readOnly) {
+            var inp = document.createElement("input");
+            inp.type = "text"; inp.value = val || "";
+            if (readOnly) {
+                inp.readOnly = true;
+                inp.style.cssText = "background:" + INP_BG + ";color:" + (glass ? "rgba(255,255,255,0.45)" : "#909090") + ";border:1px solid " + BDR + ";border-radius:6px;padding:6px 8px;font-size:13px;width:100%;box-sizing:border-box;outline:none;cursor:not-allowed;";
+            } else {
+                inp.style.cssText = "background:" + INP_BG + ";color:" + TXT + ";border:1px solid " + BDR + ";border-radius:6px;padding:6px 8px;font-size:13px;width:100%;box-sizing:border-box;outline:none;";
+            }
+            return inp;
+        }
+
+        function makeField(labelText, inputEl) {
+            var wrap = document.createElement("div");
+            wrap.style.cssText = "display:flex;flex-direction:column;gap:5px;margin-bottom:10px;";
+            var lbl = document.createElement("label");
+            lbl.textContent = labelText;
+            lbl.style.cssText = "font-size:11px;font-weight:600;color:" + LBL + ";letter-spacing:0.03em;";
+            wrap.appendChild(lbl);
+            wrap.appendChild(inputEl);
+            return wrap;
+        }
+
+        var epochMap = {};
+        for (var pi = 0; pi < epochCohortPairs.length; pi++) {
+            var ep = epochCohortPairs[pi].epoch;
+            var co = epochCohortPairs[pi].cohort;
+            if (!epochMap[ep]) epochMap[ep] = [];
+            epochMap[ep].push(co);
+        }
+        var uniqueEpochs = Object.keys(epochMap);
+
+        // ── Section 1: Activity Plan ──────────────────────────────────────
+        var sec1 = makeSection("Activity Plan");
+        var epochOpts = [{ value: "", text: "— Select Epoch —" }];
+        for (var ei = 0; ei < uniqueEpochs.length; ei++) epochOpts.push({ value: uniqueEpochs[ei], text: uniqueEpochs[ei] });
+        var epochSel = makeSelect(epochOpts, restoredConfig ? restoredConfig.epoch : "");
+        var cohortInp = makeInput(restoredConfig ? restoredConfig.cohort : "", true);
+        sec1.appendChild(makeField("Epoch", epochSel));
+        sec1.appendChild(makeField("Cohort (auto-populated)", cohortInp));
+        container.appendChild(sec1);
+
+        epochSel.addEventListener("change", function() {
+            var cohorts = epochMap[epochSel.value] || [];
+            cohortInp.value = cohorts.length > 0 ? cohorts[0] : "";
+        });
+        if (epochSel.value && epochMap[epochSel.value] && !cohortInp.value) {
+            cohortInp.value = epochMap[epochSel.value][0] || "";
+        }
+
+        // ── Section 2: Subject ────────────────────────────────────────────
+        var sec2 = makeSection("Subject");
+        var assignInp = makeInput(PRINT_BARCODES_SUBJECT_NUM, true);
+        sec2.appendChild(makeField("Subject Number", assignInp));
+        container.appendChild(sec2);
+
+        // ── Section 3: Form Options ───────────────────────────────────────
+        var sec3 = makeSection("Form Options");
+        var formsArea = document.createElement("textarea");
+        formsArea.value = (restoredConfig && restoredConfig.forms) ? restoredConfig.forms : "";
+        formsArea.placeholder = "Enter form keywords, one per line";
+        formsArea.rows = 3;
+        formsArea.style.cssText = "background:" + INP_BG + ";color:" + TXT + ";border:1px solid " + BDR + ";border-radius:6px;padding:7px 9px;font-size:13px;width:100%;box-sizing:border-box;resize:vertical;outline:none;line-height:1.5;";
+        sec3.appendChild(makeField("Forms (one keyword per line)", formsArea));
+
+        var tpRow = document.createElement("div");
+        tpRow.style.cssText = "display:flex;align-items:center;gap:9px;margin-bottom:10px;padding:8px 10px;border:1px solid " + BDR + ";border-radius:6px;background:" + INP_BG + ";cursor:pointer;";
+        var tpCb = document.createElement("input"); tpCb.type = "checkbox";
+        tpCb.checked = restoredConfig ? !!restoredConfig.includeAllTimepoints : false;
+        tpCb.style.cssText = "width:14px;height:14px;cursor:pointer;accent-color:" + ACCENT + ";flex-shrink:0;";
+        var tpLbl = document.createElement("span");
+        tpLbl.textContent = "Include All Timepoints";
+        tpLbl.style.cssText = "font-size:13px;color:" + TXT + ";user-select:none;";
+        tpRow.appendChild(tpCb); tpRow.appendChild(tpLbl);
+        tpRow.addEventListener("click", function(e) { if (e.target !== tpCb) tpCb.checked = !tpCb.checked; });
+        sec3.appendChild(tpRow);
+        container.appendChild(sec3);
+
+        // ── Section 4: Print Settings ─────────────────────────────────────
+        var sec4 = makeSection("Print Settings");
+        var transferSel = makeSelect(PB_TRANSFER_ACTIONS, restoredConfig ? (restoredConfig.transferAction || PB_TRANSFER_ACTIONS[0]) : PB_TRANSFER_ACTIONS[0]);
+        var templateSel = makeSelect(PB_LABEL_TEMPLATES, restoredConfig ? (restoredConfig.template || "GenX") : "GenX");
+        sec4.appendChild(makeField("Transfer Label Action", transferSel));
+        sec4.appendChild(makeField("Template", templateSel));
+        container.appendChild(sec4);
+
+        // ── Save Footer ───────────────────────────────────────────────────
+        var saveRow = document.createElement("div");
+        saveRow.style.cssText = "display:flex;align-items:center;gap:10px;padding-top:12px;border-top:1px solid " + SECTION_BDR + ";margin-top:4px;";
+        var saveBtn = document.createElement("button");
+        saveBtn.textContent = "Save Configuration";
+        saveBtn.style.cssText = "background:#10b981;color:#fff;border:none;border-radius:6px;padding:7px 18px;font-size:12px;font-weight:700;cursor:pointer;transition:background 0.15s;letter-spacing:0.02em;";
+        saveBtn.addEventListener("mouseenter", function() { saveBtn.style.background = "#059669"; });
+        saveBtn.addEventListener("mouseleave", function() { saveBtn.style.background = "#10b981"; });
+        var saveMsg = document.createElement("span");
+        saveMsg.style.cssText = "font-size:12px;color:#34d399;display:none;font-weight:500;";
+        saveMsg.textContent = "\u2713 Saved!";
+        saveRow.appendChild(saveBtn); saveRow.appendChild(saveMsg);
+        container.appendChild(saveRow);
+
+        container._getConfig = function() {
+            return {
+                epoch: epochSel.value,
+                cohort: cohortInp.value,
+                forms: formsArea.value,
+                includeAllTimepoints: tpCb.checked,
+                transferAction: transferSel.value,
+                template: templateSel.value
+            };
+        };
+
+        saveBtn.addEventListener("click", function() {
+            pbSaveConfig(container._getConfig());
+            saveMsg.style.display = "inline";
+            setTimeout(function() { saveMsg.style.display = "none"; }, 2000);
+        });
+
+        return container;
+    }
+
+    function runPrintBarcodes() {
+        if (PRINT_BARCODES_RUNNING) { log("PrintBarcodes: already running"); return; }
+        if (PRINT_BARCODES_POPUP_REF) { try { PRINT_BARCODES_POPUP_REF.close(); } catch(e) {} PRINT_BARCODES_POPUP_REF = null; }
+
+        var glass = isGlassTheme();
+        PRINT_BARCODES_SUBJECT_NUM = "";
+        PRINT_BARCODES_EPOCH_COHORT_PAIRS = [];
+
+        var ACCENT = "#4a9fd4";
+        var BDR  = glass ? "rgba(255,255,255,0.12)" : "#2e2e2e";
+        var TXT  = glass ? "#f0f0f0" : "#e2e2e2";
+        var DIM  = glass ? "rgba(255,255,255,0.6)" : "#b0b0b0";
+        var PNL  = glass ? "rgba(255,255,255,0.04)" : "#171717";
+
+        var mainContainer = document.createElement("div");
+        mainContainer.style.cssText = "display:flex;flex-direction:column;gap:14px;";
+
+        // ── Subject card ──────────────────────────────────────────────────
+        var headerCard = document.createElement("div");
+        headerCard.style.cssText = "border:1px solid " + BDR + ";border-left:3px solid " + ACCENT + ";border-radius:8px;padding:13px 14px;background:" + (glass ? "rgba(255,255,255,0.04)" : "#1c1c1c") + ";";
+
+        var stepLabel = document.createElement("div");
+        stepLabel.textContent = "SUBJECT NUMBER";
+        stepLabel.style.cssText = "font-size:10px;font-weight:700;color:" + ACCENT + ";letter-spacing:0.08em;margin-bottom:8px;";
+
+        var subjectRow = document.createElement("div");
+        subjectRow.style.cssText = "display:flex;align-items:center;gap:8px;";
+
+        var subjectInput = document.createElement("input");
+        subjectInput.type = "text";
+        subjectInput.placeholder = "e.g. 279612001";
+        subjectInput.style.cssText = "flex:1;min-width:0;background:" + (glass ? "rgba(255,255,255,0.07)" : "#252525") + ";color:" + TXT + ";border:1px solid " + BDR + ";border-radius:6px;padding:7px 11px;font-size:14px;font-weight:500;outline:none;letter-spacing:0.02em;";
+
+        var applyBtn = document.createElement("button");
+        applyBtn.textContent = "Apply";
+        applyBtn.style.cssText = "background:" + ACCENT + ";color:#fff;border:none;border-radius:6px;padding:7px 18px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;transition:background 0.15s;letter-spacing:0.02em;flex-shrink:0;";
+        applyBtn.addEventListener("mouseenter", function() { applyBtn.style.background = "#3182c4"; });
+        applyBtn.addEventListener("mouseleave", function() { applyBtn.style.background = ACCENT; });
+
+        var applyStatus = document.createElement("div");
+        applyStatus.style.display = "none";
+
+        subjectRow.appendChild(subjectInput);
+        subjectRow.appendChild(applyBtn);
+        headerCard.appendChild(stepLabel);
+        headerCard.appendChild(subjectRow);
+        headerCard.appendChild(applyStatus);
+        mainContainer.appendChild(headerCard);
+
+        var twoPanel = document.createElement("div");
+        twoPanel.style.cssText = "display:flex;gap:12px;";
+
+        // ── Left panel: Print Options ─────────────────────────────────────
+        var leftPanel = document.createElement("div");
+        leftPanel.style.cssText = "display:flex;flex-direction:column;gap:0;min-width:155px;max-width:165px;border:1px solid " + BDR + ";border-radius:8px;overflow:hidden;background:" + PNL + ";";
+
+        var leftHeader = document.createElement("div");
+        leftHeader.textContent = "Print Options";
+        leftHeader.style.cssText = "font-size:10px;font-weight:700;color:" + DIM + ";text-transform:uppercase;letter-spacing:0.07em;padding:10px 12px 9px;border-bottom:1px solid " + BDR + ";";
+        leftPanel.appendChild(leftHeader);
+
+        var selectAllBtn = document.createElement("button");
+        selectAllBtn.textContent = "Select All";
+        selectAllBtn.disabled = true;
+        selectAllBtn.style.cssText = "background:" + ACCENT + ";color:#fff;border:none;border-radius:0;padding:8px 12px;font-size:12px;font-weight:700;cursor:not-allowed;opacity:0.35;transition:all 0.15s;width:100%;text-align:left;border-bottom:1px solid " + BDR + ";letter-spacing:0.02em;";
+
+        function makeOptionRow(labelText, accentColor) {
+            var row = document.createElement("div");
+            row.style.cssText = "display:flex;align-items:center;gap:9px;padding:10px 12px;cursor:not-allowed;opacity:0.35;user-select:none;border-bottom:1px solid " + BDR + ";transition:background 0.12s;";
+            var cb = document.createElement("input"); cb.type = "checkbox"; cb.disabled = true;
+            cb.style.cssText = "width:14px;height:14px;cursor:not-allowed;accent-color:" + (accentColor || ACCENT) + ";flex-shrink:0;pointer-events:none;";
+            var lbl = document.createElement("span");
+            lbl.textContent = labelText;
+            lbl.style.cssText = "font-size:13px;color:" + TXT + ";font-weight:600;";
+            var badge = document.createElement("span");
+            badge.style.cssText = "margin-left:auto;width:7px;height:7px;border-radius:50%;background:" + (accentColor || ACCENT) + ";flex-shrink:0;opacity:0.5;";
+            row.appendChild(cb); row.appendChild(lbl); row.appendChild(badge);
+            return { row: row, cb: cb, badge: badge };
+        }
+
+        var labelOpt    = makeOptionRow("Label",   ACCENT);
+        var barcodeOpt  = makeOptionRow("Barcode", "#0d9488");
+
+        leftPanel.appendChild(selectAllBtn);
+        leftPanel.appendChild(labelOpt.row);
+        leftPanel.appendChild(barcodeOpt.row);
+
+        // ── Right panel: config area ──────────────────────────────────────
+        var rightPanel = document.createElement("div");
+        rightPanel.style.cssText = "flex:1;border:1px solid " + BDR + ";border-radius:8px;padding:14px 16px;background:" + PNL + ";min-width:0;overflow-y:auto;max-height:440px;";
+
+        var rightPlaceholder = document.createElement("div");
+        rightPlaceholder.style.cssText = "display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;height:200px;";
+        var phIcon = document.createElement("div");
+        phIcon.textContent = "\u2B1B";
+        phIcon.style.cssText = "font-size:28px;opacity:0.18;line-height:1;";
+        var phLine1 = document.createElement("div");
+        phLine1.textContent = "Enter a Subject Number and click Apply";
+        phLine1.style.cssText = "font-size:13px;color:" + DIM + ";font-weight:600;";
+        var phLine2 = document.createElement("div");
+        phLine2.textContent = "Then select Label to configure label options.";
+        phLine2.style.cssText = "font-size:12px;color:" + (glass ? "rgba(255,255,255,0.45)" : "#888") + ";";        
+        rightPlaceholder.appendChild(phIcon);
+        rightPlaceholder.appendChild(phLine1);
+        rightPlaceholder.appendChild(phLine2);
+        rightPanel.appendChild(rightPlaceholder);
+
+        var labelConfigContainer = null;
+
+        twoPanel.appendChild(leftPanel);
+        twoPanel.appendChild(rightPanel);
+        mainContainer.appendChild(twoPanel);
+
+        var confirmBtn = document.createElement("button");
+        confirmBtn.textContent = "\u25B6  Run Print Job";
+        confirmBtn.disabled = true;
+        confirmBtn.style.cssText = "background:#10b981;color:#fff;border:none;border-radius:7px;padding:9px 26px;font-size:13px;font-weight:700;cursor:not-allowed;opacity:0.35;transition:background 0.15s,opacity 0.15s;letter-spacing:0.02em;";
+        var footerRow = document.createElement("div");
+        footerRow.style.cssText = "display:flex;justify-content:flex-end;align-items:center;padding-top:10px;border-top:1px solid " + BDR + ";";
+        footerRow.appendChild(confirmBtn);
+        mainContainer.appendChild(footerRow);
+
+        function updateConfirmBtn() {
+            var any = (!labelOpt.cb.disabled && labelOpt.cb.checked) || (!barcodeOpt.cb.disabled && barcodeOpt.cb.checked);
+            confirmBtn.disabled = !any;
+            confirmBtn.style.opacity = any ? "1" : "0.35";
+            confirmBtn.style.cursor = any ? "pointer" : "not-allowed";
+            labelOpt.row.style.background   = (labelOpt.cb.checked   && !labelOpt.cb.disabled)   ? (glass ? "rgba(74,159,212,0.1)"   : "#1f2b35") : "";
+            barcodeOpt.row.style.background = (barcodeOpt.cb.checked && !barcodeOpt.cb.disabled) ? (glass ? "rgba(13,148,136,0.1)"  : "#1a2826") : "";
+        }
+
+        function enableLeftPanel() {
+            selectAllBtn.disabled = false;
+            selectAllBtn.style.cursor = "pointer";
+            selectAllBtn.style.opacity = "1";
+            selectAllBtn.addEventListener("mouseenter", function() { if (!selectAllBtn.disabled) selectAllBtn.style.background = "#3182c4"; });
+            selectAllBtn.addEventListener("mouseleave", function() { if (!selectAllBtn.disabled) selectAllBtn.style.background = ACCENT; });
+
+            labelOpt.cb.disabled = false; labelOpt.cb.style.cursor = "pointer"; labelOpt.cb.style.pointerEvents = "auto";
+            labelOpt.row.style.cursor = "pointer"; labelOpt.row.style.opacity = "1";
+            labelOpt.badge.style.opacity = "1";
+            labelOpt.row.addEventListener("mouseenter", function() { if (!labelOpt.cb.disabled) labelOpt.row.style.background = glass ? "rgba(74,159,212,0.12)" : "#232e38"; });
+            labelOpt.row.addEventListener("mouseleave", function() { labelOpt.row.style.background = labelOpt.cb.checked ? (glass ? "rgba(74,159,212,0.1)" : "#1f2b35") : ""; });
+
+            barcodeOpt.cb.disabled = false; barcodeOpt.cb.style.cursor = "pointer"; barcodeOpt.cb.style.pointerEvents = "auto";
+            barcodeOpt.row.style.cursor = "pointer"; barcodeOpt.row.style.opacity = "1";
+            barcodeOpt.badge.style.opacity = "1";
+            barcodeOpt.row.addEventListener("mouseenter", function() { if (!barcodeOpt.cb.disabled) barcodeOpt.row.style.background = glass ? "rgba(13,148,136,0.12)" : "#1e2c2a"; });
+            barcodeOpt.row.addEventListener("mouseleave", function() { barcodeOpt.row.style.background = barcodeOpt.cb.checked ? (glass ? "rgba(13,148,136,0.1)" : "#1a2826") : ""; });
+        }
+
+        function showLabelConfig() {
+            if (PRINT_BARCODES_EPOCH_COHORT_PAIRS.length === 0) return;
+            var savedConfig = pbLoadConfig();
+            var restoredConfig = savedConfig ? pbRestoreConfig(savedConfig, PRINT_BARCODES_EPOCH_COHORT_PAIRS) : null;
+            while (rightPanel.firstChild) rightPanel.removeChild(rightPanel.firstChild);
+            var title = document.createElement("div");
+            title.textContent = "Label Configuration";
+            title.style.cssText = "font-size:11px;font-weight:700;color:" + ACCENT + ";text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;padding-bottom:10px;border-bottom:1px solid " + BDR + ";";
+            rightPanel.appendChild(title);
+            labelConfigContainer = pbBuildLabelConfigUI(PRINT_BARCODES_EPOCH_COHORT_PAIRS, restoredConfig, glass);
+            rightPanel.appendChild(labelConfigContainer);
+        }
+
+        function clearRightPanel() {
+            while (rightPanel.firstChild) rightPanel.removeChild(rightPanel.firstChild);
+            rightPanel.appendChild(rightPlaceholder);
+            labelConfigContainer = null;
+        }
+
+        labelOpt.row.addEventListener("click", function(e) {
+            if (labelOpt.cb.disabled) return;
+            if (e.target !== labelOpt.cb) { labelOpt.cb.checked = !labelOpt.cb.checked; }
+            if (labelOpt.cb.checked) { showLabelConfig(); } else { clearRightPanel(); }
+            updateConfirmBtn();
+        });
+        labelOpt.cb.addEventListener("change", function() {
+            if (labelOpt.cb.checked) { showLabelConfig(); } else { clearRightPanel(); }
+            updateConfirmBtn();
+        });
+
+        barcodeOpt.row.addEventListener("click", function(e) {
+            if (barcodeOpt.cb.disabled) return;
+            if (e.target !== barcodeOpt.cb) { barcodeOpt.cb.checked = !barcodeOpt.cb.checked; }
+            updateConfirmBtn();
+        });
+        barcodeOpt.cb.addEventListener("change", updateConfirmBtn);
+
+        selectAllBtn.addEventListener("click", function() {
+            if (selectAllBtn.disabled) return;
+            labelOpt.cb.checked = true;
+            barcodeOpt.cb.checked = true;
+            showLabelConfig();
+            updateConfirmBtn();
+        });
+
+        applyBtn.addEventListener("click", async function() {
+            var subjectNum = subjectInput.value.trim();
+            if (!subjectNum) {
+                pbSetApplyStatus(applyStatus, "error", "Please enter a subject number.");
+                return;
+            }
+            applyBtn.disabled = true; applyBtn.style.opacity = "0.6";
+            log("PrintBarcodes: applying subject number: " + subjectNum);
+            try {
+                pbSetApplyStatus(applyStatus, "info", "Navigating to subjects list\u2026");
+                var iframe = pbGetIframe();
+                var loaded = await pbNavigateIframe(iframe, PB_SUBJECTS_LIST_URL);
+                if (!loaded) throw new Error("Subjects list page did not load within timeout");
+
+                var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                var iframeWin = iframe.contentWindow;
+
+                // Wait for the #subjectId Select2 container to initialise (JS runs after readyState=complete)
+                pbSetApplyStatus(applyStatus, "info", "Waiting for filter controls\u2026");
+                var s2ContainerEl = await pbWaitForElement(iframeDoc, "#s2id_subjectId, .select2-container[id*='subjectId']", 10000);
+                iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                iframeWin = iframe.contentWindow;
+
+                // Primary: use the #subjectId Select2 filter — triggers a server-side refresh
+                // that shows only the matching subject in #subjectTableBody.
+                pbSetApplyStatus(applyStatus, "info", "Filtering by subject number\u2026");
+                var s2ok = s2ContainerEl ? await pbSelect2FilterSubject(iframeDoc, iframeWin, subjectNum) : false;
+                log("PrintBarcodes: Select2 filter result: " + s2ok);
+                if (s2ok) {
+                    // After Select2 selection the page refreshes the table via AJAX.
+                    await sleep(800);
+                    var rowsLoaded = await pbWaitForTableRows(iframe, "#subjectTableBody", 15000);
+                    if (!rowsLoaded) throw new Error("Subjects table did not refresh after filtering. Check your ClinSpark session.");
+                    iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                    iframeWin = iframe.contentWindow;
+                }
+
+                // Look for the subject in the (possibly filtered) table.
+                var subjectRow = pbFindSubjectRowInDoc(iframeDoc, subjectNum);
+
+                // Fallback: Select2 may not have been available yet — wait for table rows then scan.
+                if (!subjectRow && !s2ok) {
+                    pbSetApplyStatus(applyStatus, "info", "Waiting for subjects table\u2026");
+                    var rowsLoaded2 = await pbWaitForTableRows(iframe, "#subjectTableBody", 18000);
+                    if (!rowsLoaded2) throw new Error("Subjects table did not load. Check your ClinSpark session and study context.");
+                    iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                    iframeWin = iframe.contentWindow;
+                    subjectRow = pbFindSubjectRowInDoc(iframeDoc, subjectNum);
+
+                    // Last resort: DataTables text search
+                    if (!subjectRow) {
+                        var dtInput = iframeDoc.querySelector(".dataTables_filter input, input[type='search'][aria-controls], #subjectTable_filter input");
+                        if (dtInput) {
+                            pbSetApplyStatus(applyStatus, "info", "Using DataTables filter\u2026");
+                            dtInput.value = subjectNum;
+                            dtInput.dispatchEvent(new Event("input", { bubbles: true }));
+                            dtInput.dispatchEvent(new Event("keyup",  { bubbles: true }));
+                            try { if (iframeWin.jQuery) iframeWin.jQuery(dtInput).trigger("keyup"); } catch(e) {}
+                            await sleep(700);
+                            iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                            subjectRow = pbFindSubjectRowInDoc(iframeDoc, subjectNum);
+                        }
+                    }
+                }
+
+                if (!subjectRow) throw new Error("Subject \u201c" + subjectNum + "\u201d not found on the subjects list page.");
+                var pairs = pbCollectEpochCohortFromRow(subjectRow);
+                if (pairs.length === 0) throw new Error("No epoch/cohort assignments found for subject \u201c" + subjectNum + "\u201d. Ensure the subject has cohort assignments.");
+                PRINT_BARCODES_SUBJECT_NUM = subjectNum;
+                PRINT_BARCODES_EPOCH_COHORT_PAIRS = pairs;
+                log("PrintBarcodes: found " + pairs.length + " epoch/cohort pair(s): " + pairs.map(function(p) { return p.epoch + "/" + p.cohort; }).join(", "));
+                pbSetApplyStatus(applyStatus, "success", "\u2713 Found subject with " + pairs.length + " epoch/cohort pair(s). Select print options below.");
+                enableLeftPanel();
+                if (labelOpt.cb.checked) showLabelConfig();
+            } catch (err) {
+                log("PrintBarcodes: apply error: " + String(err));
+                pbSetApplyStatus(applyStatus, "error", String(err));
+            } finally {
+                applyBtn.disabled = false; applyBtn.style.opacity = "1";
+            }
+        });
+
+        subjectInput.addEventListener("keydown", function(e) { if (e.key === "Enter") applyBtn.click(); });
+
+        confirmBtn.addEventListener("mouseenter", function() { if (!confirmBtn.disabled) { confirmBtn.style.background = "#059669"; confirmBtn.style.transform = "translateY(-1px)"; } });
+        confirmBtn.addEventListener("mouseleave", function() { if (!confirmBtn.disabled) { confirmBtn.style.background = "#10b981"; confirmBtn.style.transform = ""; } });
+
+        confirmBtn.addEventListener("click", async function() {
+            if (confirmBtn.disabled || PRINT_BARCODES_RUNNING) return;
+            var doLabel = !labelOpt.cb.disabled && labelOpt.cb.checked;
+            var doBarcode = !barcodeOpt.cb.disabled && barcodeOpt.cb.checked;
+            if (!doLabel && !doBarcode) return;
+            var labelConfig = null;
+            if (doLabel) {
+                if (!labelConfigContainer || !labelConfigContainer._getConfig) {
+                    pbShowPrintBarcodesError("Label configuration is not ready. Select the Label option and configure it first.");
+                    return;
+                }
+                labelConfig = labelConfigContainer._getConfig();
+                if (!labelConfig.epoch) {
+                    pbShowPrintBarcodesError("Please select an Epoch in the Label configuration before confirming.");
+                    return;
+                }
+            }
+            PRINT_BARCODES_RUNNING = true;
+            PRINT_BARCODES_CANCELLED = false;
+
+            if (!document.getElementById("pb-spin-style")) {
+                var spinStyle = document.createElement("style");
+                spinStyle.id = "pb-spin-style";
+                spinStyle.textContent = "@keyframes pb-spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}";
+                document.head.appendChild(spinStyle);
+            }
+            var overlay = document.createElement("div");
+            overlay.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.72);z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;border-radius:8px;";
+            var spinner = document.createElement("div");
+            spinner.style.cssText = "width:34px;height:34px;border:4px solid rgba(255,255,255,0.15);border-top:4px solid " + ACCENT + ";border-radius:50%;animation:pb-spin 0.8s linear infinite;";
+            var progressMsg = document.createElement("div");
+            progressMsg.style.cssText = "font-size:13px;color:#fff;font-weight:600;text-align:center;max-width:80%;line-height:1.5;";
+            progressMsg.textContent = "Processing...";
+            overlay.appendChild(spinner); overlay.appendChild(progressMsg);
+            var origPos = mainContainer.style.position;
+            mainContainer.style.position = "relative";
+            mainContainer.appendChild(overlay);
+
+            function setProgress(msg) { progressMsg.textContent = msg; log("PrintBarcodes: " + msg); }
+
+            try {
+                var iframe = pbGetIframe();
+                if (doLabel) {
+                    setProgress("Processing Label...");
+                    await pbProcessLabel(labelConfig, PRINT_BARCODES_SUBJECT_NUM, PRINT_BARCODES_EPOCH_COHORT_PAIRS, iframe, setProgress);
+                }
+                if (!PRINT_BARCODES_CANCELLED && doBarcode) {
+                    setProgress("Processing Barcode...");
+                    await pbProcessBarcode(PRINT_BARCODES_EPOCH_COHORT_PAIRS, PRINT_BARCODES_SUBJECT_NUM, iframe, setProgress);
+                }
+                if (!PRINT_BARCODES_CANCELLED) {
+                    overlay.remove();
+                    pbShowPrintBarcodesSuccess("Print Barcodes completed successfully!");
+                    log("PrintBarcodes: completed successfully");
+                }
+            } catch (err) {
+                log("PrintBarcodes: processing error: " + String(err));
+                overlay.remove();
+                pbShowPrintBarcodesError(String(err));
+            } finally {
+                mainContainer.style.position = origPos;
+                PRINT_BARCODES_RUNNING = false;
+            }
+        });
+
+        PRINT_BARCODES_POPUP_REF = createPopup({
+            title: "Print Barcodes",
+            description: "Configure and print labels and barcodes for a subject",
+            content: mainContainer,
+            width: "680px",
+            height: "auto",
+            maxHeight: "90vh",
+            onClose: function() {
+                PRINT_BARCODES_POPUP_REF = null;
+                if (!PRINT_BARCODES_RUNNING) pbRemoveIframe();
+            }
+        });
+    }
+
+    async function pbProcessLabel(labelConfig, subjectNum, epochCohortPairs, iframe, setProgress) {
+        setProgress("Label: Navigating to label printing page...");
+        var loaded = await pbNavigateIframe(iframe, PB_LABEL_URL);
+        if (!loaded) throw new Error("Label printing page did not load within timeout");
+        await sleep(800);
+        var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+        var iframeWin = iframe.contentWindow;
+
+        setProgress("Label: Waiting for epoch selector...");
+        var epochSel = await pbWaitForElement(iframeDoc, "select[id*='epoch'], #epoch, select[name*='epoch']", 12000);
+        if (!epochSel) { await sleep(1500); iframeDoc = iframe.contentDocument || iframe.contentWindow.document; iframeWin = iframe.contentWindow; epochSel = iframeDoc.querySelector("select[id*='epoch'], #epoch, select[name*='epoch']"); }
+        if (epochSel) { setProgress("Label: Setting epoch..."); pbSelectByText(iframeDoc, iframeWin, epochSel, labelConfig.epoch); await sleep(800); }
+
+        iframeDoc = iframe.contentDocument || iframe.contentWindow.document; iframeWin = iframe.contentWindow;
+        var cohortSel = iframeDoc.querySelector("select[id*='cohort'], #cohort, select[name*='cohort']");
+        if (cohortSel) { setProgress("Label: Setting cohort..."); pbSelectByText(iframeDoc, iframeWin, cohortSel, labelConfig.cohort); await sleep(800); }
+
+        iframeDoc = iframe.contentDocument || iframe.contentWindow.document; iframeWin = iframe.contentWindow;
+        setProgress("Label: Searching for activity plan containing subject...");
+        var apSel = await pbWaitForElement(iframeDoc, "select[id*='activityPlan'], #activityPlan, select[name*='activityPlan']", 8000);
+        if (!apSel) { iframeDoc = iframe.contentDocument || iframe.contentWindow.document; iframeWin = iframe.contentWindow; apSel = iframeDoc.querySelector("select[id*='activityPlan'], #activityPlan"); }
+
+        var normalizedSubject = pbNormalizeSubjectNum(subjectNum);
+        var foundActivityPlan = false;
+        if (apSel) {
+            var apOpts = apSel.querySelectorAll("option");
+            for (var ai = 0; ai < apOpts.length; ai++) {
+                var apVal = (apOpts[ai].value || "").trim();
+                if (!apVal) continue;
+                setProgress("Label: Checking activity plan \u201c" + (apOpts[ai].textContent || apVal).trim() + "\u201d...");
+                pbSelectByValue(iframeDoc, iframeWin, apSel, apVal);
+                await sleep(800);
+                iframeDoc = iframe.contentDocument || iframe.contentWindow.document; iframeWin = iframe.contentWindow;
+                var caList = iframeDoc.querySelector("select[id*='cohortAssignment'], #cohortAssignments, select[name*='cohortAssignment']");
+                if (caList) {
+                    var caOpts = caList.querySelectorAll("option");
+                    for (var ci = 0; ci < caOpts.length; ci++) {
+                        var caText = pbNormalizeSubjectNum(caOpts[ci].textContent || caOpts[ci].value || "");
+                        if (caText.indexOf(normalizedSubject) !== -1 || normalizedSubject.indexOf(caText) !== -1) { foundActivityPlan = true; break; }
+                    }
+                }
+                if (foundActivityPlan) { setProgress("Label: Subject found in activity plan."); break; }
+            }
+            if (!foundActivityPlan) throw new Error("Subject \u201c" + subjectNum + "\u201d not found in any activity plan on the label printing page");
+        }
+
+        iframeDoc = iframe.contentDocument || iframe.contentWindow.document; iframeWin = iframe.contentWindow;
+
+        if (labelConfig.forms && labelConfig.forms.trim()) {
+            setProgress("Label: Selecting forms...");
+            var keywords = labelConfig.forms.split("\n").map(function(k) { return k.trim().toLowerCase(); }).filter(Boolean);
+            var formsSel = iframeDoc.querySelector("select[id*='forms'], #forms, select[multiple][id*='form'], select[name*='forms']");
+            if (formsSel) {
+                var anyMatch = false;
+                var formOpts = formsSel.querySelectorAll("option");
+                for (var fi = 0; fi < formOpts.length; fi++) {
+                    var ft = (formOpts[fi].textContent || "").toLowerCase().trim();
+                    for (var ki = 0; ki < keywords.length; ki++) {
+                        if (ft.indexOf(keywords[ki]) !== -1) { formOpts[fi].selected = true; anyMatch = true; break; }
+                    }
+                }
+                if (!anyMatch) log("PrintBarcodes: Label: no forms matched keywords, continuing");
+                formsSel.dispatchEvent(new Event("change", { bubbles: true }));
+                try { if (iframeWin.jQuery) iframeWin.jQuery(formsSel).trigger("change"); } catch(e) {}
+            }
+        }
+
+        await sleep(500);
+        iframeDoc = iframe.contentDocument || iframe.contentWindow.document; iframeWin = iframe.contentWindow;
+
+        setProgress("Label: Checking required select2 field...");
+        var s2Hidden = iframeDoc.querySelector("select.select2-hidden-accessible");
+        if (s2Hidden) {
+            var s2Val = (s2Hidden.value || "").trim();
+            if (!s2Val || s2Val === "0" || s2Val === "") {
+                throw new Error("A required field (select2 input) is empty after form selection. Please ensure the form populates this field before proceeding.");
+            }
+        }
+
+        iframeDoc = iframe.contentDocument || iframe.contentWindow.document; iframeWin = iframe.contentWindow;
+        setProgress("Label: Setting timepoints checkbox...");
+        var tpCb = iframeDoc.querySelector("input[type='checkbox'][id*='timepoint'], input[type='checkbox'][name*='timepoint'], input[type='checkbox'][id*='allTimepoint']");
+        if (tpCb && tpCb.checked !== labelConfig.includeAllTimepoints) { tpCb.click(); await sleep(200); }
+
+        iframeDoc = iframe.contentDocument || iframe.contentWindow.document; iframeWin = iframe.contentWindow;
+        setProgress("Label: Selecting all scheduled activities...");
+        var schedActSel = iframeDoc.querySelector("select[id*='scheduledActivit'], #scheduledActivities, select[name*='scheduledActivit']");
+        if (schedActSel) {
+            var saOpts = schedActSel.querySelectorAll("option");
+            for (var sai = 0; sai < saOpts.length; sai++) saOpts[sai].selected = true;
+            schedActSel.dispatchEvent(new Event("change", { bubbles: true }));
+            try { if (iframeWin.jQuery) iframeWin.jQuery(schedActSel).trigger("change"); } catch(e) {}
+        }
+
+        iframeDoc = iframe.contentDocument || iframe.contentWindow.document; iframeWin = iframe.contentWindow;
+        setProgress("Label: Setting transfer label action...");
+        var transferSel = iframeDoc.querySelector("select[id*='transfer'], #transferLabel, select[name*='transfer']");
+        if (transferSel) { pbSelectByText(iframeDoc, iframeWin, transferSel, labelConfig.transferAction); await sleep(300); }
+
+        iframeDoc = iframe.contentDocument || iframe.contentWindow.document; iframeWin = iframe.contentWindow;
+        setProgress("Label: Setting template...");
+        var templateSel = iframeDoc.querySelector("select[id*='template'], #template, select[name*='template']");
+        if (templateSel) { pbSelectByText(iframeDoc, iframeWin, templateSel, labelConfig.template); await sleep(300); }
+
+        iframeDoc = iframe.contentDocument || iframe.contentWindow.document; iframeWin = iframe.contentWindow;
+        setProgress("Label: Clicking Print...");
+        var printBtn = null;
+        var allBtns = iframeDoc.querySelectorAll("button, input[type='submit']");
+        for (var pbi = 0; pbi < allBtns.length; pbi++) {
+            var bText = (allBtns[pbi].textContent || allBtns[pbi].value || "").toLowerCase().trim();
+            if (bText === "print" || bText.indexOf("print") !== -1) { printBtn = allBtns[pbi]; break; }
+        }
+        if (printBtn) { printBtn.click(); await sleep(1500); log("PrintBarcodes: Label: Print clicked"); }
+        else { log("PrintBarcodes: Label: Print button not found"); }
+        setProgress("Label: Done.");
+    }
+
+    async function pbProcessBarcode(epochCohortPairs, subjectNum, iframe, setProgress) {
+        var normalizedSubject = pbNormalizeSubjectNum(subjectNum);
+        var foundSubject = false;
+        for (var pi = 0; pi < epochCohortPairs.length; pi++) {
+            var pair = epochCohortPairs[pi];
+            setProgress("Barcode: Navigating to barcode subjects page (pair " + (pi + 1) + "/" + epochCohortPairs.length + ")...");
+            var loaded = await pbNavigateIframe(iframe, PB_BARCODE_URL);
+            if (!loaded) throw new Error("Barcode subjects page did not load within timeout");
+            await sleep(600);
+            var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            var iframeWin = iframe.contentWindow;
+
+            setProgress("Barcode: Setting epoch \u201c" + pair.epoch + "\u201d...");
+            var epochSel = await pbWaitForElement(iframeDoc, "select[id*='epoch'], #epoch, select[name*='epoch']", 10000);
+            if (epochSel) { pbSelectByText(iframeDoc, iframeWin, epochSel, pair.epoch); await sleep(800); }
+
+            iframeDoc = iframe.contentDocument || iframe.contentWindow.document; iframeWin = iframe.contentWindow;
+            setProgress("Barcode: Setting cohort \u201c" + pair.cohort + "\u201d...");
+            var cohortSel = iframeDoc.querySelector("select[id*='cohort'], #cohort, select[name*='cohort']");
+            if (cohortSel) { pbSelectByText(iframeDoc, iframeWin, cohortSel, pair.cohort); await sleep(800); }
+
+            iframeDoc = iframe.contentDocument || iframe.contentWindow.document; iframeWin = iframe.contentWindow;
+            setProgress("Barcode: Searching for subject in subjects list...");
+            var subjectsSel = await pbWaitForElement(iframeDoc, "select[id*='subjects'], #subjects, select[name*='subjects']", 10000);
+            if (!subjectsSel) { log("PrintBarcodes: Barcode: subjects select not found for pair " + (pi + 1) + ", trying next"); continue; }
+            await sleep(400);
+            iframeDoc = iframe.contentDocument || iframe.contentWindow.document; iframeWin = iframe.contentWindow;
+            subjectsSel = iframeDoc.querySelector("select[id*='subjects'], #subjects, select[name*='subjects']");
+            if (!subjectsSel) continue;
+
+            var subOpts = subjectsSel.querySelectorAll("option");
+            var matchedVal = null;
+            for (var si = 0; si < subOpts.length; si++) {
+                var st = pbNormalizeSubjectNum(subOpts[si].textContent || subOpts[si].value || "");
+                if (st.indexOf(normalizedSubject) !== -1 || normalizedSubject.indexOf(st) !== -1) { matchedVal = subOpts[si].value; break; }
+            }
+            if (!matchedVal) { log("PrintBarcodes: Barcode: subject not found for pair " + (pi + 1) + ", trying next"); continue; }
+
+            foundSubject = true;
+            setProgress("Barcode: Subject found. Selecting...");
+            pbSelectByValue(iframeDoc, iframeWin, subjectsSel, matchedVal);
+            await sleep(400);
+
+            iframeDoc = iframe.contentDocument || iframe.contentWindow.document; iframeWin = iframe.contentWindow;
+            setProgress("Barcode: Setting printer to PDF (preview)...");
+            var printerSel = iframeDoc.querySelector("select[id*='printer'], #printer, select[name*='printer']");
+            if (printerSel) { pbSelectByText(iframeDoc, iframeWin, printerSel, "PDF (preview)"); await sleep(300); }
+
+            iframeDoc = iframe.contentDocument || iframe.contentWindow.document; iframeWin = iframe.contentWindow;
+            setProgress("Barcode: Clicking Print...");
+            var pBtns = iframeDoc.querySelectorAll("button, input[type='submit']");
+            var printBtn = null;
+            for (var pbi = 0; pbi < pBtns.length; pbi++) {
+                var bText = (pBtns[pbi].textContent || pBtns[pbi].value || "").toLowerCase().trim();
+                if (bText === "print" || bText.indexOf("print") !== -1) { printBtn = pBtns[pbi]; break; }
+            }
+            if (printBtn) { printBtn.click(); await sleep(1500); log("PrintBarcodes: Barcode: Print clicked"); }
+            break;
+        }
+        if (!foundSubject) throw new Error("Subject \u201c" + subjectNum + "\u201d not found in any epoch/cohort combination on the barcode printing page");
+        setProgress("Barcode: Done.");
+    }
+
+    function pbShowPrintBarcodesError(msg) {
+        var glass = isGlassTheme();
+        var overlay = document.createElement("div");
+        overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.65);z-index:2000001;display:flex;align-items:center;justify-content:center;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;";
+        var box = document.createElement("div");
+        box.style.cssText = "background:" + (glass ? "rgba(15,10,40,0.95)" : "#181818") + ";border:1px solid " + (glass ? "rgba(255,255,255,0.2)" : "#444") + ";border-radius:12px;padding:24px 28px;max-width:460px;width:90%;box-shadow:0 12px 40px rgba(0,0,0,0.5);display:flex;flex-direction:column;gap:14px;";
+        var ttl = document.createElement("div"); ttl.textContent = "Print Barcodes \u2014 Error"; ttl.style.cssText = "color:#ef4444;font-size:16px;font-weight:700;";
+        var body = document.createElement("div"); body.textContent = msg; body.style.cssText = "color:" + (glass ? "rgba(255,255,255,0.85)" : "#ccc") + ";font-size:13px;line-height:1.5;word-break:break-word;";
+        var okBtn = document.createElement("button"); okBtn.textContent = "OK";
+        okBtn.style.cssText = "background:#4a9fd4;color:#fff;border:none;border-radius:7px;padding:8px 24px;font-size:13px;font-weight:600;cursor:pointer;align-self:flex-end;";
+        okBtn.addEventListener("click", function() { overlay.remove(); });
+        box.appendChild(ttl); box.appendChild(body); box.appendChild(okBtn);
+        overlay.appendChild(box); document.body.appendChild(overlay);
+    }
+
+    function pbShowPrintBarcodesSuccess(msg) {
+        var glass = isGlassTheme();
+        var overlay = document.createElement("div");
+        overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.65);z-index:2000001;display:flex;align-items:center;justify-content:center;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;";
+        var box = document.createElement("div");
+        box.style.cssText = "background:" + (glass ? "rgba(15,10,40,0.95)" : "#181818") + ";border:1px solid " + (glass ? "rgba(255,255,255,0.2)" : "#444") + ";border-radius:12px;padding:24px 28px;max-width:460px;width:90%;box-shadow:0 12px 40px rgba(0,0,0,0.5);display:flex;flex-direction:column;gap:14px;";
+        var ttl = document.createElement("div"); ttl.textContent = "\u2713 Print Barcodes \u2014 Success"; ttl.style.cssText = "color:#10b981;font-size:16px;font-weight:700;";
+        var body = document.createElement("div"); body.textContent = msg; body.style.cssText = "color:" + (glass ? "rgba(255,255,255,0.85)" : "#ccc") + ";font-size:13px;line-height:1.5;";
+        var okBtn = document.createElement("button"); okBtn.textContent = "OK";
+        okBtn.style.cssText = "background:#10b981;color:#fff;border:none;border-radius:7px;padding:8px 24px;font-size:13px;font-weight:600;cursor:pointer;align-self:flex-end;";
+        okBtn.addEventListener("click", function() { overlay.remove(); });
+        box.appendChild(ttl); box.appendChild(body); box.appendChild(okBtn);
+        overlay.appendChild(box); document.body.appendChild(overlay);
+    }
+
     function createPopup(options) {
         var glass = isGlassTheme();
         if (glass) injectThemeStylesIfNeeded();
@@ -32811,8 +33811,8 @@
             openHelpPopup();
         });
 
-        rightControls.appendChild(settingsBtn);
         rightControls.appendChild(helpBtn);
+        rightControls.appendChild(settingsBtn);
         rightControls.appendChild(collapseBtn);
         rightControls.appendChild(closeBtn);
 
@@ -33160,10 +34160,27 @@
             await runDownloadDtsReport();
         });
 
+        var printBarcodesBtn = document.createElement("button");
+        printBarcodesBtn.textContent = "Print Barcodes";
+        printBarcodesBtn.style.background = "#0d9488";
+        printBarcodesBtn.style.color = "#fff";
+        printBarcodesBtn.style.border = "none";
+        printBarcodesBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        printBarcodesBtn.style.padding = scale(BUTTON_PADDING_PX);
+        printBarcodesBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
+        printBarcodesBtn.style.cursor = "pointer";
+        printBarcodesBtn.style.fontWeight = "500";
+        printBarcodesBtn.style.transition = "background 0.2s";
+        printBarcodesBtn.onmouseenter = function() { this.style.background = "#0f766e"; };
+        printBarcodesBtn.onmouseleave = function() { this.style.background = "#0d9488"; };
+        printBarcodesBtn.addEventListener("click", function() {
+            log("Print Barcodes: button clicked");
+            runPrintBarcodes();
+        });
 
         // Apply glassmorphism theme to all panel buttons if glass theme is active
         if (glass) {
-            var allPanelBtns = [svcBtn, runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, importFromLibBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, bplBtn, importEligBtn, findAeBtn, findFormAndEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, editStudyEventsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn, downloadDtsBtn];
+            var allPanelBtns = [svcBtn, runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, importFromLibBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, bplBtn, importEligBtn, findAeBtn, findFormAndEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, editStudyEventsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn, downloadDtsBtn, printBarcodesBtn];
             for (var gi = 0; gi < allPanelBtns.length; gi++) {
                 var gb = allPanelBtns[gi];
                 gb.className = "ie-btn-primary";
@@ -33200,6 +34217,7 @@
             { el: editStudyEventsBtn, label: "Edit Study Events List" },
             { el: svcBtn, label: "Set Visibility Condition" },
             { el: downloadDtsBtn, label: "Download DTS Report" },
+            { el: printBarcodesBtn, label: "Print Barcodes" },
             { el: pauseBtn, label: "Pause" },
             { el: clearLogsBtn, label: "Clear Logs" },
             { el: toggleLogsBtn, label: "Hide Logs" }

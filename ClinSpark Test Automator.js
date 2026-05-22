@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 4.1.0
+// @version 4.1.2
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -11433,25 +11433,6 @@
         if (HELP_MODAL_OPEN) return null;
         HELP_MODAL_OPEN = true;
 
-        var _g = (getThemeMode() === THEME_MODE_GLASS);
-        var tc = {
-            containerBg: _g ? "linear-gradient(135deg,#667eea 0%,#764ba2 100%)" : "#1a1a1a",
-            headerBg: _g ? "rgba(255,255,255,0.1)" : "#222",
-            headerBorder: _g ? "rgba(255,255,255,0.2)" : "#333",
-            sectionBorder: _g ? "rgba(255,255,255,0.15)" : "#2a2a2a",
-            closeBg: _g ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.1)",
-            textSec: _g ? "rgba(255,255,255,0.9)" : "#ccc",
-            textMuted: _g ? "rgba(255,255,255,0.65)" : "#999",
-            cardBg: _g ? "rgba(255,255,255,0.07)" : "#1f1f1f",
-            cardBorder: _g ? "rgba(255,255,255,0.14)" : "#2e2e2e",
-            cardHover: _g ? "rgba(255,255,255,0.13)" : "#272727",
-            inputBg: _g ? "rgba(15,10,40,0.6)" : "#2a2a2a",
-            inputBorder: _g ? "rgba(255,255,255,0.28)" : "#444",
-            inputText: _g ? "#e0e0ff" : "#fff",
-            accentColor: _g ? "#a78bfa" : "#7c6ddb",
-            sectionLabelBg: _g ? "rgba(255,255,255,0.1)" : "#252525"
-        };
-
         var helpSections = [
             {
                 title: "Study Setup",
@@ -11523,12 +11504,12 @@
         ];
 
         var overlay = document.createElement("div");
-        overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:30000;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;";
+        overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:30000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;";
 
-        var container = document.createElement("div");
-        container.setAttribute("role", "dialog");
-        container.setAttribute("aria-modal", "true");
-        container.style.cssText = "background:" + tc.containerBg + ";border-radius:12px;padding:0;width:580px;max-width:94%;box-shadow:0 15px 35px rgba(0,0,0,0.4);display:flex;flex-direction:column;max-height:90vh;";
+        var modal = document.createElement("div");
+        modal.setAttribute("role", "dialog");
+        modal.setAttribute("aria-modal", "true");
+        modal.style.cssText = "background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);border-radius:16px;box-shadow:0 25px 60px rgba(0,0,0,0.5);width:90vw;max-width:720px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;border:1px solid rgba(102,126,234,0.4);";
 
         function doClose() {
             if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
@@ -11538,45 +11519,33 @@
 
         overlay.addEventListener("click", function(e) { if (e.target === overlay) doClose(); });
 
-        var modalHeader = document.createElement("div");
-        modalHeader.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid " + tc.headerBorder + ";background:" + tc.headerBg + ";border-radius:12px 12px 0 0;flex-shrink:0;";
+        var mHeader = document.createElement("div");
+        mHeader.style.cssText = "padding:20px 24px;background:rgba(102,126,234,0.15);border-bottom:1px solid rgba(102,126,234,0.3);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;";
 
-        var titleWrap = document.createElement("div");
-        titleWrap.style.cssText = "display:flex;align-items:center;gap:8px;";
+        var mTitle = document.createElement("div");
+        mTitle.innerHTML = "<span style='font-size:20px;font-weight:700;color:white;'>ClinSpark Test Automator</span><span style='font-size:14px;color:rgba(255,255,255,0.6);margin-left:10px;'>Help Guide</span>";
 
-        var titleBadge = document.createElement("span");
-        titleBadge.textContent = "?";
-        titleBadge.style.cssText = "background:" + tc.accentColor + ";color:#fff;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;";
-
-        var titleText = document.createElement("h3");
-        titleText.textContent = "Help Guide";
-        titleText.style.cssText = "margin:0;color:white;font-size:16px;font-weight:600;";
-
-        titleWrap.appendChild(titleBadge);
-        titleWrap.appendChild(titleText);
-
-        var modalClose = document.createElement("button");
-        modalClose.innerHTML = "\u2715";
-        modalClose.setAttribute("type", "button");
-        modalClose.style.cssText = "background:" + tc.closeBg + ";border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all 0.3s ease;";
-        modalClose.onmouseover = function() { modalClose.style.background = "rgba(255,67,54,0.8)"; };
-        modalClose.onmouseout = function() { modalClose.style.background = tc.closeBg; };
-        modalClose.addEventListener("click", doClose);
-
-        modalHeader.appendChild(titleWrap);
-        modalHeader.appendChild(modalClose);
+        var closeX = document.createElement("button");
+        closeX.innerHTML = "\u2715";
+        closeX.setAttribute("type", "button");
+        closeX.style.cssText = "background:rgba(255,255,255,0.1);border:none;color:white;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px;flex-shrink:0;transition:background 0.2s;";
+        closeX.onmouseover = function() { closeX.style.background = "rgba(255,67,54,0.7)"; };
+        closeX.onmouseout = function() { closeX.style.background = "rgba(255,255,255,0.1)"; };
+        closeX.addEventListener("click", doClose);
+        mHeader.appendChild(mTitle);
+        mHeader.appendChild(closeX);
 
         var searchWrap = document.createElement("div");
-        searchWrap.style.cssText = "padding:10px 16px;border-bottom:1px solid " + tc.sectionBorder + ";flex-shrink:0;";
+        searchWrap.style.cssText = "padding:16px 24px;background:rgba(0,0,0,0.2);border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;";
 
         var searchInput = document.createElement("input");
         searchInput.type = "text";
         searchInput.setAttribute("placeholder", "Search features\u2026");
-        searchInput.style.cssText = "width:100%;box-sizing:border-box;padding:8px 12px;background:" + tc.inputBg + ";border:1px solid " + tc.inputBorder + ";border-radius:6px;color:" + tc.inputText + ";font-size:13px;outline:none;";
+        searchInput.style.cssText = "width:100%;box-sizing:border-box;background:rgba(255,255,255,0.08);border:1px solid rgba(102,126,234,0.4);color:white;border-radius:8px;padding:10px 14px;font-size:14px;outline:none;";
         searchWrap.appendChild(searchInput);
 
         var modalBody = document.createElement("div");
-        modalBody.style.cssText = "padding:12px 16px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:14px;";
+        modalBody.style.cssText = "overflow-y:auto;padding:20px 24px;flex:1;";
 
         function renderHelpSections(filterText) {
             modalBody.innerHTML = "";
@@ -11591,34 +11560,35 @@
                 }
                 if (vis.length === 0) continue;
                 hasAny = true;
-                var secEl = document.createElement("div");
-                var secLabel = document.createElement("div");
-                secLabel.textContent = sec.title.toUpperCase();
-                secLabel.style.cssText = "padding:5px 10px;background:" + tc.sectionLabelBg + ";border-radius:5px;margin-bottom:6px;font-size:10px;font-weight:700;letter-spacing:0.9px;color:" + tc.textSec + ";";
-                secEl.appendChild(secLabel);
+                var secTitle = document.createElement("div");
+                secTitle.textContent = sec.title;
+                secTitle.style.cssText = "color:rgba(120,140,255,1);font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px;";
+                modalBody.appendChild(secTitle);
+                var grid = document.createElement("div");
+                grid.style.cssText = "display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:24px;";
                 for (var vi = 0; vi < vis.length; vi++) {
                     (function(feat) {
                         var card = document.createElement("div");
-                        card.style.cssText = "padding:10px 12px;background:" + tc.cardBg + ";border:1px solid " + tc.cardBorder + ";border-radius:8px;margin-bottom:5px;transition:background 0.15s;";
-                        card.addEventListener("mouseenter", function() { this.style.background = tc.cardHover; });
-                        card.addEventListener("mouseleave", function() { this.style.background = tc.cardBg; });
+                        card.style.cssText = "background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:14px 16px;transition:border-color 0.2s;";
+                        card.onmouseover = function() { card.style.borderColor = "rgba(102,126,234,0.6)"; };
+                        card.onmouseout = function() { card.style.borderColor = "rgba(255,255,255,0.12)"; };
                         var lbl = document.createElement("div");
                         lbl.textContent = feat.label;
-                        lbl.style.cssText = "color:white;font-size:13px;font-weight:600;margin-bottom:4px;";
+                        lbl.style.cssText = "color:white;font-size:14px;font-weight:600;margin-bottom:6px;";
                         var descEl = document.createElement("div");
                         descEl.textContent = feat.desc;
-                        descEl.style.cssText = "color:" + tc.textMuted + ";font-size:12px;line-height:1.55;";
+                        descEl.style.cssText = "color:rgba(255,255,255,0.65);font-size:12px;line-height:1.5;";
                         card.appendChild(lbl);
                         card.appendChild(descEl);
-                        secEl.appendChild(card);
+                        grid.appendChild(card);
                     })(vis[vi]);
                 }
-                modalBody.appendChild(secEl);
+                modalBody.appendChild(grid);
             }
             if (!hasAny) {
                 var noRes = document.createElement("div");
                 noRes.textContent = "No features match your search.";
-                noRes.style.cssText = "color:" + (_g ? "rgba(255,255,255,0.45)" : "#666") + ";font-size:13px;text-align:center;padding:28px 0;";
+                noRes.style.cssText = "color:rgba(255,255,255,0.5);text-align:center;padding:40px;";
                 modalBody.appendChild(noRes);
             }
         }
@@ -11626,24 +11596,23 @@
         searchInput.addEventListener("input", function() { renderHelpSections(this.value); });
 
         var modalFooter = document.createElement("div");
-        modalFooter.style.cssText = "padding:10px 16px;border-top:1px solid " + tc.sectionBorder + ";flex-shrink:0;display:flex;justify-content:flex-end;";
+        modalFooter.style.cssText = "padding:14px 24px;background:rgba(0,0,0,0.2);border-top:1px solid rgba(255,255,255,0.08);flex-shrink:0;display:flex;justify-content:flex-end;";
 
         var footerCloseBtn = document.createElement("button");
         footerCloseBtn.textContent = "Close";
-        footerCloseBtn.style.cssText = "background:" + tc.closeBg + ";border:1px solid " + tc.headerBorder + ";color:white;padding:7px 22px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;transition:background 0.2s;";
-        footerCloseBtn.onmouseover = function() { footerCloseBtn.style.background = "rgba(255,255,255,0.2)"; };
-        footerCloseBtn.onmouseout = function() { footerCloseBtn.style.background = tc.closeBg; };
+        footerCloseBtn.style.cssText = "background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border:none;color:white;padding:10px 28px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;";
         footerCloseBtn.addEventListener("click", doClose);
         modalFooter.appendChild(footerCloseBtn);
 
-        container.appendChild(modalHeader);
-        container.appendChild(searchWrap);
-        container.appendChild(modalBody);
-        container.appendChild(modalFooter);
-        overlay.appendChild(container);
+        modal.appendChild(mHeader);
+        modal.appendChild(searchWrap);
+        modal.appendChild(modalBody);
+        modal.appendChild(modalFooter);
+        overlay.appendChild(modal);
         document.body.appendChild(overlay);
 
         renderHelpSections("");
+        setTimeout(function() { searchInput.focus(); }, 50);
 
         function handleHelpKey(e) { if (e.key === "Escape") doClose(); }
         document.addEventListener("keydown", handleHelpKey);
@@ -30075,6 +30044,7 @@
                 if (actionable) {
                     log("Run Form V2: filling single rowId=" + String(rowId));
                     await fillSingleItemControl(td);
+                    await fillAuditAnnotationIfPresent(tr);
                     if (rowId && rowId.length > 0) {
                         filledIds[rowId] = true;
                     }
@@ -30452,6 +30422,57 @@
 
 
         log("Run Form: itemControl has no known actionable inputs; skipping");
+    }
+
+    // After filling an item value, fill Audit and Annotation inputs on the same row if present.
+    async function fillAuditAnnotationIfPresent(tr) {
+        if (!tr) {
+            return;
+        }
+        var auditInput = tr.querySelector("input.auditReasonForChange.collectInput");
+        if (!auditInput) {
+            return;
+        }
+        log("Run Form: audit/annotation inputs detected on row");
+        var auditSet = false;
+        if (window.jQuery && window.jQuery.fn && window.jQuery.fn.select2) {
+            try {
+                var jqAudit = window.jQuery("#" + auditInput.id);
+                if (jqAudit.length > 0) {
+                    jqAudit.select2("val", "Data clarification");
+                    jqAudit.trigger("change");
+                    auditSet = true;
+                    log("Run Form: audit set via jQuery select2 API");
+                }
+            } catch (jqErr) {
+                log("Run Form: jQuery select2 API error: " + String(jqErr));
+            }
+        }
+        if (!auditSet) {
+            auditInput.value = "Data clarification";
+            var auditChangeEvt = new Event("change", { bubbles: true });
+            auditInput.dispatchEvent(auditChangeEvt);
+            var auditS2 = tr.querySelector("div.select2-container.auditReasonForChange");
+            if (auditS2) {
+                var chosenSpan = auditS2.querySelector("span.select2-chosen");
+                if (chosenSpan) {
+                    chosenSpan.textContent = "Data clarification";
+                }
+                var choiceAnchor = auditS2.querySelector("a.select2-choice");
+                if (choiceAnchor) {
+                    choiceAnchor.classList.remove("select2-default");
+                }
+            }
+            auditSet = true;
+            log("Run Form: audit set via direct input assignment");
+        }
+        var annotationInput = tr.querySelector("input.annotationInput.collectInput");
+        if (annotationInput) {
+            annotationInput.value = "Test";
+            var annotEvt = new Event("input", { bubbles: true });
+            annotationInput.dispatchEvent(annotEvt);
+            log("Run Form: annotation set to Test");
+        }
     }
 
     // Extract the numeric item row id from a row element's id.
@@ -31864,9 +31885,10 @@
         
             // Search type — use Existing Cohort Assignments for non-screening (same subject)
             var searchSel = await waitForSelector('select#cohortAssignmentSearch', 5000);
-            if (searchSel && searchSel.value !== "Existing") {
-                searchSel.value = "Existing";
+            if (searchSel && searchSel.value !== "AllVolunteers") {
+                searchSel.value = "AllVolunteers";
                 searchSel.dispatchEvent(new Event("change", { bubbles: true }));
+                log("Non-scrn: Volunteer Source set to All Active Volunteers");
                 await sleep(500);
             }
         
@@ -40312,8 +40334,8 @@
             openHelpPopup();
         });
 
-        rightControls.appendChild(settingsBtn);
         rightControls.appendChild(helpBtn);
+        rightControls.appendChild(settingsBtn);
         rightControls.appendChild(collapseBtn);
         rightControls.appendChild(closeBtn);
 

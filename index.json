@@ -378,13 +378,6 @@
     "updated": "2026-03-02"
   },
   {
-    "id": "M-061",
-    "title": "Average DBP or DIA, SBP or SYS, Heart Rate (REPEAT)",
-    "tags": ["Average"],
-    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20DBP%20or%20DIA%2C%20SBP%20or%20SYS%2C%20Heart%20Rate%20(REPEAT).md",
-    "updated": "2026-03-04"
-  },
-  {
     "id": "M-062",
     "title": "Protocol Check Average Vital Signs Range SYS, DIA (BOTH)",
     "tags": ["Protocol", "Protocol"],
