@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.5.8
+// @version     2.5.9
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -3832,6 +3832,7 @@
     var IFL_STORAGE_STUDIES_CACHE = "ifl.studiesCache";
     var IFL_STORAGE_FULLSCREEN = "ifl.fullscreen";
     var IFL_STORAGE_DIVIDERS = "ifl.dividerWidths";
+    var IFL_STORAGE_SELECTIONS = "ifl.selections";
     var IFL_MIN_PANEL_WIDTH = 120;
     var IFL_MAX_PANEL_WIDTH_RATIO = 0.6;
     var IFL_DIVIDER_WIDTH = 6;
@@ -3983,7 +3984,7 @@
 
     function ifl_clearImportState() {
         try { localStorage.removeItem(IFL_STORAGE_IMPORT_STATE); } catch (e) {}
-        try { localStorage.removeItem(IFL_STORAGE_STUDIES_CACHE); } catch (e) {}
+        // Studies cache is intentionally kept — use Re-scan Library to refresh it
     }
 
     function ifl_saveStudiesCache(studies) {
@@ -3996,6 +3997,34 @@
             if (raw) return JSON.parse(raw);
         } catch (e) {}
         return null;
+    }
+
+    function ifl_clearStudiesCache() {
+        try { localStorage.removeItem(IFL_STORAGE_STUDIES_CACHE); } catch (e) {}
+    }
+
+    function ifl_saveSelections(formItems) {
+        try {
+            var sel = {};
+            for (var i = 0; i < formItems.length; i++) {
+                if (formItems[i].selected) {
+                    sel[formItems[i].studyValue + "|" + formItems[i].formValue] = true;
+                }
+            }
+            localStorage.setItem(IFL_STORAGE_SELECTIONS, JSON.stringify(sel));
+        } catch (e) {}
+    }
+
+    function ifl_loadSelections() {
+        try {
+            var raw = localStorage.getItem(IFL_STORAGE_SELECTIONS);
+            if (raw) return JSON.parse(raw);
+        } catch (e) {}
+        return {};
+    }
+
+    function ifl_clearSelections() {
+        try { localStorage.removeItem(IFL_STORAGE_SELECTIONS); } catch (e) {}
     }
 
     // ---- IFL itemGroupsDiv helpers ----
@@ -4190,6 +4219,100 @@
             log("IFL: removed background iframe");
         }
         iflBgTab = null;
+    }
+
+    async function ifl_rescanStudyFormsViaBgTab(studyValue) {
+        if (!iflBgTab || iflBgTab.closed) {
+            log("IFL: rescanStudyForms \u2014 bg tab not available");
+            return null;
+        }
+        var bgDoc;
+        try { bgDoc = iflBgTab.document; } catch (e) {
+            log("IFL: rescanStudyForms \u2014 cannot access bg tab document: " + e);
+            return null;
+        }
+
+        // Ensure modal is open in bg tab
+        var studySel = bgDoc.getElementById(IFL_STUDY_SELECT_ID);
+        if (!studySel) {
+            var reopenLink = bgDoc.querySelector('a[href*="' + IFL_IMPORT_LINK_HREF + '"]');
+            if (reopenLink) {
+                reopenLink.click();
+                var reopenStart = Date.now();
+                while (Date.now() - reopenStart < IFL_MODAL_TIMEOUT) {
+                    studySel = bgDoc.getElementById(IFL_STUDY_SELECT_ID);
+                    if (studySel) break;
+                    await sleep(IFL_SELECT_POLL_INTERVAL);
+                }
+            }
+            if (!studySel) {
+                log("IFL: rescanStudyForms \u2014 bg tab modal failed to open");
+                return null;
+            }
+        }
+
+        // Select the study in bg tab
+        studySel.value = studyValue;
+        var evtChange = new Event("change", { bubbles: true });
+        studySel.dispatchEvent(evtChange);
+        try { if (iflBgTab.jQuery) iflBgTab.jQuery(studySel).trigger("change"); } catch (e) {}
+        log("IFL: rescanStudyForms \u2014 selected study=" + studyValue);
+        await sleep(300);
+
+        // Wait for form dropdown to populate
+        var scanStart = Date.now();
+        var populated = false;
+        var lastCount = -1;
+        var stableCount = 0;
+        while (Date.now() - scanStart < IFL_FORM_POPULATE_TIMEOUT) {
+            var formSel = bgDoc.getElementById(IFL_FORM_SELECT_ID);
+            if (formSel) {
+                var opts = formSel.querySelectorAll("option");
+                var realOpts = 0;
+                for (var oi = 0; oi < opts.length; oi++) {
+                    if (opts[oi].value && opts[oi].value !== "") realOpts++;
+                }
+                if (realOpts > 0) {
+                    if (realOpts === lastCount) {
+                        stableCount++;
+                        if (stableCount >= 2) { populated = true; break; }
+                    } else { stableCount = 0; }
+                    lastCount = realOpts;
+                }
+            }
+            await sleep(IFL_SELECT_POLL_INTERVAL);
+        }
+        if (!populated) {
+            var fs2 = bgDoc.getElementById(IFL_FORM_SELECT_ID);
+            if (fs2) {
+                var opts2 = fs2.querySelectorAll("option");
+                for (var oi2 = 0; oi2 < opts2.length; oi2++) {
+                    if (opts2[oi2].value && opts2[oi2].value !== "") { populated = true; break; }
+                }
+            }
+        }
+        if (!populated) {
+            log("IFL: rescanStudyForms \u2014 form dropdown did not populate for study=" + studyValue);
+            return [];
+        }
+
+        // Read form options with deduplication by value+text key
+        var formSelFinal = bgDoc.getElementById(IFL_FORM_SELECT_ID);
+        if (!formSelFinal) return [];
+        var allOpts = formSelFinal.querySelectorAll("option");
+        var results = [];
+        var seen = {};
+        for (var i = 0; i < allOpts.length; i++) {
+            if (allOpts[i].value && allOpts[i].value !== "") {
+                var dedupKey = allOpts[i].value + "|" + allOpts[i].textContent.trim();
+                if (!seen[dedupKey]) {
+                    seen[dedupKey] = true;
+                    results.push({ value: allOpts[i].value, text: allOpts[i].textContent.trim() });
+                }
+            }
+        }
+        log("IFL: rescanStudyForms \u2014 collected " + results.length + " unique forms for study=" + studyValue);
+        return results;
     }
 
     async function ifl_syncModalToFormViaBgTab(item) {
@@ -4448,6 +4571,7 @@
         if (glass) injectThemeStylesIfNeeded();
 
         // State
+        var savedSelections = ifl_loadSelections();
         var formItems = [];
         for (var si = 0; si < studies.length; si++) {
             for (var fi = 0; fi < studies[si].forms.length; fi++) {
@@ -4458,7 +4582,7 @@
                     formValue: studies[si].forms[fi].value,
                     originalName: studies[si].forms[fi].text,
                     newName: studies[si].forms[fi].text,
-                    selected: false,
+                    selected: savedSelections[studies[si].value + "|" + studies[si].forms[fi].value] || false,
                     lockOnSave: true,
                     itemGroups: null
                 });
@@ -4731,9 +4855,21 @@
         showSelBtn.style.cssText = "background:" + tc.surface + ";border:1px solid " + tc.border + ";color:white;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;";
         showSelBtn.onmouseover = function() { showSelBtn.style.background = tc.surfaceHover; };
         showSelBtn.onmouseout = function() { showSelBtn.style.background = showSelectedOnly ? tc.accent : tc.surface; };
+        var rescanLibBtn = document.createElement("button");
+        rescanLibBtn.textContent = "Re-scan Library";
+        rescanLibBtn.style.cssText = "background:" + tc.surface + ";border:1px solid " + tc.border + ";color:white;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;";
+        rescanLibBtn.onmouseover = function() { rescanLibBtn.style.background = tc.surfaceHover; };
+        rescanLibBtn.onmouseout = function() { rescanLibBtn.style.background = tc.surface; };
+        var clearSelBtn = document.createElement("button");
+        clearSelBtn.textContent = "Clear Selection";
+        clearSelBtn.style.cssText = "background:" + tc.surface + ";border:1px solid " + tc.border + ";color:white;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;";
+        clearSelBtn.onmouseover = function() { clearSelBtn.style.background = tc.surfaceHover; };
+        clearSelBtn.onmouseout = function() { clearSelBtn.style.background = tc.surface; };
         var selCount = document.createElement("span");
         selCount.style.cssText = "color:" + tc.textMuted + ";font-size:12px;";
         footerLeft.appendChild(showSelBtn);
+        footerLeft.appendChild(rescanLibBtn);
+        footerLeft.appendChild(clearSelBtn);
         footerLeft.appendChild(selCount);
 
         var confirmBtn = document.createElement("button");
@@ -4824,7 +4960,69 @@
                 var hdrArrow = document.createElement("span");
                 hdrArrow.textContent = isCollapsed ? "\u25B6" : "\u25BC";
                 hdrArrow.style.cssText = "color:" + tc.textMuted + ";font-size:10px;flex-shrink:0;margin-left:8px;";
+                var rescanFormsBtn = document.createElement("button");
+                rescanFormsBtn.textContent = "\u21BB";
+                rescanFormsBtn.title = "Re-scan forms for this study";
+                rescanFormsBtn.style.cssText = "background:transparent;border:1px solid " + tc.border + ";color:" + tc.textMuted + ";border-radius:4px;padding:0 5px;font-size:11px;line-height:16px;cursor:pointer;flex-shrink:0;margin-left:6px;";
+                rescanFormsBtn.onmouseover = function() { this.style.background = tc.surfaceHover; this.style.color = tc.text; };
+                rescanFormsBtn.onmouseout = function() { this.style.background = "transparent"; this.style.color = tc.textMuted; };
+                rescanFormsBtn.onclick = (function(studyVal, studyObj, btn) {
+                    return function(e) {
+                        e.stopPropagation();
+                        btn.textContent = "\u231B";
+                        btn.disabled = true;
+                        ifl_rescanStudyFormsViaBgTab(studyVal).then(function(newForms) {
+                            btn.textContent = "\u21BB";
+                            btn.disabled = false;
+                            if (!newForms || newForms.length === 0) {
+                                log("IFL: Re-scan Forms found nothing for study=" + studyVal);
+                                return;
+                            }
+                            // Preserve existing selected+renamed state for matching form values
+                            var existingByKey = {};
+                            for (var ei = 0; ei < formItems.length; ei++) {
+                                if (formItems[ei].studyValue === studyVal) {
+                                    existingByKey[formItems[ei].formValue] = formItems[ei];
+                                }
+                            }
+                            // Remove old entries for this study
+                            for (var ri2 = formItems.length - 1; ri2 >= 0; ri2--) {
+                                if (formItems[ri2].studyValue === studyVal) {
+                                    formItems.splice(ri2, 1);
+                                }
+                            }
+                            // Add freshly scanned forms
+                            for (var nfi = 0; nfi < newForms.length; nfi++) {
+                                var existing = existingByKey[newForms[nfi].value];
+                                formItems.push({
+                                    studyName: studyObj.text,
+                                    studyValue: studyVal,
+                                    formName: newForms[nfi].text,
+                                    formValue: newForms[nfi].value,
+                                    originalName: newForms[nfi].text,
+                                    newName: existing ? existing.newName : newForms[nfi].text,
+                                    selected: existing ? existing.selected : false,
+                                    lockOnSave: existing ? existing.lockOnSave : true,
+                                    itemGroups: existing ? existing.itemGroups : null
+                                });
+                            }
+                            // Update study object forms list in the studies array
+                            studyObj.forms = newForms;
+                            // Persist updated cache
+                            ifl_saveStudiesCache(studies);
+                            ifl_saveSelections(formItems);
+                            log("IFL: Re-scan Forms updated " + newForms.length + " forms for study=" + studyVal);
+                            renderMidPanel();
+                            updateConfirmState();
+                        }).catch(function(err) {
+                            btn.textContent = "\u21BB";
+                            btn.disabled = false;
+                            log("IFL: Re-scan Forms error for study=" + studyVal + " \u2014 " + String(err));
+                        });
+                    };
+                })(sVal, studies[si3], rescanFormsBtn);
                 hdr.appendChild(hdrLabel);
+                hdr.appendChild(rescanFormsBtn);
                 hdr.appendChild(hdrArrow);
                 hdr.onclick = (function(val) {
                     return function() { collapsed[val] = !collapsed[val]; renderMidPanel(); };
@@ -4874,6 +5072,7 @@
                         cb.onclick = function(e) { e.stopPropagation(); };
                         cb.onchange = function() {
                             fItem.selected = cb.checked;
+                            ifl_saveSelections(formItems);
                             updateConfirmState();
                         };
 
@@ -5046,6 +5245,31 @@
             showSelBtn.textContent = showSelectedOnly ? "Show All" : "Show Selected";
             showSelBtn.style.background = showSelectedOnly ? tc.accent : tc.surface;
             renderMidPanel();
+        };
+
+        rescanLibBtn.onclick = function() {
+            // Dismiss current GUI, clear cache, and do a full re-scan
+            ifl_closeBgTab();
+            document.removeEventListener("mousemove", onDragMove);
+            document.removeEventListener("mouseup", onDragEnd);
+            document.removeEventListener("keydown", escHandler, true);
+            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            ifl_clearStudiesCache();
+            log("IFL: Re-scan Library triggered by user");
+            var onGUIConfirm = function(selectedItems) {
+                ifl_processImports(selectedItems, 0, null);
+            };
+            ifl_runFullScan(onGUIConfirm);
+        };
+
+        clearSelBtn.onclick = function() {
+            for (var ci = 0; ci < formItems.length; ci++) {
+                formItems[ci].selected = false;
+            }
+            ifl_clearSelections();
+            renderMidPanel();
+            updateConfirmState();
+            log("IFL: all selections cleared");
         };
 
         hClose.onclick = function() {
@@ -5638,25 +5862,10 @@
         ifl_processImports(saved.items, nextIdx, saved.statuses);
     }
 
-    // ---- Main entry point ----
+    // ---- Full library scan (used by initial load and Re-scan Library button) ----
 
-    async function runImportFromLibrary() {
-        log("IFL: Import from Library started");
-        IFL_CANCELED = false;
-
-        // Page check
-        if (!isOnImportFromLibraryPage()) {
-            createPopup({
-                title: "Import from Library",
-                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">\u26A0\uFE0F Wrong Page</p><p>You must be on the Study Library Forms page to use this feature.</p><p style="margin-top:12px;font-size:12px;color:#ffffffff;word-wrap:break-word;word-break:break-all;">Required URL:<br>' + IFL_VALID_URLS[0] + '<br>or<br>' + IFL_VALID_URLS[1] + '</p></div>',
-                width: "450px",
-                height: "auto"
-            });
-            log("IFL: wrong page \u2014 " + location.href);
-            return;
-        }
-
-        // Open background tab immediately (before first await to preserve user gesture for popup)
+    async function ifl_runFullScan(onGUIConfirm) {
+        // Open background tab immediately
         ifl_openBgTabWindow();
 
         // Open import modal
@@ -5691,27 +5900,65 @@
             return;
         }
 
-        // Cache studies for potential resume
+        // Save cache for future sessions
         ifl_saveStudiesCache(studies);
 
         // Close the main tab modal
         await ifl_closeImportModal();
 
         // Wait for background tab to be ready with its modal open
-        // (overlay stays visible — user sees "Collecting data" while bg tab loads)
         collecting.setMessage("Preparing background worker\u2026");
         var bgReady = await ifl_waitForBgTabReady();
         if (!bgReady) {
-            log("IFL: bg tab not ready — item group loading will fall back to main tab");
+            log("IFL: bg tab not ready \u2014 item group loading will fall back to main tab");
         }
 
-        // Remove "Collecting data" overlay right before showing selection GUI
+        // Remove collecting overlay and show selection GUI
         collecting.close();
+        ifl_buildSelectionGUI(studies, onGUIConfirm);
+    }
 
-        // Show selection GUI
-        ifl_buildSelectionGUI(studies, function(selectedItems) {
+    // ---- Main entry point ----
+
+    async function runImportFromLibrary() {
+        log("IFL: Import from Library started");
+        IFL_CANCELED = false;
+
+        // Page check
+        if (!isOnImportFromLibraryPage()) {
+            createPopup({
+                title: "Import from Library",
+                content: '<div style="text-align:center;padding:20px;"><p style="color:#ff6b6b;font-size:16px;margin-bottom:12px;">\u26A0\uFE0F Wrong Page</p><p>You must be on the Study Library Forms page to use this feature.</p><p style="margin-top:12px;font-size:12px;color:#ffffffff;word-wrap:break-word;word-break:break-all;">Required URL:<br>' + IFL_VALID_URLS[0] + '<br>or<br>' + IFL_VALID_URLS[1] + '</p></div>',
+                width: "450px",
+                height: "auto"
+            });
+            log("IFL: wrong page \u2014 " + location.href);
+            return;
+        }
+
+        var onGUIConfirm = function(selectedItems) {
             ifl_processImports(selectedItems, 0, null);
-        });
+        };
+
+        // Use cached studies if available — skip the lengthy initial scan
+        var cachedStudies = ifl_loadStudiesCache();
+        if (cachedStudies && cachedStudies.length > 0) {
+            log("IFL: found cached library data (" + cachedStudies.length + " studies) \u2014 skipping scan");
+            ifl_openBgTabWindow();
+            var collectingCache = createCollectingOverlay("Loading Library", "Restoring library data from cache\u2026");
+            collectingCache.setMessage("Preparing background worker\u2026");
+            var bgReadyCache = await ifl_waitForBgTabReady();
+            if (!bgReadyCache) {
+                log("IFL: bg tab not ready \u2014 item group loading will fall back to main tab");
+            }
+            collectingCache.close();
+            ifl_buildSelectionGUI(cachedStudies, onGUIConfirm);
+            return;
+        }
+
+        // No cache found \u2014 perform full library scan
+        log("IFL: no cached data \u2014 performing full library scan");
+        await ifl_runFullScan(onGUIConfirm);
     }
 
     //==========================
