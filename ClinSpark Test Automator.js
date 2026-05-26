@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 4.1.3
+// @version 4.1.4
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -31901,13 +31901,30 @@
                 log("Non-scrn: ActivityPlan chosen value=" + String(chosen.value) + " (used=" + String(usedPlans.length + 1) + ")");
             }
         
-            // Search type — use Existing Cohort Assignments for non-screening (same subject)
+            // Search type — prefer AllVolunteers; fallback to Existing Cohort Assignments
+            var usedExistingSource = false;
             var searchSel = await waitForSelector('select#cohortAssignmentSearch', 5000);
-            if (searchSel && searchSel.value !== "AllVolunteers") {
-                searchSel.value = "AllVolunteers";
-                searchSel.dispatchEvent(new Event("change", { bubbles: true }));
-                log("Non-scrn: Volunteer Source set to All Active Volunteers");
-                await sleep(500);
+            if (searchSel) {
+                var volOpts = searchSel.querySelectorAll("option");
+                var hasAllVolunteers = false;
+                var voi = 0;
+                while (voi < volOpts.length) {
+                    if ((volOpts[voi].value + "").trim() === "AllVolunteers") {
+                        hasAllVolunteers = true;
+                        break;
+                    }
+                    voi = voi + 1;
+                }
+                var targetVolSrc = hasAllVolunteers ? "AllVolunteers" : "Existing";
+                usedExistingSource = targetVolSrc === "Existing";
+                if (searchSel.value !== targetVolSrc) {
+                    searchSel.value = targetVolSrc;
+                    searchSel.dispatchEvent(new Event("change", { bubbles: true }));
+                    log("Non-scrn: Volunteer Source set to " + (hasAllVolunteers ? "All Active Volunteers" : "Existing Cohort Assignments"));
+                    await sleep(500);
+                } else {
+                    log("Non-scrn: Volunteer Source already " + targetVolSrc);
+                }
             }
         
             // --- DATEPICKER (detect presence in modal regardless of epoch source flags) ---
@@ -31946,12 +31963,13 @@
                 }
             }
         
-            // --- SUBJECT NUMBER INPUT (for epochs with leadIn/randomization that are NOT the first) ---
-            if ((flags.sourceLeadIn || flags.sourceRandomization) && activityPlanIndex > 0) {
-                var primarySubjNum = getPrimaryLinkedSubjectNumber();
+            // --- SUBJECT NUMBER INPUT ---
+            if (usedExistingSource || ((flags.sourceLeadIn || flags.sourceRandomization) && activityPlanIndex > 0)) {
+                var primarySubjNum = usedExistingSource
+                    ? (getStoredSubjectNumber() || getPrimaryLinkedSubjectNumber())
+                    : getPrimaryLinkedSubjectNumber();
                 if (primarySubjNum) {
-                    // Look for Subject Number input in the modal
-                    var subjInput = modal.querySelector('input#subjectNumber');
+                    var subjInput = await waitForSelector('input#subjectNumber', 3000);
                     if (!subjInput) {
                         subjInput = modal.querySelector('input[name="subjectNumber"]');
                     }
