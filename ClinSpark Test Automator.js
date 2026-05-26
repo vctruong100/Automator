@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 4.1.2
+// @version 4.1.3
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -30059,6 +30059,24 @@
                 break;
             }
             safety = safety + 1;
+        }
+        var auditSweepRows = containerEl.querySelectorAll("tr[id^=\"itemDataCollectRow_\"]");
+        var asi = 0;
+        while (asi < auditSweepRows.length) {
+            var atr = auditSweepRows[asi];
+            var aRowId = getItemRowId(atr);
+            if (!filledIds[aRowId]) {
+                var aStyle = atr.getAttribute("style") || "";
+                var aVisible = aStyle.indexOf("display: table-row") !== -1 || aStyle.trim().length === 0;
+                var aHidden = aStyle.indexOf("display: none") !== -1;
+                if (aVisible && !aHidden) {
+                    var hasAuditInput = atr.querySelector("input.auditReasonForChange.collectInput");
+                    if (hasAuditInput) {
+                        await fillAuditAnnotationIfPresent(atr);
+                    }
+                }
+            }
+            asi = asi + 1;
         }
     }
 
