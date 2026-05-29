@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.6.4
+// @version     2.6.7
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -32564,7 +32564,34 @@
     var PB_BARCODE_URL = "https://cenexel.clinspark.com/secure/barcodeprinting/subjects";
 
     var PB_LABEL_TEMPLATES = [
-        "GenX", "GenX Small", "GenX Mini", "Brady", "Zebra", "Dymo", "Avery"
+        "GenX",
+        "GenX Small",
+        "COVID Swab",
+        "Void Barcode",
+        "GenX Aliquot",
+        "Collection Tube_SCN",
+        "Collection Tube_RND",
+        "Dosing Label_RND",
+        "BMS CN0140001 Aliquot",
+        "Flow Cytometry",
+        "Ensho Aliquot",
+        "Ensho Bulk Collection",
+        "Ensho Bulk Aliquot",
+        "Genentech ISL",
+        "Urine Jug Barcode",
+        "Merck MK-4082-002 Collection Tube",
+        "Abbvie Aliquot w/o Barcode",
+        "Abbvie Aliquot w/Barcode",
+        "Gilead 6974 Aliquot",
+        "Gilead 6974 Urine Jug",
+        "Rapport Aliquot",
+        "Amgen 20230259/20210268",
+        "Amgen v2",
+        "GenX Mini",
+        "Brady",
+        "Zebra",
+        "Dymo",
+        "Avery"
     ];
 
     var PB_TRANSFER_ACTIONS = [
@@ -33418,15 +33445,24 @@
                     return;
                 }
 
-                var iframe = pbGetIframe();
                 if (!PRINT_BARCODES_CANCELLED && doBarcode) {
-                    setProgress("Processing Barcode...");
-                    await pbProcessBarcode(PRINT_BARCODES_EPOCH_COHORT_PAIRS, PRINT_BARCODES_SUBJECT_NUM, iframe, setProgress);
-                }
-                if (!PRINT_BARCODES_CANCELLED) {
+                    // Navigate the main window to the barcode printing page; auto-fill runs on page load.
+                    var barcodeOnlyState = {
+                        subjectNum: PRINT_BARCODES_SUBJECT_NUM,
+                        epochCohortPairs: PRINT_BARCODES_EPOCH_COHORT_PAIRS,
+                        ts: Date.now()
+                    };
+                    try {
+                        localStorage.setItem(STORAGE_PB_BARCODE_PENDING, JSON.stringify(barcodeOnlyState));
+                        localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_PRINT_BARCODES_BARCODE);
+                    } catch(e) {}
+                    log("PrintBarcodes: navigating to barcode printing page...");
                     overlay.remove();
-                    pbShowPrintBarcodesSuccess("Print Barcodes completed successfully!");
-                    log("PrintBarcodes: completed successfully");
+                    mainContainer.style.position = origPos;
+                    PRINT_BARCODES_RUNNING = false;
+                    if (PRINT_BARCODES_POPUP_REF) { try { PRINT_BARCODES_POPUP_REF.close(); } catch(e) {} PRINT_BARCODES_POPUP_REF = null; }
+                    window.location.href = PB_BARCODE_URL;
+                    return;
                 }
             } catch (err) {
                 log("PrintBarcodes: processing error: " + String(err));
@@ -33579,6 +33615,20 @@
         return null;
     }
 
+    // Locate a Print button: prefer #printButton, otherwise match by visible text.
+    function pbFindPrintButton(root) {
+        var doc = root || document;
+        var byId = doc.querySelector("#printButton");
+        if (byId && !byId.disabled) return byId;
+        var btns = doc.querySelectorAll("button, input[type='submit'], input[type='button'], a.btn");
+        for (var i = 0; i < btns.length; i++) {
+            if (btns[i].disabled) continue;
+            var t = (btns[i].textContent || btns[i].value || "").toLowerCase().trim();
+            if (t === "print" || t.indexOf("print") !== -1) return btns[i];
+        }
+        return byId || null;
+    }
+
     async function pbWaitForSelect2Opts(selectId, timeoutMs) {
         var start = Date.now(); timeoutMs = timeoutMs || 8000;
         while (Date.now() - start < timeoutMs) {
@@ -33630,6 +33680,24 @@
             }
             return null;
         } catch(e) { return null; }
+    }
+
+    // Select2 v3: set selection on widget + underlying <select> WITHOUT firing a change event,
+    // so the dependent-field cascade (forms/items/timepoints) is not re-triggered and does not
+    // clear this field. Falls back to plain .val() if the Select2 plugin is unavailable.
+    function pbSelect2SetValueSilent(selectId, vals) {
+        try {
+            var jq = window.jQuery;
+            if (!jq) return false;
+            var $sel = jq("#" + selectId);
+            if (!$sel.length) return false;
+            var done = false;
+            if (typeof $sel.select2 === "function") {
+                try { $sel.select2("val", vals); done = true; } catch(e) {}
+            }
+            if (!done) $sel.val(vals);
+            return true;
+        } catch(e) { return false; }
     }
 
     async function pbAutoFillLabelPage(pendingState) {
@@ -33694,9 +33762,10 @@
             }
             if (!foundActivityPlan) log("PrintBarcodes Label: subject not found in any activity plan, using current selection");
 
-            // 4. Cohort assignments (Select2 hidden) — select matching subject or all
+            // 4. Cohort assignments (Select2 hidden) — trigger change so forms/items cascade loads
             setProgress("Selecting cohort assignment\u2026");
             var caReady = await pbWaitForSelect2Opts("cohortAssignments", 5000);
+            var normalizedSubjectForReassert = normalizedSubject;
             if (caReady) {
                 var subjectVal = pbSelect2FindSubject("cohortAssignments", normalizedSubject);
                 if (subjectVal) {
@@ -33753,6 +33822,27 @@
             var printerSel = await pbWaitForFieldEnabled("#printerName", 5000);
             if (printerSel) { pbSelectByValue(document, window, printerSel, "fhpdf"); await sleep(200); }
 
+            // 11b. Final re-assert: re-search the (possibly AJAX-refreshed) cohortAssignments for the
+            // subject and set it via the Select2 v3 API WITHOUT firing change (so the forms/items
+            // cascade does not re-fire and wipe it). This is what was getting cleared on forms change.
+            if (caReady && normalizedSubjectForReassert) {
+                setProgress("Confirming subject assignment\u2026");
+                var freshSubjectVal = pbSelect2FindSubject("cohortAssignments", normalizedSubjectForReassert);
+                if (freshSubjectVal) {
+                    pbSelect2SetValueSilent("cohortAssignments", [freshSubjectVal]);
+                    log("PrintBarcodes Label: Subject assignment confirmed: " + freshSubjectVal);
+                } else {
+                    var allCaVals2 = [];
+                    try {
+                        var jq2 = window.jQuery;
+                        if (jq2) { allCaVals2 = jq2("#cohortAssignments option").map(function() { return this.value; }).get(); }
+                    } catch(e) {}
+                    if (allCaVals2.length) pbSelect2SetValueSilent("cohortAssignments", allCaVals2);
+                    log("PrintBarcodes Label: Subject not found in refreshed list, selected all assignments.");
+                }
+                await sleep(300);
+            }
+
             // 12. Wait for Print button to be enabled and click
             setProgress("Waiting for Print button\u2026");
             var printBtn = await pbWaitForFieldEnabled("#printButton", 10000);
@@ -33802,6 +33892,8 @@
 
         try {
             var normalizedSubject = pbNormalizeSubjectNum(subjectNum);
+            if (!epochCohortPairs.length) throw new Error("No epoch/cohort pairs available for subject \u201c" + subjectNum + "\u201d");
+            var printedOnce = false;
 
             for (var pi = 0; pi < epochCohortPairs.length; pi++) {
                 var pair = epochCohortPairs[pi];
@@ -33859,14 +33951,17 @@
                 // 6. Wait for Print button and click
                 setProgress(pairLabel + ": Waiting for Print button\u2026");
                 var printBtn = await pbWaitForFieldEnabled("#printButton", 10000);
+                if (!printBtn) printBtn = pbFindPrintButton(document);
                 if (!printBtn) throw new Error("Print button did not become enabled (pair " + (pi + 1) + ")");
                 setProgress(pairLabel + ": Printing\u2026");
                 printBtn.click();
                 await sleep(2500);
                 log("PrintBarcodes Barcode: Print clicked for " + pairLabel);
-
-                if (pi < epochCohortPairs.length - 1) await sleep(500);
+                printedOnce = true;
+                break; // Subject barcode found and printed; no need to scan remaining pairs
             }
+
+            if (!printedOnce) throw new Error("Subject \u201c" + subjectNum + "\u201d not found in any epoch/cohort combination on the barcode printing page");
 
             setProgress("\u2713 Barcode printed for " + subjectNum + ". Done.");
             banner.style.borderColor = glass ? "rgba(16,185,129,0.7)" : "#2ecc71";
@@ -35289,6 +35384,29 @@
         }
         var onBarcodeSubjects = isBarcodeSubjectsPage();
         if (onBarcodeSubjects) {
+            var pbBarcodeRunMode = null;
+            try { pbBarcodeRunMode = localStorage.getItem(STORAGE_RUN_MODE); } catch (e) {}
+            if (pbBarcodeRunMode === RUNMODE_PRINT_BARCODES_BARCODE) {
+                var pbBcRaw = null;
+                try { pbBcRaw = localStorage.getItem(STORAGE_PB_BARCODE_PENDING); } catch (e) {}
+                if (!pbBcRaw) {
+                    log("PrintBarcodes: no pending barcode state, clearing run mode");
+                    try { localStorage.removeItem(STORAGE_RUN_MODE); } catch (e) {}
+                    return;
+                }
+                var pbBcState = null;
+                try { pbBcState = JSON.parse(pbBcRaw); } catch (e) {}
+                if (!pbBcState || !pbBcState.subjectNum || !pbBcState.epochCohortPairs || (Date.now() - (pbBcState.ts || 0) > 120000)) {
+                    log("PrintBarcodes: pending barcode state stale or invalid, clearing");
+                    try { localStorage.removeItem(STORAGE_RUN_MODE); localStorage.removeItem(STORAGE_PB_BARCODE_PENDING); } catch (e) {}
+                    return;
+                }
+                // Clear both keys BEFORE running — prevents re-run on any subsequent navigation
+                try { localStorage.removeItem(STORAGE_RUN_MODE); localStorage.removeItem(STORAGE_PB_BARCODE_PENDING); } catch (e) {}
+                log("PrintBarcodes: resuming barcode auto-fill for subject " + pbBcState.subjectNum);
+                setTimeout(function () { pbAutoFillBarcodePage(pbBcState); }, 1500);
+                return;
+            }
             processBarcodeSubjectsPage();
             return;
         }
