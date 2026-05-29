@@ -38241,7 +38241,8 @@
             panel.style.overflow = "hidden";
 
             if (bodyContainer) {
-                bodyContainer.style.display = "block";
+                bodyContainer.style.display = "flex";
+                bodyContainer.style.flexDirection = "column";
             }
             if (resizeHandle) {
                 resizeHandle.style.display = "block";
@@ -40315,11 +40316,10 @@
             panel.style.height = String(newH) + "px";
 
             if (bodyContainer) {
-                bodyContainer.style.display = "block";
-
+                bodyContainer.style.display = "flex";
+                bodyContainer.style.flexDirection = "column";
                 bodyContainer.style.height = "calc(100% - " + String(scale(PANEL_HEADER_HEIGHT_PX)) + "px)";
                 bodyContainer.style.maxHeight = "calc(100% - " + String(scale(PANEL_HEADER_HEIGHT_PX)) + "px)";
-
                 bodyContainer.style.overflowY = "auto";
             }
         });
@@ -40579,7 +40579,8 @@
         headerBar.appendChild(rightControls);
         panel.appendChild(headerBar);
         var bodyContainer = document.createElement("div");
-        bodyContainer.style.display = "block";
+        bodyContainer.style.display = "flex";
+        bodyContainer.style.flexDirection = "column";
         bodyContainer.style.height = "calc(100% - " + String(scale(PANEL_HEADER_HEIGHT_PX)) + "px)";
         bodyContainer.style.maxHeight = "calc(100% - " + String(scale(PANEL_HEADER_HEIGHT_PX)) + "px)";
         bodyContainer.style.overflowY = "auto";
@@ -41130,7 +41131,8 @@
         var logBox = document.createElement("div");
         logBox.id = LOG_ID;
         logBox.style.marginTop = scale(LOG_MARGIN_TOP_PX);
-        logBox.style.height = scale(LOG_HEIGHT_PX);
+        logBox.style.flex = "1";
+        logBox.style.minHeight = scale(LOG_HEIGHT_PX);
         logBox.style.overflowY = "auto";
         logBox.style.background = glass ? THEME_SURFACE_BG : "#141414";
         logBox.style.border = glass ? ("1px solid " + THEME_SURFACE_INNER_BORDER) : "1px solid #333";

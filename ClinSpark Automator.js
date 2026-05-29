@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.6.0
+// @version     2.6.1
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -31256,7 +31256,8 @@
             panel.style.height = String(newH) + "px";
 
             if (bodyContainer) {
-                bodyContainer.style.display = "block";
+                bodyContainer.style.display = "flex";
+                bodyContainer.style.flexDirection = "column";
                 bodyContainer.style.height = "calc(100% - " + String(scale(PANEL_HEADER_HEIGHT_PX)) + "px)";
                 bodyContainer.style.maxHeight = "calc(100% - " + String(scale(PANEL_HEADER_HEIGHT_PX)) + "px)";
                 bodyContainer.style.overflowY = "auto";
@@ -31297,7 +31298,8 @@
             panel.style.overflow = "visible";
 
             if (bodyContainer) {
-                bodyContainer.style.display = "block";
+                bodyContainer.style.display = "flex";
+                bodyContainer.style.flexDirection = "column";
             }
             if (resizeHandle) {
                 resizeHandle.style.display = "block";
@@ -34066,7 +34068,8 @@
         headerBar.appendChild(rightControls);
         panel.appendChild(headerBar);
         var bodyContainer = document.createElement("div");
-        bodyContainer.style.display = "block";
+        bodyContainer.style.display = "flex";
+        bodyContainer.style.flexDirection = "column";
         bodyContainer.style.height = "calc(100% - " + scale(PANEL_HEADER_HEIGHT_PX) + ")";
         bodyContainer.style.maxHeight = "calc(100% - " + scale(PANEL_HEADER_HEIGHT_PX) + ")";
         bodyContainer.style.overflowY = "auto";
@@ -34535,7 +34538,8 @@
         var logBox = document.createElement("div");
         logBox.id = LOG_ID;
         logBox.style.marginTop = scale(LOG_MARGIN_TOP_PX);
-        logBox.style.height = scale(LOG_HEIGHT_PX);
+        logBox.style.flex = "1";
+        logBox.style.minHeight = scale(LOG_HEIGHT_PX);
         logBox.style.overflowY = "auto";
         logBox.style.background = glass ? THEME_SURFACE_BG : "#141414";
         logBox.style.border = "1px solid #333";
