@@ -1,19 +1,33 @@
 const item = itemJson.item;
+var triggerLetter = "T";
+var groupName = getItemGroupName(formJson);
+var isSerum = containsValue(groupName, "serum");
+var isPlasma = containsValue(groupName, "plasma");
 
-try {
-    const itemGroupName = getItemGroupName(formJson);
+logger("Group Name: " + groupName);
+if (isSerum || isPlasma) return true;
 
-    if (containsValue(itemGroupName, "self-collection") || containsValue(itemGroupName, "pg dna")) {
-        if (containsValue(item.value, "t")) {
-            customErrorMessage("Barcode cannot contain 'T'")
-            return false;
-        }
+logger(item.value);
+
+var value = (item.value || "").toString().trim().toUpperCase();
+var letter = triggerLetter.toUpperCase();
+
+if (!value) return false;
+
+if (value.indexOf(triggerLetter) !== -1) {
+    customErrorMessage("Value cannot contain " + triggerLetter);
+    return false;
+}
+
+return true;
+
+function containsValue(input, keyword) {
+    if (input == null) {
+        return false;
     }
 
-    return true;
-} catch (e) {
-    logger("Error in main execution logic: " + e.message);
-    return null;
+    var value = input.toString().toLowerCase();
+    return value.indexOf(keyword) !== -1;
 }
 
 function getItemGroupName(form) {
@@ -30,13 +44,4 @@ function getItemGroupName(form) {
         }
     }
     return null;
-}
-
-function containsValue(input, keyword) {
-    if (input == null) {
-        return false;
-    }
-
-    var value = input.toString().toLowerCase();
-    return value.indexOf(keyword) !== -1;
 }
