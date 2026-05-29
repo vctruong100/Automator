@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.6.7
+// @version     2.6.9
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -32799,11 +32799,21 @@
     function pbSelectByText(iframeDoc, iframeWin, selectEl, text) {
         var opts = selectEl.querySelectorAll("option");
         var lc = (text || "").toLowerCase().trim();
+        if (!lc) return false;
+        // Pass 1: exact (case-insensitive) text match — highest priority.
         for (var i = 0; i < opts.length; i++) {
-            var t = (opts[i].textContent || opts[i].innerText || "").toLowerCase().trim();
-            if (!t) continue;
-            if (t === lc || t.indexOf(lc) !== -1 || lc.indexOf(t) !== -1) {
+            var et = (opts[i].textContent || opts[i].innerText || "").toLowerCase().trim();
+            if (et && et === lc) {
                 pbSelectByValue(iframeDoc, iframeWin, selectEl, opts[i].value);
+                return true;
+            }
+        }
+        // Pass 2: substring match (option contains target, or target contains option).
+        for (var j = 0; j < opts.length; j++) {
+            var t = (opts[j].textContent || opts[j].innerText || "").toLowerCase().trim();
+            if (!t) continue;
+            if (t.indexOf(lc) !== -1 || lc.indexOf(t) !== -1) {
+                pbSelectByValue(iframeDoc, iframeWin, selectEl, opts[j].value);
                 return true;
             }
         }
@@ -33018,9 +33028,10 @@
         // ── Section 4: Print Settings ─────────────────────────────────────
         var sec4 = makeSection("Print Settings");
         var transferSel = makeSelect(PB_TRANSFER_ACTIONS, restoredConfig ? (restoredConfig.transferAction || PB_TRANSFER_ACTIONS[0]) : PB_TRANSFER_ACTIONS[0]);
-        var templateSel = makeSelect(PB_LABEL_TEMPLATES, restoredConfig ? (restoredConfig.template || "GenX") : "GenX");
+        var templateInp = makeInput(restoredConfig ? (restoredConfig.template || "GenX") : "GenX", false);
+        templateInp.placeholder = "e.g. genx  (comma-separated fallbacks: CN0140001 Aliquot, Aliquot)";
         sec4.appendChild(makeField("Transfer Label Action", transferSel));
-        sec4.appendChild(makeField("Template", templateSel));
+        sec4.appendChild(makeField("Template (keyword match)", templateInp));
         container.appendChild(sec4);
 
         // ── Save Footer ───────────────────────────────────────────────────
@@ -33044,7 +33055,7 @@
                 forms: formsArea.value,
                 includeAllTimepoints: tpCb.checked,
                 transferAction: transferSel.value,
-                template: templateSel.value
+                template: templateInp.value.trim()
             };
         };
 
@@ -33590,7 +33601,7 @@
         iframeDoc = iframe.contentDocument || iframe.contentWindow.document; iframeWin = iframe.contentWindow;
         setProgress("Label: Setting template...");
         var templateSel = iframeDoc.querySelector("select[id*='template'], #template, select[name*='template']");
-        if (templateSel) { pbSelectByText(iframeDoc, iframeWin, templateSel, labelConfig.template); await sleep(300); }
+        if (templateSel) { pbSelectTemplateByKeywords(iframeDoc, iframeWin, templateSel, labelConfig.template); await sleep(300); }
 
         iframeDoc = iframe.contentDocument || iframe.contentWindow.document; iframeWin = iframe.contentWindow;
         setProgress("Label: Clicking Print...");
@@ -33613,6 +33624,106 @@
             await sleep(300);
         }
         return null;
+    }
+
+    // Does the select already contain an option whose text matches `text`
+    // (exact first, then substring), ignoring blank placeholder options?
+    function pbSelectHasOptionText(selectEl, text) {
+        if (!selectEl) return false;
+        var lc = (text || "").toLowerCase().trim();
+        if (!lc) return false;
+        var opts = selectEl.querySelectorAll("option");
+        for (var i = 0; i < opts.length; i++) {
+            var t = (opts[i].textContent || opts[i].innerText || "").toLowerCase().trim();
+            if (!t) continue;
+            if (t === lc || t.indexOf(lc) !== -1 || lc.indexOf(t) !== -1) return true;
+        }
+        return false;
+    }
+
+    // Wait for `selector` to be enabled AND for the desired option text to be
+    // populated (template/printer lists load via AJAX after the field enables),
+    // then select it. Returns true on success.
+    async function pbWaitAndSelectByText(selector, text, timeoutMs) {
+        var start = Date.now(); timeoutMs = timeoutMs || 8000;
+        while (Date.now() - start < timeoutMs) {
+            var el = document.querySelector(selector);
+            if (el && !el.disabled && pbSelectHasOptionText(el, text)) {
+                var ok = pbSelectByText(document, window, el, text);
+                // If the field is Select2-enhanced, nudge the widget to repaint.
+                try { if (window.jQuery && window.jQuery(el).data("select2")) window.jQuery(el).trigger("change.select2"); } catch (e) {}
+                return ok;
+            }
+            await sleep(300);
+        }
+        return false;
+    }
+
+    // Number of real (non-blank) options currently in a <select>.
+    function pbCountRealOptions(selectEl) {
+        if (!selectEl) return 0;
+        var opts = selectEl.querySelectorAll("option");
+        var n = 0;
+        for (var i = 0; i < opts.length; i++) {
+            var t = (opts[i].textContent || opts[i].innerText || "").trim();
+            if (t) n++;
+        }
+        return n;
+    }
+
+    // Select a template option by keyword(s). `rawInput` may be a single keyword
+    // or a comma-separated priority list of fallback candidates. For each
+    // candidate (in order) we try an exact (case-insensitive) match first so a
+    // keyword like "genx" picks "GenX" rather than "GenX Small"; if no exact
+    // match, we pick the FIRST option whose text contains the keyword. The first
+    // candidate that resolves to an option wins. Returns true on success.
+    function pbSelectTemplateByKeywords(iframeDoc, iframeWin, selectEl, rawInput) {
+        if (!selectEl) return false;
+        var candidates = String(rawInput || "")
+            .split(",")
+            .map(function (s) { return s.toLowerCase().trim(); })
+            .filter(function (s) { return s.length > 0; });
+        if (!candidates.length) return false;
+
+        var opts = selectEl.querySelectorAll("option");
+        for (var c = 0; c < candidates.length; c++) {
+            var kw = candidates[c];
+            // Pass 1: exact text match.
+            for (var i = 0; i < opts.length; i++) {
+                var et = (opts[i].textContent || opts[i].innerText || "").toLowerCase().trim();
+                if (et && et === kw) {
+                    pbSelectByValue(iframeDoc, iframeWin, selectEl, opts[i].value);
+                    return true;
+                }
+            }
+            // Pass 2: first option whose text contains the keyword.
+            for (var j = 0; j < opts.length; j++) {
+                var t = (opts[j].textContent || opts[j].innerText || "").toLowerCase().trim();
+                if (t && t.indexOf(kw) !== -1) {
+                    pbSelectByValue(iframeDoc, iframeWin, selectEl, opts[j].value);
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    // Wait for the template <select> to be enabled and populated (it loads via
+    // AJAX), then keyword-match `rawInput` against the study's actual options.
+    // Returns true on success.
+    async function pbWaitAndSelectTemplate(selector, rawInput, timeoutMs) {
+        var start = Date.now(); timeoutMs = timeoutMs || 8000;
+        while (Date.now() - start < timeoutMs) {
+            var el = document.querySelector(selector);
+            if (el && !el.disabled && pbCountRealOptions(el) > 0) {
+                if (pbSelectTemplateByKeywords(document, window, el, rawInput)) {
+                    try { if (window.jQuery && window.jQuery(el).data("select2")) window.jQuery(el).trigger("change.select2"); } catch (e) {}
+                    return true;
+                }
+            }
+            await sleep(300);
+        }
+        return false;
     }
 
     // Locate a Print button: prefer #printButton, otherwise match by visible text.
@@ -33813,9 +33924,20 @@
             if (transferSel && labelConfig.transferAction) { pbSelectByText(document, window, transferSel, labelConfig.transferAction); await sleep(400); }
 
             // 10. Template — actual ID: labelTemplateId, wait for enabled (cascade-disabled)
+            // and populated (loads via AJAX), then keyword-match against the
+            // study's actual options since template lists differ per study.
             setProgress("Setting template\u2026");
-            var templateSel = await pbWaitForFieldEnabled("#labelTemplateId", 8000);
-            if (templateSel && labelConfig.template) { pbSelectByText(document, window, templateSel, labelConfig.template); await sleep(400); }
+            if (labelConfig.template) {
+                var tmplOk = await pbWaitAndSelectTemplate("#labelTemplateId", labelConfig.template, 8000);
+                if (tmplOk) {
+                    var tmplEl = document.querySelector("#labelTemplateId");
+                    var chosen = tmplEl && tmplEl.options[tmplEl.selectedIndex] ? (tmplEl.options[tmplEl.selectedIndex].textContent || "").trim() : labelConfig.template;
+                    log("PrintBarcodes Label: template matched '" + labelConfig.template + "' -> '" + chosen + "'.");
+                    await sleep(400);
+                } else {
+                    log("PrintBarcodes Label: WARNING - no template option matched keyword(s) '" + labelConfig.template + "'.");
+                }
+            }
 
             // 11. Destination = PDF (value: fhpdf)
             setProgress("Setting destination to PDF\u2026");
@@ -33853,7 +33975,15 @@
             log("PrintBarcodes Label: Print clicked.");
 
             if (doBarcode && epochCohortPairs.length > 0) {
-                setProgress("Label printed. Navigating to barcode page\u2026");
+                // The Print click triggers a server-side PDF download in this same window.
+                // Navigating away too early aborts that in-flight download, so wait for it
+                // to register before transitioning to the barcode page.
+                var pbLabelDownloadWaitMs = 6000;
+                for (var pbW = pbLabelDownloadWaitMs; pbW > 0; pbW -= 1000) {
+                    setProgress("Label printed. Waiting for PDF download\u2026 (" + Math.ceil(pbW / 1000) + "s)");
+                    await sleep(1000);
+                }
+                setProgress("Navigating to barcode page\u2026");
                 var barcodeState = { subjectNum: subjectNum, epochCohortPairs: epochCohortPairs, ts: Date.now() };
                 try {
                     localStorage.setItem(STORAGE_PB_BARCODE_PENDING, JSON.stringify(barcodeState));
