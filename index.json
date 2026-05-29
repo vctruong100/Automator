@@ -565,5 +565,12 @@
     "tags": ["IQVIA"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Unique%20Incremental%20ID%20Number.md",
     "updated": "2026-05-20"
+  },
+  {
+    "id": "M-089",
+    "title": "Outpatient Visit Window",
+    "tags": ["Visit Window"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Outpatient%20Visit%20Window.md",
+    "updated": "2026-05-29"
   }
 ]

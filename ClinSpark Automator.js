@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.6.1
+// @version     2.6.2
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -32554,6 +32554,10 @@
     var PRINT_BARCODES_SUBJECT_NUM = "";
     var PRINT_BARCODES_EPOCH_COHORT_PAIRS = [];
     var STORAGE_PRINT_BARCODES_CONFIG = "activityPlanState.printBarcodes.config";
+    var STORAGE_PB_LABEL_PENDING = "activityPlanState.printBarcodes.labelPending";
+    var STORAGE_PB_BARCODE_PENDING = "activityPlanState.printBarcodes.barcodePending";
+    var RUNMODE_PRINT_BARCODES_LABEL = "printBarcodesLabel";
+    var RUNMODE_PRINT_BARCODES_BARCODE = "printBarcodesBarcode";
 
     var PB_SUBJECTS_LIST_URL = "https://cenexel.clinspark.com/secure/study/subjects/list";
     var PB_LABEL_URL = "https://cenexel.clinspark.com/secure/barcodeprinting/labels";
@@ -32770,6 +32774,7 @@
         var lc = (text || "").toLowerCase().trim();
         for (var i = 0; i < opts.length; i++) {
             var t = (opts[i].textContent || opts[i].innerText || "").toLowerCase().trim();
+            if (!t) continue;
             if (t === lc || t.indexOf(lc) !== -1 || lc.indexOf(t) !== -1) {
                 pbSelectByValue(iframeDoc, iframeWin, selectEl, opts[i].value);
                 return true;
@@ -32781,22 +32786,34 @@
     function pbCollectEpochCohortFromRow(row) {
         var results = [];
         var seen = {};
-        function tryAdd(epoch, cohort) {
+        function tryAdd(epoch, cohort, assignmentNum) {
             var key = epoch + "|" + cohort;
-            if (!seen[key]) { seen[key] = true; results.push({ epoch: epoch, cohort: cohort }); }
+            if (!seen[key]) { seen[key] = true; results.push({ epoch: epoch, cohort: cohort, assignmentNum: (assignmentNum || "").trim() }); }
         }
+        // Primary: parse structured vertSep / vertSepNoBorder divs
+        var vertDivs = row.querySelectorAll("div.vertSep, div.vertSepNoBorder");
+        for (var vi = 0; vi < vertDivs.length; vi++) {
+            var vd = vertDivs[vi];
+            var assignAnchor = vd.querySelector("span.subjectSortaBold a, span.subjectSortaBold");
+            var assignmentNum = "";
+            if (assignAnchor) {
+                var anchorEl = vd.querySelector("span.subjectSortaBold a");
+                assignmentNum = ((anchorEl || assignAnchor).textContent || "").trim();
+            }
+            var spans = vd.querySelectorAll("span");
+            for (var si = 0; si < spans.length; si++) {
+                var st = (spans[si].textContent || "").trim();
+                var m = st.match(/^\(([^,)]+),\s*([^)]+)\)$/);
+                if (m) { tryAdd(m[1].trim(), m[2].trim(), assignmentNum); break; }
+            }
+        }
+        // Fallback: scan all spans/divs/cells if vertSep parsing found nothing
+        if (!results.length) {
         var allEls = row.querySelectorAll("span, div, td, li");
         for (var i = 0; i < allEls.length; i++) {
             var text = (allEls[i].textContent || "").trim();
-            var m = text.match(/\(([^,)]+),\s*([^)]+)\)/);
-            if (m) tryAdd(m[1].trim(), m[2].trim());
-        }
-        var cells = row.querySelectorAll("td");
-        for (var ci = 0; ci < cells.length; ci++) {
-            var lines = (cells[ci].textContent || "").split(/[\n\r]/);
-            for (var li = 0; li < lines.length; li++) {
-                var m2 = lines[li].trim().match(/\(([^,)]+),\s*([^)]+)\)/);
-                if (m2) tryAdd(m2[1].trim(), m2[2].trim());
+                var m2 = text.match(/\(([^,)]+),\s*([^)]+)\)/);
+                if (m2) tryAdd(m2[1].trim(), m2[2].trim(), "");
             }
         }
         return results;
@@ -32837,21 +32854,24 @@
     function pbSetApplyStatus(el, type, msg) {
         el.style.display = "block";
         el.textContent = msg;
-        var colors = { info: { bg: "rgba(74,159,212,0.09)", border: "#4a9fd4", text: "#bfdbfe" },
-                       success: { bg: "rgba(34,197,94,0.09)", border: "#22c55e", text: "#bbf7d0" },
-                       error: { bg: "rgba(239,68,68,0.09)", border: "#ef4444", text: "#fca5a5" } };
+        var glass = isGlassTheme();
+        var colors = {
+            info:    { bg: glass ? "rgba(167,139,250,0.15)" : "rgba(74,159,212,0.09)",  border: glass ? THEME_ACCENT : "#4a9fd4", text: glass ? THEME_TEXT_MUTED : "#bfdbfe" },
+            success: { bg: glass ? "rgba(16,185,129,0.15)"  : "rgba(34,197,94,0.09)",   border: "#22c55e", text: glass ? "#6ee7b7" : "#bbf7d0" },
+            error:   { bg: glass ? "rgba(239,68,68,0.15)"   : "rgba(239,68,68,0.09)",   border: "#ef4444", text: "#fca5a5" }
+        };
         var c = colors[type] || colors.info;
         el.style.cssText = "display:block;margin-top:8px;padding:7px 11px;border-radius:6px;font-size:12px;font-weight:500;line-height:1.5;background:" + c.bg + ";border-left:3px solid " + c.border + ";color:" + c.text + ";";
     }
 
     function pbBuildLabelConfigUI(epochCohortPairs, restoredConfig, glass) {
-        var BG = glass ? "rgba(255,255,255,0.05)" : "#1c1c1c";
-        var BDR = glass ? "rgba(255,255,255,0.12)" : "#2e2e2e";
-        var TXT = glass ? "#f0f0f0" : "#e2e2e2";
-        var LBL = glass ? "rgba(255,255,255,0.8)" : "#d0d0d0";
-        var INP_BG = glass ? "rgba(255,255,255,0.07)" : "#252525";
-        var SECTION_BDR = glass ? "rgba(255,255,255,0.08)" : "#282828";
-        var ACCENT = "#4a9fd4";
+        var BG = glass ? THEME_SURFACE_BG : "#1c1c1c";
+        var BDR = glass ? THEME_SURFACE_BORDER : "#2e2e2e";
+        var TXT = glass ? THEME_TEXT_PRIMARY : "#e2e2e2";
+        var LBL = glass ? THEME_TEXT_MUTED : "#d0d0d0";
+        var INP_BG = glass ? THEME_SURFACE_BG_HEAVY : "#252525";
+        var SECTION_BDR = glass ? "rgba(255,255,255,0.18)" : "#282828";
+        var ACCENT = glass ? THEME_ACCENT : "#4a9fd4";
 
         var container = document.createElement("div");
         container.style.cssText = "display:flex;flex-direction:column;gap:0;font-size:13px;";
@@ -32886,9 +32906,18 @@
             inp.type = "text"; inp.value = val || "";
             if (readOnly) {
                 inp.readOnly = true;
-                inp.style.cssText = "background:" + INP_BG + ";color:" + (glass ? "rgba(255,255,255,0.45)" : "#909090") + ";border:1px solid " + BDR + ";border-radius:6px;padding:6px 8px;font-size:13px;width:100%;box-sizing:border-box;outline:none;cursor:not-allowed;";
+                var roColor = glass ? "rgba(255,255,255,0.7)" : "#909090";
+                inp.style.cssText = "background:" + INP_BG + ";color:" + roColor + ";border:1px solid " + BDR + ";border-radius:6px;padding:6px 8px;font-size:13px;width:100%;box-sizing:border-box;outline:none;cursor:not-allowed;color-scheme:dark;";
+                if (glass) {
+                    inp.style.setProperty("background-color", INP_BG, "important");
+                    inp.style.setProperty("color", roColor, "important");
+                }
             } else {
-                inp.style.cssText = "background:" + INP_BG + ";color:" + TXT + ";border:1px solid " + BDR + ";border-radius:6px;padding:6px 8px;font-size:13px;width:100%;box-sizing:border-box;outline:none;";
+                inp.style.cssText = "background:" + INP_BG + ";color:" + TXT + ";border:1px solid " + BDR + ";border-radius:6px;padding:6px 8px;font-size:13px;width:100%;box-sizing:border-box;outline:none;color-scheme:dark;";
+                if (glass) {
+                    inp.style.setProperty("background-color", INP_BG, "important");
+                    inp.style.setProperty("color", TXT, "important");
+                }
             }
             return inp;
         }
@@ -33001,6 +33030,28 @@
         return container;
     }
 
+    async function pbFetchSubjectWithSearch(subjectNum) {
+        var encoded = encodeURIComponent(subjectNum);
+        var urls = [
+            PB_SUBJECTS_LIST_URL + "?sSearch=" + encoded,
+            PB_SUBJECTS_LIST_URL + "?search%5Bvalue%5D=" + encoded,
+            PB_SUBJECTS_LIST_URL
+        ];
+        for (var i = 0; i < urls.length; i++) {
+            try {
+                var resp = await fetch(urls[i], { method: "GET", credentials: "include", headers: { "Accept": "text/html,*/*" } });
+                if (!resp.ok) { log("PrintBarcodes: fast fetch url[" + i + "] status " + resp.status); continue; }
+                var html = await resp.text();
+                var parser = new DOMParser();
+                var doc = parser.parseFromString(html, "text/html");
+                var row = pbFindSubjectRowInDoc(doc, subjectNum);
+                if (row) { log("PrintBarcodes: fast fetch found subject via url[" + i + "]"); return row; }
+                else if (i === 0) log("PrintBarcodes: fast fetch url[0] page loaded but subject not in rows (rows: " + doc.querySelectorAll("#subjectTableBody tr").length + ")");
+            } catch(e) { log("PrintBarcodes: fast fetch url[" + i + "] error: " + String(e)); }
+        }
+        return null;
+    }
+
     function runPrintBarcodes() {
         if (PRINT_BARCODES_RUNNING) { log("PrintBarcodes: already running"); return; }
         if (PRINT_BARCODES_POPUP_REF) { try { PRINT_BARCODES_POPUP_REF.close(); } catch(e) {} PRINT_BARCODES_POPUP_REF = null; }
@@ -33009,18 +33060,18 @@
         PRINT_BARCODES_SUBJECT_NUM = "";
         PRINT_BARCODES_EPOCH_COHORT_PAIRS = [];
 
-        var ACCENT = "#4a9fd4";
-        var BDR  = glass ? "rgba(255,255,255,0.12)" : "#2e2e2e";
-        var TXT  = glass ? "#f0f0f0" : "#e2e2e2";
-        var DIM  = glass ? "rgba(255,255,255,0.6)" : "#b0b0b0";
-        var PNL  = glass ? "rgba(255,255,255,0.04)" : "#171717";
+        var ACCENT = glass ? THEME_ACCENT : "#4a9fd4";
+        var BDR  = glass ? THEME_SURFACE_BORDER : "#2e2e2e";
+        var TXT  = glass ? THEME_TEXT_PRIMARY : "#e2e2e2";
+        var DIM  = glass ? THEME_TEXT_MUTED : "#b0b0b0";
+        var PNL  = glass ? THEME_SURFACE_BG : "#171717";
 
         var mainContainer = document.createElement("div");
         mainContainer.style.cssText = "display:flex;flex-direction:column;gap:14px;";
 
         // ── Subject card ──────────────────────────────────────────────────
         var headerCard = document.createElement("div");
-        headerCard.style.cssText = "border:1px solid " + BDR + ";border-left:3px solid " + ACCENT + ";border-radius:8px;padding:13px 14px;background:" + (glass ? "rgba(255,255,255,0.04)" : "#1c1c1c") + ";";
+        headerCard.style.cssText = "border:1px solid " + BDR + ";border-left:3px solid " + ACCENT + ";border-radius:8px;padding:13px 14px;background:" + (glass ? THEME_SURFACE_BG : "#1c1c1c") + ";";
 
         var stepLabel = document.createElement("div");
         stepLabel.textContent = "SUBJECT NUMBER";
@@ -33032,12 +33083,12 @@
         var subjectInput = document.createElement("input");
         subjectInput.type = "text";
         subjectInput.placeholder = "e.g. 279612001";
-        subjectInput.style.cssText = "flex:1;min-width:0;background:" + (glass ? "rgba(255,255,255,0.07)" : "#252525") + ";color:" + TXT + ";border:1px solid " + BDR + ";border-radius:6px;padding:7px 11px;font-size:14px;font-weight:500;outline:none;letter-spacing:0.02em;";
+        subjectInput.style.cssText = "flex:1;min-width:0;background:" + (glass ? THEME_SURFACE_BG_HEAVY : "#252525") + ";color:" + TXT + ";border:1px solid " + BDR + ";border-radius:6px;padding:7px 11px;font-size:14px;font-weight:500;outline:none;letter-spacing:0.02em;";
 
         var applyBtn = document.createElement("button");
         applyBtn.textContent = "Apply";
         applyBtn.style.cssText = "background:" + ACCENT + ";color:#fff;border:none;border-radius:6px;padding:7px 18px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;transition:background 0.15s;letter-spacing:0.02em;flex-shrink:0;";
-        applyBtn.addEventListener("mouseenter", function() { applyBtn.style.background = "#3182c4"; });
+        applyBtn.addEventListener("mouseenter", function() { applyBtn.style.background = glass ? THEME_ACCENT_HOVER : "#3182c4"; });
         applyBtn.addEventListener("mouseleave", function() { applyBtn.style.background = ACCENT; });
 
         var applyStatus = document.createElement("div");
@@ -33128,28 +33179,28 @@
             confirmBtn.disabled = !any;
             confirmBtn.style.opacity = any ? "1" : "0.35";
             confirmBtn.style.cursor = any ? "pointer" : "not-allowed";
-            labelOpt.row.style.background   = (labelOpt.cb.checked   && !labelOpt.cb.disabled)   ? (glass ? "rgba(74,159,212,0.1)"   : "#1f2b35") : "";
-            barcodeOpt.row.style.background = (barcodeOpt.cb.checked && !barcodeOpt.cb.disabled) ? (glass ? "rgba(13,148,136,0.1)"  : "#1a2826") : "";
+            labelOpt.row.style.background   = (labelOpt.cb.checked   && !labelOpt.cb.disabled)   ? (glass ? "rgba(167,139,250,0.15)" : "#1f2b35") : "";
+            barcodeOpt.row.style.background = (barcodeOpt.cb.checked && !barcodeOpt.cb.disabled) ? (glass ? "rgba(167,139,250,0.1)"  : "#1a2826") : "";
         }
 
         function enableLeftPanel() {
             selectAllBtn.disabled = false;
             selectAllBtn.style.cursor = "pointer";
             selectAllBtn.style.opacity = "1";
-            selectAllBtn.addEventListener("mouseenter", function() { if (!selectAllBtn.disabled) selectAllBtn.style.background = "#3182c4"; });
+            selectAllBtn.addEventListener("mouseenter", function() { if (!selectAllBtn.disabled) selectAllBtn.style.background = glass ? THEME_ACCENT_HOVER : "#3182c4"; });
             selectAllBtn.addEventListener("mouseleave", function() { if (!selectAllBtn.disabled) selectAllBtn.style.background = ACCENT; });
 
             labelOpt.cb.disabled = false; labelOpt.cb.style.cursor = "pointer"; labelOpt.cb.style.pointerEvents = "auto";
             labelOpt.row.style.cursor = "pointer"; labelOpt.row.style.opacity = "1";
             labelOpt.badge.style.opacity = "1";
-            labelOpt.row.addEventListener("mouseenter", function() { if (!labelOpt.cb.disabled) labelOpt.row.style.background = glass ? "rgba(74,159,212,0.12)" : "#232e38"; });
-            labelOpt.row.addEventListener("mouseleave", function() { labelOpt.row.style.background = labelOpt.cb.checked ? (glass ? "rgba(74,159,212,0.1)" : "#1f2b35") : ""; });
+            labelOpt.row.addEventListener("mouseenter", function() { if (!labelOpt.cb.disabled) labelOpt.row.style.background = glass ? "rgba(167,139,250,0.2)" : "#232e38"; });
+            labelOpt.row.addEventListener("mouseleave", function() { labelOpt.row.style.background = labelOpt.cb.checked ? (glass ? "rgba(167,139,250,0.15)" : "#1f2b35") : ""; });
 
             barcodeOpt.cb.disabled = false; barcodeOpt.cb.style.cursor = "pointer"; barcodeOpt.cb.style.pointerEvents = "auto";
             barcodeOpt.row.style.cursor = "pointer"; barcodeOpt.row.style.opacity = "1";
             barcodeOpt.badge.style.opacity = "1";
-            barcodeOpt.row.addEventListener("mouseenter", function() { if (!barcodeOpt.cb.disabled) barcodeOpt.row.style.background = glass ? "rgba(13,148,136,0.12)" : "#1e2c2a"; });
-            barcodeOpt.row.addEventListener("mouseleave", function() { barcodeOpt.row.style.background = barcodeOpt.cb.checked ? (glass ? "rgba(13,148,136,0.1)" : "#1a2826") : ""; });
+            barcodeOpt.row.addEventListener("mouseenter", function() { if (!barcodeOpt.cb.disabled) barcodeOpt.row.style.background = glass ? "rgba(167,139,250,0.15)" : "#1e2c2a"; });
+            barcodeOpt.row.addEventListener("mouseleave", function() { barcodeOpt.row.style.background = barcodeOpt.cb.checked ? (glass ? "rgba(167,139,250,0.1)" : "#1a2826") : ""; });
         }
 
         function showLabelConfig() {
@@ -33206,60 +33257,80 @@
             applyBtn.disabled = true; applyBtn.style.opacity = "0.6";
             log("PrintBarcodes: applying subject number: " + subjectNum);
             try {
+                // Fast path: try direct fetch with search filter (no iframe overhead)
+                pbSetApplyStatus(applyStatus, "info", "Searching for subject\u2026");
+                var fastRow = await pbFetchSubjectWithSearch(subjectNum);
+                if (fastRow) {
+                    var fastPairs = pbCollectEpochCohortFromRow(fastRow);
+                    if (fastPairs.length > 0) {
+                        PRINT_BARCODES_SUBJECT_NUM = subjectNum;
+                        PRINT_BARCODES_EPOCH_COHORT_PAIRS = fastPairs;
+                        log("PrintBarcodes: fast path found " + fastPairs.length + " pair(s): " + fastPairs.map(function(p) { return p.epoch + "/" + p.cohort; }).join(", "));
+                        pbSetApplyStatus(applyStatus, "success", "\u2713 Found subject with " + fastPairs.length + " epoch/cohort pair(s). Select print options below.");
+                        enableLeftPanel();
+                        if (labelOpt.cb.checked) showLabelConfig();
+                        applyBtn.disabled = false; applyBtn.style.opacity = "1";
+                        return;
+                    }
+                }
+
+                // Fallback: iframe approach
                 pbSetApplyStatus(applyStatus, "info", "Navigating to subjects list\u2026");
                 var iframe = pbGetIframe();
                 var loaded = await pbNavigateIframe(iframe, PB_SUBJECTS_LIST_URL);
                 if (!loaded) throw new Error("Subjects list page did not load within timeout");
 
+                // Wait for table rows to appear via AJAX (DataTables loads after page ready)
+                pbSetApplyStatus(applyStatus, "info", "Loading subjects table\u2026");
+                var rowsReady = await pbWaitForTableRows(iframe, "#subjectTableBody", 8000);
                 var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
                 var iframeWin = iframe.contentWindow;
 
-                // Wait for the #subjectId Select2 container to initialise (JS runs after readyState=complete)
-                pbSetApplyStatus(applyStatus, "info", "Waiting for filter controls\u2026");
-                var s2ContainerEl = await pbWaitForElement(iframeDoc, "#s2id_subjectId, .select2-container[id*='subjectId']", 10000);
-                iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-                iframeWin = iframe.contentWindow;
-
-                // Primary: use the #subjectId Select2 filter — triggers a server-side refresh
-                // that shows only the matching subject in #subjectTableBody.
-                pbSetApplyStatus(applyStatus, "info", "Filtering by subject number\u2026");
-                var s2ok = s2ContainerEl ? await pbSelect2FilterSubject(iframeDoc, iframeWin, subjectNum) : false;
-                log("PrintBarcodes: Select2 filter result: " + s2ok);
-                if (s2ok) {
-                    // After Select2 selection the page refreshes the table via AJAX.
-                    await sleep(800);
-                    var rowsLoaded = await pbWaitForTableRows(iframe, "#subjectTableBody", 15000);
-                    if (!rowsLoaded) throw new Error("Subjects table did not refresh after filtering. Check your ClinSpark session.");
-                    iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-                    iframeWin = iframe.contentWindow;
-                }
-
-                // Look for the subject in the (possibly filtered) table.
-                var subjectRow = pbFindSubjectRowInDoc(iframeDoc, subjectNum);
-
-                // Fallback: Select2 may not have been available yet — wait for table rows then scan.
-                if (!subjectRow && !s2ok) {
-                    pbSetApplyStatus(applyStatus, "info", "Waiting for subjects table\u2026");
-                    var rowsLoaded2 = await pbWaitForTableRows(iframe, "#subjectTableBody", 18000);
-                    if (!rowsLoaded2) throw new Error("Subjects table did not load. Check your ClinSpark session and study context.");
+                // Strategy 1: DataTables client-side text filter — fastest, no AJAX round-trip
+                var subjectRow = null;
+                var dtInput = iframeDoc.querySelector(".dataTables_filter input, input[type='search'][aria-controls], #subjectTable_filter input");
+                if (dtInput) {
+                    pbSetApplyStatus(applyStatus, "info", "Filtering subjects\u2026");
+                    dtInput.value = subjectNum;
+                    dtInput.dispatchEvent(new Event("input", { bubbles: true }));
+                    dtInput.dispatchEvent(new Event("keyup",  { bubbles: true }));
+                    try { if (iframeWin.jQuery) iframeWin.jQuery(dtInput).trigger("keyup"); } catch(e) {}
+                    await sleep(600);
                     iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
                     iframeWin = iframe.contentWindow;
                     subjectRow = pbFindSubjectRowInDoc(iframeDoc, subjectNum);
+                }
 
-                    // Last resort: DataTables text search
-                    if (!subjectRow) {
-                        var dtInput = iframeDoc.querySelector(".dataTables_filter input, input[type='search'][aria-controls], #subjectTable_filter input");
-                        if (dtInput) {
-                            pbSetApplyStatus(applyStatus, "info", "Using DataTables filter\u2026");
-                            dtInput.value = subjectNum;
-                            dtInput.dispatchEvent(new Event("input", { bubbles: true }));
-                            dtInput.dispatchEvent(new Event("keyup",  { bubbles: true }));
-                            try { if (iframeWin.jQuery) iframeWin.jQuery(dtInput).trigger("keyup"); } catch(e) {}
-                            await sleep(700);
+                // Also try direct scan (subject may already be in table without filtering)
+                if (!subjectRow) subjectRow = pbFindSubjectRowInDoc(iframeDoc, subjectNum);
+
+                // Strategy 2: Select2 server-side filter — triggers AJAX, use only if needed
+                if (!subjectRow) {
+                    pbSetApplyStatus(applyStatus, "info", "Applying server filter\u2026");
+                    var s2ContainerEl = await pbWaitForElement(iframeDoc, "#s2id_subjectId, .select2-container[id*='subjectId']", 2000);
+                    iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                    iframeWin = iframe.contentWindow;
+                    var s2ok = s2ContainerEl ? await pbSelect2FilterSubject(iframeDoc, iframeWin, subjectNum) : false;
+                    log("PrintBarcodes: Select2 filter result: " + s2ok);
+                    if (s2ok) {
+                        await sleep(800);
+                        var rowsLoaded = await pbWaitForTableRows(iframe, "#subjectTableBody", 12000);
+                        if (rowsLoaded) {
                             iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                            iframeWin = iframe.contentWindow;
                             subjectRow = pbFindSubjectRowInDoc(iframeDoc, subjectNum);
                         }
                     }
+                }
+
+                // Strategy 3: table hadn't loaded yet when DataTables was tried — wait more and retry
+                if (!subjectRow && !rowsReady) {
+                    pbSetApplyStatus(applyStatus, "info", "Waiting for subjects table\u2026");
+                    var moreRows = await pbWaitForTableRows(iframe, "#subjectTableBody", 12000);
+                    if (!moreRows) throw new Error("Subjects table did not load. Check your ClinSpark session and study context.");
+                    iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                    iframeWin = iframe.contentWindow;
+                    subjectRow = pbFindSubjectRowInDoc(iframeDoc, subjectNum);
                 }
 
                 if (!subjectRow) throw new Error("Subject \u201c" + subjectNum + "\u201d not found on the subjects list page.");
@@ -33325,11 +33396,29 @@
             function setProgress(msg) { progressMsg.textContent = msg; log("PrintBarcodes: " + msg); }
 
             try {
-                var iframe = pbGetIframe();
                 if (doLabel) {
-                    setProgress("Processing Label...");
-                    await pbProcessLabel(labelConfig, PRINT_BARCODES_SUBJECT_NUM, PRINT_BARCODES_EPOCH_COHORT_PAIRS, iframe, setProgress);
+                    // Navigate the main window to the label printing page; auto-fill runs on page load
+                    var pendingState = {
+                        subjectNum: PRINT_BARCODES_SUBJECT_NUM,
+                        epochCohortPairs: PRINT_BARCODES_EPOCH_COHORT_PAIRS,
+                        labelConfig: labelConfig,
+                        doBarcode: doBarcode,
+                        ts: Date.now()
+                    };
+                    try {
+                        localStorage.setItem(STORAGE_PB_LABEL_PENDING, JSON.stringify(pendingState));
+                        localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_PRINT_BARCODES_LABEL);
+                    } catch(e) {}
+                    log("PrintBarcodes: navigating to label printing page...");
+                    overlay.remove();
+                    mainContainer.style.position = origPos;
+                    PRINT_BARCODES_RUNNING = false;
+                    if (PRINT_BARCODES_POPUP_REF) { try { PRINT_BARCODES_POPUP_REF.close(); } catch(e) {} PRINT_BARCODES_POPUP_REF = null; }
+                    window.location.href = PB_LABEL_URL;
+                    return;
                 }
+
+                var iframe = pbGetIframe();
                 if (!PRINT_BARCODES_CANCELLED && doBarcode) {
                     setProgress("Processing Barcode...");
                     await pbProcessBarcode(PRINT_BARCODES_EPOCH_COHORT_PAIRS, PRINT_BARCODES_SUBJECT_NUM, iframe, setProgress);
@@ -33478,6 +33567,317 @@
         if (printBtn) { printBtn.click(); await sleep(1500); log("PrintBarcodes: Label: Print clicked"); }
         else { log("PrintBarcodes: Label: Print button not found"); }
         setProgress("Label: Done.");
+    }
+
+    async function pbWaitForFieldEnabled(selector, timeoutMs) {
+        var start = Date.now(); timeoutMs = timeoutMs || 10000;
+        while (Date.now() - start < timeoutMs) {
+            var el = document.querySelector(selector);
+            if (el && !el.disabled) return el;
+            await sleep(300);
+        }
+        return null;
+    }
+
+    async function pbWaitForSelect2Opts(selectId, timeoutMs) {
+        var start = Date.now(); timeoutMs = timeoutMs || 8000;
+        while (Date.now() - start < timeoutMs) {
+            var el = document.getElementById(selectId);
+            if (el && el.options && el.options.length > 0) return el;
+            await sleep(300);
+        }
+        return null;
+    }
+
+    function pbSelect2SetAll(selectId) {
+        try {
+            var jq = window.jQuery;
+            if (!jq) return false;
+            var $sel = jq("#" + selectId);
+            var allVals = $sel.find("option").map(function() { return this.value; }).get();
+            if (!allVals.length) return false;
+            $sel.val(allVals).trigger("change");
+            return true;
+        } catch(e) { return false; }
+    }
+
+    function pbSelect2SetByKeywords(selectId, keywords) {
+        try {
+            var jq = window.jQuery;
+            if (!jq) return false;
+            var $sel = jq("#" + selectId);
+            var vals = [];
+            $sel.find("option").each(function() {
+                var t = (this.textContent || this.innerText || "").toLowerCase().trim();
+                for (var ki = 0; ki < keywords.length; ki++) {
+                    if (t.indexOf(keywords[ki]) !== -1) { vals.push(this.value); break; }
+                }
+            });
+            if (!vals.length) return false;
+            $sel.val(vals).trigger("change");
+            return true;
+        } catch(e) { return false; }
+    }
+
+    function pbSelect2FindSubject(selectId, normalizedSubject) {
+        try {
+            var el = document.getElementById(selectId);
+            if (!el) return null;
+            var opts = el.querySelectorAll("option");
+            for (var i = 0; i < opts.length; i++) {
+                var t = pbNormalizeSubjectNum(opts[i].textContent || opts[i].value || "");
+                if (t.indexOf(normalizedSubject) !== -1 || normalizedSubject.indexOf(t) !== -1) return opts[i].value;
+            }
+            return null;
+        } catch(e) { return null; }
+    }
+
+    async function pbAutoFillLabelPage(pendingState) {
+        var subjectNum = pendingState.subjectNum;
+        var epochCohortPairs = pendingState.epochCohortPairs || [];
+        var labelConfig = pendingState.labelConfig || {};
+        var doBarcode = !!pendingState.doBarcode;
+
+        var glass = isGlassTheme();
+        var bannerBg  = glass ? "rgba(15,10,40,0.92)" : "#1a1a1a";
+        var bannerBdr = glass ? "rgba(167,139,250,0.5)" : "#444";
+
+        var banner = document.createElement("div");
+        banner.style.cssText = "position:fixed;top:16px;right:16px;z-index:9999999;background:" + bannerBg + ";color:#fff;border:1px solid " + bannerBdr + ";border-radius:8px;padding:12px 16px;font-size:13px;font-weight:600;font-family:system-ui,sans-serif;box-shadow:0 4px 20px rgba(0,0,0,0.5);max-width:340px;line-height:1.5;";
+        banner.textContent = "PrintBarcodes: filling label form\u2026";
+        document.body.appendChild(banner);
+
+        function setProgress(msg) { log("PrintBarcodes Label: " + msg); banner.textContent = msg; }
+
+        try {
+            var normalizedSubject = pbNormalizeSubjectNum(subjectNum);
+
+            // 1. Epoch — should already be enabled on page load
+            setProgress("Waiting for epoch\u2026");
+            var epochSel = await pbWaitForElement(document, "#epoch", 12000);
+            if (!epochSel) throw new Error("Epoch selector not found");
+            setProgress("Setting epoch \u201c" + labelConfig.epoch + "\u201d\u2026");
+            pbSelectByText(document, window, epochSel, labelConfig.epoch);
+            await sleep(800);
+
+            // 2. Cohort — disabled until epoch AJAX
+            setProgress("Waiting for cohort\u2026");
+            var cohortSel = await pbWaitForFieldEnabled("#cohort", 10000);
+            if (!cohortSel) throw new Error("Cohort selector did not become enabled");
+            setProgress("Setting cohort \u201c" + labelConfig.cohort + "\u201d\u2026");
+            pbSelectByText(document, window, cohortSel, labelConfig.cohort);
+            await sleep(800);
+
+            // 3. Activity plan — disabled until cohort AJAX
+            setProgress("Waiting for activity plan\u2026");
+            var apSel = await pbWaitForFieldEnabled("#activityPlan", 10000);
+            if (!apSel) throw new Error("Activity plan selector did not become enabled");
+            await sleep(400);
+
+            // Iterate plans to find one containing our subject
+            var apOpts = apSel.querySelectorAll("option");
+            var foundActivityPlan = false;
+            for (var ai = 0; ai < apOpts.length; ai++) {
+                var apVal = (apOpts[ai].value || "").trim();
+                if (!apVal) continue;
+                setProgress("Checking plan: \u201c" + (apOpts[ai].textContent || apVal).trim().slice(0, 30) + "\u201d\u2026");
+                pbSelectByValue(document, window, apSel, apVal);
+                var caEl = await pbWaitForSelect2Opts("cohortAssignments", 3000);
+                if (caEl) {
+                    var caOpts = caEl.querySelectorAll("option");
+                    for (var ci = 0; ci < caOpts.length; ci++) {
+                        var caText = pbNormalizeSubjectNum(caOpts[ci].textContent || caOpts[ci].value || "");
+                        if (caText.indexOf(normalizedSubject) !== -1 || normalizedSubject.indexOf(caText) !== -1) { foundActivityPlan = true; break; }
+                    }
+                }
+                if (foundActivityPlan) { setProgress("Subject found in activity plan."); break; }
+            }
+            if (!foundActivityPlan) log("PrintBarcodes Label: subject not found in any activity plan, using current selection");
+
+            // 4. Cohort assignments (Select2 hidden) — select matching subject or all
+            setProgress("Selecting cohort assignment\u2026");
+            var caReady = await pbWaitForSelect2Opts("cohortAssignments", 5000);
+            if (caReady) {
+                var subjectVal = pbSelect2FindSubject("cohortAssignments", normalizedSubject);
+                if (subjectVal) {
+                    try { if (window.jQuery) window.jQuery("#cohortAssignments").val([subjectVal]).trigger("change"); } catch(e) {}
+                    setProgress("Cohort assignment selected.");
+                } else {
+                    pbSelect2SetAll("cohortAssignments");
+                    setProgress("All cohort assignments selected.");
+                }
+                await sleep(1000);
+            }
+
+            // 5. Forms (Select2 hidden) — select by keyword or all
+            setProgress("Waiting for forms\u2026");
+            var formsReady = await pbWaitForSelect2Opts("forms", 8000);
+            if (formsReady) {
+                var keywords = (labelConfig.forms || "").split("\n").map(function(k) { return k.trim().toLowerCase(); }).filter(Boolean);
+                var selectedForms = false;
+                if (keywords.length) {
+                    selectedForms = pbSelect2SetByKeywords("forms", keywords);
+                    if (!selectedForms) log("PrintBarcodes Label: no forms matched keywords, selecting all");
+                }
+                if (!selectedForms) pbSelect2SetAll("forms");
+                await sleep(1000);
+            }
+
+            // 6. Items (Select2 hidden) — select all
+            setProgress("Waiting for items\u2026");
+            var itemsReady = await pbWaitForSelect2Opts("items", 8000);
+            if (itemsReady) { pbSelect2SetAll("items"); await sleep(800); }
+
+            // 7. Include all timepoints checkbox
+            setProgress("Setting timepoints option\u2026");
+            var tpCb = document.getElementById("includeAllTimepoints");
+            if (tpCb && tpCb.checked !== !!labelConfig.includeAllTimepoints) { tpCb.click(); await sleep(400); }
+
+            // 8. Scheduled activities (Select2 hidden) — select all
+            setProgress("Waiting for timepoints\u2026");
+            var schedReady = await pbWaitForSelect2Opts("scheduledActivities", 8000);
+            if (schedReady) { pbSelect2SetAll("scheduledActivities"); await sleep(800); }
+
+            // 9. Transfer action — actual ID: barcodeTransferAction
+            setProgress("Setting transfer label action\u2026");
+            var transferSel = document.getElementById("barcodeTransferAction");
+            if (transferSel && labelConfig.transferAction) { pbSelectByText(document, window, transferSel, labelConfig.transferAction); await sleep(400); }
+
+            // 10. Template — actual ID: labelTemplateId, wait for enabled (cascade-disabled)
+            setProgress("Setting template\u2026");
+            var templateSel = await pbWaitForFieldEnabled("#labelTemplateId", 8000);
+            if (templateSel && labelConfig.template) { pbSelectByText(document, window, templateSel, labelConfig.template); await sleep(400); }
+
+            // 11. Destination = PDF (value: fhpdf)
+            setProgress("Setting destination to PDF\u2026");
+            var printerSel = await pbWaitForFieldEnabled("#printerName", 5000);
+            if (printerSel) { pbSelectByValue(document, window, printerSel, "fhpdf"); await sleep(200); }
+
+            // 12. Wait for Print button to be enabled and click
+            setProgress("Waiting for Print button\u2026");
+            var printBtn = await pbWaitForFieldEnabled("#printButton", 10000);
+            if (!printBtn) throw new Error("Print button did not become enabled");
+            setProgress("Clicking Print\u2026");
+            printBtn.click();
+            await sleep(2000);
+            log("PrintBarcodes Label: Print clicked.");
+
+            if (doBarcode && epochCohortPairs.length > 0) {
+                setProgress("Label printed. Navigating to barcode page\u2026");
+                var barcodeState = { subjectNum: subjectNum, epochCohortPairs: epochCohortPairs, ts: Date.now() };
+                try {
+                    localStorage.setItem(STORAGE_PB_BARCODE_PENDING, JSON.stringify(barcodeState));
+                    localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_PRINT_BARCODES_BARCODE);
+                } catch(e) {}
+                if (banner.parentNode) banner.remove();
+                window.location.href = PB_BARCODE_URL;
+            } else {
+                setProgress("\u2713 Label printed for " + subjectNum + ". Done.");
+                banner.style.borderColor = glass ? "rgba(16,185,129,0.7)" : "#2ecc71";
+                setTimeout(function() { if (banner.parentNode) banner.remove(); }, 8000);
+            }
+        } catch(err) {
+            log("PrintBarcodes Label: auto-fill error: " + String(err));
+            banner.style.background = "#7f1d1d";
+            banner.style.borderColor = "#ef4444";
+            banner.textContent = "Label fill error: " + String(err);
+            setTimeout(function() { if (banner.parentNode) banner.remove(); }, 10000);
+        }
+    }
+
+    async function pbAutoFillBarcodePage(pendingState) {
+        var subjectNum = pendingState.subjectNum;
+        var epochCohortPairs = pendingState.epochCohortPairs || [];
+
+        var glass = isGlassTheme();
+        var bannerBg  = glass ? "rgba(15,10,40,0.92)" : "#1a1a1a";
+        var bannerBdr = glass ? "rgba(167,139,250,0.5)" : "#444";
+
+        var banner = document.createElement("div");
+        banner.style.cssText = "position:fixed;top:16px;right:16px;z-index:9999999;background:" + bannerBg + ";color:#fff;border:1px solid " + bannerBdr + ";border-radius:8px;padding:12px 16px;font-size:13px;font-weight:600;font-family:system-ui,sans-serif;box-shadow:0 4px 20px rgba(0,0,0,0.5);max-width:340px;line-height:1.5;";
+        banner.textContent = "PrintBarcodes: filling barcode form\u2026";
+        document.body.appendChild(banner);
+
+        function setProgress(msg) { log("PrintBarcodes Barcode: " + msg); banner.textContent = msg; }
+
+        try {
+            var normalizedSubject = pbNormalizeSubjectNum(subjectNum);
+
+            for (var pi = 0; pi < epochCohortPairs.length; pi++) {
+                var pair = epochCohortPairs[pi];
+                var pairLabel = "Pair " + (pi + 1) + "/" + epochCohortPairs.length;
+
+                // 1. Epoch
+                setProgress(pairLabel + ": Setting epoch \u201c" + pair.epoch + "\u201d\u2026");
+                var epochSel = await pbWaitForElement(document, "#epoch", 10000);
+                if (!epochSel) throw new Error("Epoch selector not found");
+                pbSelectByText(document, window, epochSel, pair.epoch);
+                await sleep(800);
+
+                // 2. Cohort — disabled until epoch AJAX
+                setProgress(pairLabel + ": Waiting for cohort\u2026");
+                var cohortSel = await pbWaitForFieldEnabled("#cohort", 10000);
+                if (!cohortSel) throw new Error("Cohort selector did not become enabled (pair " + (pi + 1) + ")");
+                pbSelectByText(document, window, cohortSel, pair.cohort);
+                await sleep(800);
+
+                // 3. Subjects — disabled until cohort AJAX
+                setProgress(pairLabel + ": Waiting for subjects\u2026");
+                var subjectsSel = await pbWaitForFieldEnabled("#subjects", 12000);
+                if (!subjectsSel) throw new Error("Subjects selector did not become enabled (pair " + (pi + 1) + ")");
+                await sleep(400);
+
+                var subjectOpts = subjectsSel.querySelectorAll("option");
+                var subjectOptVal = null;
+                for (var si = 0; si < subjectOpts.length; si++) {
+                    var st = pbNormalizeSubjectNum(subjectOpts[si].textContent || subjectOpts[si].value || "");
+                    if (st.indexOf(normalizedSubject) !== -1 || normalizedSubject.indexOf(st) !== -1) {
+                        subjectOptVal = subjectOpts[si].value; break;
+                    }
+                }
+                if (!subjectOptVal) {
+                    log("PrintBarcodes Barcode: subject not found in " + pairLabel + " subjects list, skipping");
+                    continue;
+                }
+                setProgress(pairLabel + ": Selecting subject\u2026");
+                pbSelectByValue(document, window, subjectsSel, subjectOptVal);
+                await sleep(500);
+
+                // 4. Template — wait for enabled, use first available option
+                setProgress(pairLabel + ": Setting template\u2026");
+                var templateSel = await pbWaitForFieldEnabled("#labelTemplateId", 8000);
+                if (templateSel && templateSel.options.length > 0) {
+                    pbSelectByValue(document, window, templateSel, templateSel.options[0].value);
+                    await sleep(300);
+                }
+
+                // 5. Destination = PDF (fhpdf, not fhpdfPreview)
+                setProgress(pairLabel + ": Setting destination to PDF\u2026");
+                var printerSel = await pbWaitForFieldEnabled("#printerName", 5000);
+                if (printerSel) { pbSelectByValue(document, window, printerSel, "fhpdf"); await sleep(200); }
+
+                // 6. Wait for Print button and click
+                setProgress(pairLabel + ": Waiting for Print button\u2026");
+                var printBtn = await pbWaitForFieldEnabled("#printButton", 10000);
+                if (!printBtn) throw new Error("Print button did not become enabled (pair " + (pi + 1) + ")");
+                setProgress(pairLabel + ": Printing\u2026");
+                printBtn.click();
+                await sleep(2500);
+                log("PrintBarcodes Barcode: Print clicked for " + pairLabel);
+
+                if (pi < epochCohortPairs.length - 1) await sleep(500);
+            }
+
+            setProgress("\u2713 Barcode printed for " + subjectNum + ". Done.");
+            banner.style.borderColor = glass ? "rgba(16,185,129,0.7)" : "#2ecc71";
+            setTimeout(function() { if (banner.parentNode) banner.remove(); }, 8000);
+        } catch(err) {
+            log("PrintBarcodes Barcode: auto-fill error: " + String(err));
+            banner.style.background = "#7f1d1d";
+            banner.style.borderColor = "#ef4444";
+            banner.textContent = "Barcode fill error: " + String(err);
+            setTimeout(function() { if (banner.parentNode) banner.remove(); }, 10000);
+        }
     }
 
     async function pbProcessBarcode(epochCohortPairs, subjectNum, iframe, setProgress) {
@@ -34977,6 +35377,33 @@
                 log("DTS: run mode set but no state found; clearing");
                 dtsClearState();
             }
+            return;
+        }
+        if (runModeRaw === RUNMODE_PRINT_BARCODES_LABEL) {
+            // Only continue if we are actually on the label printing page
+            if (location.href.indexOf("/barcodeprinting/labels") === -1) {
+                log("PrintBarcodes: not on label page, clearing label run mode");
+                try { localStorage.removeItem(STORAGE_RUN_MODE); localStorage.removeItem(STORAGE_PB_LABEL_PENDING); } catch(e) {}
+                return;
+            }
+            var pbPendingRaw = null;
+            try { pbPendingRaw = localStorage.getItem(STORAGE_PB_LABEL_PENDING); } catch(e) {}
+            if (!pbPendingRaw) {
+                log("PrintBarcodes: no pending label state, clearing run mode");
+                try { localStorage.removeItem(STORAGE_RUN_MODE); } catch(e) {}
+                return;
+            }
+            var pbPendingState = null;
+            try { pbPendingState = JSON.parse(pbPendingRaw); } catch(e) {}
+            if (!pbPendingState || !pbPendingState.subjectNum || !pbPendingState.labelConfig || (Date.now() - (pbPendingState.ts || 0) > 120000)) {
+                log("PrintBarcodes: pending label state stale or invalid, clearing");
+                try { localStorage.removeItem(STORAGE_RUN_MODE); localStorage.removeItem(STORAGE_PB_LABEL_PENDING); } catch(e) {}
+                return;
+            }
+            // Clear both keys BEFORE running — prevents re-run on any subsequent navigation
+            try { localStorage.removeItem(STORAGE_RUN_MODE); localStorage.removeItem(STORAGE_PB_LABEL_PENDING); } catch(e) {}
+            log("PrintBarcodes: resuming label auto-fill for subject " + pbPendingState.subjectNum);
+            setTimeout(function() { pbAutoFillLabelPage(pbPendingState); }, 1500);
             return;
         }
     }

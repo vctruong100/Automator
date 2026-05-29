@@ -509,7 +509,7 @@
     //==================================================
     // Pull Lab Barcode Feature
     //==================================================
-    // 
+    //
     //==================================================
     function setAriaBusyOn() {
         log("[PullLabBarcode] setAriaBusyOn: setting aria-busy on body");
@@ -2437,7 +2437,7 @@
             return;
         }
 
-        log("APS_RunBarcode: Fetching barcode in background\u2026");
+        log("APS_RunBarcode: Fetching barcode in background…");
 
         var loadingText = document.createElement("div");
         loadingText.style.textAlign = "center";
@@ -3144,7 +3144,8 @@
             panel.style.height = String(newH) + "px";
 
             if (bodyContainer) {
-                bodyContainer.style.display = "block";
+                bodyContainer.style.display = "flex";
+                bodyContainer.style.flexDirection = "column";
                 bodyContainer.style.height = "calc(100% - " + String(scale(PANEL_HEADER_HEIGHT_PX)) + "px)";
                 bodyContainer.style.maxHeight = "calc(100% - " + String(scale(PANEL_HEADER_HEIGHT_PX)) + "px)";
                 bodyContainer.style.overflowY = "auto";
@@ -3185,13 +3186,14 @@
             panel.style.overflow = "visible";
 
             if (bodyContainer) {
-                bodyContainer.style.display = "block";
+                bodyContainer.style.display = "flex";
+                bodyContainer.style.flexDirection = "column";
             }
             if (resizeHandle) {
                 resizeHandle.style.display = "block";
             }
             if (collapseBtn) {
-                collapseBtn.textContent = "\u2212";
+                collapseBtn.textContent = "—";
             }
         }
     }
