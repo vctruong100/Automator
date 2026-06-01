@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.8.1
+// @version     2.8.2
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -32554,10 +32554,25 @@
     var PRINT_BARCODES_SUBJECT_NUM = "";
     var PRINT_BARCODES_EPOCH_COHORT_PAIRS = [];
     var STORAGE_PRINT_BARCODES_CONFIG = "activityPlanState.printBarcodes.config";
+    var STORAGE_PB_BARCODE_CONFIG = "activityPlanState.printBarcodes.barcodeConfig";
     var STORAGE_PB_LABEL_PENDING = "activityPlanState.printBarcodes.labelPending";
     var STORAGE_PB_BARCODE_PENDING = "activityPlanState.printBarcodes.barcodePending";
+    var STORAGE_PB_SCAN_PENDING = "activityPlanState.printBarcodes.scanPending";
     var RUNMODE_PRINT_BARCODES_LABEL = "printBarcodesLabel";
     var RUNMODE_PRINT_BARCODES_BARCODE = "printBarcodesBarcode";
+    var RUNMODE_PRINT_BARCODES_SCAN = "printBarcodesScan";
+
+    // Barcode (subject) printing config — fixed option lists per study UI.
+    var PB_BARCODE_TEMPLATES = [
+        "Subject Sticker",
+        "Subject Wristband",
+        "Subject Sticker_Year Only",
+        "Subject Wristband_Year Only",
+        "Subject Strip"
+    ];
+    // Destination keyword shown in dropdowns; matched against the printerName option text.
+    var PB_DESTINATIONS = ["PDF", "PDF (preview)"];
+    var PB_DEFAULT_DESTINATION = "PDF";
 
     // Multi-subject (scanned list) mode persistence.
     var STORAGE_PB_SUBJECT_MODE = "activityPlanState.printBarcodes.subjectMode";      // "single" | "multi"
@@ -32616,6 +32631,30 @@
 
     function pbSaveConfig(config) {
         try { localStorage.setItem(STORAGE_PRINT_BARCODES_CONFIG, JSON.stringify(config)); } catch (e) {}
+    }
+
+    function pbLoadBarcodeConfig() {
+        try {
+            var raw = localStorage.getItem(STORAGE_PB_BARCODE_CONFIG);
+            if (raw) {
+                var parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === "object") return parsed;
+            }
+        } catch (e) {}
+        return null;
+    }
+
+    function pbSaveBarcodeConfig(config) {
+        try { localStorage.setItem(STORAGE_PB_BARCODE_CONFIG, JSON.stringify(config)); } catch (e) {}
+    }
+
+    // Resolve a barcode config to a complete, validated object with safe defaults.
+    function pbResolveBarcodeConfig(config) {
+        var tmpl = (config && config.template) ? String(config.template) : PB_BARCODE_TEMPLATES[0];
+        if (PB_BARCODE_TEMPLATES.indexOf(tmpl) === -1) tmpl = PB_BARCODE_TEMPLATES[0];
+        var dest = (config && config.destination) ? String(config.destination) : PB_DEFAULT_DESTINATION;
+        if (PB_DESTINATIONS.indexOf(dest) === -1) dest = PB_DEFAULT_DESTINATION;
+        return { template: tmpl, destination: dest };
     }
 
     function pbNormalizeSubjectNum(s) {
@@ -33043,8 +33082,11 @@
         var transferSel = makeSelect(PB_TRANSFER_ACTIONS, restoredConfig ? (restoredConfig.transferAction || PB_TRANSFER_ACTIONS[0]) : PB_TRANSFER_ACTIONS[0]);
         var templateInp = makeInput(restoredConfig ? (restoredConfig.template || "GenX") : "GenX", false);
         templateInp.placeholder = "e.g. genx  (comma-separated fallbacks: CN0140001 Aliquot, Aliquot)";
+        var destinationInp = makeInput(restoredConfig ? (restoredConfig.destination || PB_DEFAULT_DESTINATION) : PB_DEFAULT_DESTINATION, false);
+        destinationInp.placeholder = "e.g. PDF  (matched against the Destination dropdown text)";
         sec4.appendChild(makeField("Transfer Label Action", transferSel));
         sec4.appendChild(makeField("Template (keyword match)", templateInp));
+        sec4.appendChild(makeField("Destination (keyword match)", destinationInp));
         container.appendChild(sec4);
 
         // ── Save Footer ───────────────────────────────────────────────────
@@ -33069,12 +33111,88 @@
                 items: itemsArea.value,
                 includeAllTimepoints: tpCb.checked,
                 transferAction: transferSel.value,
-                template: templateInp.value.trim()
+                template: templateInp.value.trim(),
+                destination: destinationInp.value.trim() || PB_DEFAULT_DESTINATION
             };
         };
 
         saveBtn.addEventListener("click", function() {
             pbSaveConfig(container._getConfig());
+            saveMsg.style.display = "inline";
+            setTimeout(function() { saveMsg.style.display = "none"; }, 2000);
+        });
+
+        return container;
+    }
+
+    // Build the Barcode (subject) printing configuration panel: a Template dropdown
+    // (fixed 5 options) and a Destination dropdown (PDF / PDF (preview)), plus a
+    // Save Configuration button. The returned container exposes _getConfig().
+    function pbBuildBarcodeConfigUI(restoredConfig, glass) {
+        var BG = glass ? THEME_SURFACE_BG : "#1c1c1c";
+        var BDR = glass ? THEME_SURFACE_BORDER : "#2e2e2e";
+        var TXT = glass ? THEME_TEXT_PRIMARY : "#e2e2e2";
+        var LBL = glass ? THEME_TEXT_MUTED : "#d0d0d0";
+        var INP_BG = glass ? THEME_SURFACE_BG_HEAVY : "#252525";
+        var SECTION_BDR = glass ? "rgba(255,255,255,0.18)" : "#282828";
+        var ACCENT = "#0d9488";
+
+        var resolved = pbResolveBarcodeConfig(restoredConfig);
+
+        var container = document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;gap:0;font-size:13px;";
+
+        function makeSelect(options, defaultVal) {
+            var sel = document.createElement("select");
+            sel.style.cssText = "background:" + INP_BG + ";color:" + TXT + ";border:1px solid " + BDR + ";border-radius:6px;padding:6px 8px;font-size:13px;width:100%;outline:none;cursor:pointer;color-scheme:dark;";
+            for (var i = 0; i < options.length; i++) {
+                var opt = document.createElement("option");
+                opt.value = options[i]; opt.textContent = options[i];
+                opt.style.cssText = "background:" + INP_BG + ";color:" + TXT + ";";
+                if (options[i] === defaultVal) opt.selected = true;
+                sel.appendChild(opt);
+            }
+            return sel;
+        }
+
+        function makeField(labelText, inputEl) {
+            var wrap = document.createElement("div");
+            wrap.style.cssText = "display:flex;flex-direction:column;gap:5px;margin-bottom:12px;";
+            var lbl = document.createElement("label");
+            lbl.textContent = labelText;
+            lbl.style.cssText = "font-size:11px;font-weight:600;color:" + LBL + ";letter-spacing:0.03em;";
+            wrap.appendChild(lbl);
+            wrap.appendChild(inputEl);
+            return wrap;
+        }
+
+        var sec = document.createElement("div");
+        sec.style.cssText = "padding:4px 0;";
+        var templateSel = makeSelect(PB_BARCODE_TEMPLATES, resolved.template);
+        var destinationSel = makeSelect(PB_DESTINATIONS, resolved.destination);
+        sec.appendChild(makeField("Template", templateSel));
+        sec.appendChild(makeField("Destination", destinationSel));
+        container.appendChild(sec);
+
+        var saveRow = document.createElement("div");
+        saveRow.style.cssText = "display:flex;align-items:center;gap:10px;padding-top:12px;border-top:1px solid " + SECTION_BDR + ";margin-top:4px;";
+        var saveBtn = document.createElement("button");
+        saveBtn.textContent = "Save Configuration";
+        saveBtn.style.cssText = "background:#10b981;color:#fff;border:none;border-radius:6px;padding:7px 18px;font-size:12px;font-weight:700;cursor:pointer;transition:background 0.15s;letter-spacing:0.02em;";
+        saveBtn.addEventListener("mouseenter", function() { saveBtn.style.background = "#059669"; });
+        saveBtn.addEventListener("mouseleave", function() { saveBtn.style.background = "#10b981"; });
+        var saveMsg = document.createElement("span");
+        saveMsg.style.cssText = "font-size:12px;color:#34d399;display:none;font-weight:500;";
+        saveMsg.textContent = "\u2713 Saved!";
+        saveRow.appendChild(saveBtn); saveRow.appendChild(saveMsg);
+        container.appendChild(saveRow);
+
+        container._getConfig = function() {
+            return { template: templateSel.value, destination: destinationSel.value };
+        };
+
+        saveBtn.addEventListener("click", function() {
+            pbSaveBarcodeConfig(container._getConfig());
             saveMsg.style.display = "inline";
             setTimeout(function() { saveMsg.style.display = "none"; }, 2000);
         });
@@ -33331,6 +33449,7 @@
         rightPanel.appendChild(rightPlaceholder);
 
         var labelConfigContainer = null;
+        var barcodeConfigContainer = null;
 
         twoPanel.appendChild(leftPanel);
         twoPanel.appendChild(rightPanel);
@@ -33396,8 +33515,15 @@
             resetOption(barcodeOpt);
         }
 
-        function showLabelConfig() {
-            if (PRINT_BARCODES_EPOCH_COHORT_PAIRS.length === 0) return;
+        function makeConfigTitle(text, accentColor) {
+            var title = document.createElement("div");
+            title.textContent = text;
+            title.style.cssText = "font-size:11px;font-weight:700;color:" + (accentColor || ACCENT) + ";text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;padding-bottom:10px;border-bottom:1px solid " + BDR + ";";
+            return title;
+        }
+
+        function buildLabelConfigSection() {
+            if (PRINT_BARCODES_EPOCH_COHORT_PAIRS.length === 0) { labelConfigContainer = null; return; }
             var savedConfig = pbLoadConfig();
             // In multi mode, force epoch/cohort to the scanned Screening context while
             // preserving the user's saved forms/template/transfer settings.
@@ -33405,44 +33531,63 @@
                 ? Object.assign({}, savedConfig || {}, { epoch: pbForcedConfig.epoch, cohort: pbForcedConfig.cohort })
                 : savedConfig;
             var restoredConfig = base ? pbRestoreConfig(base, PRINT_BARCODES_EPOCH_COHORT_PAIRS) : null;
-            while (rightPanel.firstChild) rightPanel.removeChild(rightPanel.firstChild);
-            var title = document.createElement("div");
-            title.textContent = "Label Configuration";
-            title.style.cssText = "font-size:11px;font-weight:700;color:" + ACCENT + ";text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;padding-bottom:10px;border-bottom:1px solid " + BDR + ";";
-            rightPanel.appendChild(title);
+            rightPanel.appendChild(makeConfigTitle("Label Configuration", ACCENT));
             labelConfigContainer = pbBuildLabelConfigUI(PRINT_BARCODES_EPOCH_COHORT_PAIRS, restoredConfig, glass);
             rightPanel.appendChild(labelConfigContainer);
         }
 
-        function clearRightPanel() {
+        function buildBarcodeConfigSection() {
+            var wrap = document.createElement("div");
+            if (labelConfigContainer) wrap.style.cssText = "margin-top:18px;";
+            wrap.appendChild(makeConfigTitle("Barcode Configuration", "#0d9488"));
+            barcodeConfigContainer = pbBuildBarcodeConfigUI(pbLoadBarcodeConfig(), glass);
+            wrap.appendChild(barcodeConfigContainer);
+            rightPanel.appendChild(wrap);
+        }
+
+        // Render the right config panel based on which options are currently checked.
+        // Shows the label config and/or barcode config (stacked), or the placeholder.
+        function renderRightPanel() {
             while (rightPanel.firstChild) rightPanel.removeChild(rightPanel.firstChild);
-            rightPanel.appendChild(rightPlaceholder);
             labelConfigContainer = null;
+            barcodeConfigContainer = null;
+            var wantLabel = !labelOpt.cb.disabled && labelOpt.cb.checked;
+            var wantBarcode = !barcodeOpt.cb.disabled && barcodeOpt.cb.checked;
+            if (!wantLabel && !wantBarcode) {
+                rightPanel.appendChild(rightPlaceholder);
+                return;
+            }
+            if (wantLabel) buildLabelConfigSection();
+            if (wantBarcode) buildBarcodeConfigSection();
         }
 
         labelOpt.row.addEventListener("click", function(e) {
             if (labelOpt.cb.disabled) return;
             if (e.target !== labelOpt.cb) { labelOpt.cb.checked = !labelOpt.cb.checked; }
-            if (labelOpt.cb.checked) { showLabelConfig(); } else { clearRightPanel(); }
+            renderRightPanel();
             updateConfirmBtn();
         });
         labelOpt.cb.addEventListener("change", function() {
-            if (labelOpt.cb.checked) { showLabelConfig(); } else { clearRightPanel(); }
+            renderRightPanel();
             updateConfirmBtn();
         });
 
         barcodeOpt.row.addEventListener("click", function(e) {
             if (barcodeOpt.cb.disabled) return;
             if (e.target !== barcodeOpt.cb) { barcodeOpt.cb.checked = !barcodeOpt.cb.checked; }
+            renderRightPanel();
             updateConfirmBtn();
         });
-        barcodeOpt.cb.addEventListener("change", updateConfirmBtn);
+        barcodeOpt.cb.addEventListener("change", function() {
+            renderRightPanel();
+            updateConfirmBtn();
+        });
 
         selectAllBtn.addEventListener("click", function() {
             if (selectAllBtn.disabled) return;
             labelOpt.cb.checked = true;
             if (!barcodeOpt.cb.disabled) barcodeOpt.cb.checked = true;
-            showLabelConfig();
+            renderRightPanel();
             updateConfirmBtn();
         });
 
@@ -33462,7 +33607,7 @@
             checklistWrap.style.display = "none";
             while (checklistEl.firstChild) checklistEl.removeChild(checklistEl.firstChild);
             resetLeftPanel();
-            clearRightPanel();
+            renderRightPanel();
             updateConfirmBtn();
             pbSetSubjectMode(mode);
         }
@@ -33566,7 +33711,7 @@
             pbScannedList = []; pbSelectedKeys = []; pbScanContext = null; pbForcedConfig = null;
             checklistWrap.style.display = "none";
             resetLeftPanel();
-            clearRightPanel();
+            renderRightPanel();
             updateConfirmBtn();
             try {
                 var result = await pbScanScreeningSubjects(function(msg) { pbSetApplyStatus(scanStatus, "info", msg); });
@@ -33608,7 +33753,7 @@
                         log("PrintBarcodes: fast path found " + fastPairs.length + " pair(s): " + fastPairs.map(function(p) { return p.epoch + "/" + p.cohort; }).join(", "));
                         pbSetApplyStatus(applyStatus, "success", "\u2713 Found subject with " + fastPairs.length + " epoch/cohort pair(s). Select print options below.");
                         enableLeftPanel();
-                        if (labelOpt.cb.checked) showLabelConfig();
+                        renderRightPanel();
                         applyBtn.disabled = false; applyBtn.style.opacity = "1";
                         return;
                     }
@@ -33681,7 +33826,7 @@
                 log("PrintBarcodes: found " + pairs.length + " epoch/cohort pair(s): " + pairs.map(function(p) { return p.epoch + "/" + p.cohort; }).join(", "));
                 pbSetApplyStatus(applyStatus, "success", "\u2713 Found subject with " + pairs.length + " epoch/cohort pair(s). Select print options below.");
                 enableLeftPanel();
-                if (labelOpt.cb.checked) showLabelConfig();
+                renderRightPanel();
             } catch (err) {
                 log("PrintBarcodes: apply error: " + String(err));
                 pbSetApplyStatus(applyStatus, "error", String(err));
@@ -33711,6 +33856,12 @@
                     pbShowPrintBarcodesError("Please select an Epoch in the Label configuration before confirming.");
                     return;
                 }
+            }
+            var barcodeConfig = null;
+            if (doBarcode) {
+                barcodeConfig = (barcodeConfigContainer && barcodeConfigContainer._getConfig)
+                    ? barcodeConfigContainer._getConfig()
+                    : pbResolveBarcodeConfig(pbLoadBarcodeConfig());
             }
             PRINT_BARCODES_RUNNING = true;
             PRINT_BARCODES_CANCELLED = false;
@@ -33744,6 +33895,7 @@
                         epochCohortPairs: PRINT_BARCODES_EPOCH_COHORT_PAIRS,
                         labelConfig: labelConfig,
                         doBarcode: isMulti ? false : doBarcode,
+                        barcodeConfig: barcodeConfig,
                         multi: isMulti,
                         subjectKeys: isMulti ? pbSelectedKeys.slice() : [],
                         scanContext: isMulti ? pbScanContext : null,
@@ -33767,6 +33919,7 @@
                     var barcodeOnlyState = {
                         subjectNum: PRINT_BARCODES_SUBJECT_NUM,
                         epochCohortPairs: PRINT_BARCODES_EPOCH_COHORT_PAIRS,
+                        barcodeConfig: barcodeConfig,
                         ts: Date.now()
                     };
                     try {
@@ -34502,6 +34655,7 @@
         var epochCohortPairs = pendingState.epochCohortPairs || [];
         var labelConfig = pendingState.labelConfig || {};
         var doBarcode = !!pendingState.doBarcode;
+        var barcodeConfig = pendingState.barcodeConfig || null;
 
         var glass = isGlassTheme();
         var bannerBg  = glass ? "rgba(15,10,40,0.92)" : "#1a1a1a";
@@ -34771,7 +34925,7 @@
                     await sleep(1000);
                 }
                 setProgress("Navigating to barcode page\u2026");
-                var barcodeState = { subjectNum: subjectNum, epochCohortPairs: epochCohortPairs, ts: Date.now() };
+                var barcodeState = { subjectNum: subjectNum, epochCohortPairs: epochCohortPairs, barcodeConfig: barcodeConfig, ts: Date.now() };
                 try {
                     localStorage.setItem(STORAGE_PB_BARCODE_PENDING, JSON.stringify(barcodeState));
                     localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_PRINT_BARCODES_BARCODE);
@@ -34795,6 +34949,7 @@
     async function pbAutoFillBarcodePage(pendingState) {
         var subjectNum = pendingState.subjectNum;
         var epochCohortPairs = pendingState.epochCohortPairs || [];
+        var barcodeConfig = pbResolveBarcodeConfig(pendingState.barcodeConfig);
 
         var glass = isGlassTheme();
         var bannerBg  = glass ? "rgba(15,10,40,0.92)" : "#1a1a1a";
@@ -34852,18 +35007,25 @@
                 pbSelectByValue(document, window, subjectsSel, subjectOptVal);
                 await sleep(500);
 
-                // 4. Template — wait for enabled, use first available option
-                setProgress(pairLabel + ": Setting template\u2026");
+                // 4. Template — wait for enabled, apply configured template (fallback to first option)
+                setProgress(pairLabel + ": Setting template to \u201c" + barcodeConfig.template + "\u201d\u2026");
                 var templateSel = await pbWaitForFieldEnabled("#labelTemplateId", 8000);
                 if (templateSel && templateSel.options.length > 0) {
-                    pbSelectByValue(document, window, templateSel, templateSel.options[0].value);
+                    if (!pbSelectByText(document, window, templateSel, barcodeConfig.template)) {
+                        pbSelectByValue(document, window, templateSel, templateSel.options[0].value);
+                    }
                     await sleep(300);
                 }
 
-                // 5. Destination = PDF (fhpdf, not fhpdfPreview)
-                setProgress(pairLabel + ": Setting destination to PDF\u2026");
+                // 5. Destination — apply configured destination (fallback to PDF value)
+                setProgress(pairLabel + ": Setting destination to \u201c" + barcodeConfig.destination + "\u201d\u2026");
                 var printerSel = await pbWaitForFieldEnabled("#printerName", 5000);
-                if (printerSel) { pbSelectByValue(document, window, printerSel, "fhpdf"); await sleep(200); }
+                if (printerSel) {
+                    if (!pbSelectByText(document, window, printerSel, barcodeConfig.destination)) {
+                        pbSelectByValue(document, window, printerSel, "fhpdf");
+                    }
+                    await sleep(200);
+                }
 
                 // 6. Wait for Print button and click
                 setProgress(pairLabel + ": Waiting for Print button\u2026");
