@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.8.2
+// @version     2.8.4
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -32841,6 +32841,17 @@
         try { if (iframeWin && iframeWin.jQuery) iframeWin.jQuery(selectEl).trigger("change"); } catch (e) {}
     }
 
+    function pbMultiSelectByValues(iframeDoc, iframeWin, selectEl, values) {
+        var opts = selectEl.querySelectorAll("option");
+        var valSet = {};
+        for (var i = 0; i < values.length; i++) valSet[values[i]] = true;
+        for (var j = 0; j < opts.length; j++) {
+            opts[j].selected = !!valSet[opts[j].value];
+        }
+        selectEl.dispatchEvent(new Event("change", { bubbles: true }));
+        try { if (iframeWin && iframeWin.jQuery) iframeWin.jQuery(selectEl).trigger("change"); } catch (e) {}
+    }
+
     function pbSelectByText(iframeDoc, iframeWin, selectEl, text) {
         var opts = selectEl.querySelectorAll("option");
         var lc = (text || "").toLowerCase().trim();
@@ -33509,12 +33520,6 @@
             resetOption(labelOpt);
             resetOption(barcodeOpt);
         }
-        // Lock or unlock the Barcode option independently (multi mode = label only).
-        function setBarcodeAvailability(available) {
-            if (available) return; // enableLeftPanel already enables it
-            resetOption(barcodeOpt);
-        }
-
         function makeConfigTitle(text, accentColor) {
             var title = document.createElement("div");
             title.textContent = text;
@@ -33723,8 +33728,7 @@
                 pbSetScanContext(pbScanContext);
                 renderMultiChecklist(pbScannedList);
                 enableLeftPanel();
-                setBarcodeAvailability(false);
-                pbSetApplyStatus(scanStatus, "success", "\u2713 Found " + pbScannedList.length + " subject(s) in " + (pbScanContext.plan || "Screening") + ". Select subjects, then enable Label.");
+                pbSetApplyStatus(scanStatus, "success", "\u2713 Found " + pbScannedList.length + " subject(s) in " + (pbScanContext.plan || "Screening") + ". Select subjects, then choose Label and/or Barcode.");
             } catch (err) {
                 log("PrintBarcodes: scan error: " + String(err));
                 pbSetApplyStatus(scanStatus, "error", String(err));
@@ -33894,7 +33898,7 @@
                         subjectNum: PRINT_BARCODES_SUBJECT_NUM,
                         epochCohortPairs: PRINT_BARCODES_EPOCH_COHORT_PAIRS,
                         labelConfig: labelConfig,
-                        doBarcode: isMulti ? false : doBarcode,
+                        doBarcode: doBarcode,
                         barcodeConfig: barcodeConfig,
                         multi: isMulti,
                         subjectKeys: isMulti ? pbSelectedKeys.slice() : [],
@@ -33916,10 +33920,14 @@
 
                 if (!PRINT_BARCODES_CANCELLED && doBarcode) {
                     // Navigate the main window to the barcode printing page; auto-fill runs on page load.
+                    var isMultiBc = (pbMode === "multi");
                     var barcodeOnlyState = {
                         subjectNum: PRINT_BARCODES_SUBJECT_NUM,
                         epochCohortPairs: PRINT_BARCODES_EPOCH_COHORT_PAIRS,
                         barcodeConfig: barcodeConfig,
+                        multi: isMultiBc,
+                        subjectKeys: isMultiBc ? pbSelectedKeys.slice() : [],
+                        scanContext: isMultiBc ? pbScanContext : null,
                         ts: Date.now()
                     };
                     try {
@@ -34439,6 +34447,24 @@
         return out;
     }
 
+    // Find the option VALUE in a barcode-page subjects <select> whose label matches a
+    // single cleaned subject key (same matching strategy as pbCollectOptionValuesByKeys).
+    function pbFindBarcodeSubjectOptionValue(selectEl, key) {
+        if (!selectEl || !key) return null;
+        var opts = selectEl.querySelectorAll("option");
+        for (var j = 0; j < opts.length; j++) {
+            var v = (opts[j].value || "").trim();
+            if (v === "") continue;
+            var label = opts[j].textContent || opts[j].value || "";
+            if (pbCleanAssignmentNum(label) === key) return v;
+            var toks = pbExtractKeys(label);
+            for (var k = 0; k < toks.length; k++) {
+                if (toks[k] === key) return v;
+            }
+        }
+        return null;
+    }
+
     // Pick the "Screening" option of a <select>: prefer an option containing "screening"
     // that is NOT a rescreen / "do not use" variant; fall back to any "screen" option.
     // Selects it (firing change) and returns the chosen option's text, or "" if none.
@@ -34925,7 +34951,15 @@
                     await sleep(1000);
                 }
                 setProgress("Navigating to barcode page\u2026");
-                var barcodeState = { subjectNum: subjectNum, epochCohortPairs: epochCohortPairs, barcodeConfig: barcodeConfig, ts: Date.now() };
+                var barcodeState = {
+                    subjectNum: subjectNum,
+                    epochCohortPairs: epochCohortPairs,
+                    barcodeConfig: barcodeConfig,
+                    multi: multi,
+                    subjectKeys: subjectKeys,
+                    scanContext: pendingState.scanContext || null,
+                    ts: Date.now()
+                };
                 try {
                     localStorage.setItem(STORAGE_PB_BARCODE_PENDING, JSON.stringify(barcodeState));
                     localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_PRINT_BARCODES_BARCODE);
@@ -34950,6 +34984,9 @@
         var subjectNum = pendingState.subjectNum;
         var epochCohortPairs = pendingState.epochCohortPairs || [];
         var barcodeConfig = pbResolveBarcodeConfig(pendingState.barcodeConfig);
+        var multi = !!pendingState.multi;
+        var subjectKeys = pendingState.subjectKeys || [];
+        var scanContext = pendingState.scanContext || null;
 
         var glass = isGlassTheme();
         var bannerBg  = glass ? "rgba(15,10,40,0.92)" : "#1a1a1a";
@@ -34964,6 +35001,93 @@
 
         try {
             var normalizedSubject = pbNormalizeSubjectNum(subjectNum);
+
+            // Multi-subject mode: every selected subject shares the scanned Screening
+            // epoch/cohort, so set epoch+cohort once, multi-select all subjects, then print.
+            if (multi) {
+                if (!subjectKeys.length) throw new Error("No subjects were selected for the multi-subject barcode job.");
+                var mEpoch = (scanContext && scanContext.epoch) || (epochCohortPairs[0] && epochCohortPairs[0].epoch);
+                var mCohort = (scanContext && scanContext.cohort) || (epochCohortPairs[0] && epochCohortPairs[0].cohort);
+                if (!mEpoch || !mCohort) throw new Error("Missing epoch/cohort context for the multi-subject barcode job.");
+
+                // 1. Epoch
+                setProgress("Setting epoch \u201c" + mEpoch + "\u201d\u2026");
+                var mEpochSel = await pbWaitForElement(document, "#epoch", 10000);
+                if (!mEpochSel) throw new Error("Epoch selector not found");
+                pbSelectByText(document, window, mEpochSel, mEpoch);
+                await sleep(800);
+
+                // 2. Cohort — disabled until epoch AJAX completes.
+                setProgress("Waiting for cohort\u2026");
+                var mCohortSel = await pbWaitForFieldEnabled("#cohort", 10000);
+                if (!mCohortSel) throw new Error("Cohort selector did not become enabled");
+                pbSelectByText(document, window, mCohortSel, mCohort);
+                await sleep(800);
+
+                // 3. Subjects — disabled until cohort AJAX completes. Multi-select all matching subjects.
+                setProgress("Waiting for subjects\u2026");
+                var mSubjectsSel = await pbWaitForFieldEnabled("#subjects", 12000);
+                if (!mSubjectsSel) throw new Error("Subjects selector did not become enabled");
+                await sleep(400);
+
+                var mSubjectVals = [];
+                var mNotFound = [];
+                for (var mi = 0; mi < subjectKeys.length; mi++) {
+                    var mKey = subjectKeys[mi];
+                    if (!mKey) continue;
+                    var mVal = pbFindBarcodeSubjectOptionValue(mSubjectsSel, mKey);
+                    if (mVal) {
+                        mSubjectVals.push(mVal);
+                    } else {
+                        log("PrintBarcodes Barcode: subject key '" + mKey + "' not found in subjects list, skipping");
+                        mNotFound.push(mKey);
+                    }
+                }
+
+                if (mSubjectVals.length === 0) throw new Error("None of the " + subjectKeys.length + " selected subjects were found on the barcode printing page.");
+
+                setProgress("Selecting " + mSubjectVals.length + " subject(s)\u2026");
+                pbMultiSelectByValues(document, window, mSubjectsSel, mSubjectVals);
+                await sleep(500);
+
+                // 4. Template — apply configured template (fallback to first option).
+                setProgress("Setting template\u2026");
+                var mTemplateSel = await pbWaitForFieldEnabled("#labelTemplateId", 8000);
+                if (mTemplateSel && mTemplateSel.options.length > 0) {
+                    if (!pbSelectByText(document, window, mTemplateSel, barcodeConfig.template)) {
+                        pbSelectByValue(document, window, mTemplateSel, mTemplateSel.options[0].value);
+                    }
+                    await sleep(300);
+                }
+
+                // 5. Destination — apply configured destination (fallback to PDF).
+                setProgress("Setting destination\u2026");
+                var mPrinterSel = await pbWaitForFieldEnabled("#printerName", 5000);
+                if (mPrinterSel) {
+                    if (!pbSelectByText(document, window, mPrinterSel, barcodeConfig.destination)) {
+                        pbSelectByValue(document, window, mPrinterSel, "fhpdf");
+                    }
+                    await sleep(200);
+                }
+
+                // 6. Print all selected subjects in one job.
+                setProgress("Waiting for Print button\u2026");
+                var mPrintBtn = await pbWaitForFieldEnabled("#printButton", 10000);
+                if (!mPrintBtn) mPrintBtn = pbFindPrintButton(document);
+                if (!mPrintBtn) throw new Error("Print button did not become enabled");
+                setProgress("Printing " + mSubjectVals.length + " subject(s)\u2026");
+                mPrintBtn.click();
+                await sleep(2500);
+                log("PrintBarcodes Barcode: Print clicked for " + mSubjectVals.length + " subject(s)");
+
+                var mDoneMsg = "\u2713 Barcodes printed for " + mSubjectVals.length + " subject(s).";
+                if (mNotFound.length) mDoneMsg += " " + mNotFound.length + " not found.";
+                setProgress(mDoneMsg);
+                banner.style.borderColor = glass ? "rgba(16,185,129,0.7)" : "#2ecc71";
+                setTimeout(function() { if (banner.parentNode) banner.remove(); }, 8000);
+                return;
+            }
+
             if (!epochCohortPairs.length) throw new Error("No epoch/cohort pairs available for subject \u201c" + subjectNum + "\u201d");
             var printedOnce = false;
 
