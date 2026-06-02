@@ -1,13 +1,13 @@
 const sysItems = [
-    "SYS (60 - 200) mmHg",
+    "SYS (60 - 200) mmHg", "SYS (60 - 200)",
 ];
 
 const diaItems = [
-    "DIA (40 - 110) mmHg",
+    "DIA (40 - 110) mmHg", "DIA (40 - 110)",
 ];
 
 const hrItems = [
-    "HR (50 - 100) bpm",
+    "HR (50 - 100) bpm", "HR (30 - 200)",
 ]
 
 // Inclusive
@@ -17,22 +17,22 @@ var sys_max_range = 200;
 var dia_min_range = 40
 var dia_max_range = 110;
 
-var hr_min_range = 50;
-var hr_max_range = 100;
+var hr_min_range = 30;
+var hr_max_range = 200;
 
 // ======== Don't modify ========
 var item = itemJson.item;
 
 try {
-    var groupid = getItemGroupID(formJson);
+    var isRepeat = isItemInRepeat(formJson);
     
-    var sys = pullItemFromForm(formJson, sysItems, groupid);
-    var dia = pullItemFromForm(formJson, diaItems, groupid);
-    var hr = pullItemFromForm(formJson, hrItems, groupid);
+    var sys = pullItemFromForm(formJson, sysItems, isRepeat);
+    var dia = pullItemFromForm(formJson, diaItems, isRepeat);
+    var hr = pullItemFromForm(formJson, hrItems, isRepeat);
 
     log();
 
-    if (!sys || sys === null || !dia || dia == null || !hr || hr == null) return itemJson.item.codeListItems[4];
+    if (!sys || sys === null || !dia || dia == null || !hr || hr == null) return itemJson.item.codeListItems[4].codedValue;
     // OOR
     if (
         sys > sys_max_range ||
@@ -41,7 +41,7 @@ try {
         dia < dia_min_range ||
         hr > hr_max_range ||
         hr < hr_min_range
-    ) return itemJson.item.codeListItems[1]; // Out of Protocol Range
+    ) return itemJson.item.codeListItems[1].codedValue; // Out of Protocol Range
     else if ( // IR
         sys <= sys_max_range &&
         sys >= sys_min_range && 
@@ -49,11 +49,11 @@ try {
         dia >= dia_min_range &&
         hr <= hr_max_range &&
         hr >= hr_min_range
-    ) return itemJson.item.codeListItems[0]; // Within Normal Range
+    ) return itemJson.item.codeListItems[0].codedValue; // Within Normal Range
 
-    return itemJson.item.codeListItems[4];
+    return itemJson.item.codeListItems[4].codedValue;
 } catch (e) {
-    logger("Error in main execution logic: " + e.message);
+    logger("Error in main execution logic: " + e);
     return null;
 }
 
@@ -94,7 +94,7 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     return keepers;
 }
 
-function pullItemFromForm(form, targetItem, groupid) {
+function pullItemFromForm(form, targetItem, repeat) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
     
@@ -141,6 +141,14 @@ function calculateAverage(values) {
     var avg = sum / count;
     return avg;
 }
+function containsValue(input, keyword) {
+    if (input == null) {
+        return false;
+    }
+
+    var value = input.toString().toLowerCase();
+    return value.indexOf(keyword) !== -1;
+}
 
 function isItemInRepeat(form) {
     for (var i = 0; i < form.form.itemGroups.length; i++) {
@@ -151,7 +159,7 @@ function isItemInRepeat(form) {
         for (var j = 0; j < items.length; j++) {
             var it = items[j];
             if (it.id === item.id) {
-                return group.id;
+                if (containsValue(group.name, "repeat")) return true;
             }
         }
     }

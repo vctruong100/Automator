@@ -34,7 +34,7 @@ try {
     else if (POCBP.value == POCBP.codeListItems[1].codedValue) return itemJson.item.codeListItems[1].codedValue; // return no
     return null;
 } catch (e) {
-    logger("Error in main execution logic: " + e.message);
+    logger("Error in main execution logic: " + e);
     return null;
 }
 

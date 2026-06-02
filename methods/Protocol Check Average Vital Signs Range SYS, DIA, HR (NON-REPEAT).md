@@ -91,7 +91,7 @@ try {
 
     return itemJson.item.codeListItems[4];
 } catch (e) {
-    logger("Error in main execution logic: " + e.message);
+    logger("Error in main execution logic: " + e);
     return null;
 }
 

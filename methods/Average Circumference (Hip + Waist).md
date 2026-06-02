@@ -51,7 +51,7 @@ try {
 
     return null;
 } catch (e) {
-    logger("Error in main method: " + e.message);
+    logger("Error in main method: " + e);
     return null;
 }
 

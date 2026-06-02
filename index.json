@@ -4,14 +4,14 @@
     "title": "Average Circumference (Hip)",
     "tags": ["Average", "Circumference", "Hip"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20Circumference%20(Hip).md",
-    "updated": "2026-02-12"
+    "updated": "2026-06-02"
   },
   {
     "id": "M-002",
     "title": "Average Circumference (Waist)",
     "tags": ["Average", "Circumference", "Waist"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20Circumference%20(Waist).md",
-    "updated": "2026-02-12"
+    "updated": "2026-06-02"
   },
   {
     "id": "M-003",
@@ -225,16 +225,9 @@
   },
   {
     "id": "M-034",
-    "title": "Protocol Check Vital Signs Range #1 (NON-REPEAT)",
+    "title": "Protocol Check Vital Signs Range",
     "tags": ["Protocol Check", "Vitals", "NON-REPEAT"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Vital%20Signs%20Range%20%231%20(NON-REPEAT).md",
-    "updated": "2026-03-30"
-  },
-  {
-    "id": "M-035",
-    "title": "Protocol Check Vital Signs Range #2 (REPEAT)",
-    "tags": ["Protocol Check", "Vitals", "REPEAT"],
-    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Vital%20Signs%20Range%20%232%20(REPEAT).md",
     "updated": "2026-03-30"
   },
   {

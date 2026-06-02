@@ -38,7 +38,7 @@ try {
 
     return itemJson.item.codeListItems[3].codedValue; // return none
 } catch (e) {
-    logger("Error in main execution logic: " + e.message);
+    logger("Error in main execution logic: " + e);
     return null;
 }
 

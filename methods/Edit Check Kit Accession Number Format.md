@@ -3,7 +3,7 @@ const value = itemJson.item.value;
 try {
     return isValidFormat(value);
 } catch (e) {
-    logger("Error in main execution logic: " + e.message);
+    logger("Error in main execution logic: " + e);
     return null;
 }
 

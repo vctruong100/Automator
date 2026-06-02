@@ -106,7 +106,7 @@ try {
 
     return item.codeListItems[0].codedValue;
 } catch (e) {
-    logger("Error in main execution logic: " + e.message);
+    logger("Error in main execution logic: " + e);
     return null;
 }
 

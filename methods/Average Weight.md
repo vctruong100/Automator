@@ -21,7 +21,7 @@ try {
     if (list.length === maxCount) return (avg).toFixed(sigfig);
     return null;
 } catch (e) {
-    logger("Error in main execution logic: " + e.message);
+    logger("Error in main execution logic: " + e);
     return null;
 }
 

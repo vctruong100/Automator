@@ -61,7 +61,7 @@ try {
 
     return true;
 } catch (e) {
-    logger("Error in main execution logic: " + e.message);
+    logger("Error in main execution logic: " + e);
     return null;
 }
 
@@ -247,7 +247,21 @@ function parseMultiRange(input) {
         .replace(/\s+/g, " ")
         .trim();
 
-    var parts = content.split(/[,|;/\-]+/);
+    var hasMale = /\b(male|m)\b/.test(content);
+    var hasFemale = /\b(female|f)\b/.test(content);
+
+    logger("hasMale: " + hasMale + ", hasFemale: " + hasFemale);
+
+    if (!hasMale && !hasFemale) {
+        var parsedDefault = parseRange("(" + content + ")");
+        if (parsedDefault) {
+            result.default = parsedDefault;
+        }
+        logger("Single range detected, using default: " + JSON.stringify(result));
+        return Object.keys(result).length ? result : null;
+    }
+
+    var parts = content.split(/[,;|]+/);
 
     for (var i = 0; i < parts.length; i++) {
         var part = parts[i].trim();
@@ -258,14 +272,7 @@ function parseMultiRange(input) {
         if (/\b(female|f)\b/.test(part)) label = "female";
         else if (/\b(male|m)\b/.test(part)) label = "male";
 
-        var rangeMatch = part.match(/(<=|>=|<|>)?\s*-?[\d.]+(\s*-\s*-?[\d.]+)?/);
-
-        if (!rangeMatch) continue;
-
-        var rule = rangeMatch[0];
-
-        var parsed = parseRange("(" + rule + ")");
-
+        var parsed = parseRange("(" + part + ")");
         if (!parsed) continue;
 
         if (label) {

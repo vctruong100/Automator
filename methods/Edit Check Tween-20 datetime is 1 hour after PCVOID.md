@@ -39,7 +39,7 @@ try {
     customErrorMessage("Difference is out of range: " + Math.abs(differenceInMins) + ", Previous PCVoid Time: " + formatDateTime(pcvoid.value));
     return true;
 } catch (e) {
-    logger("Error in main execution logic: " + e.message);
+    logger("Error in main execution logic: " + e);
     return null;
 }
 

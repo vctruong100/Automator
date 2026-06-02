@@ -3,7 +3,7 @@ const dob = formJson.form.subject.volunteer.dateOfBirth;
 try {
     return getYearOnly(dob);
 } catch (e) {
-    logger("Error in main execution logic: " + e.message);
+    logger("Error in main execution logic: " + e);
     return null;
 }
 

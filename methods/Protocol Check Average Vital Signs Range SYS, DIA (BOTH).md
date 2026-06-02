@@ -70,7 +70,7 @@ try {
 
     return item.codeListItems[2].codedValue; // return no
 } catch (e) {
-    logger("Error in main execution logic: " + e.message);
+    logger("Error in main execution logic: " + e);
     return null;
 }
 

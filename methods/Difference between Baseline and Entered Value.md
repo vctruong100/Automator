@@ -32,7 +32,7 @@ try {
     logger("Difference: " + difference);
     return difference;
 } catch (e) {
-    logger("Error in main execution logic: " + e.message);
+    logger("Error in main execution logic: " + e);
     return null;
 }
 
