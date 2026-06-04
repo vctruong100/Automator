@@ -371,6 +371,13 @@
     "updated": "2026-03-02"
   },
   {
+    "id": "M-061",
+    "title": "Total Urine Weight v2",
+    "tags": ["Void", "Weight"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Total%20Urine%20Weight%20v2.md",
+    "updated": "2026-03-02"
+  },
+  {
     "id": "M-062",
     "title": "Protocol Check Average Vital Signs Range SYS, DIA (BOTH)",
     "tags": ["Protocol", "Protocol"],
@@ -565,5 +572,12 @@
     "tags": ["Visit Window"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Outpatient%20Visit%20Window.md",
     "updated": "2026-05-29"
+  },
+  {
+    "id": "M-090",
+    "title": "Collect All Transfer Barcode",
+    "tags": ["Barcode"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Collect%20All%20Transfer%20Barcode.md",
+    "updated": "2026-06-02"
   }
 ]

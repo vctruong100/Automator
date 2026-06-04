@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.8.4
+// @version     2.8.5
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -205,7 +205,6 @@
     var GENDER_FEMALE = "Female";
     var GENDER_CONTROL_CLASS = "ieGenderControl";
     var CODE_VIEW_DUP_TOGGLE_BUTTON_ID = "ieCodeViewDupToggle";
-
 
     var BARCODE_SELECTORS = {
         featureButtonTarget: '.main-gui-panel',
@@ -16305,6 +16304,7 @@
         { id: "Cohort Eligibility", label: "Cohort Eligibility" },
         { id: "Subject Eligibility", label: "Subject Eligibility" },
         { id: "Parse Study Event", label: "Parse Study Event" },
+        { id: "Parse Forms", label: "Parse Forms" },
         { id: "Edit Study Events List", label: "Edit Study Events List" },
         { id: "Download DTS Report", label: "Download DTS Report" },
         { id: "Print Barcodes", label: "Print Barcodes" },
@@ -17719,6 +17719,264 @@
 
             log("[ParseStudyEvent] Results displayed, collected " + events.length + " events");
         });
+    }
+
+
+    //==========================
+    // PARSE FORMS FEATURE
+    //==========================
+    // This section contains functions for parsing forms from the study library.
+    // It extracts form names from the form list page and generates formatted output.
+    //==========================
+
+    function isFormListPage() {
+        var url = location.href.toLowerCase();
+        return url.indexOf("cenexel.clinspark.com/secure/crfdesign/studylibrary/list/form") !== -1;
+    }
+
+    function parseFormsCollectFromTable() {
+        var tbody = document.querySelector("tbody");
+        if (!tbody) {
+            log("[ParseForms] tbody not found");
+            return [];
+        }
+
+        var rows = tbody.querySelectorAll("tr");
+        var forms = [];
+
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            
+            // Skip rows with display: none
+            var computedStyle = window.getComputedStyle(row);
+            if (computedStyle.display === "none") {
+                continue;
+            }
+
+            // Find the anchor in the first td with class "highlight"
+            var highlightTd = row.querySelector("td.highlight");
+            if (highlightTd) {
+                var anchor = highlightTd.querySelector("a");
+                if (anchor) {
+                    var rawName = anchor.textContent || "";
+                    var name = rawName.replace(/\s+/g, " ").trim();
+                    if (name.length > 0) {
+                        forms.push({ name: name, originalName: rawName.trim() });
+                        log("[ParseForms] Collected: \"" + name + "\"");
+                    }
+                }
+            }
+        }
+
+        return forms;
+    }
+
+    function parseFormsGenerateOutput(forms) {
+        var lines = [];
+        for (var i = 0; i < forms.length; i++) {
+            lines.push("\"" + forms[i].name + "\"");
+        }
+        return lines.join(",\n");
+    }
+
+    function parseFormsCopyToClipboard(text) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function() {
+                log("[ParseForms] Copied to clipboard");
+            }).catch(function(err) {
+                log("[ParseForms] Clipboard error: " + err);
+            });
+        } else {
+            var ta = document.createElement("textarea");
+            ta.value = text;
+            ta.style.position = "fixed";
+            ta.style.left = "-9999px";
+            document.body.appendChild(ta);
+            ta.select();
+            try {
+                document.execCommand("copy");
+                log("[ParseForms] Copied to clipboard (fallback)");
+            } catch (err) {
+                log("[ParseForms] Copy failed: " + err);
+            }
+            document.body.removeChild(ta);
+        }
+    }
+
+    function parseFormsCreateResultsUI(forms) {
+        var container = document.createElement("div");
+        container.style.display = "flex";
+        container.style.flexDirection = "column";
+        container.style.gap = "16px";
+        container.style.height = "100%";
+        container.style.padding = "12px";
+
+        var countDiv = document.createElement("div");
+        countDiv.style.textAlign = "center";
+        countDiv.style.fontSize = "16px";
+        countDiv.style.fontWeight = "600";
+        countDiv.style.color = "#9df";
+        countDiv.style.padding = "8px";
+        countDiv.style.background = "#1a1a1a";
+        countDiv.style.borderRadius = "6px";
+        countDiv.textContent = "Collected " + forms.length + " forms";
+        container.appendChild(countDiv);
+
+        var contentContainer = document.createElement("div");
+        contentContainer.style.display = "flex";
+        contentContainer.style.flexDirection = "column";
+        contentContainer.style.gap = "8px";
+        contentContainer.style.flex = "1";
+        contentContainer.style.minHeight = "0";
+        contentContainer.style.overflow = "hidden";
+
+        var outputData = parseFormsGenerateOutput(forms);
+
+        var header = document.createElement("div");
+        header.style.display = "flex";
+        header.style.justifyContent = "space-between";
+        header.style.alignItems = "center";
+        header.style.padding = "6px 8px";
+        header.style.background = "#2a2a2a";
+        header.style.borderRadius = "4px";
+
+        var titleEl = document.createElement("span");
+        titleEl.style.fontWeight = "600";
+        titleEl.style.fontSize = "13px";
+        titleEl.textContent = "Form Names";
+
+        var copyBtn = document.createElement("button");
+        copyBtn.textContent = "Copy";
+        copyBtn.style.background = "#28a745";
+        copyBtn.style.color = "#fff";
+        copyBtn.style.border = "none";
+        copyBtn.style.borderRadius = "4px";
+        copyBtn.style.padding = "4px 10px";
+        copyBtn.style.cursor = "pointer";
+        copyBtn.style.fontSize = "12px";
+        copyBtn.style.fontWeight = "500";
+        copyBtn.addEventListener("mouseenter", function() { this.style.background = "#218838"; });
+        copyBtn.addEventListener("mouseleave", function() { this.style.background = "#28a745"; });
+        copyBtn.addEventListener("click", function() {
+            parseFormsCopyToClipboard(outputData);
+            var origText = copyBtn.textContent;
+            copyBtn.textContent = "Copied!";
+            copyBtn.style.background = "#17a2b8";
+            setTimeout(function() {
+                copyBtn.textContent = origText;
+                copyBtn.style.background = "#28a745";
+            }, 1500);
+        });
+
+        header.appendChild(titleEl);
+        header.appendChild(copyBtn);
+        contentContainer.appendChild(header);
+
+        var content = document.createElement("div");
+        content.style.flex = "1";
+        content.style.overflow = "auto";
+        content.style.background = "#1a1a1a";
+        content.style.border = "1px solid #333";
+        content.style.borderRadius = "4px";
+        content.style.padding = "8px";
+        content.style.fontSize = "12px";
+        content.style.fontFamily = "monospace";
+        content.style.whiteSpace = "pre-wrap";
+        content.style.wordBreak = "break-word";
+        content.style.color = "#e0e0e0";
+        content.textContent = outputData;
+
+        contentContainer.appendChild(content);
+        container.appendChild(contentContainer);
+
+        return container;
+    }
+
+    function APS_ParseForms() {
+        log("[ParseForms] Starting...");
+        log("[ParseForms] URL check: " + location.href);
+
+        if (!isFormListPage()) {
+            log("[ParseForms] Not on form list page");
+            showWrongPagePopup("Parse Forms", "cenexel.clinspark.com/secure/crfdesign/studylibrary/list/form", location.pathname);
+            return;
+        }
+
+        log("[ParseForms] On valid form list page, scanning table");
+
+        var loadingContainer = document.createElement("div");
+        loadingContainer.style.display = "flex";
+        loadingContainer.style.flexDirection = "column";
+        loadingContainer.style.alignItems = "center";
+        loadingContainer.style.gap = "20px";
+        loadingContainer.style.padding = "40px 20px";
+
+        var spinner = document.createElement("div");
+        spinner.style.width = "48px";
+        spinner.style.height = "48px";
+        spinner.style.border = "4px solid #333";
+        spinner.style.borderTop = "4px solid #17a2b8";
+        spinner.style.borderRadius = "50%";
+        spinner.style.animation = "parseFormsSpinner 1s linear infinite";
+
+        var style = document.createElement("style");
+        style.textContent = "@keyframes parseFormsSpinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }";
+        document.head.appendChild(style);
+
+        var statusText = document.createElement("div");
+        statusText.style.fontSize = "16px";
+        statusText.style.fontWeight = "500";
+        statusText.style.color = "#9df";
+        statusText.textContent = "Scanning table...";
+
+        var progressText = document.createElement("div");
+        progressText.style.fontSize = "13px";
+        progressText.style.color = "#888";
+        progressText.textContent = "Collecting form names from tbody";
+
+        loadingContainer.appendChild(spinner);
+        loadingContainer.appendChild(statusText);
+        loadingContainer.appendChild(progressText);
+
+        var popup = createPopup({
+            title: "Parse Forms",
+            content: loadingContainer,
+            width: "400px",
+            height: "auto"
+        });
+
+        setTimeout(async function() {
+            log("[ParseForms] Searching for tbody");
+            var forms = parseFormsCollectFromTable();
+
+            if (forms.length === 0) {
+                log("[ParseForms] No forms found");
+                statusText.textContent = "No forms found";
+                statusText.style.color = "#f66";
+                spinner.style.display = "none";
+                progressText.textContent = "Make sure the table has data loaded";
+                return;
+            }
+
+            log("[ParseForms] Found " + forms.length + " forms, generating output");
+            statusText.textContent = "Processing " + forms.length + " forms...";
+
+            await sleep(200);
+
+            var resultsUI = parseFormsCreateResultsUI(forms);
+            popup.setContent(resultsUI);
+
+            popup.element.style.width = "600px";
+            popup.element.style.height = "500px";
+            popup.element.style.maxWidth = "95%";
+            popup.element.style.maxHeight = "85%";
+
+            popup.element.style.left = (window.innerWidth / 2) + "px";
+            popup.element.style.top = (window.innerHeight / 2) + "px";
+            popup.element.style.transform = "translate(-50%, -50%)";
+
+            log("[ParseForms] Results displayed, collected " + forms.length + " forms");
+        }, 300);
     }
 
 
@@ -35946,6 +36204,21 @@
             APS_ParseStudyEvent();
         });
 
+        var parseFormsBtn = document.createElement("button");
+        parseFormsBtn.textContent = "Parse Forms";
+        parseFormsBtn.style.background = "#4a90e2";
+        parseFormsBtn.style.color = "#fff";
+        parseFormsBtn.style.border = "none";
+        parseFormsBtn.style.borderRadius = "6px";
+        parseFormsBtn.style.padding = "8px";
+        parseFormsBtn.style.cursor = "pointer";
+        parseFormsBtn.onmouseenter = function() { this.style.background = "#58a1f5"; };
+        parseFormsBtn.onmouseleave = function() { this.style.background = "#4a90e2"; };
+        parseFormsBtn.addEventListener("click", function() {
+            log("[ParseForms] Button clicked");
+            APS_ParseForms();
+        });
+
         var parseDeviationBtn = document.createElement("button");
         parseDeviationBtn.textContent = "Parse Deviation";
         parseDeviationBtn.style.background = "#5b43c7";
@@ -36128,7 +36401,7 @@
 
         // Apply glassmorphism theme to all panel buttons if glass theme is active
         if (glass) {
-            var allPanelBtns = [svcBtn, runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, importFromLibBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, bplBtn, importEligBtn, findAeBtn, findFormAndEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, editStudyEventsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn, downloadDtsBtn, printBarcodesBtn];
+            var allPanelBtns = [svcBtn, runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, importFromLibBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, bplBtn, importEligBtn, findAeBtn, findFormAndEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, parseFormsBtn, editStudyEventsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn, downloadDtsBtn, printBarcodesBtn];
             for (var gi = 0; gi < allPanelBtns.length; gi++) {
                 var gb = allPanelBtns[gi];
                 gb.className = "ie-btn-primary";
@@ -36162,6 +36435,7 @@
             { el: openEligBtn, label: "Cohort Eligibility" },
             { el: subjectEligBtn, label: "Subject Eligibility" },
             { el: parseStudyEventBtn, label: "Parse Study Event" },
+            { el: parseFormsBtn, label: "Parse Forms" },
             { el: editStudyEventsBtn, label: "Edit Study Events List" },
             { el: svcBtn, label: "Set Visibility Condition" },
             { el: downloadDtsBtn, label: "Download DTS Report" },
