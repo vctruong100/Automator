@@ -1,4 +1,4 @@
-Button Redirect to Image Page (use direct link):
+Green Button Redirect to Image Page (use direct link):
 <a href="https://i.ibb.co/FbnX6XvJ/image-6.png" 
    target="_blank"
    class="img-link-btn">

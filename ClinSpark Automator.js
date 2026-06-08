@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.8.5
+// @version     2.8.8
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -32916,7 +32916,7 @@
     }
 
     function pbNormalizeSubjectNum(s) {
-        return (s || "").replace(/\s+/g, "").toLowerCase();
+        return (s || "").replace(/\s+/g, "").replace(/[\u2010\u2011\u2012\u2013\u2014\u2015]/g, "-").toLowerCase();
     }
 
     function pbGetIframe() {
@@ -32994,54 +32994,80 @@
     }
 
     // Returns true if filtering succeeded, false if #subjectId Select2 is not present on the page.
+    // Strategy: use Select2's jQuery plugin API to properly open+activate, then trigger the
+    // 'keyup-change' event that Select2 v3 specifically listens to for AJAX queries.
     async function pbSelect2FilterSubject(iframeDoc, iframeWin, subjectNum) {
-        // Locate the Select2 container generated for #subjectId.
-        // Select2 v3 produces #s2id_subjectId; v4 places a sibling container next to the hidden input.
-        var s2Container = iframeDoc.querySelector("#s2id_subjectId, .select2-container[id*='subjectId'], .select2-container[aria-owns*='subjectId']");
-        if (!s2Container) {
-            var hiddenInput = iframeDoc.getElementById("subjectId");
-            if (hiddenInput) {
-                var sib = hiddenInput.previousElementSibling || hiddenInput.nextElementSibling;
-                if (sib && sib.className && sib.className.match(/select2/i)) s2Container = sib;
-            }
-        }
-        if (!s2Container) return false; // Not present on this page — caller should try another strategy
+        var jq = iframeWin.jQuery;
+        if (!jq) { log("PrintBarcodes: jQuery not available in iframe, cannot use Select2 API"); return false; }
 
-        var clickTarget = s2Container.querySelector(".select2-choice, .select2-selection, a.select2-choice") || s2Container;
-        clickTarget.click();
-        await sleep(250);
+        var $hidden = jq("#subjectId");
+        if (!$hidden.length) { log("PrintBarcodes: #subjectId not found"); return false; }
+
+        // Programmatically open Select2 — this calls activate() which adds .select2-container-active,
+        // which is required for Select2 v3 to process search events and fire AJAX.
+        try {
+            $hidden.select2("open");
+            log("PrintBarcodes: select2('open') called");
+        } catch(e) {
+            log("PrintBarcodes: select2('open') threw: " + e);
+            return false;
+        }
+        await sleep(400);
 
         iframeDoc = iframeWin.document;
 
-        var s2Search = iframeDoc.querySelector(".select2-drop .select2-input, .select2-dropdown .select2-search__field, .select2-search input");
-        if (!s2Search) return false;
-
-        s2Search.focus();
-        s2Search.value = subjectNum;
-        s2Search.dispatchEvent(new Event("input", { bubbles: true }));
-        s2Search.dispatchEvent(new Event("keyup",  { bubbles: true }));
-        try { if (iframeWin.jQuery) iframeWin.jQuery(s2Search).trigger("input").trigger("keyup"); } catch(e) {}
-        await sleep(700); // Wait for AJAX results
-
-        iframeDoc = iframeWin.document;
-
-        var results = iframeDoc.querySelectorAll(".select2-results li.select2-result, .select2-results__options .select2-results__option");
-        var normalTarget = pbNormalizeSubjectNum(subjectNum);
-        var clicked = false;
-        for (var i = 0; i < results.length; i++) {
-            var rt = results[i].textContent || "";
-            if (/no results|searching/i.test(rt)) continue;
-            if (pbNormalizeSubjectNum(rt).indexOf(normalTarget) !== -1) { results[i].click(); clicked = true; break; }
+        // Access the Select2 internal instance to get its search input reference
+        var s2 = $hidden.data("select2") || $hidden.data("select2Data");
+        var $search;
+        if (s2 && s2.search && s2.search.length) {
+            $search = s2.search;
+            log("PrintBarcodes: got search input from s2 instance, id=" + ($search.attr("id") || "(none)"));
+        } else {
+            // Fallback: find it in the DOM
+            $search = jq(".select2-choices .select2-input, .select2-drop .select2-input").first();
+            log("PrintBarcodes: got search input from DOM fallback, len=" + $search.length);
         }
-        if (!clicked) {
-            for (var j = 0; j < results.length; j++) {
-                var ft = (results[j].textContent || "").trim();
-                if (ft && !/no results|searching/i.test(ft)) { results[j].click(); clicked = true; break; }
+        if (!$search || !$search.length) { log("PrintBarcodes: search input not found"); return false; }
+
+        // Set value and trigger 'keyup-change' — the exact event Select2 v3 listens to
+        // (it binds: this.search.on("keyup-change input paste", this.bind(this.updateSearch)))
+        $search.val(subjectNum);
+        $search.trigger("keyup-change");
+        $search.trigger("input");
+        $search.trigger(jq.Event("keyup", { which: 49 }));
+        log("PrintBarcodes: triggered keyup-change+input on search input");
+
+        // Poll for AJAX results (up to 5 seconds)
+        var pollStart = Date.now();
+        var hasResults = false;
+        while (Date.now() - pollStart < 5000 && !hasResults) {
+            await sleep(400);
+            iframeDoc = iframeWin.document;
+            var results = iframeDoc.querySelectorAll(".select2-results li.select2-result:not(.select2-no-results)");
+            log("PrintBarcodes: Select2 poll results count=" + results.length);
+            for (var i = 0; i < Math.min(results.length, 3); i++) {
+                log("PrintBarcodes:   result[" + i + "]='" + (results[i].textContent || "").trim().substring(0, 60) + "'");
             }
+            if (results.length > 0) { hasResults = true; }
         }
-        if (!clicked) return false;
+        if (!hasResults) { log("PrintBarcodes: Select2 no results after 5s"); return false; }
 
-        await sleep(500);
+        // Press Enter via jQuery to select the first/highlighted option
+        $search.trigger(jq.Event("keydown", { which: 13, keyCode: 13 }));
+        $search.trigger(jq.Event("keyup",   { which: 13, keyCode: 13 }));
+        log("PrintBarcodes: Enter dispatched via jQuery");
+
+        // Wait for a choice chip to appear
+        var chipStart = Date.now();
+        while (Date.now() - chipStart < 4000) {
+            iframeDoc = iframeWin.document;
+            var chips = iframeDoc.querySelectorAll(".select2-choices .select2-search-choice");
+            if (chips.length > 0) { log("PrintBarcodes: choice chip appeared, count=" + chips.length); await sleep(600); return true; }
+            await sleep(300);
+        }
+
+        log("PrintBarcodes: no choice chip — returning true (table may refresh without chip)");
+        await sleep(600);
         return true;
     }
 
@@ -33175,14 +33201,30 @@
         if (!tbody) return null;
         var normalizedSubject = pbNormalizeSubjectNum(subjectNum);
         var rows = tbody.querySelectorAll("tr");
+        var bestRow = null;
+        var bestScore = -1;
         for (var i = 0; i < rows.length; i++) {
+            var score = -1;
             var cells = rows[i].querySelectorAll("td");
             for (var j = 0; j < cells.length; j++) {
-                if (pbNormalizeSubjectNum(cells[j].textContent || "").indexOf(normalizedSubject) !== -1) return rows[i];
+                var cellNorm = pbNormalizeSubjectNum(cells[j].textContent || "");
+                if (cellNorm === normalizedSubject) { score = 2; break; }
+                if (score < 1 && cellNorm.indexOf(normalizedSubject) === 0) score = 1;
+                if (score < 0 && cellNorm.indexOf(normalizedSubject) !== -1) score = 0;
             }
-            if (pbNormalizeSubjectNum(rows[i].textContent || "").indexOf(normalizedSubject) !== -1) return rows[i];
+            if (score < 0) {
+                var rowNorm = pbNormalizeSubjectNum(rows[i].textContent || "");
+                if (rowNorm === normalizedSubject) score = 2;
+                else if (rowNorm.indexOf(normalizedSubject) === 0) score = 1;
+                else if (rowNorm.indexOf(normalizedSubject) !== -1) score = 0;
+            }
+            if (score > bestScore) {
+                bestScore = score;
+                bestRow = rows[i];
+                if (bestScore === 2) break;
+            }
         }
-        return null;
+        return bestRow;
     }
 
     function pbRestoreConfig(savedConfig, newPairs) {
@@ -33316,6 +33358,7 @@
         var assignInp = makeInput(PRINT_BARCODES_SUBJECT_NUM, true);
         sec2.appendChild(makeField("Subject Number", assignInp));
         container.appendChild(sec2);
+        container._subjectInput = assignInp;
 
         // ── Section 3: Form Options ───────────────────────────────────────
         var sec3 = makeSection("Form Options");
@@ -33485,7 +33528,15 @@
                 var doc = parser.parseFromString(html, "text/html");
                 var row = pbFindSubjectRowInDoc(doc, subjectNum);
                 if (row) { log("PrintBarcodes: fast fetch found subject via url[" + i + "]"); return row; }
-                else if (i === 0) log("PrintBarcodes: fast fetch url[0] page loaded but subject not in rows (rows: " + doc.querySelectorAll("#subjectTableBody tr").length + ")");
+                else if (i === 0) {
+                    var dbgRows = doc.querySelectorAll("#subjectTableBody tr");
+                    log("PrintBarcodes: fast fetch url[0] page loaded but subject not in rows (rows: " + dbgRows.length + ")");
+                    if (dbgRows.length > 0) {
+                        for (var dri = 0; dri < Math.min(dbgRows.length, 3); dri++) {
+                            log("PrintBarcodes:   row[" + dri + "] text=" + (dbgRows[dri].textContent || "").trim().substring(0, 120));
+                        }
+                    }
+                }
             } catch(e) { log("PrintBarcodes: fast fetch url[" + i + "] error: " + String(e)); }
         }
         return null;
@@ -33882,6 +33933,9 @@
             checklistCount.textContent = pbSelectedKeys.length + " of " + cbs.length + " selected";
             pbSetSelectedKeys(pbSelectedKeys);
             PRINT_BARCODES_SUBJECT_NUM = "Multiple (" + pbSelectedKeys.length + " subjects)";
+            if (labelConfigContainer && labelConfigContainer._subjectInput) {
+                labelConfigContainer._subjectInput.value = PRINT_BARCODES_SUBJECT_NUM;
+            }
             updateConfirmBtn();
         }
 
@@ -33945,7 +33999,7 @@
                 var hit = false;
                 for (var p = 0; p < pasted.length; p++) {
                     var want = pasted[p];
-                    if (want && rowText && (rowText.indexOf(want) !== -1 || want.indexOf(rowText) !== -1)) {
+                    if (want && rowText && (rowText === want || rowText.indexOf(want) === 0)) {
                         hit = true; matchedInput[want] = true; break;
                     }
                 }
@@ -34038,14 +34092,26 @@
                 var dtInput = iframeDoc.querySelector(".dataTables_filter input, input[type='search'][aria-controls], #subjectTable_filter input");
                 if (dtInput) {
                     pbSetApplyStatus(applyStatus, "info", "Filtering subjects\u2026");
-                    dtInput.value = subjectNum;
-                    dtInput.dispatchEvent(new Event("input", { bubbles: true }));
-                    dtInput.dispatchEvent(new Event("keyup",  { bubbles: true }));
-                    try { if (iframeWin.jQuery) iframeWin.jQuery(dtInput).trigger("keyup"); } catch(e) {}
-                    await sleep(600);
-                    iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-                    iframeWin = iframe.contentWindow;
-                    subjectRow = pbFindSubjectRowInDoc(iframeDoc, subjectNum);
+                    try {
+                        if (iframeWin.jQuery) { iframeWin.jQuery(dtInput).val(subjectNum).trigger("input").trigger("keyup"); }
+                        else {
+                            dtInput.value = subjectNum;
+                            dtInput.dispatchEvent(new Event("input", { bubbles: true }));
+                            dtInput.dispatchEvent(new Event("keyup",  { bubbles: true }));
+                        }
+                    } catch(e) {
+                        dtInput.value = subjectNum;
+                        dtInput.dispatchEvent(new Event("input", { bubbles: true }));
+                        dtInput.dispatchEvent(new Event("keyup",  { bubbles: true }));
+                    }
+                    var pollStart = Date.now();
+                    while (Date.now() - pollStart < 3000) {
+                        await sleep(400);
+                        iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                        iframeWin = iframe.contentWindow;
+                        subjectRow = pbFindSubjectRowInDoc(iframeDoc, subjectNum);
+                        if (subjectRow) break;
+                    }
                 }
 
                 // Also try direct scan (subject may already be in table without filtering)
@@ -34064,8 +34130,25 @@
                         var rowsLoaded = await pbWaitForTableRows(iframe, "#subjectTableBody", 12000);
                         if (rowsLoaded) {
                             iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-                            iframeWin = iframe.contentWindow;
-                            subjectRow = pbFindSubjectRowInDoc(iframeDoc, subjectNum);
+                            // After Select2 applies the subject filter, the table contains only
+                            // the selected subject(s). Grab the first row directly.
+                            var tbody = iframeDoc.getElementById("subjectTableBody");
+                            if (tbody) {
+                                var allRows = tbody.querySelectorAll("tr");
+                                // DataTables "no records" uses exactly 1 row with a colspan td — ignore it
+                                if (allRows.length === 1) {
+                                    var firstCell = allRows[0].querySelector("td");
+                                    if (firstCell && firstCell.getAttribute("colspan")) {
+                                        subjectRow = null;
+                                    } else {
+                                        subjectRow = allRows[0];
+                                    }
+                                } else if (allRows.length > 1) {
+                                    // If multiple rows, try to pick the one that actually contains the subject number
+                                    subjectRow = pbFindSubjectRowInDoc(iframeDoc, subjectNum);
+                                    if (!subjectRow) subjectRow = allRows[0];
+                                }
+                            }
                         }
                     }
                 }
