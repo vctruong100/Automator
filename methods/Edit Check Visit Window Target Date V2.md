@@ -8,7 +8,6 @@ const itemName = [
     "IP_StartDate"
 ]
 
-return true; 
 var currentStudyName = formJson.form.studyEventName;
 var item = itemJson.item;
 

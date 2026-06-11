@@ -158,3 +158,11 @@ incomplete datetime: 2026-02-17
 incomplete time: 08:40:22
 time: 08:40:22
 date: 2026-02-17
+
+{
+"collectedBarcodes": "F6059441-C5",
+"transferBarcodes": "F6059441-C5",
+"foundItemDataId": 6059441,
+"foundItemName": "🐯Screening GenX Chemistry",
+"foundItemGroupName": "Screening Safety Labs"
+}

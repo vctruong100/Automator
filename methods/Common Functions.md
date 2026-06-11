@@ -1,4 +1,10 @@
 /* jshint strict: false */ 
+To convert to Int:
+value.toFixed(0);
+
+For float:
+value.toFixed(sigfig);
+
 logger(JSON.stringify(itemJson, null, 2));
 
 function containsValue(input, keyword) {
