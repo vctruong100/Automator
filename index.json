@@ -579,5 +579,19 @@
     "tags": ["Barcode"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Collect%20All%20Transfer%20Barcode.md",
     "updated": "2026-06-02"
+  },
+  {
+    "id": "M-091",
+    "title": "Expected Number of Tablets Returned",
+    "tags": ["Tablets"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Expected%20Number%20of%20Tablets%20Returned.md",
+    "updated": "2026-06-11"
+  },
+    {
+    "id": "M-092",
+    "title": "Calculate Current Dosing Level",
+    "tags": ["Dosing"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Calculate%20Current%20Dosing%20Level.md",
+    "updated": "2026-06-11"
   }
 ]
