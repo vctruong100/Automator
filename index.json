@@ -587,11 +587,18 @@
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Expected%20Number%20of%20Tablets%20Returned.md",
     "updated": "2026-06-11"
   },
-    {
+  {
     "id": "M-092",
     "title": "Calculate Current Dosing Level",
     "tags": ["Dosing"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Calculate%20Current%20Dosing%20Level.md",
     "updated": "2026-06-11"
+  },
+  {
+    "id": "M-093",
+    "title": "Unique Incremental ID Number (repeated item groups + repeated forms)",
+    "tags": ["Unique Incremental ID Number"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Unique%20Incremental%20ID%20Number%20(repeated%20item%20groups%20+ %20repeated%20forms).md",
+    "updated": "2026-06-12"
   }
 ]
