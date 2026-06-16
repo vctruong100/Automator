@@ -600,5 +600,12 @@
     "tags": ["Unique Incremental ID Number"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Unique%20Incremental%20ID%20Number%20(repeated%20item%20groups%20+ %20repeated%20forms).md",
     "updated": "2026-06-12"
+  },
+  {
+    "id": "M-094",
+    "title": "Datetime functions",
+    "tags": ["Datetime"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Datetime%20functions.md",
+    "updated": "2026-06-15"
   }
 ]
