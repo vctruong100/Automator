@@ -18260,6 +18260,46 @@
         return results.map(function(r) { return r.method; });
     }
 
+    var STORAGE_METHODS_MODAL_SIZE = "activityPlanState.methodsLibrary.modalSize";
+
+    function getSavedModalSize() {
+        try {
+            var raw = localStorage.getItem(STORAGE_METHODS_MODAL_SIZE);
+            if (raw) {
+                var parsed = JSON.parse(raw);
+                if (parsed && parsed.width && parsed.height) {
+                    return { width: parsed.width, height: parsed.height };
+                }
+            }
+        } catch (e) {}
+        return null;
+    }
+
+    function saveModalSize(width, height) {
+        try {
+            localStorage.setItem(STORAGE_METHODS_MODAL_SIZE, JSON.stringify({ width: width, height: height }));
+        } catch (e) {}
+    }
+
+    function injectModalStyles() {
+        var id = "methods-library-modal-styles";
+        if (document.getElementById(id)) return;
+        var style = document.createElement("style");
+        style.id = id;
+        style.textContent = [
+            "#methods-library-modal ::-webkit-scrollbar { width: 6px; height: 6px; }",
+            "#methods-library-modal ::-webkit-scrollbar-track { background: transparent; }",
+            "#methods-library-modal ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }",
+            "#methods-library-modal ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }",
+            "#methods-library-modal .method-tag-pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:10px; font-weight:500; background:rgba(167,139,250,0.15); color:#a78bfa; border:1px solid rgba(167,139,250,0.25); margin-right:4px; margin-bottom:3px; }",
+            "#methods-library-modal .method-tag-pill.glass { background:rgba(167,139,250,0.12); color:#c4b5fd; border-color:rgba(167,139,250,0.3); }",
+            "#methods-library-modal .resize-handle { position:absolute; bottom:0; right:0; width:16px; height:16px; cursor:nwse-resize; z-index:10; opacity:0.4; transition:opacity 0.2s; }",
+            "#methods-library-modal .resize-handle:hover { opacity:1; }",
+            "#methods-library-modal .resize-handle::after { content:''; position:absolute; right:3px; bottom:3px; width:8px; height:8px; border-right:2px solid rgba(255,255,255,0.5); border-bottom:2px solid rgba(255,255,255,0.5); border-radius:0 0 2px 0; }"
+        ].join("\n");
+        document.head.appendChild(style);
+    }
+
     function openMethodsLibraryModal() {
         var glass = isGlassTheme();
         if (glass) injectThemeStylesIfNeeded();
@@ -18300,7 +18340,12 @@
         overlay.style.background = glass ? "rgba(0,0,0,0.4)" : "rgba(0,0,0,0.6)";
         overlay.style.zIndex = glass ? String(THEME_Z_OVERLAY - 1) : "999997";
 
+        var savedSize = getSavedModalSize();
+        var modalWidth = savedSize ? savedSize.width : 900;
+        var modalHeight = savedSize ? savedSize.height : 600;
+
         var modal = document.createElement("div");
+        modal.id = "methods-library-modal";
         modal.setAttribute("role", "dialog");
         modal.setAttribute("aria-modal", "true");
         modal.setAttribute("aria-label", "ClinSpark Methods Library");
@@ -18309,10 +18354,13 @@
         modal.style.top = "50%";
         modal.style.left = "50%";
         modal.style.transform = "translate(-50%, -50%)";
-        modal.style.width = "900px";
-        modal.style.maxWidth = "95vw";
-        modal.style.height = "600px";
-        modal.style.maxHeight = "90vh";
+        modal.style.width = modalWidth + "px";
+        modal.style.maxWidth = "98vw";
+        modal.style.minWidth = "640px";
+        modal.style.height = modalHeight + "px";
+        modal.style.maxHeight = "96vh";
+        modal.style.minHeight = "420px";
+        modal.style.resize = "both";
         if (glass) {
             modal.classList.add(THEME_SCOPE_CLASS);
             modal.classList.add("ie-glass-panel");
@@ -18329,6 +18377,7 @@
         modal.style.fontSize = "14px";
         modal.style.zIndex = glass ? String(THEME_Z_OVERLAY) : "999998";
         modal.style.outline = "none";
+        injectModalStyles();
 
         METHODS_LIBRARY_MODAL_REF = modal;
 
@@ -18557,6 +18606,11 @@
         statusBar.style.background = glass ? THEME_SURFACE_BG : "#1a1a1a";
         statusBar.textContent = "Loading...";
         modal.appendChild(statusBar);
+
+        var resizeHandle = document.createElement("div");
+        resizeHandle.className = "resize-handle";
+        resizeHandle.setAttribute("aria-hidden", "true");
+        modal.appendChild(resizeHandle);
 
         function updateStatus(msg, isError) {
             statusBar.textContent = msg;
@@ -18995,6 +19049,37 @@
 
         document.addEventListener("mouseup", function() {
             isDragging = false;
+        });
+
+        var isResizing = false;
+        var resizeStartX = 0, resizeStartY = 0, resizeStartW = 0, resizeStartH = 0;
+
+        resizeHandle.addEventListener("mousedown", function(e) {
+            isResizing = true;
+            resizeStartX = e.clientX;
+            resizeStartY = e.clientY;
+            var rect = modal.getBoundingClientRect();
+            resizeStartW = rect.width;
+            resizeStartH = rect.height;
+            e.preventDefault();
+            e.stopPropagation();
+        });
+
+        document.addEventListener("mousemove", function(e) {
+            if (!isResizing) return;
+            var dw = e.clientX - resizeStartX;
+            var dh = e.clientY - resizeStartY;
+            var newW = Math.max(640, Math.min(window.innerWidth * 0.98, resizeStartW + dw));
+            var newH = Math.max(420, Math.min(window.innerHeight * 0.96, resizeStartH + dh));
+            modal.style.width = newW + "px";
+            modal.style.height = newH + "px";
+            saveModalSize(newW, newH);
+        });
+
+        document.addEventListener("mouseup", function() {
+            if (isResizing) {
+                isResizing = false;
+            }
         });
 
         document.body.appendChild(overlay);
