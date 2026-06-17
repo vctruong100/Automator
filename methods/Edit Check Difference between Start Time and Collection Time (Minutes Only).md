@@ -1,14 +1,16 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Validates time difference between start and collection.
 
 // Add Item Names
-const startTimeItem = [
+var startTimeItem = [
     "Start Semirecumbent Time",
     "VS_Repeat Start supine time",
     "VS_COLLECTION_DATE/TIME",
 ]
 
-const difference = 5; // in minutes
+var difference = 5; // in minutes
 
 // Two Approaches: Method A and Method B
 // Let's say Start Time is 10:00:59 and End Time is 10:10:00
@@ -146,9 +148,9 @@ function formatDateTimeByType(item) {
 function pullItemFromForm(form, targetItem, isRepeat) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     if (!isRepeat) {
         for (i = 0; i < itemGroups.length; i++) {
             group = itemGroups[i];

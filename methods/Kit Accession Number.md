@@ -1,9 +1,11 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Generates or validates kit accession numbers with D1-prefix logic.
 
-const formNames = [
-    "(*)🩸D1, D2, D3, D4, D7, D10, D14_Predose_Safety Labs + PD/PK - 6 TUBES", 
-    "(*)🩸Sched B_Visit 2 W1, D0_Safeties + PK/ADA/Biomarkers_PREDOSE - 8 TUBES", 
+var formNames = [
+    "(*)🩸D1, D2, D3, D4, D7, D10, D14_Predose_Safety Labs + PD/PK - 6 TUBES",
+    "(*)🩸Sched B_Visit 2 W1, D0_Safeties + PK/ADA/Biomarkers_PREDOSE - 8 TUBES",
     "(*)🩸D15 24h_Safety Labs + PD/PK - 6 TUBES",
     "(*)🩸D1, D2, D3, D4, D7, D10, D14_Predose_Safety Labs + PD/PK - 6 TUBES V2",
     "(*)🩸D15 24h_Safety Labs + PD/PK - 6 TUBES V2",
@@ -11,31 +13,31 @@ const formNames = [
     "(*) LAB_🩸Part 2_D5 PREDOSE, D6 PREDOSE, D7, D8, D11, D14, D19 24h - 6 TUBES",
 ];
 
-const d1FormNames = [
-    "(*)🩸D1, D2, D3, D4, D7, D10, D14_Predose_Safety Labs + PD/PK - 6 TUBES", 
+var d1FormNames = [
+    "(*)🩸D1, D2, D3, D4, D7, D10, D14_Predose_Safety Labs + PD/PK - 6 TUBES",
     "(*)🩸D1, D2, D3, D4, D7, D10, D14_Predose_Safety Labs + PD/PK - 6 TUBES V2",
 ]
-const itemName = ["Process No.", "Kit Accession Number"];
-const currentStudyEvent = formJson.form.studyEventName;
+var itemName = ["Process No.", "Kit Accession Number"];
+var currentStudyEvent = formJson.form.studyEventName;
 
 var form = null;
 logger("Study event: " + currentStudyEvent);
 
-const D1events = [
+var D1events = [
     "Day 1 P2 (0.5hr)",
     "D1 (PRE)",
 ];
-const D5events = [
+var D5events = [
     "D5 (PRE) -1h",
 ]
-const D14events = [
+var D14events = [
     "D14 (PRE) -1h",
 ];
 
-const D15events = [
+var D15events = [
     "D15 (24hr)"
 ];
-const D18events = [
+var D18events = [
     "Day 18 (PRE)"
 ]
 
@@ -82,9 +84,9 @@ function pullForm(studyeventList, formNameList) {
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;
@@ -107,7 +109,7 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     var keepers = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
-        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' || 
+        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' ||
                 (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
             keepers.push(formData);
         } else {

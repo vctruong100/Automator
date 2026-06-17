@@ -1,14 +1,16 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Calculates net urine weight (jug+urine minus empty jug).
 
-const urineJugItem = [
+var urineJugItem = [
     "Weight of Void Jug+Urine"
 ];
-const emptyJugItem = [
+var emptyJugItem = [
     "Weight of Empty Void Jug"
 ];
 
-const sigfig = itemJson.item.significantDigits;
+var sigfig = itemJson.item.significantDigits;
 
 try {
     var urineJug = pullItemFromForm(formJson, urineJugItem);
@@ -31,7 +33,7 @@ function pullItemFromForm(form, targetItem) {
     var group, items, item, i, j;
     var total = 0;
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;

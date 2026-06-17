@@ -1,25 +1,27 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Calculates delta between baseline and currently entered value.
 
 // Add Item Names
-const baselineStudyEvent = [
+var baselineStudyEvent = [
     "Period 1 Day 1",
     "Visit 2 Week 1 Day 0",
 ];
-const baselineFormName = [
+var baselineFormName = [
     "ECG_Single 12 - Lead ECG + Triplicate",
     "ECG_Predose_Triplicate ECG (baseline) (SPONSOR PROVIDED MACHINE)",
     "ECG_Single 12 - Lead ECG + Triplicate (baseline - PREDOSE)"
 ];
 
-const qtcfItem = [
+var qtcfItem = [
     "QTcF (protocol range)",
     "QTcF (baseline)",
     "Baseline QTcF"
 ];
 
 // ======== Don't modify ========
-const sigfig = itemJson.item.significantDigits;
+var sigfig = itemJson.item.significantDigits;
 
 try {
     var form = pullForm(baselineStudyEvent, baselineFormName);
@@ -51,9 +53,9 @@ function pullForm(studyeventList, formNameList) {
 function pullBaselineItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;
@@ -67,9 +69,9 @@ function pullBaselineItemFromForm(form, targetItem) {
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = itemGroups.length - 1; i >= 0; i--) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;
@@ -93,7 +95,7 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     var keepers = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
-        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' || 
+        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' ||
                 (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
             keepers.push(formData);
         } else {

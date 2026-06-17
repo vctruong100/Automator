@@ -1,3 +1,5 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: ClinSpark automation method: Subject's Initials.
 

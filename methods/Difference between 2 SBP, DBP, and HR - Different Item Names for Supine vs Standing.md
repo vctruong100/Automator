@@ -1,54 +1,56 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Computes differences between supine and standing vitals (different item names).
 
 // Add item names
-const sysItem = [
+var sysItem = [
     "SYS (I: 90-150)",
     "Systolic Blood Pressure",
 ]
-const diaItem = [
+var diaItem = [
     "DIA (I: 50-99)",
     "DIA (I: 50-90)"
 ]
 
-const hrItem = [
+var hrItem = [
     "HR (I: 45-100)"
 ]
 
-const sysStandingItem = [
+var sysStandingItem = [
     "SYS (I: 90-145) standing",
     "SYS (I: 90-150) standing",
 ]
 
-const diaStandingItem = [
+var diaStandingItem = [
     "DIA (I: 50-90) standing",
     "DIA (I: 50-99) standing",
 ]
 
-const hrStandingItem = [
+var hrStandingItem = [
     "HR (I: 45-90) standing",
     "HR (I: 45-100) standing",
 ]
 
-const sysAttachedItem = [
+var sysAttachedItem = [
     "Systolic_BP_Diff",
     "ortho sbp check",
 ]
 
-const diaAttachedItem = [
+var diaAttachedItem = [
     "Diastolic_BP_Diff",
     "Repeat_ortho dbp check",
 ]
 
-const hrAttachedItem = [
+var hrAttachedItem = [
     "HR_Diff",
     "Repeat_ortho hr check",
 ]
 
 // Inclusive (editable)
-const sysDifferenceRange = 20;
-const diaDifferenceRange = 10;
-const hrDifferenceRange = 30;
+var sysDifferenceRange = 20;
+var diaDifferenceRange = 10;
+var hrDifferenceRange = 30;
 
 // ======== Don't modify ========
 var sysSemi = null;
@@ -60,7 +62,7 @@ var diaStanding = null;
 var hrSemi = null;
 var hrStanding = null;
 
-const item = itemJson.item;
+var item = itemJson.item;
 
 try {
     logger("Attached item: " + item.name);
@@ -97,9 +99,9 @@ function checkDifference(range, semi, standing) {
 function pullFirstItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;
@@ -114,9 +116,9 @@ function pullFirstItemFromForm(form, targetItem) {
 function pullLastItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = itemGroups.length - 1; i >= 0; i--) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;

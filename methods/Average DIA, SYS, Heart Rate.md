@@ -5,14 +5,14 @@
 
 // Add item names
 // items to pull for calculation
-const sysItem = ["SYS (60 - 200) mmHg", "SYS (I: 90 - 150)"];
-const diaItem = ["DIA (40 - 110) mmHg", "DIA (I: 50 - 100)",];
-const hrItem = ["HR (50 - 100) bpm"];
+var sysItem = ["SYS (60 - 200) mmHg", "SYS (I: 90 - 150)"];
+var diaItem = ["DIA (40 - 110) mmHg", "DIA (I: 50 - 100)",];
+var hrItem = ["HR (50 - 100) bpm"];
 
 // items to attach
-const sysAttach = ["SYS MEAN AVERAGE"];
-const diaAttach = ["DIA MEAN AVERAGE"];
-const hrAttach = ["HR MEAN AVERAGE"];
+var sysAttach = ["SYS MEAN AVERAGE"];
+var diaAttach = ["DIA MEAN AVERAGE"];
+var hrAttach = ["HR MEAN AVERAGE"];
 
 // ======== Don't modify ========
 var form = formJson.form;
@@ -34,19 +34,19 @@ try {
     logger("sysList: " + sysList);
     logger("diaList: " + diaList);
     logger("hrList: " + hrList);
-    
+
     var avgSys = calculateAverage(sysList);
     var avgDia = calculateAverage(diaList);
     var avgHR = calculateAverage(hrList);
-    
+
     logger("Average PR: " + avgSys);
     logger("AVerage QRS: " + avgDia);
     logger("Average QT: " + avgHR);
-    
+
     if (sysAttach.indexOf(item.name) !== -1) return avgSys;
     if (diaAttach.indexOf(item.name) !== -1) return avgDia;
     if (hrAttach.indexOf(item.name) !== -1) return avgHR;
-    
+
     return null;
 } catch (e) {
     logger("Error in main execution logic: " + e);
@@ -76,7 +76,7 @@ function getItemGroupName(form) {
         var group = form.form.itemGroups[i];
         var items = group.items;
         if (!items || items.length < 1) continue;
-    
+
         for (var j = 0; j < items.length; j++) {
             var it = items[j];
             if (it.id === item.id) {
@@ -93,7 +93,7 @@ function populateList(form, targetItem, attachedItem, repeat) {
     var list = [];
     var count = 0;
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     if (repeat) {
         for (i = itemGroups.length - 1; i >= 0; i--) {
             group = itemGroups[i];

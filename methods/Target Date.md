@@ -1,32 +1,34 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Calculates target visit dates from randomization date and visit windows.
 
-const studyEvent = formJson.form.studyEventName;
-const studyEventNames = [
+var studyEvent = formJson.form.studyEventName;
+var studyEventNames = [
     "Day 1 (pre)",
     "DAY 1 (Pre)",
     "V1 (Pre-Randomization)",
 ];
-const formNames = [
+var formNames = [
     "RANDOMIZATION",
     "DISPOSITION RANDOMIZATION_V2.0",
     "DISPOSITION RANDOMIZATION",
     "RANDOMIZATION IMPALA (IRT)",
     "RANDOMIZATION IMPALA (IRT) V2.0",
 ];
-const startDateItem = [
+var startDateItem = [
     "Date..",
     "Date of Randomization"
 ];
 
-const map = {
+var map = {
     "V3 (D28 to D35)": 31,
     "V4 (D84 to D98)": 91,
     "V5 (D175 to D189)": 182,
     "V6 (Within 4 weeks)": 28
 };
 
-const range = {
+var range = {
     "V3 (D28 to D35)": 4,
     "V4 (D84 to D98)": 7,
     "V5 (D175 to D189)": 7,
@@ -134,9 +136,9 @@ function toLocalMidnight(ms) {
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;
@@ -151,7 +153,7 @@ function pullItemFromForm(form, targetItem) {
 
 function isoToLocalMidnight(isoStr) {
     if (!isoStr) return null;
-    var d = isoStr.split("T")[0]; 
+    var d = isoStr.split("T")[0];
     var p = d.split("-");
     return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])).getTime();
 }

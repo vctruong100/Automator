@@ -1,13 +1,15 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Flags samples collected outside defined time windows.
 
-const studyevents = [
+var studyevents = [
     "Day 1"
 ]
-const formName = [
+var formName = [
     "🟡IP_EVOLOCUMAB ADMINISTRATION",
 ]
-const itemName = [
+var itemName = [
     "IP_StartDate"
 ]
 
@@ -41,9 +43,9 @@ try {
 
     logger("Difference in Ms: " + diffMs);
 
-    const minuteMs = 1000 * 60;
-    const hourMs = minuteMs * 60;
-    const dayMs = hourMs * 24;
+    var minuteMs = 1000 * 60;
+    var hourMs = minuteMs * 60;
+    var dayMs = hourMs * 24;
 
     var lowerBound;
     var upperBound;
@@ -103,7 +105,7 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     var keepers = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
-        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' || 
+        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' ||
                 (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
             keepers.push(formData);
         } else {
@@ -133,9 +135,9 @@ function pullForm(studyeventList, formNameList) {
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;

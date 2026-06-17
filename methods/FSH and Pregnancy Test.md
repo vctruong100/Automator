@@ -1,28 +1,30 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Evaluates FSH and pregnancy test result logic.
 
-const formName = formJson.form.name;
+var formName = formJson.form.name;
 
-const studyEvent = [
+var studyEvent = [
     "SCREENING",
     "Screening"
 ];
-const formNames = [
+var formNames = [
     "REP_Reproductive Status and Contraception – Female",
     "REP_Female Reproductive Status and Contraceptive Use",
     "♀️ REP_CONTRACEPTIVE & REPRODUCTIVE STATUS (Female)"
 ];
-const childbearingItem = [
+var childbearingItem = [
     "Is the female subject of childbearing potential?",
     "Childbearing potential?"
 ];
-const statusItem = [
+var statusItem = [
     "Female Reproductive Status",
     "Female subject is considered non-childbearing potential due to"
 ];
 
-const gender = formJson.form.subject.volunteer.sexMale;
-const age = formJson.form.subject.volunteer.age;
+var gender = formJson.form.subject.volunteer.sexMale;
+var age = formJson.form.subject.volunteer.age;
 
 try {
     logger(age);
@@ -62,9 +64,9 @@ function pullForm(studyeventList, formNameList) {
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;
@@ -92,7 +94,7 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     var keepers = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
-        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' || 
+        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' ||
                 (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
             keepers.push(formData);
         } else {

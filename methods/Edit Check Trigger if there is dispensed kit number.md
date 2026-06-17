@@ -1,7 +1,9 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Triggers validation when dispensed kit number is present.
 
-const itemName = "Dispensed kit number #4";
+var itemName = "Dispensed kit number #4";
 var item = itemJson.item;
 
 try {

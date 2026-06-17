@@ -1,7 +1,9 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Validates urine void intervals are sequential without gaps.
 
-const allForms = [
+var allForms = [
     "(*) 💧 -2 to 0 hr Urine Interval v3", // 0
     "(*)💧0 to 4 hr Urine Interval v4",// 1
     "(*) 💧 4 to 8 hr Urine Interval v2",// 2
@@ -13,11 +15,11 @@ const allForms = [
     "(*) 💧 72 to 96 hrs Urine Interval v3",// 7
 ]
 
-const attachedItemName = [
+var attachedItemName = [
     "PCVOID w/edit check",
     "PCVOID",
 ]
-const formMaps = {
+var formMaps = {
     "(*)💧0 to 4 hr Urine Interval v4" : "(*) 💧 -2 to 0 hr Urine Interval v3",
     "(*) 💧 4 to 8 hr Urine Interval v2" : "(*)💧0 to 4 hr Urine Interval v2",
     "(*) 💧 4 to 8 hr Urine Interval v3" : "(*)💧0 to 4 hr Urine Interval v4",
@@ -28,7 +30,7 @@ const formMaps = {
     "(*) 💧 72 to 96 hrs Urine Interval v3" : "(*) 💧 48 to 72 hrs Urine Interval v3",
 }
 
-const afterDoseItem = [
+var afterDoseItem = [
     "0 to 4 hrs END/4 to 8 hrs START", // 0
     "4 to 8 hrs END/8 to 12 hrs START", // 1
     "8 to 12 hrs END/12 to 24 hrs START", // 2
@@ -36,10 +38,10 @@ const afterDoseItem = [
     "24 to 48 hrs END/48 to 72 hrs START",// 4
     "48 to 72 hrs END/72 to 96 hrs START",// 5
     "72 to 96 hrs END", // 6
-    
+
 ]
 
-const studyEvents = [
+var studyEvents = [
     "-2 to 0 hr",
     "0 to 4 hrs",
     "4 to 8 hrs",
@@ -50,12 +52,12 @@ const studyEvents = [
     "72 to 96 hrs",
 ]
 
-const item = itemJson.item;
-const studyevent = formJson.form.studyEventName;
-const form = formJson.form;
+var item = itemJson.item;
+var studyevent = formJson.form.studyEventName;
+var form = formJson.form;
 
-const sameFormDifference = 15;
-const prevFormDifference = 15;
+var sameFormDifference = 15;
+var prevFormDifference = 15;
 
 var prevForm = null;
 var prevEndTime = null;
@@ -95,13 +97,13 @@ try {
     logger("Collected Time: "  + formatDateTimeByType(voidTime));
     logger("End Time: " + formatDateTimeByType(endTime));
 
-    const differenceMs =  collectedTimeMs - endTimeMs;
+    var differenceMs =  collectedTimeMs - endTimeMs;
     logger(differenceMs)
     if (differenceMs < 0) {
         customErrorMessage("Out of Window")
         return false;
     }
-    const differenceInMins = Math.abs(Math.floor(differenceMs / (1000 * 60)))
+    var differenceInMins = Math.abs(Math.floor(differenceMs / (1000 * 60)))
 
     if(differenceInMins > sameFormDifference){
         customErrorMessage("Out of Window");
@@ -121,7 +123,7 @@ try {
         return false;
     }
 
-    const differenceInMins2 = Math.abs(Math.floor(differenceMs2 / (1000 * 60)))
+    var differenceInMins2 = Math.abs(Math.floor(differenceMs2 / (1000 * 60)))
     if(differenceInMins2 < prevFormDifference){
         customErrorMessage("Out of Window");
         return false;
@@ -140,9 +142,9 @@ function normalize(str) {
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;
@@ -175,7 +177,7 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     var keepers = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
-        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' || 
+        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' ||
                 (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
             keepers.push(formData);
         } else {

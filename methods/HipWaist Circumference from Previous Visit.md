@@ -1,31 +1,33 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Pulls hip and waist circumference from previous visit.
 
-const formName = [
+var formName = [
     "BM_Waist/Hip Circumference"
 ];
-const screeningStudyEvent = [
-    "Screening", 
+var screeningStudyEvent = [
+    "Screening",
     "SCREENING"
 ]
-const screeningFormName = [
+var screeningFormName = [
     "BM_Waist/Hip Circumference (SCRN)"
 ];
 
-const waistItem1 = [
+var waistItem1 = [
     "Waist Circumference #1"
 ];
-const waistItem2 = [
+var waistItem2 = [
     "Waist Circumference #2"
 ];
-const hipItem1 = [
+var hipItem1 = [
     "Hip Circumference #1"
 ];
-const hipItem2 = [
+var hipItem2 = [
     "Hip Circumference #2"
 ];
 
-const studyEvents = {
+var studyEvents = {
     "Visit 2 Week 1 Day 0": "Screening",
     "Visit 3 Week 2 Day 7": "Visit 2 Week 1 Day 0",
     "Visit 4 Week 3 Day 14": "Visit 3 Week 2 Day 7",
@@ -38,8 +40,8 @@ const studyEvents = {
     "EOS Visit 11 Week 24 Day 161": "EOT Visit 10 Week 21 Day 140"
 }
 
-const itemName = itemJson.item.name;
-const currentEvent = formJson.form.studyEventName;
+var itemName = itemJson.item.name;
+var currentEvent = formJson.form.studyEventName;
 
 try {
     var newEvent = studyEvents[currentEvent];
@@ -81,7 +83,7 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     var keepers = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
-        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' || 
+        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' ||
                 (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
             keepers.push(formData);
         } else {
@@ -94,9 +96,9 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = itemGroups.length - 1; i >= 0; i--) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;

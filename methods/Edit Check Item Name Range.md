@@ -1,3 +1,5 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Generic range validation for any item name.
 
@@ -35,11 +37,11 @@ try {
 
     logger("Is repeat: " + isRepeat + ", Is Male: " + isMale + ", is isQtcOrQTcF: " + isQtcOrQTcF);
 
-    if (isQtcOrQTcF) {   
+    if (isQtcOrQTcF) {
         var qtcfDict = parseMultiRange(item.name);
         logger(JSON.stringify(qtcfDict, null, 2))
         var range;
-        
+
         if (isMale && qtcfDict.male) {
             range = qtcfDict.male;
         } else if (!isMale && qtcfDict.female) {
@@ -47,12 +49,12 @@ try {
         } else {
             range = qtcfDict.default;
         }
-        
+
         if (!range) return true;
-        
+
         var min = range[0];
         var max = range[1];
-        
+
         if (!checkRange(isRepeat, min, max)) return false;
     } else {
         var minMax = parseRange(item.name);

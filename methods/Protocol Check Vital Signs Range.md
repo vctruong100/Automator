@@ -1,15 +1,17 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: General vital signs range protocol check.
 
-const sysItems = [
+var sysItems = [
     "SYS (60 - 200) mmHg", "SYS (60 - 200)",
 ];
 
-const diaItems = [
+var diaItems = [
     "DIA (40 - 110) mmHg", "DIA (40 - 110)",
 ];
 
-const hrItems = [
+var hrItems = [
     "HR (50 - 100) bpm", "HR (30 - 200)",
 ]
 
@@ -28,7 +30,7 @@ var item = itemJson.item;
 
 try {
     var isRepeat = isItemInRepeat(formJson);
-    
+
     var sys = pullItemFromForm(formJson, sysItems, isRepeat);
     var dia = pullItemFromForm(formJson, diaItems, isRepeat);
     var hr = pullItemFromForm(formJson, hrItems, isRepeat);
@@ -47,7 +49,7 @@ try {
     ) return itemJson.item.codeListItems[1].codedValue; // Out of Protocol Range
     else if ( // IR
         sys <= sys_max_range &&
-        sys >= sys_min_range && 
+        sys >= sys_min_range &&
         dia <= dia_max_range &&
         dia >= dia_min_range &&
         hr <= hr_max_range &&
@@ -87,7 +89,7 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     var keepers = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
-        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' || 
+        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' ||
                 (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
             keepers.push(formData);
         } else {
@@ -100,9 +102,9 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
 function pullItemFromForm(form, targetItem, repeat) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     if (repeat) {
         for (i = itemGroups.length - 1; i >= 0; i--) {
             group = itemGroups[i];

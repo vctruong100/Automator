@@ -1,19 +1,21 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Protocol check for averaged QTcF/QRS out-of-range (non-repeat).
 
 // Add Item names
-const QTcFitems = [
-    '- QTcF (≤ 450 msec "Males") (≤ 470 msec "Females")', 
-    "QTcF", 
+var QTcFitems = [
+    '- QTcF (≤ 450 msec "Males") (≤ 470 msec "Females")',
+    "QTcF",
     "QTcF_Protocol",
     "QTcF #1",
-    "QTcF #2", 
+    "QTcF #2",
     "QTcF #3"
 ];
 
-const QRSitems = [
-    "- QRS duration ( ≤ 120 ms)", 
-    "QRS", 
+var QRSitems = [
+    "- QRS duration ( ≤ 120 ms)",
+    "QRS",
     "QRS_Protocol"
 ];
 
@@ -22,15 +24,19 @@ var QTcF_max_range = 450;
 var QRS_max_range = 120;
 
 // ======== Don't modify ========
-var QTcFmaxCount = 3; 
+var QTcFmaxCount = 3;
 var QTcFlist = [];
 var QTcFavg = 0;
 
-var QRSmaxCount = 3; 
+var QRSmaxCount = 3;
 var QRSlist = [];
 var QRSavg = 0;
 
+var item = itemJson.item.id;
+
 try {
+    var itemRaw = getItemDataContextByItemDataId(item.id);
+    var context = JSON.parse(itemRaw);
     QTcFlist = populateList(formJson, QTcFitems, QTcFlist, QTcFmaxCount);
     QTcFavg = calculateAverage(QTcFlist);
 
@@ -55,7 +61,7 @@ function log() {
     logger("List length: " + QTcFlist.length);
     logger("Max count: " + QTcFmaxCount);
     logger("Average: " + QTcFavg);
-    
+
     logger("List: " + QRSlist);
     logger("List length: " + QRSlist.length);
     logger("Max count: " + QRSmaxCount);
@@ -67,7 +73,7 @@ function populateList(form, targetItem, list, maxCount) {
     var group, items, item, i, j, value;
     var count = 0;
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;
@@ -105,7 +111,7 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     var keepers = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
-        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' || 
+        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' ||
                 (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
             keepers.push(formData);
         } else {

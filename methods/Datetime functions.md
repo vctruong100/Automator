@@ -10,7 +10,7 @@ function getTimeRange(datetimeStr) {
         return "";
     }
 
-    var timePart = parts[1]; 
+    var timePart = parts[1];
 
     var timePieces = timePart.split(":");
     var hour = parseInt(timePieces[0], 10);

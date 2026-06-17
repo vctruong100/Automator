@@ -1,10 +1,12 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Validates transfer barcodes contain required T prefix.
 
-const item = itemJson.item;
+var item = itemJson.item;
 
 try {
-    const itemGroupName = getItemGroupName(formJson);
+    var itemGroupName = getItemGroupName(formJson);
 
     if (containsValue(itemGroupName, "self-collection") || containsValue(itemGroupName, "pg dna")) {
         if (containsValue(item.value, "t")) {
@@ -24,7 +26,7 @@ function getItemGroupName(form) {
         var group = form.form.itemGroups[i];
         var items = group.items;
         if (!items || items.length < 1) continue;
-    
+
         for (var j = 0; j < items.length; j++) {
             var it = items[j];
             if (it.id === item.id) {

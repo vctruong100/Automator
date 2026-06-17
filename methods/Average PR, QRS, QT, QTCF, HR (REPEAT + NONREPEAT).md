@@ -5,22 +5,22 @@
 
 // Add item names
 // items to pull for calculation
-const PRitem = ["PR", "PR V4", "🟢 PR (100-250) ms",];
-const QRSitem = ["QRS", "QRS V4", "🟢 QRS (50-150)",];
-const Qtitem = ["QT", "QT V4", "🟢 QT (250-500) ms",];
-const QTcFitem = ["QTcF", "QTcF V4", "🟢 QTcF (250 - 500) ms",];
-const HRitem = ["RATE", "RATE V4", "🟢 HR (30 - 200)",];
-const QtcBitem = ["🟢 QTcB (I: >470)",]
-const RRitem = ["🟢 RR (I: 120-200)"];
+var PRitem = ["PR", "PR V4", "🟢 PR (100-250) ms",];
+var QRSitem = ["QRS", "QRS V4", "🟢 QRS (50-150)",];
+var Qtitem = ["QT", "QT V4", "🟢 QT (250-500) ms",];
+var QTcFitem = ["QTcF", "QTcF V4", "🟢 QTcF (250 - 500) ms",];
+var HRitem = ["RATE", "RATE V4", "🟢 HR (30 - 200)",];
+var QtcBitem = ["🟢 QTcB (I: >470)",]
+var RRitem = ["🟢 RR (I: 120-200)"];
 
 // items to attach
-const PRattach = ["avg_PR", "PR AVERAGE (100-250)",];
-const QRSattach = ["avg_QRS", "QRS AVERAGE (50-150)",];
-const QTcFattach = ["avg_QTcf", "QTcF AVERAGE (250-500)",];
-const QTattach = ["Avg_QT", "QT AVERAGE (250-500)",];
-const HRattach = ["HR", "Avg_HR", "HR AVERAGE (30- 200)",];
-const QtcBattach = ["QTcB AVERAGE (I: >470)"]
-const RRattach = ["RR AVERAGE (I: 120-200)"];
+var PRattach = ["avg_PR", "PR AVERAGE (100-250)",];
+var QRSattach = ["avg_QRS", "QRS AVERAGE (50-150)",];
+var QTcFattach = ["avg_QTcf", "QTcF AVERAGE (250-500)",];
+var QTattach = ["Avg_QT", "QT AVERAGE (250-500)",];
+var HRattach = ["HR", "Avg_HR", "HR AVERAGE (30- 200)",];
+var QtcBattach = ["QTcB AVERAGE (I: >470)"]
+var RRattach = ["RR AVERAGE (I: 120-200)"];
 
 // ======== Don't modify ========
 var form = formJson.form;
@@ -50,7 +50,7 @@ try {
     logger("HRlist: " + HRlist);
     logger("QTcBlist: " + QTcBlist);
     logger("RRlist: " + RRlist);
-    
+
     var avgPR = calculateAverage(PRlist);
     var avgQRS = calculateAverage(QRSlist);
     var avgQT = calculateAverage(Qtlist);
@@ -58,7 +58,7 @@ try {
     var avgHR = calculateAverage(HRlist);
     var avgQtcB = calculateAverage(QTcBlist);
     var avgRR = calculateAverage(RRlist);
-    
+
     logger("Average PR: " + avgPR);
     logger("AVerage QRS: " + avgQRS);
     logger("Average QT: " + avgQT);
@@ -66,7 +66,7 @@ try {
     logger("Average HR: " + avgHR);
     logger("Average QtcB: " + avgQtcB);
     logger("Average RR: " + avgRR);
-    
+
     if (PRattach.indexOf(item.name) !== -1) return avgPR;
     if (QRSattach.indexOf(item.name) !== -1) return avgQRS;
     if (QTcFattach.indexOf(item.name) !== -1) return avgQTcF;
@@ -74,7 +74,7 @@ try {
     if (HRattach.indexOf(item.name) !== -1) return avgHR;
     if (QtcBattach.indexOf(item.name) !== -1) return avgQtcB;
     if (RRattach.indexOf(item.name) !== -1) return avgRR;
-    
+
     return null;
 } catch (e) {
     logger("Error in main execution logic: " + e);
@@ -104,7 +104,7 @@ function getItemGroupName(form) {
         var group = form.form.itemGroups[i];
         var items = group.items;
         if (!items || items.length < 1) continue;
-    
+
         for (var j = 0; j < items.length; j++) {
             var it = items[j];
             if (it.id === item.id) {
@@ -121,7 +121,7 @@ function populateList(form, targetItem, attachedItem, repeat) {
     var list = [];
     var count = 0;
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     if (repeat) {
         for (i = itemGroups.length - 1; i >= 0; i--) {
             group = itemGroups[i];

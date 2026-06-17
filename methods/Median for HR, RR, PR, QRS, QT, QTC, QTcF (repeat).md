@@ -1,52 +1,52 @@
-/* jshint strict: false */ 
+/* jshint strict: false */
 
 // Version: v1
 // Purpose: Computes median values for full ECG/vitals panel (repeat).
-const HRItem = [
+var HRItem = [
     "HR (P: 40-100)",
 ]
 
-const RRItem = [
+var RRItem = [
     "RR (I: 600-1000 ms)",
 ]
 
-const PRItem = [
+var PRItem = [
     "PR (P: <230)",
 ]
 
-const QRSItem = [
-    "QRS (P: <130)",    
+var QRSItem = [
+    "QRS (P: <130)",
 ]
 
-const QTItem = [
+var QTItem = [
     "QT (I: ≤500 ms)",
 ]
 
-const QTCItem = [
+var QTCItem = [
     "QTc (P: Male < 470 ms / Female < 480 ms)",
 ]
-const QTcFitem = [
+var QTcFitem = [
     "QTcF (P: Male < 470 ms / Female < 480 ms)",
 ]
-const HRAttachedItem = [
+var HRAttachedItem = [
     "HR (P: 40-100) - Median"
 ]
-const RRAttachedItem = [
+var RRAttachedItem = [
     "RR (I: 600-1000) - Median",
 ]
-const PRAttachedItem = [
+var PRAttachedItem = [
     "PR (P: <230) - Median",
 ]
-const QTAttachedItem = [
+var QTAttachedItem = [
     "QT (I: ≤500 ms) - Median",
 ]
-const QRSAttachedItem = [
+var QRSAttachedItem = [
     "QRS (P: <130) - Median",
 ]
-const QTCAttachedItem = [
+var QTCAttachedItem = [
     "QTC (P: Male < 470 ms / Female < 480 ms) - Median",
 ]
-const QTcFAttachedItem = [
+var QTcFAttachedItem = [
     "QTcF (P: Male < 470 ms / Female < 480 ms) - Median",
 ]
 
@@ -54,8 +54,8 @@ var list = [];
 var maxCount = 0;
 var median = 0;
 
-const item = itemJson.item;
-const sigfig = item.significantDigits;
+var item = itemJson.item;
+var sigfig = item.significantDigits;
 
 try {
     logger("Attached item: " + item.name);
@@ -131,7 +131,7 @@ function populateList(form, targetItem, attachedItem) {
     list = [];
     maxCount = 0;
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = itemGroups.length - 1; i >= 0; i--) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;

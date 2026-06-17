@@ -1,52 +1,54 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Comprehensive range check for all standard vital/ECG parameters.
 
 
 // Add item names
-const SYS = [
+var SYS = [
     "SYS (P: 90-140)", "SYS_3", "SYS_1", "SYS_2"
 ];
-const DIA = [
+var DIA = [
     "DIA (P: 60-90)", "DIA_3", "DIA_1", "DIA_2"
 ];
-const HR = [
+var HR = [
     "HR (P: 40-100)", "HR_3", "HR_1", "HR_2"
 ];
-const RR = [
+var RR = [
     "RR (P: 600-1000)", "RR_3", "RR_1", "RR_2"
 ];
-const PR = [
+var PR = [
     "PR (P: 120-200)", "PR_3", "PR_1", "PR_2", "PR (I: 120 - 200 ms)",
 ];
-const QRS = [
+var QRS = [
     "QRS (P: 90-140)", "QRS_3", "QRS_1", "QRS_2"
 ];
-const QTC = [
+var QTC = [
     "QTC (P: 90-140)", "QTC_3", "QTC_1", "QTC_2"
 ];
-const QtcF = [
+var QtcF = [
     "QtcF (P: 90-140)", "QtcF_3", "QtcF_1", "QtcF_2"
 ];
-const QT = [
+var QT = [
     "QT (P: 90-140)", "QT_3", "QT_1", "QT_2"
 ];
 
-const SysRange = [90, 140]; // Minimum, Maximum
-const DiaRange = [60, 90];
-const HrRange = [40, 100];
-const RrRange = [600, 1000];
-const PrRange = [120, 200];
-const QrsRange = [100, 130];
-const QtcRange = [380, 500];
-const QtcFRangeMale = [380, 450];
-const QtcFRangeFemale = [380, 470];
-const QtRange = [400, 500];
+var SysRange = [90, 140]; // Minimum, Maximum
+var DiaRange = [60, 90];
+var HrRange = [40, 100];
+var RrRange = [600, 1000];
+var PrRange = [120, 200];
+var QrsRange = [100, 130];
+var QtcRange = [380, 500];
+var QtcFRangeMale = [380, 450];
+var QtcFRangeFemale = [380, 470];
+var QtRange = [400, 500];
 
 // ======== Don't modify ========
-const item = itemJson.item;
-const isMale = formJson.form.subject.volunteer.sexMale;
-const groupName = getItemGroupName(formJson);
-const isRepeat = containsValue(groupName, "repeat");
+var item = itemJson.item;
+var isMale = formJson.form.subject.volunteer.sexMale;
+var groupName = getItemGroupName(formJson);
+var isRepeat = containsValue(groupName, "repeat");
 
 try {
     if (SYS.indexOf(item.name) !== -1) return checkRange(SysRange, isRepeat);
@@ -67,7 +69,7 @@ try {
 
 function checkRange(range, isRepeat) {
     const [min, max] = range;
-    const value = item.value;
+    var value = item.value;
     logger("Value: " + value);
     logger("Min-Max: " + min + "-" + max)
     if (value >= min && value <= max) {

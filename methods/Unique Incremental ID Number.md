@@ -1,3 +1,5 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Generates next incremental unique ID across all study events.
 
@@ -74,10 +76,16 @@ function getMaxAEIDValue(aeidValues) {
 }
 
 // Execution
-var aeidValues = getAEIDValues(formData);
-logger('All AEID values: ' + aeidValues.join(', '));
+try {
+    if (!formData) return 1;
+    var aeidValues = getAEIDValues(formData);
+    logger('All AEID values: ' + aeidValues.join(', '));
 
-var nextAEID = getMaxAEIDValue(aeidValues);
-logger('Next AEID value (forced integer): ' + nextAEID);
+    var nextAEID = getMaxAEIDValue(aeidValues);
+    logger('Next AEID value (forced integer): ' + nextAEID);
 
-return parseInt(nextAEID, 10);  // Return the next AEID as an explicit integer
+    return parseInt(nextAEID, 10);  // Return the next AEID as an explicit integer
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
+}

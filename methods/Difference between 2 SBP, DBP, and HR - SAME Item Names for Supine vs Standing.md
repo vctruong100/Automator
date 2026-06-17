@@ -1,31 +1,33 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Computes differences between supine and standing vitals (same item names).
 
-const sysItem = [
+var sysItem = [
     "Systolic BP (P: 90 - 140 mmHg)",
     "SYS (I: 80-150)",
     "Systolic Blood Pressure",
 ]
-const diaItem = [
+var diaItem = [
     "Diastolic BP (E: 50 - 95 mmHg)",
     "DIA (I: 50-99)",
     "DIA (I: 50-90)"
 ]
 
-const sysAttachedItem = [
+var sysAttachedItem = [
     "Systolic_BP_DIFF_@3min",
     "Systolic_BP_DIFF_@3min_repeat",
     "Systolic_BP_Diff",
     "ortho sbp check",
 ]
 
-const diaAttachedItem = [
+var diaAttachedItem = [
     "Diastolic_BP_DIFF_@3min",
     "Diastolic_BP_Diff",
     "Repeat_ortho dbp check",
 ]
 
-const item = itemJson.item;
+var item = itemJson.item;
 var isRepeat = false;
 var semiValue, standing;
 
@@ -69,9 +71,9 @@ function getItemGroupName(form) {
 function pullItemFromForm(form, targetItem, repeat, isStanding) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    if (repeat) { 
+    if (repeat) {
         for (i = itemGroups.length - 1; i >= 0; i--) {
             group = itemGroups[i];
             if (!group || group.canceled) continue;

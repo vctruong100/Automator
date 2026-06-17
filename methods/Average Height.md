@@ -1,15 +1,17 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Computes average height from repeated measurements.
 
 // Add item names
-const itemList = [
-    "BMI_HEIGHT #1", 
+var itemList = [
+    "BMI_HEIGHT #1",
     "BMI_HEIGHT #2"
 ];
 
 // ======== Don't modify ========
-const sigfig = itemJson.item.significantDigits;
-var maxCount = 0; 
+var sigfig = itemJson.item.significantDigits;
+var maxCount = 0;
 var list = [];
 var avg = 0;
 
@@ -33,7 +35,7 @@ function populateList(form, targetItem) {
     var group, items, item, i, j, value;
     var count = 0;
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = itemGroups.length - 1; i >= 0; i--) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;

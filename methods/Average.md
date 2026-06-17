@@ -1,22 +1,21 @@
-/* jshint strict: false */\
-
+/* jshint strict: false */
 // Version: v1
 // Purpose: Calculates average PR, QRS, QT, QTcF, and HR from form items (repeat and non-repeat support).
 
 // Add item names
 // items to pull for calculation
-const PRitem = ["PR", "PR V4"];
-const QRSitem = ["QRS", "QRS V4"];
-const Qtitem = ["QT", "QT V4"];
-const QTcFitem = ["QTcF", "QTcF V4"];
-const HRitem = ["RATE", "RATE V4"];
+var PRitem = ["PR", "PR V4"];
+var QRSitem = ["QRS", "QRS V4"];
+var Qtitem = ["QT", "QT V4"];
+var QTcFitem = ["QTcF", "QTcF V4"];
+var HRitem = ["RATE", "RATE V4"];
 
 // items to attach
-const PRattach = ["avg_PR"];
-const QRSattach = ["avg_QRS"];
-const QTcFattach = ["avg_QTcf"];
-const QTattach = ["Avg_QT"];
-const HRattach = ["HR", "Avg_HR"];
+var PRattach = ["avg_PR"];
+var QRSattach = ["avg_QRS"];
+var QTcFattach = ["avg_QTcf"];
+var QTattach = ["Avg_QT"];
+var HRattach = ["HR", "Avg_HR"];
 
 // ======== Don't modify ========
 var form = formJson.form;
@@ -122,7 +121,7 @@ function getItemGroupName(form) {
         var group = form.form.itemGroups[i];
         var items = group.items;
         if (!items || items.length < 1) continue;
-    
+
         for (var j = 0; j < items.length; j++) {
             var it = items[j];
             if (it.id === item.id) {
@@ -139,7 +138,7 @@ function populateList(form, targetItem, attachedItem) {
     var list = [];
     var count = 0;
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;
@@ -161,7 +160,7 @@ function populateListLastToFirst(form, targetItem, attachedItem) {
     var group, items, item, i, j, value;
     var list = []
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = itemGroups.length - 1; i >= 0; i--) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;

@@ -1,17 +1,19 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Pulls BMI value from the Screening event's body measurements form.
 
-const studyEventNames = [
+var studyEventNames = [
     "Screening",
     "SCREENING",
 ]
 
-const bmiForms = [
-    "📏 BM_BODY MEASUREMENTS (HEIGHT / WEIGHT / BMI)"    
+var bmiForms = [
+    "📏 BM_BODY MEASUREMENTS (HEIGHT / WEIGHT / BMI)"
 ]
 
-const itemName = [
-    "VS_BMI"    
+var itemName = [
+    "VS_BMI"
 ]
 
 try {
@@ -27,9 +29,9 @@ try {
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;
@@ -62,7 +64,7 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     var keepers = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
-        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' || 
+        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' ||
                 (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
             keepers.push(formData);
         } else {

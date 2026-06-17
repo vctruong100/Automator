@@ -1,9 +1,11 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Lightweight range check for any vitals or ECG parameter.
 
-const value = itemJson.item.value;
-const minimum_range = 60;
-const maximum_range = 100;
+var value = itemJson.item.value;
+var minimum_range = 60;
+var maximum_range = 100;
 
 try {
     if (value >= minimum_range && value <= maximum_range) {

@@ -1,21 +1,23 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Determines LDL titration decision based on reduction and thresholds.
 
-const studyEventNames = [
+var studyEventNames = [
     "Day 1",
     "Screening",
     "SCREENING",
 ]
 
-const formName = [
-    "LDL Continuation (Baseline LDL)"    
+var formName = [
+    "LDL Continuation (Baseline LDL)"
 ]
 
-const baselineItem = [
-    "Baseline LDL (Day 1)"    
+var baselineItem = [
+    "Baseline LDL (Day 1)"
 ]
 
-const valueItem = [
+var valueItem = [
     "LDL-C Value at Week 10",
     "LDL-C Value at Week 8",
 ]
@@ -23,7 +25,7 @@ try {
     var form = pullForm(studyEventNames, formName);
     if (!form) return null;
 
-    const item = itemJson.item;
+    var item = itemJson.item;
     var groupName, groupID = getItemGroupName(formJson);
 
     var baseline = pullItemFromForm(form, baselineItem, null);
@@ -74,7 +76,7 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     var keepers = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
-        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' || 
+        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' ||
                 (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
             keepers.push(formData);
         } else {
@@ -87,9 +89,9 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
 function pullItemFromForm(form, targetItem, groupid) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;
@@ -116,7 +118,7 @@ function getItemGroupName(form) {
         var group = form.form.itemGroups[i];
         var items = group.items;
         if (!items || items.length < 1) continue;
-    
+
         for (var j = 0; j < items.length; j++) {
             var it = items[j];
             if (it.id === item.id) {

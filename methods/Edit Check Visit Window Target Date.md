@@ -1,32 +1,34 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Validates visit dates fall within protocol-defined windows.
 
 // Add item names
-const studyEventNames = [
+var studyEventNames = [
     "Day 1 (pre)",
     "DAY 1 (Pre)",
     "V1 (Pre-Randomization)",
 ];
-const formNames = [
+var formNames = [
     "RANDOMIZATION",
     "DISPOSITION RANDOMIZATION_V2.0",
     "DISPOSITION RANDOMIZATION",
     "RANDOMIZATION IMPALA (IRT)",
     "RANDOMIZATION IMPALA (IRT) V2.0",
 ];
-const startDateItem = [
+var startDateItem = [
     "Date..",
     "Date of Randomization"
 ];
 
-const map = {
+var map = {
     "V3 (D28 to D35)": 31,
     "V4 (D84 to D98)": 91,
     "V5 (D175 to D189)": 182,
     "V6 (Within 4 weeks)": 28
 };
 
-const range = {
+var range = {
     "V3 (D28 to D35)": 4,
     "V4 (D84 to D98)": 7,
     "V5 (D175 to D189)": 7,
@@ -34,8 +36,8 @@ const range = {
 };
 
 // ======== Don't modify ========
-const studyEvent = formJson.form.studyEventName;
-const item = itemJson.item;
+var studyEvent = formJson.form.studyEventName;
+var item = itemJson.item;
 
 try {
     var form = pullForm(formNames, studyEventNames);
@@ -120,9 +122,9 @@ function checkForm(form, studyevent) {
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;

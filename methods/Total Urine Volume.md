@@ -1,8 +1,10 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Calculates total urine volume across collection intervals.
 
-const currentEvent = formJson.form.studyEventName;
-const studyevents = {
+var currentEvent = formJson.form.studyEventName;
+var studyevents = {
     "Day 1": "Day-1",
     "Day 2": "Day 1",
     "Day 3": "Day 2",
@@ -19,15 +21,15 @@ const studyevents = {
     "Day 18": "Day 17"
 }
 
-const mealForms = [
-    'STOP SNACKS', "Snack End", 
+var mealForms = [
+    'STOP SNACKS', "Snack End",
     'STOP DINNER', "Dinner End",
     'STOP LUNCH', "Lunch End",
     'STOP BREAKFAST', "Breakfast End",
 ];
 
 try {
-    const prevEvent = studyevents[currentEvent];
+    var prevEvent = studyevents[currentEvent];
     var form = pullForm([prevEvent], mealForms);
     if (!form) return null;
 
@@ -43,9 +45,9 @@ try {
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;
@@ -78,7 +80,7 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     var keepers = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
-        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' || 
+        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' ||
                 (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
             keepers.push(formData);
         } else {

@@ -1,22 +1,24 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Calculates Tween-20 volume as urine volume divided by 10.
 
-const urineJugItem = [
+var urineJugItem = [
     "Weight of Void Jug+Urine"
 ];
-const emptyJugItem = [
+var emptyJugItem = [
     "Weight of Empty Void Jug"
 ];
-const item = itemJson.item;
+var item = itemJson.item;
 var groupid = null;
 
 try {
     getItemGroupID(formJson.form);
 
-    const urineJug = getItemValueFromSameGroup(formJson.form, urineJugItem);
-    const voidJug = getItemValueFromSameGroup(formJson.form, emptyJugItem);
+    var urineJug = getItemValueFromSameGroup(formJson.form, urineJugItem);
+    var voidJug = getItemValueFromSameGroup(formJson.form, emptyJugItem);
 
-    const sigfig = item.significantDigits;
+    var sigfig = item.significantDigits;
 
     var weight = (urineJug - voidJug).toFixed(0);
     if (!weight) return null;
@@ -65,5 +67,5 @@ function getItemValueFromSameGroup(form, itemName) {
             }
         }
     }
-    return null; 
+    return null;
 }

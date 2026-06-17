@@ -1,32 +1,34 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Computes median HR, SBP, DBP for repeat item groups.
 
-const sysItem = [
-    "Systolic BP", 
-    "SCRN_Systolic BP", 
+var sysItem = [
+    "Systolic BP",
+    "SCRN_Systolic BP",
     "ET Threshold SBP",
     "SYS (I: 90-150)",
 ];
 
-const sysAttachedItem = [
+var sysAttachedItem = [
     "Average SBP",
     "SYS Median (SF: >150)",
 ];
 
-const diaItem = [
+var diaItem = [
     "DIA (I: 50-99)",
     "DIA (I: 50-90)"
 ];
 
-const diaAttachedItem = [
+var diaAttachedItem = [
     "DIA Median (SF: ≥100)",
 ];
 
-const hrItem = [
+var hrItem = [
     "HR (I: 45-100)",
 ];
 
-const HRAttachedItem = [
+var HRAttachedItem = [
     "HR Median (SF: >100)",
 ];
 
@@ -37,8 +39,8 @@ var median = 0;
 var sysMaxCount = 6;
 var diaMaxCount = 6;
 var hrMaxCount = 6;
-const item = itemJson.item;
-const sigfig = item.significantDigits;
+var item = itemJson.item;
+var sigfig = item.significantDigits;
 
 try {
     if (HRAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, hrItem, HRAttachedItem, hrMaxCount)) {
@@ -103,7 +105,7 @@ function populateList(form, targetItem, attachedItem, maxCount) {
     var group, items, item, i, j;
     list = [];
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;

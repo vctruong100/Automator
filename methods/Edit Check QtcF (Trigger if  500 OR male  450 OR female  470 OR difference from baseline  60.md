@@ -1,31 +1,33 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: QTcF safety edit check with sex-specific thresholds.
 
 // Add item names
-const baselineForm = [
+var baselineForm = [
     "⚡DAY-1 ECG SINGLE 12 LEAD V1",
     "ECG_Predose_Triplicate ECG (baseline) (SPONSOR PROVIDED MACHINE)",
 
 ]
-const baselineEvent = [
+var baselineEvent = [
     "Day -1",
     "Visit 2 Week 1 Day 0",
 ]
-const baselineItem = [
+var baselineItem = [
     "Fridericia QTc Interval.",
     "Fridericia QTc Interval",
     "Baseline QTcF",
     "QTcF.",
 ];
 
-const maxRange = 500;
-const maleRange = 450;
-const femaleRange = 470;
-const differenceRange = 60;
+var maxRange = 500;
+var maleRange = 450;
+var femaleRange = 470;
+var differenceRange = 60;
 
 // ======== Don't modify ========
-const item = itemJson.item;
-const sexMale = formJson.form.subject.volunteer.sexMale;
+var item = itemJson.item;
+var sexMale = formJson.form.subject.volunteer.sexMale;
 var diff = 0;
 
 try {
@@ -115,7 +117,7 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     var keepers = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
-        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' || 
+        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' ||
                 (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
             keepers.push(formData);
         } else {

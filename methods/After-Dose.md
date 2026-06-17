@@ -1,24 +1,26 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Calculates end-of-interval datetime from dose time and study event name.
 
 // Add item names
-const doseForms = [
+var doseForms = [
     "IP_Study Drug Exposure - Blinded Study Medication Part A",
     "IP_Study Drug Exposure - Blinded Study Medication Part B",
 ]
 
-const doseStudyEvent = [
+var doseStudyEvent = [
     "Day 1",
 ]
 
-const doseItem = [
-    "Datetime of Administration",    
+var doseItem = [
+    "Datetime of Administration",
 ]
 
 // ======== Don't modify ========
-const item = itemJson.item;
-const studyevent = formJson.form.studyEventName;
-const form = formJson.form;
+var item = itemJson.item;
+var studyevent = formJson.form.studyEventName;
+var form = formJson.form;
 try {
     var upperInterval = getUpperIntervalValue(studyevent);
     if (upperInterval) {
@@ -92,7 +94,7 @@ function parseDateTime(doseTime) {
     var second = parseInt(timePieces[2], 10);
 
     var doseDate = new Date(year, month, day, hour, minute, second);
-    var doseTimeMs = doseDate.getTime();    
+    var doseTimeMs = doseDate.getTime();
     return doseTimeMs;
 }
 function getUpperIntervalValue(studyEventName) {
@@ -131,9 +133,9 @@ function formatDateObject(dateObj) {
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;
@@ -166,7 +168,7 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     var keepers = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
-        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' || 
+        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' ||
                 (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
             keepers.push(formData);
         } else {

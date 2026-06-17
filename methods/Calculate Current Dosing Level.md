@@ -1,11 +1,13 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Determines current dosing level from kit label and tablet count.
 
-const formNames = [
-    "🟡IP_ MK-4082/Placebo Administration (D36-D84)"    
+var formNames = [
+    "🟡IP_ MK-4082/Placebo Administration (D36-D84)"
 ]
 
-const studyeventMap = {
+var studyeventMap = {
     "Wk7 Day 43": "Wk6 Day 38",
     "Wk8 Day 50": "Wk7 Day 43",
     "Wk9 Day 57": "Wk8 Day 50",
@@ -15,25 +17,25 @@ const studyeventMap = {
     "Wk13 Day 85": "Wk12 Day 78",
 };
 
-const placeboItem = [
-    "Label Description MK-4082/Placebo"    
+var placeboItem = [
+    "Label Description MK-4082/Placebo"
 ]
 
-const numTabletsItem = [
-    "Number of Units Taken - MK-4082/Placebo",    
+var numTabletsItem = [
+    "Number of Units Taken - MK-4082/Placebo",
 ]
-const studyevent = formJson.form.studyEventName;
+var studyevent = formJson.form.studyEventName;
 var expectedDays = 0;
 
-const screeningNumber = formJson.form.subject.screeningNumber;
+var screeningNumber = formJson.form.subject.screeningNumber;
 logger("Subject ID: " + screeningNumber);
 
 try {
     var expectedDays = 0;
-    const day = parseInt(studyevent.split(" ")[2]);
-    const prevDay = studyeventMap[studyevent];
-    const prevPrevVisit = studyeventMap[prevDay];
-    
+    var day = parseInt(studyevent.split(" ")[2]);
+    var prevDay = studyeventMap[studyevent];
+    var prevPrevVisit = studyeventMap[prevDay];
+
     logger("Studyevent: " + studyevent)
     logger("Previous visit: " + prevDay)
     var prevVisitform = pullForm([prevDay], formNames);
@@ -48,15 +50,15 @@ try {
     }
     logger("Placebo: " + placebo);
     logger("Tablet: " + tablet);
-    
+
     var parts = placebo.split(" ");
-    
+
     var count = parseInt(parts[0], 10);
     var description = parts.slice(1).join(" ");
 
     logger("Count: " + count);
     logger("Description: " + description);
-    
+
     var total = parseInt(count) * tablet;
 
     return total + " " + description;
@@ -70,9 +72,9 @@ try {
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;
@@ -105,7 +107,7 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     var keepers = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
-        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' || 
+        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' ||
                 (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
             keepers.push(formData);
         } else {

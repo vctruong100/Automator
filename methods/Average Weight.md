@@ -1,15 +1,17 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Computes average weight from repeated measurements.
 
 // Add item names
-const itemList = [
-    "BMI_WEIGHT #1", 
+var itemList = [
+    "BMI_WEIGHT #1",
     "BMI_WEIGHT #2"
 ];
 
 // ======== Don't modify ========
-const sigfig = itemJson.item.significantDigits;
-var maxCount = 0; 
+var sigfig = itemJson.item.significantDigits;
+var maxCount = 0;
 var list = [];
 var avg = 0;
 
@@ -33,7 +35,7 @@ function populateList(form, targetItem) {
     var group, items, item, i, j, value;
     var count = 0;
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = itemGroups.length - 1; i >= 0; i--) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;

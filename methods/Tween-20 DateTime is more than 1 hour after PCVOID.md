@@ -1,27 +1,29 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Validates Tween-20 datetime is >1 hour after PCVOID.
 
-const pcvoidItem = [
+var pcvoidItem = [
     "PCVOID",
     "PCVOID w/edit check",
 ]
-const enteredTimeItem = [
+var enteredTimeItem = [
     "Tween-20 Date/Time"
 ]
-const attachedCodeList = [
+var attachedCodeList = [
     "YES",
     "NO",
 ]
-const difference = 60;
+var difference = 60;
 
-const item = itemJson.item;
+var item = itemJson.item;
 var groupid = null;
 
 try {
     getItemGroupID(formJson.form);
     var pcvoid = getItemValueFromSameGroup(formJson, pcvoidItem);
 
-    const enteredTime = getItemValueFromSameGroup(formJson, enteredTimeItem);
+    var enteredTime = getItemValueFromSameGroup(formJson, enteredTimeItem);
     if (!pcvoid || pcvoid == null || !enteredTime || enteredTime == null) return null;
 
     var pcvoidMs = pcvoid.dateValueMs;
@@ -77,5 +79,5 @@ function getItemValueFromSameGroup(formJ, itemName) {
             }
         }
     }
-    return null; 
+    return null;
 }

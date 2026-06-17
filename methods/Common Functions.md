@@ -1,4 +1,4 @@
-/* jshint strict: false */ 
+/* jshint strict: false */
 To convert to Int:
 value.toFixed(0);
 
@@ -16,15 +16,15 @@ function containsValue(input, keyword) {
     return value.indexOf(keyword) !== -1;
 }
 
-const sigfig = itemJson.item.significantDigits;
+var sigfig = itemJson.item.significantDigits;
 
 // Function to pull a specific item from form (not by first item name)
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;
@@ -57,7 +57,7 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     var keepers = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
-        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' || 
+        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' ||
                 (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
             keepers.push(formData);
         } else {
@@ -71,9 +71,9 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = itemGroups.length - 1; i >= 0; i--) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;
@@ -118,12 +118,12 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     var clean = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
-        if (formData.form.canceled == false && 
-            formData.form.itemGroups[0].canceled == false && 
-            (formData.form.dataCollectionStatus == 'Complete' || 
-            (INCLUDE_NONCONFORMANT_DATA == true && 
-            formData.form.dataCollectionStatus == 'Nonconformant') || 
-            formData.form.dataCollectionStatus == "Incomplete")) 
+        if (formData.form.canceled == false &&
+            formData.form.itemGroups[0].canceled == false &&
+            (formData.form.dataCollectionStatus == 'Complete' ||
+            (INCLUDE_NONCONFORMANT_DATA == true &&
+            formData.form.dataCollectionStatus == 'Nonconformant') ||
+            formData.form.dataCollectionStatus == "Incomplete"))
         {
             keepers.push(formData);
         } else {}

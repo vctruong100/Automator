@@ -1,18 +1,20 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Pulls the subject's dominant arm from Screening vitals.
 
 // Add Item Names
-const itemList = [
-    "Hip Circumference #1", 
+var itemList = [
+    "Hip Circumference #1",
     "Hip Circumference #2"
 ];
-const attachedItem = [
+var attachedItem = [
     "Average Hip Circumference"
 ];
 
 // ======== Don't modify ========
-const sigfig = itemJson.item.significantDigits;
-var maxCount = 0; 
+var sigfig = itemJson.item.significantDigits;
+var maxCount = 0;
 var list = [];
 var avg = 0;
 
@@ -36,7 +38,7 @@ function populateList(form, targetItem, ilist) {
     var group, items, item, i, j, value;
     var count = 0;
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = itemGroups.length - 1; i >= 0; i--) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;
@@ -72,21 +74,21 @@ function calculateAverage(values, sigfig) {
 }const formName = [
     "❤️ SCREEN VITALS (SUPINE) (BP,HR,RR,TEMP) V1.0",
 ]
-const studyevent = [
+var studyevent = [
     "SCREENING",
     "Screening"
 ]
 
-const itemName = [
+var itemName = [
     "Confirm_Arm.",
 ]
 
-const attachedItemCodeList = [
+var attachedItemCodeList = [
     "R",
     "L",
 ]
 
-const pulledItemCodeList = [
+var pulledItemCodeList = [
     "R",
     "L",
 ]
@@ -109,9 +111,9 @@ try {
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;
@@ -145,7 +147,7 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     var keepers = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
-        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' || 
+        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' ||
                 (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
             keepers.push(formData);
         } else {

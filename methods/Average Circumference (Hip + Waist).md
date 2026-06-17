@@ -1,31 +1,33 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Computes sum of average hip and waist circumference values.
 
 // Add item names
-const hipItemList = [
-    "Hip Circumference #1", 
+var hipItemList = [
+    "Hip Circumference #1",
     "Hip Circumference #2"
 ];
 
-const waistItemList = [
-    "Waist Circumference #1", 
+var waistItemList = [
+    "Waist Circumference #1",
     "Waist Circumference #2",
     "Waist Circumference #3",
     "Waist Circumference #4"
 ];
 
-const hipAttachedItem = [
+var hipAttachedItem = [
     "Average Hip Circumference"
 ]
 
-const waistAttachedItem = [
+var waistAttachedItem = [
     "Average Waist Circumference"
 ]
 
 // ======== Don't modify ========
-const item = itemJson.item;
-const sigfig = item.significantDigits;
-var maxCount = 2; 
+var item = itemJson.item;
+var sigfig = item.significantDigits;
+var maxCount = 2;
 var waistList = [];
 var hipList = [];
 var waistAvg = 0;
@@ -64,7 +66,7 @@ function populateList(form, targetItem) {
     var group, items, item, i, j, value;
     var count = 0;
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = itemGroups.length - 1; i >= 0; i--) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;

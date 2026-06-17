@@ -1,26 +1,28 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Handles point-of-care blood pressure data capture.
 
-const studyEvent = [
-    "SCREENING", 
+var studyEvent = [
+    "SCREENING",
     "Screening"
 ];
-const formName = [
+var formName = [
     "REM_Study Reminders (SCRN)",
 ];
-const itemName = [
+var itemName = [
     "POCBP or Partner POCBP"
 ];
-const attachedItemCodeList = [
+var attachedItemCodeList = [
     "YES",
     "NO",
 ]
-const pulledItemCodeList = [
+var pulledItemCodeList = [
     "YES",
     "NO",
 ]
 
-const gender = formJson.form.subject.volunteer.sexMale;
+var gender = formJson.form.subject.volunteer.sexMale;
 
 try {
     if (gender) return itemJson.item.codeListItems[1].codedValue; // return no
@@ -57,9 +59,9 @@ function pullForm(studyeventList, formNameList) {
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;
@@ -87,7 +89,7 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     var keepers = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
-        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' || 
+        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' ||
                 (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
             keepers.push(formData);
         } else {

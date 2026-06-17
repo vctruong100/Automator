@@ -1,29 +1,31 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Pulls and averages height and weight measurements.
 
 
 // Add item names
-const heightItemList = [
-    "BMI_HEIGHT #1", 
+var heightItemList = [
+    "BMI_HEIGHT #1",
     "BMI_HEIGHT #2"
 ];
 
-const weightItemList = [
-    "BMI_WEIGHT #1", 
+var weightItemList = [
+    "BMI_WEIGHT #1",
     "BMI_WEIGHT #2"
 ];
 
-const heightAttachedItem = [
+var heightAttachedItem = [
     "Average Height"
 ];
 
-const weightAttachedItem = [
+var weightAttachedItem = [
     "Average Weight"
 ];
 
 // ======== Don't modify ========
-const item = itemJson.item;
-const sigfig = item.significantDigits;
+var item = itemJson.item;
+var sigfig = item.significantDigits;
 var maxCount = 0;
 var heightList = [];
 var weightList = [];
@@ -63,7 +65,7 @@ function populateList(form, targetItem) {
     var group, items, item, i, j, value;
     var count = 0;
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = itemGroups.length - 1; i >= 0; i--) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;

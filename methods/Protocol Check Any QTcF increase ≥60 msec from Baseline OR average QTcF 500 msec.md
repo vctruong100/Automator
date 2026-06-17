@@ -1,64 +1,41 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Captures and formats the subject's last meal time.
+// Purpose: Protocol Check Any QTcF increase ≥60 msec from Baseline OR average QTcF 500 msec (REPEAT).
 
-var currentEvent = formJson.form.studyEventName;
-var studyevents = {
-    "Day 1": "Day-1",
-    "Day 2": "Day 1",
-    "Day 3": "Day 2",
-    "Day 4": "Day 3",
-    "Day 5": "Day 4",
-    "Day 6": "Day 5",
-    "Day 7": "Day 6",
-    "Day 8": "Day 7",
-    "Day 9": "Day 8",
-    "Day 10": "Day 9",
-    "Day 11": "Day 10",
-    "Day 12": "Day 11",
-    "Day 13": "Day 12",
-    "Day 18": "Day 17"
-}
-
-var mealForms = [
-    'STOP SNACKS', "Snack End",
-    'STOP DINNER', "Dinner End",
-    'STOP LUNCH', "Lunch End",
-    'STOP BREAKFAST', "Breakfast End",
+// Add item names
+var baselineForms = [
+    "ECG_Predose_Triplicate ECG (baseline) (SPONSOR PROVIDED MACHINE)"
+];
+var baselineFormStudyEvents = [
+    "Visit 2 Week 1 Day 0"
 ];
 
-try {
-    var prevEvent = studyevents[currentEvent];
-    var form = pullForm([prevEvent], mealForms);
-    if (!form) {
-        var preprevEvent = studyevents[prevEvent];
-        form = pullForm([preprevEvent], mealForms)
-    }
-    if (!form) return null;
-    var mealTime = form.form.itemGroups[0].items[0].value;
-    if (mealTime && mealTime !== null) return mealTime;
+var baselineItem = [
+    "Baseline QTcF"
+];
+var qtcfItems = [
+    "QTcF #1",
+    "QTcF #2",
+    "QTcF #3"
+];
 
+// ======== Don't modify ========
+var item = itemJson.item;
+
+try {
+    var form = pullForm(baselineFormStudyEvents, baselineForms);
+    if (!form) return true;
+    var baseline = pullItemFromForm(form, baselineItem);
+    var qtcf = pullItemFromForm(formJson, qtcfItems);
+
+    if (!baseline || baseline == null || !qtcf || qtcf == null) return null;
+    var diff = qtcf - baseline;
+    if (diff >= 60 || qtcf > 500) return "Y";
+    else if (diff < 60 || qtcf <= 500) return "N";
     return null;
 } catch (e) {
     logger("Error in main execution logic: " + e);
-    return null;
-}
-
-function pullItemFromForm(form, targetItem) {
-    var itemGroups = form.form.itemGroups;
-    var group, items, item, i, j, value;
-
-	if (!itemGroups || itemGroups.length < 1) return null;
-
-    for (i = 0; i < itemGroups.length; i++) {
-        group = itemGroups[i];
-        if (!group || group.canceled) continue;
-        for (j = 0; j < group.items.length; j++) {
-            item = group.items[j];
-            if (targetItem.indexOf(item.name) !== -1 && item.value !== null) return item.value;
-        }
-    }
     return null;
 }
 
@@ -69,6 +46,23 @@ function pullForm(studyeventList, formNameList) {
             if (temp) return temp;
         }
     }
+}
+
+function pullItemFromForm(form, targetItem) {
+    var itemGroups = form.form.itemGroups;
+    var group, items, item, i, j, value;
+
+	if (!itemGroups || itemGroups.length < 1) return null;
+
+    for (i = itemGroups.length - 1; i >= 0; i--) {
+        group = itemGroups[i];
+        if (!group || group.canceled) continue;
+        for (j = 0; j < group.items.length; j++) {
+            item = group.items[j];
+            if (targetItem.indexOf(item.name) !== -1 && item.value !== null) return item.value;
+        }
+    }
+    return null;
 }
 
 function checkForm(studyevent, form) {

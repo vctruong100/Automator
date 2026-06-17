@@ -1,23 +1,25 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Protocol BMI range validation.
 
 // Add item names
-const heightitemList = [
-    "BM_HT", 
+var heightitemList = [
+    "BM_HT",
     "BM_HT_Visit 2",
     "BMI_HEIGHT"
 ];
-const weightitemList = [
-    "BM_WT #1", 
+var weightitemList = [
+    "BM_WT #1",
     "BM_WT #2",
     "BMI_WEIGHT",
-    
+
 ];
-const screeningStudyEvent = [
-    "Screening", 
+var screeningStudyEvent = [
+    "Screening",
     "SCREENING"
 ];
-const screeningBMI_Form = [
+var screeningBMI_Form = [
     "BM_Height/Weight/BMI",
     "📏 SCREEN BODY MEASUREMENTS (HEIGHT / WEIGHT / BMI)",
     "📏 BM_BODY MEASUREMENTS (HEIGHT / WEIGHT / BMI)"
@@ -29,9 +31,9 @@ var BMI_upper_range = 30;
 
 
 // ======== Don't modify ========
-const currentStudyEvent = formJson.form.studyEventName;
-const item = itemJson.item;
-const sigfig = itemJson.item.significantDigits;
+var currentStudyEvent = formJson.form.studyEventName;
+var item = itemJson.item;
+var sigfig = itemJson.item.significantDigits;
 
 var weight = 0;
 var height = 0;
@@ -45,8 +47,8 @@ try {
     else {
         height = pullItemFromForm(form, heightitemList);
     }
-    
-    var maxCount = 0; 
+
+    var maxCount = 0;
     var list = [];
     var avg = 0;
 
@@ -92,7 +94,7 @@ function populateList(form, targetItem, list) {
     var group, items, item, i, j, value;
     var count = 0;
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;
@@ -122,9 +124,9 @@ function pullForm(studyeventList, formNameList) {
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;
@@ -148,7 +150,7 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     var keepers = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
-        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' || 
+        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' ||
                 (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
             keepers.push(formData);
         } else {

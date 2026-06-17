@@ -1,18 +1,20 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Sex-specific QTcF protocol threshold check.
 
-const item = itemJson.item;
+var item = itemJson.item;
 
-const qtcfItems = [
+var qtcfItems = [
     "QTcF (P: < 450 (male), < 470 (female))",
 ]
 
-const yesCodeList = item.codeListItems[1].codedValue;
-const noCodeList = item.codeListItems[0].codedValue;
-const maleRange = 450;
-const femaleRange = 470;
+var yesCodeList = item.codeListItems[1].codedValue;
+var noCodeList = item.codeListItems[0].codedValue;
+var maleRange = 450;
+var femaleRange = 470;
 
-const sexMale = formJson.form.subject.volunteer.sexMale;
+var sexMale = formJson.form.subject.volunteer.sexMale;
 
 try {
     var qtcf = pullItemFromForm(formJson, qtcfItems);

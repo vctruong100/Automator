@@ -1,3 +1,5 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Evaluates and flags dipstick results across all relevant items.
 
@@ -32,9 +34,9 @@ try {
 function pullItemFromForm(form) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-	
+
     var firstItem = null;
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];

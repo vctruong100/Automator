@@ -1,22 +1,24 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Computes waist-to-hip ratio.
 
-const waistItemList = [
-    "Waist Circumference #1", 
+var waistItemList = [
+    "Waist Circumference #1",
     "Waist Circumference #2"
 ];
-const hipItemList = [
-    "Hip Circumference #1", 
+var hipItemList = [
+    "Hip Circumference #1",
     "Hip Circumference #2"
 ];
 
-const heightItemList = [
+var heightItemList = [
     "BM_HT",
     "BMI_Height",
 ];
 
-const sigfig = itemJson.item.significantDigits;
-const maxCount = 2; 
+var sigfig = itemJson.item.significantDigits;
+var maxCount = 2;
 
 try {
     var waist = calculateAverage(populateList(formJson, waistItemList), sigfig);
@@ -53,7 +55,7 @@ function populateList(form, targetItem) {
     var list = [];
     var count = 0;
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = itemGroups.length - 1; i >= 0; i--) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;
@@ -103,7 +105,7 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     var keepers = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
-        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' || 
+        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' ||
                 (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
             keepers.push(formData);
         } else {
@@ -116,9 +118,9 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = itemGroups.length - 1; i >= 0; i--) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;

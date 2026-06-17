@@ -1,13 +1,15 @@
+/* jshint strict: false */
+
 // Version: v2
 // Purpose: Validates visit dates fall within protocol-defined windows.
 
-const studyevents = [
+var studyevents = [
     "Day 1"
 ]
-const formName = [
+var formName = [
     "🟡IP_EVOLOCUMAB ADMINISTRATION",
 ]
-const itemName = [
+var itemName = [
     "IP_StartDate"
 ]
 
@@ -19,24 +21,24 @@ try {
     if (currentStudyName == "Screening") return true;
     var day = parseInt(currentStudyName.split(" ")[1]);
     logger("Day: " + day);
-    
+
     if (day < 9) return true;
-    
+
     var form = pullForm(studyevents, formName);
-    
+
     if (!form) return null;
     var val = pullItemFromForm(form, itemName);
-    
+
     if (!val || !item || !item.dateValueMs) return false;
     logger("Start Date: " + val.value);
     logger("Collected Date: " + item.value);
     var baseDate = parseDate(val.value);
     if (!baseDate) return false;
-    
+
     var addDays = day - 1;
     logger("Add days: " + addDays)
     var allowedRange = day <= 15 ? 1 : 2;
-    
+
     logger("Allowed range: " + allowedRange)
 
     var targetMs = baseDate.getTime() + addDays * 86400000;
@@ -55,7 +57,7 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     var keepers = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
-        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' || 
+        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' ||
                 (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
             keepers.push(formData);
         } else {
@@ -98,16 +100,16 @@ function formatDateText(dateObj) {
     var d = dateObj.getDate();
     var m = MMM[dateObj.getMonth()];
     var y = dateObj.getFullYear();
-    var hy = "\u2011"; 
-    return (d < 10 ? "0"+d : ""+d) + hy + m + hy + y; 
+    var hy = "\u2011";
+    return (d < 10 ? "0"+d : ""+d) + hy + m + hy + y;
 }
 
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;

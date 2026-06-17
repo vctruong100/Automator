@@ -129,4 +129,3 @@ if (conditions.length === 0) {
 
 ctx.conditions = conditions;
 return true;
-

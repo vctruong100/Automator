@@ -1,11 +1,18 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Flags entries where collected date is in the future.
 
-const val = itemJson.item.value;
+var val = itemJson.item.value;
 
-logger(val);
-
-return isFutureDate(val);
+try {
+    if (!val) return null;
+    logger(val);
+    return isFutureDate(val);
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
+}
 
 function isFutureDate(dateStr) {
     var parts = dateStr.split("-");

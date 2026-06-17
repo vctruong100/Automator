@@ -1,17 +1,19 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Validates Tween-20 datetime is exactly 1 hour after PCVOID.
 
 
 // Add item names
-const pcvoidItem = [
+var pcvoidItem = [
     "PCVOID",
     "PCVOID w/edit check",
 ]
 
 
 // ======== Don't modify ========
-const item = itemJson.item;
-const difference = 60;
+var item = itemJson.item;
+var difference = 60;
 var groupid = null;
 
 try {
@@ -20,18 +22,18 @@ try {
     if (!pcvoid || pcvoid == null) return null;
 
     var pcvoidMs = pcvoid.dateValueMs;
-    const collectedTimeMs = item.dateValueMs;
+    var collectedTimeMs = item.dateValueMs;
 
     logger("pcvoidMs Time: "  + formatDateTime(pcvoid.value));
     logger("collected time: " + formatDateTime(item.value));
 
-    const differenceMs = collectedTimeMs - pcvoidMs;
+    var differenceMs = collectedTimeMs - pcvoidMs;
     logger(differenceMs)
     if (differenceMs < 0) {
         customErrorMessage("Selected time is less than previous PCVoid time. Previous PCVoid Time: " + formatDateTime(pcvoid.value))
         return false;
     }
-    const differenceInMins = Math.abs(Math.floor(differenceMs / (1000 * 60)))
+    var differenceInMins = Math.abs(Math.floor(differenceMs / (1000 * 60)))
 
     logger(differenceInMins)
     if(differenceInMins >= difference){
@@ -52,13 +54,13 @@ function formatDateTime(isoString) {
     var parts = isoString.split("T");
     if (parts.length < 2) return "";
 
-    var dateParts = parts[0].split("-"); 
+    var dateParts = parts[0].split("-");
     var timeParts = parts[1].split(":");
 
     if (dateParts.length < 3 || timeParts.length < 3) return "";
 
     var year = dateParts[0];
-    var month = parseInt(dateParts[1], 10) - 1; 
+    var month = parseInt(dateParts[1], 10) - 1;
     var day = dateParts[2];
 
     var hour = timeParts[0];
@@ -104,5 +106,5 @@ function getItemValueFromSameGroup(form, itemName) {
             }
         }
     }
-    return null; 
+    return null;
 }

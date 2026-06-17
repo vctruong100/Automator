@@ -1,23 +1,25 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Determines supine start time from Screening ECG for screening vitals.
 
-const formName = formJson.form.name; 
-const studyEventName = formJson.form.studyEventName;
-const studyevent = [
+var formName = formJson.form.name;
+var studyEventName = formJson.form.studyEventName;
+var studyevent = [
     "Screening",
     "SCREENING",
 ]
-const confirmationItems = [
-    "Scn_remained_Semi_recumbent V2", 
-    "Scn_remained_Semi_recumbent", 
+var confirmationItems = [
+    "Scn_remained_Semi_recumbent V2",
+    "Scn_remained_Semi_recumbent",
     "Scn_remained_Semi_recumbent."
 ];
 
-const item = [
+var item = [
     "START SUPINE"
 ];
 
-const ecgFormNames = [
+var ecgFormNames = [
   "⚡ SCREEN 12-LEAD ECG TRIPLICATE V1.0",
   "⚡ SCREEN 12-LEAD ECG TRIPLICATE V2.0",
 ];
@@ -83,9 +85,9 @@ function formatDate(dateStr) {
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;

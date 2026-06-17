@@ -1,31 +1,33 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Calculates BMI from Screening height and weight.
 
 
 // Add item names
-const heightitemList = [
-    "BM_HT", 
+var heightitemList = [
+    "BM_HT",
     "BM_HT_Visit 2",
     "BMI_HEIGHT",
-    "BMI_HEIGHT #1", 
+    "BMI_HEIGHT #1",
     "BMI_HEIGHT #2"
 ];
-const weightitemList = [
-    "BM_WT #1", 
+var weightitemList = [
+    "BM_WT #1",
     "BM_WT #2",
     "BMI_WEIGHT",
-    "BMI_WEIGHT #1", 
+    "BMI_WEIGHT #1",
     "BMI_WEIGHT #2"
 ];
 
 // ======== Don't modify ========
-const currentStudyEvent = formJson.form.studyEventName;
-const item = itemJson.item;
-const sigfig = itemJson.item.significantDigits;
+var currentStudyEvent = formJson.form.studyEventName;
+var item = itemJson.item;
+var sigfig = itemJson.item.significantDigits;
 
 var bmi = 0;
 
-var htmaxCount = 2; 
+var htmaxCount = 2;
 var htlist = [];
 var htavg = 0;
 
@@ -72,7 +74,7 @@ function populateList(form, targetItem, maxCount) {
     var list = [];
     var count = 0;
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = itemGroups.length - 1; i >= 0; i--) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;

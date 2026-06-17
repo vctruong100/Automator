@@ -1,3 +1,5 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Generates unique incremental IDs within repeated groups/forms.
 
@@ -77,10 +79,15 @@ function getMaxNumValue(numValues) {
 }
 
 // Execution
-var numValues = getNumValues(formData);
-logger('All num values: ' + numValues.join(', '));
+try {
+    var numValues = getNumValues(formData);
+    logger('All num values: ' + numValues.join(', '));
 
-var nextNum = getMaxNumValue(numValues);
-logger('Next num value (forced integer): ' + nextNum);
+    var nextNum = getMaxNumValue(numValues);
+    logger('Next num value (forced integer): ' + nextNum);
 
-return nextNum.toFixed(0);
+    return nextNum.toFixed(0);
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
+}

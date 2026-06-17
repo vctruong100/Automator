@@ -1,17 +1,19 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: ClinSpark automation method: Outpatient Visit Window.
 
-const studyevents = [
+var studyevents = [
     "Day 1"
 ]
-const formName = [
+var formName = [
     "🟡IP_EVOLOCUMAB ADMINISTRATION",
 ]
-const itemName = [
+var itemName = [
     "IP_StartDate"
 ]
 
-const sampleItem = [
+var sampleItem = [
     "🟡 Evolocumab PK",
     "🟡 PCSK9 Serum",
     "🔴 Lipid Panel (LabCorp)",
@@ -38,26 +40,26 @@ try {
     }
 
     logger("Dosing time: " + doseItem.value);
-    
+
     var sample = pullItemFromForm(formJson, sampleItem);
     if (!sample) return null;
     logger("Sample time: " + sample.value);
     var doseMs = doseItem.dateValueMs;
     var sampleMs = sample.dateValueMs;
-    
+
     // var doseDate = parseDateOnly(doseItem.value);
     // var sampleDate = parseDateOnly(sample.value);
-    
+
     // var differenceInDays = Math.floor((sampleDate.getTime() - doseDate.getTime()) / (1000 * 60 * 60 * 24));
     // logger("Dosing day: " + doseDate);
     // logger("Sample day: " + sampleDate);
     // logger("Difference In Days: " + differenceInDays);
 
-    const minuteMs = 1000 * 60;
-    const hourMs = minuteMs * 60;
-    const dayMs = hourMs * 24;
+    var minuteMs = 1000 * 60;
+    var hourMs = minuteMs * 60;
+    var dayMs = hourMs * 24;
     // var DaysInMS = differenceInDays * dayMs;
-    
+
     var diffMs = sampleMs - doseMs + dayMs;
     logger("Difference in Ms: " + diffMs);
     logger("Difference in Days: " + msToDaysHours(diffMs))
@@ -89,7 +91,7 @@ try {
     if (dayMatch) {
         var targetDay = parseInt(dayMatch[1]);
         var targetMs = targetDay * dayMs;
-        // Day 11 - 15 : ±24h 
+        // Day 11 - 15 : ±24h
         if (targetDay >= 11 && targetDay <= 15) {
             lowerBound = targetMs - dayMs;
             upperBound = targetMs + dayMs;
@@ -118,7 +120,7 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     var keepers = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
-        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' || 
+        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' ||
                 (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
             keepers.push(formData);
         } else {
@@ -148,9 +150,9 @@ function pullForm(studyeventList, formNameList) {
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;
@@ -188,7 +190,7 @@ function parseDateOnly(value) {
     var parts = datePart.split("-");
 
     var year = parseInt(parts[0], 10);
-    var month = parseInt(parts[1], 10) - 1; 
+    var month = parseInt(parts[1], 10) - 1;
     var day = parseInt(parts[2], 10);
 
     return new Date(year, month, day);

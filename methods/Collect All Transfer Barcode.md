@@ -1,13 +1,15 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Aggregates all transfer barcodes from related item data.
 
-const formsList = [
+var formsList = [
     "(*)LAB_🩸Plasma Acetaminophen PREDOSE - 1 TUBE",
     "(*)LAB_🩸D-1_15min, 30min, 60min, 2h, 3h, 4h, 6h, 10h_Plasma Acetaminophen - 1 TUBE",
     "(*)LAB_🩸D84 | 12h MK-4082 PK | 10h PL Acetaminophen - 2 TUBES ",
     "(*)LAB_🩸D84 PL Acetaminophen (0.5h)  - 1 TUBE",
 ];
-const itemNames = [
+var itemNames = [
     "🟣Plasma Acetaminophen (PREDOSE)",
     "🟣Plama Acetaminophen (PREDOSE)",
     "🟣Plasma Acetaminophen (0.5H)",
@@ -16,16 +18,21 @@ const itemNames = [
 
 var allMappings = [];
 
-for (var i = 0; i < formsList.length; i++) {
-    var formData = findFormDataAcrossStudyEvents(formsList[i], false);
-    var result = getItemMapping(formData);
+try {
+    for (var i = 0; i < formsList.length; i++) {
+        var formData = findFormDataAcrossStudyEvents(formsList[i], false);
+        var result = getItemMapping(formData);
 
-    for (var j = 0; j < result.length; j++) {
-        allMappings.push(result[j]);
+        for (var j = 0; j < result.length; j++) {
+            allMappings.push(result[j]);
+        }
     }
-}
 
-return allMappings.join(' | ');
+    return allMappings.join(' | ');
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
+}
 
 function getItemMapping(formData) {
     var mapping = [];

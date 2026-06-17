@@ -1,7 +1,9 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Manages sample barcode validation/formatting.
 
-const itemNames = [
+var itemNames = [
     "BE_Date of sample 0 (PK)",
     "BE_Date of sample 1 (ADA, nAb)",
     "BE_Date of sample 2",
@@ -9,7 +11,7 @@ const itemNames = [
     "BE_Date of sample 4 (Serum Biomarker)",
     "BE_Date of sample 5 (Plasma biomarker)",
     "BE_Date of sample 6 (WB DNA)",
-    
+
 ]
 
 try {

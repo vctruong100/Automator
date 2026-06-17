@@ -1,15 +1,17 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Computes average waist circumference from repeated measurements.
 
 // Add item names
-const itemList = [
-    "Waist Circumference #1", 
+var itemList = [
+    "Waist Circumference #1",
     "Waist Circumference #2"
 ];
 
 // ======== Don't modify ========
-const sigfig = itemJson.item.significantDigits;
-var maxCount = 2; 
+var sigfig = itemJson.item.significantDigits;
+var maxCount = 2;
 var list = [];
 var avg = 0;
 
@@ -34,7 +36,7 @@ function populateList(form, targetItem) {
     var group, items, item, i, j, value;
     var count = 0;
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = itemGroups.length - 1; i >= 0; i--) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;

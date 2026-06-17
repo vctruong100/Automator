@@ -1,10 +1,12 @@
+/* jshint strict: false */
+
 // Version: v1
 // Purpose: Determines next step in glucose monitoring from prior readings.
 
-const itemName = [
-    "Glucometer Reading"    
+var itemName = [
+    "Glucometer Reading"
 ]
-const item = itemJson.item;
+var item = itemJson.item;
 try {
     var result = getItemGroupID(formJson);
     var groupid = result[0];
@@ -36,7 +38,7 @@ function getItemGroupID(form) {
         var group = form.form.itemGroups[i];
         var items = group.items;
         if (!items || items.length < 1) continue;
-    
+
         for (var j = 0; j < items.length; j++) {
             var it = items[j];
             if (it.id === item.id) {
@@ -50,9 +52,9 @@ function getItemGroupID(form) {
 function pullItemFromForm(form, targetItem, groupid) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;

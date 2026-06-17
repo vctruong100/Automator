@@ -1,5 +1,5 @@
 Green Button Redirect to Image Page (use direct link):
-<a href="https://i.ibb.co/FbnX6XvJ/image-6.png" 
+<a href="https://i.ibb.co/FbnX6XvJ/image-6.png"
    target="_blank"
    class="img-link-btn">
   Click to View Image
@@ -21,7 +21,7 @@ Green Button Redirect to Image Page (use direct link):
     background-color: #45a049;
   }
 </style>
- 
+
 Buttons Side-by-side:
 <div class="btn-container">
   <a href="https://i.ibb.co/qY54pqkF/image-9.png" target="_blank" class="img-link-btn">
@@ -55,8 +55,8 @@ Buttons Side-by-side:
 </style>
 
 Direct image on Form (use direct link):
-<img 
-  src="https://i.ibb.co/FbnX6XvJ/image-6.png" 
+<img
+  src="https://i.ibb.co/FbnX6XvJ/image-6.png"
   style="max-width: 500px; width: 100%; height: auto;"
 >
 
@@ -67,8 +67,8 @@ Multiple images side-by-side:
 </div>
 
 No button. Just custom link:
-<a href="https://i.ibb.co/4wJ2ScHn/image-10.png" 
-  target="_blank" 
+<a href="https://i.ibb.co/4wJ2ScHn/image-10.png"
+  target="_blank"
   class="img-link-btn">
   Click to View Symptoms
 </a>
