@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Pulls weight from Screening body measurements.
+
 const formName = [
     "BM_Height / Weight / BMI",
     "BM_Height/Weight/BMI",

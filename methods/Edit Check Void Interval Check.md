@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Validates urine void intervals are sequential without gaps.
+
 const allForms = [
     "(*) 💧 -2 to 0 hr Urine Interval v3", // 0
     "(*)💧0 to 4 hr Urine Interval v4",// 1

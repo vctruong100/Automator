@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Generates next incremental unique ID across all study events.
+
 var currentAEID = parseInt(itemJson.item.value, 10);
 if (!isNaN(currentAEID)) {
     logger('Current AEID is already set: ' + currentAEID + '. Skipping calculation.');

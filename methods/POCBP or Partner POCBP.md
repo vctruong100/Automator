@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Handles point-of-care blood pressure data capture.
+
 const studyEvent = [
     "SCREENING", 
     "Screening"

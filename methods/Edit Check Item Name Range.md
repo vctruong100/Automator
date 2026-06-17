@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Generic range validation for any item name.
+
 // Just copy and paste the code. No need to do anything.
 // Acceptable Item Name Format:
 // "Heart Rate (60-100)"

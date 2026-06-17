@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Generates unique incremental IDs within repeated groups/forms.
+
 var currentNum = parseInt(itemJson.item.value, 10);
 if (!isNaN(currentNum)) {
     logger('Current num is already set: ' + currentNum + '. Skipping calculation.');

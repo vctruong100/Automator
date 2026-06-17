@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Flags entries where collected date is in the future.
+
 const val = itemJson.item.value;
 
 logger(val);

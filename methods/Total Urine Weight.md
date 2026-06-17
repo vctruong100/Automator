@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Calculates net urine weight (jug+urine minus empty jug).
+
 const urineJugItem = [
     "Weight of Void Jug+Urine"
 ];

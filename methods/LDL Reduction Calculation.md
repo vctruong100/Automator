@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Calculates LDL reduction percentage from baseline and current values.
+
 const studyEventNames = [
     "Day 1",
     "Screening",

@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Calculates BMI from Screening height and weight.
+
 
 // Add item names
 const heightitemList = [

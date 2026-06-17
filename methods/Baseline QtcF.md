@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Computes baseline QTcF from screening or predose ECG forms.
+
 // ======== Add item names ========
 const baselineStudyEvent = [
     "Visit 2 Week 1 Day 0",

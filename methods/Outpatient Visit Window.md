@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: ClinSpark automation method: Outpatient Visit Window.
+
 const studyevents = [
     "Day 1"
 ]

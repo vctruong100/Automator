@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Calculates end-of-interval datetime from dose time and study event name.
+
 // Add item names
 const doseForms = [
     "IP_Study Drug Exposure - Blinded Study Medication Part A",

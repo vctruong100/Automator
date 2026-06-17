@@ -1,3 +1,6 @@
+// Version: v2
+// Purpose: Validates visit dates fall within protocol-defined windows.
+
 const studyevents = [
     "Day 1"
 ]

@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Aggregates all transfer barcodes from related item data.
+
 const formsList = [
     "(*)LAB_🩸Plasma Acetaminophen PREDOSE - 1 TUBE",
     "(*)LAB_🩸D-1_15min, 30min, 60min, 2h, 3h, 4h, 6h, 10h_Plasma Acetaminophen - 1 TUBE",

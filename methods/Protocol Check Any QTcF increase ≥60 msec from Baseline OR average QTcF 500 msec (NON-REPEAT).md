@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: ClinSpark automation method: Protocol Check Any QTcF increase ≥60 msec from Baseline OR average QTcF 500 msec (NON-REPEAT).
+
 // Add item name
 const baselineForms = [
     "ECG_Predose_Triplicate ECG (baseline) (SPONSOR PROVIDED MACHINE)"

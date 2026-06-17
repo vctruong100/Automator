@@ -1,3 +1,6 @@
+// Version: v2
+// Purpose: Captures and formats the subject's last meal time.
+
 const studyevents = {
     "D1": "D -1",
     "D2": "D1",

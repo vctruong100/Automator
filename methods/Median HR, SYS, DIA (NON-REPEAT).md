@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Computes median HR, SBP, DBP for non-repeat item groups.
+
 const sysItem = [
     "Systolic BP", 
     "SCRN_Systolic BP", 

@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Validates transfer barcodes contain required T prefix.
+
 const item = itemJson.item;
 
 try {

@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: QTcF safety edit check with sex-specific thresholds.
+
 // Add item names
 const baselineForm = [
     "⚡DAY-1 ECG SINGLE 12 LEAD V1",

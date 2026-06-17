@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Pulls and averages height and weight measurements.
+
 
 // Add item names
 const heightItemList = [

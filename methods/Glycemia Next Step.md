@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Determines next step in glucose monitoring from prior readings.
+
 const itemName = [
     "Glucometer Reading"    
 ]

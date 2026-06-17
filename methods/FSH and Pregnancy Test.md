@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Evaluates FSH and pregnancy test result logic.
+
 const formName = formJson.form.name;
 
 const studyEvent = [

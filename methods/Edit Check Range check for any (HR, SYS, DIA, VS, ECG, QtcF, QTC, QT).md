@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Lightweight range check for any vitals or ECG parameter.
+
 const value = itemJson.item.value;
 const minimum_range = 60;
 const maximum_range = 100;

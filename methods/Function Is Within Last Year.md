@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Returns true if a date falls within the last 365 days.
+
 function isWithinLastYear(inputDate) {
     if (!inputDate) return false;
 

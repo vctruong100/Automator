@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Transfer barcode validation and formatting.
+
 const itemNames = [
     "BE_Date of sample 0 (PK)",
     "BE_Date of sample 1 (ADA, nAb)",

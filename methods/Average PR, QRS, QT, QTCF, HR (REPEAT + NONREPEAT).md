@@ -1,5 +1,8 @@
 /* jshint strict: false */
 
+// Version: v1
+// Purpose: Extended average calculator with wider item name coverage.
+
 // Add item names
 // items to pull for calculation
 const PRitem = ["PR", "PR V4", "🟢 PR (100-250) ms",];

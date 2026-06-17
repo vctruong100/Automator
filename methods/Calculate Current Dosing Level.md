@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Determines current dosing level from kit label and tablet count.
+
 const formNames = [
     "🟡IP_ MK-4082/Placebo Administration (D36-D84)"    
 ]

@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Computes QTcF from screening ECG forms.
+
 const studyevent = [
     "SCREENING",
     "Screening"

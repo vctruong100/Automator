@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Validates visit dates fall within protocol-defined windows.
+
 // Add item names
 const studyEventNames = [
     "Day 1 (pre)",

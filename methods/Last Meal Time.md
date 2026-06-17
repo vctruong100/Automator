@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Captures and formats the subject's last meal time.
+
 const currentEvent = formJson.form.studyEventName;
 const studyevents = {
     "Day 1": "Day-1",

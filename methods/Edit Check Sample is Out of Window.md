@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Flags samples collected outside defined time windows.
+
 const studyevents = [
     "Day 1"
 ]

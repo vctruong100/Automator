@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Determines LDL titration decision based on reduction and thresholds.
+
 const studyEventNames = [
     "Day 1",
     "Screening",

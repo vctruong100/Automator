@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Validates Tween-20 datetime is >1 hour after PCVOID.
+
 const pcvoidItem = [
     "PCVOID",
     "PCVOID w/edit check",

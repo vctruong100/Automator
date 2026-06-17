@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Computes waist-to-hip ratio.
+
 const waistItemList = [
     "Waist Circumference #1", 
     "Waist Circumference #2"

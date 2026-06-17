@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Calculates total urine volume across collection intervals.
+
 const currentEvent = formJson.form.studyEventName;
 const studyevents = {
     "Day 1": "Day-1",

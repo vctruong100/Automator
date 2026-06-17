@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: General vital signs range protocol check.
+
 const sysItems = [
     "SYS (60 - 200) mmHg", "SYS (60 - 200)",
 ];

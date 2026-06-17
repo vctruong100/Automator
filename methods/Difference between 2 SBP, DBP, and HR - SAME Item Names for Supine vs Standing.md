@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Computes differences between supine and standing vitals (same item names).
+
 const sysItem = [
     "Systolic BP (P: 90 - 140 mmHg)",
     "SYS (I: 80-150)",

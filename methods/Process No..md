@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Handles process number generation/tracking for lab samples.
+
 const studyevent = [
     "Visit 2 Week 1 Day 0",
 ]

@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Calculates Tween-20 volume as urine volume divided by 10.
+
 const urineJugItem = [
     "Weight of Void Jug+Urine"
 ];

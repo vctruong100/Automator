@@ -1,5 +1,8 @@
 /* jshint strict: false */\
 
+// Version: v1
+// Purpose: Calculates average PR, QRS, QT, QTcF, and HR from form items (repeat and non-repeat support).
+
 // Add item names
 // items to pull for calculation
 const PRitem = ["PR", "PR V4"];

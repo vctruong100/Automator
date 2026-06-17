@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Calculates delta between baseline and currently entered value.
+
 // Add Item Names
 const baselineStudyEvent = [
     "Period 1 Day 1",

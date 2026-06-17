@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Computes average hip circumference from repeated measurements.
+
 // Add item names
 const itemList = [
     "Hip Circumference #1", 

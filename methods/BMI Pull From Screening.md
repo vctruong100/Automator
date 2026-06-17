@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Pulls BMI value from the Screening event's body measurements form.
+
 const studyEventNames = [
     "Screening",
     "SCREENING",

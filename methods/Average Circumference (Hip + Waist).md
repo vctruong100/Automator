@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Computes sum of average hip and waist circumference values.
+
 // Add item names
 const hipItemList = [
     "Hip Circumference #1", 

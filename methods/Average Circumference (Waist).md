@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Computes average waist circumference from repeated measurements.
+
 // Add item names
 const itemList = [
     "Waist Circumference #1", 

@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Evaluates and flags dipstick results across all relevant items.
+
 var itemid = itemJson.item.id;
 
 try {

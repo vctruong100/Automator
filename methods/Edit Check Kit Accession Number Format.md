@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Validates kit accession number format.
+
 const value = itemJson.item.value;
 
 try {

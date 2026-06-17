@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Calculates target visit dates from randomization date and visit windows.
+
 const studyEvent = formJson.form.studyEventName;
 const studyEventNames = [
     "Day 1 (pre)",

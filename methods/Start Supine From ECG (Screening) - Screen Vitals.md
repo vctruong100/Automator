@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Determines supine start time from Screening ECG for screening vitals.
+
 const formName = formJson.form.name; 
 const studyEventName = formJson.form.studyEventName;
 const studyevent = [

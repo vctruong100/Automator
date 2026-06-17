@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Pulls hip and waist circumference from previous visit.
+
 const formName = [
     "BM_Waist/Hip Circumference"
 ];

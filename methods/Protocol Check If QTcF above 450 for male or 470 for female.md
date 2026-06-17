@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Sex-specific QTcF protocol threshold check.
+
 const item = itemJson.item;
 
 const qtcfItems = [

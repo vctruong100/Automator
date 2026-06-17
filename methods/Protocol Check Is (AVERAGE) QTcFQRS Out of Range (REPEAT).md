@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Protocol check for averaged QTcF/QRS out-of-range (repeat).
+
 // Add Item Names
 const QTcFitems = [
     '- QTcF (≤ 450 msec "Males") (≤ 470 msec "Females")', 

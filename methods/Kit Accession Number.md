@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Generates or validates kit accession numbers with D1-prefix logic.
+
 const formNames = [
     "(*)🩸D1, D2, D3, D4, D7, D10, D14_Predose_Safety Labs + PD/PK - 6 TUBES", 
     "(*)🩸Sched B_Visit 2 W1, D0_Safeties + PK/ADA/Biomarkers_PREDOSE - 8 TUBES", 

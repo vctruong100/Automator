@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Protocol range check for averaged SBP, DBP, HR (repeat).
+
 // Add item names
 const dbpItems = [
     "Diastolic BP", 

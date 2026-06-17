@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Extracts or computes the subject's year of birth.
+
 const dob = formJson.form.subject.volunteer.dateOfBirth;
 
 try {

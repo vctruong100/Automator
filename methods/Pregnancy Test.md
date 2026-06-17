@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Evaluates pregnancy test results and sets flags.
+
 const formName = formJson.form.name;
 
 const studyEvent = [

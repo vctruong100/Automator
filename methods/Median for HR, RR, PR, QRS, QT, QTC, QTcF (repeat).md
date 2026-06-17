@@ -1,4 +1,7 @@
 /* jshint strict: false */ 
+
+// Version: v1
+// Purpose: Computes median values for full ECG/vitals panel (repeat).
 const HRItem = [
     "HR (P: 40-100)",
 ]

@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Validates time difference between start and collection.
+
 // Add Item Names
 const startTimeItem = [
     "Start Semirecumbent Time",

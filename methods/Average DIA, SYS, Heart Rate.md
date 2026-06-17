@@ -1,5 +1,8 @@
 /* jshint strict: false */
 
+// Version: v1
+// Purpose: Calculates average diastolic, systolic BP, and heart rate.
+
 // Add item names
 // items to pull for calculation
 const sysItem = ["SYS (60 - 200) mmHg", "SYS (I: 90 - 150)"];

@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Protocol BMI range validation.
+
 // Add item names
 const heightitemList = [
     "BM_HT", 

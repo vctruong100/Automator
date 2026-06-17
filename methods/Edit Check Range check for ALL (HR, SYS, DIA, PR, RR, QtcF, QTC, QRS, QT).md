@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Comprehensive range check for all standard vital/ECG parameters.
+
 
 // Add item names
 const SYS = [

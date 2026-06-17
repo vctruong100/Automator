@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Pulls the subject's dominant arm from Screening vitals.
+
 // Add Item Names
 const itemList = [
     "Hip Circumference #1", 

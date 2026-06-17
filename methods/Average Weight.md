@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Computes average weight from repeated measurements.
+
 // Add item names
 const itemList = [
     "BMI_WEIGHT #1", 

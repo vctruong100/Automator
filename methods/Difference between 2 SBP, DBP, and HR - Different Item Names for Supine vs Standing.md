@@ -1,3 +1,6 @@
+// Version: v1
+// Purpose: Computes differences between supine and standing vitals (different item names).
+
 // Add item names
 const sysItem = [
     "SYS (I: 90-150)",
