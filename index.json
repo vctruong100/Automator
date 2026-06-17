@@ -607,5 +607,12 @@
     "tags": ["Datetime"],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Datetime%20functions.md",
     "updated": "2026-06-15"
+  },
+  {
+    "id": "M-095",
+    "title": "Calculate Post Dose Window",
+    "tags": ["Window"],
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Calculate%20Post%20Dose%20Window.md",
+    "updated": "2026-06-17"
   }
 ]
