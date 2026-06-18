@@ -1671,7 +1671,11 @@
 
         // Keyword chip searchbar
         var searchRow = document.createElement("div");
-        searchRow.style.cssText = "display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:4px 6px;border:1px solid #444;border-radius:4px;background:#1a1a1a;min-height:28px;";
+        searchRow.style.cssText = "display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:4px 6px;border:1px solid #444;border-radius:4px;background:#1a1a1a;min-height:28px;cursor:text;";
+        var searchIcon = document.createElement("span");
+        searchIcon.textContent = "\uD83D\uDD0D";
+        searchIcon.style.cssText = "font-size:12px;color:#888;flex-shrink:0;user-select:none;";
+        searchRow.appendChild(searchIcon);
         var searchChipContainer = document.createElement("span");
         searchChipContainer.style.cssText = "display:flex;flex-wrap:wrap;gap:3px;align-items:center;";
         searchRow.appendChild(searchChipContainer);
@@ -1679,6 +1683,11 @@
         searchInput.type = "text";
         searchInput.placeholder = "Type keyword + Enter...";
         searchInput.style.cssText = "flex:1;min-width:100px;border:none;background:transparent;color:#fff;font-size:11px;outline:none;padding:2px 4px;";
+        searchRow.addEventListener("click", function(e) {
+            if (e.target === searchRow || e.target === searchChipContainer || e.target === searchIcon) {
+                searchInput.focus();
+            }
+        });
         searchInput.addEventListener("keydown", function(e) {
             if (e.key === "Enter") {
                 e.preventDefault();
@@ -1698,6 +1707,19 @@
             }
         });
         searchRow.appendChild(searchInput);
+        var clearAllBtn = document.createElement("span");
+        clearAllBtn.textContent = "\u2715";
+        clearAllBtn.title = "Clear all keywords";
+        clearAllBtn.style.cssText = "cursor:pointer;color:#ff6b6b;font-size:11px;font-weight:bold;padding:0 4px;flex-shrink:0;display:none;user-select:none;";
+        clearAllBtn.addEventListener("click", function(e) {
+            e.stopPropagation();
+            svcSearchKeywords = [];
+            renderSearchChips();
+            renderPrimaryPanel();
+            renderSegNavPanel();
+            searchInput.focus();
+        });
+        searchRow.appendChild(clearAllBtn);
         primaryHeader.appendChild(searchRow);
 
         function renderSearchChips() {
@@ -1705,22 +1727,28 @@
             for (var ci = 0; ci < svcSearchKeywords.length; ci++) {
                 (function(kw, idx) {
                     var chip = document.createElement("span");
-                    chip.style.cssText = "display:inline-flex;align-items:center;gap:2px;padding:2px 6px;background:#3a3a5a;border-radius:10px;font-size:10px;color:#ccc;white-space:nowrap;";
+                    chip.style.cssText = "display:inline-flex;align-items:center;gap:2px;padding:2px 6px;background:#3a3a5a;border-radius:10px;font-size:10px;color:#ccc;white-space:nowrap;cursor:default;transition:background 0.15s;";
                     chip.textContent = kw;
+                    chip.addEventListener("mouseenter", function() { this.style.background = "#4a4a7a"; });
+                    chip.addEventListener("mouseleave", function() { this.style.background = "#3a3a5a"; });
                     var chipX = document.createElement("span");
                     chipX.textContent = "\u00D7";
-                    chipX.style.cssText = "cursor:pointer;color:#ff6b6b;font-weight:bold;font-size:11px;margin-left:2px;";
+                    chipX.style.cssText = "cursor:pointer;color:#ff6b6b;font-weight:bold;font-size:11px;margin-left:2px;transition:color 0.15s;";
+                    chipX.addEventListener("mouseenter", function() { this.style.color = "#ff3333"; });
+                    chipX.addEventListener("mouseleave", function() { this.style.color = "#ff6b6b"; });
                     chipX.addEventListener("click", function(e) {
                         e.stopPropagation();
                         svcSearchKeywords.splice(idx, 1);
                         renderSearchChips();
                         renderPrimaryPanel();
                         renderSegNavPanel();
+                        searchInput.focus();
                     });
                     chip.appendChild(chipX);
                     searchChipContainer.appendChild(chip);
                 })(svcSearchKeywords[ci], ci);
             }
+            clearAllBtn.style.display = svcSearchKeywords.length > 0 ? "inline" : "none";
         }
 
         var primaryBody = document.createElement("div");
@@ -1816,6 +1844,7 @@
 
         function renderPrimaryPanel() {
             primaryBody.innerHTML = "";
+            var hasAnyResults = false;
             for (var si = 0; si < segmentOrder.length; si++) {
                 var segName = segmentOrder[si];
                 var entries = segmentGroups[segName];
@@ -1847,6 +1876,10 @@
                 if (svcShowCompleted && filtered.length === 0) continue;
 
                 var isCollapsed = !!svcSegCollapsed[segName];
+                // Auto-expand segments with search matches
+                if (svcSearchKeywords.length > 0 && filtered.length > 0) {
+                    isCollapsed = false;
+                }
 
                 var segBlock = document.createElement("div");
                 segBlock.style.cssText = "margin-bottom:10px;border:1px solid #444;border-radius:6px;background:#1e1e1e;overflow:hidden;";
@@ -2064,7 +2097,14 @@
 
                     segBlock.appendChild(segBody);
                 }
+                hasAnyResults = true;
                 primaryBody.appendChild(segBlock);
+            }
+            if (!hasAnyResults) {
+                var noResults = document.createElement("div");
+                noResults.textContent = svcSearchKeywords.length > 0 ? "No forms match your search." : "No forms to display.";
+                noResults.style.cssText = "text-align:center;padding:24px;color:#888;font-size:12px;font-style:italic;";
+                primaryBody.appendChild(noResults);
             }
             updateConfirmState();
         }

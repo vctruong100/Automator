@@ -19,6 +19,7 @@ try {
     return null;
 }
 
+// Parses related item data contexts to find collected barcodes across multiple item names.
 function parseItemContext(item) {
     for (var i = 0; i < item.length; i++) {
         var context = JSON.parse(getRelatedItemDataContext(item[i]))

@@ -1,26 +1,39 @@
-// Version: v1
-// Purpose: Handles process number generation/tracking for lab samples.
+/* jshint strict: false */
 
-const studyevent = [
-    "Visit 2 Week 1 Day 0",
-]
-const formName = [
-    "(*)🩸Visit 2 W1_ Safeties + ADA/PK/Biomarkers_PREDOSE - 8 TUBES",
-    
-]
-const itemName = [
-    "Process No.",
-]
+// Version: v1
+// Purpose: Protocol Check Any QTcF increase ≥60 msec from Baseline OR average QTcF 500 msec (REPEAT).
+
+// Add item names
+var baselineForms = [
+    "ECG_Predose_Triplicate ECG (baseline) (SPONSOR PROVIDED MACHINE)"
+];
+var baselineFormStudyEvents = [
+    "Visit 2 Week 1 Day 0"
+];
+
+var baselineItem = [
+    "Baseline QTcF"
+];
+var qtcfItems = [
+    "QTcF #1",
+    "QTcF #2",
+    "QTcF #3"
+];
+
+// ======== Don't modify ========
+var item = itemJson.item;
 
 try {
-    var form = pullForm(studyevent, formName);
-    if (!form) return null;
+    var form = pullForm(baselineFormStudyEvents, baselineForms);
+    if (!form) return true;
+    var baseline = pullItemFromForm(form, baselineItem);
+    var qtcf = pullItemFromForm(formJson, qtcfItems);
 
-    var result = pullItemFromForm(form, itemName);
-
-    log()
-
-    return result;
+    if (!baseline || baseline == null || !qtcf || qtcf == null) return null;
+    var diff = qtcf - baseline;
+    if (diff >= 60 || qtcf > 500) return "Y";
+    else if (diff < 60 || qtcf <= 500) return "N";
+    return null;
 } catch (e) {
     logger("Error in main execution logic: " + e);
     return null;
@@ -40,10 +53,10 @@ function pullForm(studyeventList, formNameList) {
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
-    for (i = 0; i < itemGroups.length; i++) {
+
+    for (i = itemGroups.length - 1; i >= 0; i--) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;
         for (j = 0; j < group.items.length; j++) {
@@ -56,14 +69,10 @@ function pullItemFromForm(form, targetItem) {
 
 // Retrieves the first completed (or nonconformant) form instance from a study event.
 function checkForm(studyevent, form) {
-    if (!form) {
-        return formJson.form;
-    } else {
-        var arrayForms = findFormData(studyevent, form);
-        var completedForm = collectCompleted(arrayForms, true);
-        if (!completedForm || completedForm.length === 0) return null;
-        return completedForm[0];
-    }
+    var arrayForms = findFormData(studyevent, form);
+    var completedForm = collectCompleted(arrayForms, true);
+    if (!completedForm || completedForm.length === 0) return null;
+    return completedForm[0];
 }
 
 // Filters an array of form data to return only entries with valid completion status (Complete, Nonconformant, or Incomplete).
@@ -72,17 +81,12 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     var completedForms = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
-        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' || 
+        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' ||
                 (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
             completedForms.push(formData);
         } else {
 
         }
     }
-<<<<<<< Updated upstream
-    return keepers;
-}
-=======
     return completedForms;
 }
->>>>>>> Stashed changes

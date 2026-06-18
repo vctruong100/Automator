@@ -19,6 +19,7 @@ try {
     return null;
 }
 
+// Retrieves the name of the item group containing the current item.
 function getItemGroupName(form) {
     for (var i = 0; i < form.form.itemGroups.length; i++) {
         var group = form.form.itemGroups[i];
@@ -26,8 +27,8 @@ function getItemGroupName(form) {
         if (!items || items.length < 1) continue;
     
         for (var j = 0; j < items.length; j++) {
-            var it = items[j];
-            if (it.id === item.id) {
+            var currentItem = items[j];
+            if (currentItem.id === item.id) {
                 return group.name;
             }
         }
@@ -35,11 +36,18 @@ function getItemGroupName(form) {
     return null;
 }
 
+// Checks if the input string contains the specified keyword (case-insensitive). Returns false for null/undefined input.
 function containsValue(input, keyword) {
     if (input == null) {
         return false;
     }
 
+<<<<<<< Updated upstream
     var value = input.toString().toLowerCase();
     return value.indexOf(keyword) !== -1;
 }
+=======
+    var normalizedInput = input.toString().toLowerCase();
+    return normalizedInput.indexOf(keyword) !== -1;
+}
+>>>>>>> Stashed changes

@@ -27,6 +27,7 @@ try {
     return null;
 }
 
+// Searches a form's item groups for an item matching the target name and returns its value or the item object.
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;

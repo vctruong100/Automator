@@ -65,6 +65,7 @@ try {
     return null;
 }
 
+// Evaluates whether: checkRange.
 function checkRange(range, isRepeat) {
     const [min, max] = range;
     const value = item.value;
@@ -81,15 +82,17 @@ function checkRange(range, isRepeat) {
     return false;
 }
 
+// Checks if the input string contains the specified keyword (case-insensitive). Returns false for null/undefined input.
 function containsValue(input, keyword) {
     if (input == null) {
         return false;
     }
 
-    var value = input.toString().toLowerCase();
-    return value.indexOf(keyword) !== -1;
+    var normalizedInput = input.toString().toLowerCase();
+    return normalizedInput.indexOf(keyword) !== -1;
 }
 
+// Retrieves the name of the item group containing the current item.
 function getItemGroupName(form) {
     var groupName = "";
     for (var i = 0; i < form.form.itemGroups.length; i++) {
@@ -98,8 +101,8 @@ function getItemGroupName(form) {
         if (!items || items.length < 1) continue;
 
         for (var j = 0; j < items.length; j++) {
-            var it = items[j];
-            if (it.id === item.id) {
+            var currentItem = items[j];
+            if (currentItem.id === item.id) {
                 groupName = group.name;
                 return groupName;
             }

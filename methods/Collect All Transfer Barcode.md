@@ -25,8 +25,12 @@ for (var i = 0; i < formsList.length; i++) {
     }
 }
 
+<<<<<<< Updated upstream
 return allMappings.join(' | ');
 
+=======
+// Retrieves data for: getItemMapping.
+>>>>>>> Stashed changes
 function getItemMapping(formData) {
     var mapping = [];
     logger('Form data length: ' + formData.length);

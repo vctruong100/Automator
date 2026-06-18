@@ -76,6 +76,7 @@ try {
     return null;
 }
 
+// Logs the current values of sys, dia, and hr variables for debugging purposes.
 function log() {
     logger("Study event: " + studyEvent);
     logger("Day 1 Date: " + day1Dateformat);
@@ -86,9 +87,10 @@ function log() {
     logger("Target date range: " + minTargeDateformat + " to " + maxTargetDateformat);
 }
 
+// Filters an array of form data to return only entries with valid completion status (Complete, Nonconformant, or Incomplete).
 function collectCompleted(formDataArray) {
     if (formDataArray == null) return [];
-    var keepers = [];
+    var completedForms = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
         if (
@@ -100,12 +102,13 @@ function collectCompleted(formDataArray) {
                 formData.form.dataCollectionStatus == 'Nonconformant'
             )
         ) {
-            keepers.push(formData);
+            completedForms.push(formData);
         }
     }
-    return keepers;
+    return completedForms;
 }
 
+// Retrieves the first completed (or nonconformant) form instance from a study event.
 function checkForm(form, studyevent) {
     if (!form) {
         return formJson.form;
@@ -117,6 +120,7 @@ function checkForm(form, studyevent) {
     }
 }
 
+// Searches a form's item groups for an item matching the target name and returns its value or the item object.
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
@@ -134,15 +138,17 @@ function pullItemFromForm(form, targetItem) {
     return null;
 }
 
+// Iterates through study events and form names to find the first matching completed form.
 function pullForm(studyeventList, formNameList) {
     for (var i = 0; i < studyeventList.length; i++) {
         for (var j = 0; j < formNameList.length; j++) {
-            var temp = checkForm(studyeventList[i], formNameList[j]);
-            if (temp) return temp;
+            var matchedForm = checkForm(studyeventList[i], formNameList[j]);
+            if (matchedForm) return matchedForm;
         }
     }
 }
 
+// Helper function: msToDate.
 function msToDate(ms) {
     var d = new Date(Number(ms));
     var day = d.getDate();
@@ -153,6 +159,7 @@ function msToDate(ms) {
     return day + " " + month + " " + year;
 }
 
+// Evaluates whether: isoToLocalMidnight.
 function isoToLocalMidnight(isoStr) {
     if (!isoStr) return null;
     var d = isoStr.split("T")[0];

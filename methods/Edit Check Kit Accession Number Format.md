@@ -10,6 +10,7 @@ try {
     return null;
 }
 
+// Evaluates whether: isValidFormat.
 function isValidFormat(value)
 {
     var pattern = /^[A-Za-z]{2}[0-9]{5}$/;

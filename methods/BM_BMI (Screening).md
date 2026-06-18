@@ -60,12 +60,14 @@ try {
     return null;
 }
 
+// Logs the current values of sys, dia, and hr variables for debugging purposes.
 function log() {
     logger("Height in meter: " + heightMtr)
     logger("Factor: " + factor);
     logger("BMI: " + bmi);
 }
 
+// Collects numeric values from form items matching target names, stopping when an attached item is encountered (first-to-last order).
 function populateList(form, targetItem, maxCount) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
@@ -89,6 +91,7 @@ function populateList(form, targetItem, maxCount) {
     return list;
 }
 
+// Calculates the arithmetic mean of an array of numeric values, ignoring non-numeric entries.
 function calculateAverage(values, sigfig) {
     if (values.length === 0) return null;
     var sum = 0;

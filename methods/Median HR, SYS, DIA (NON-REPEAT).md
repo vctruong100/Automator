@@ -65,12 +65,14 @@ try {
     return null;
 }
 
+// Logs the current values of sys, dia, and hr variables for debugging purposes.
 function log() {
     logger("List: " + list);
     logger("List length: " + list.length)
     logger("Median: " + median)
 }
 
+// Performs calculation: calculateMedian.
 function calculateMedian(values, sigfig) {
     if (values.length === 0) return null;
 
@@ -89,6 +91,7 @@ function calculateMedian(values, sigfig) {
     return Math.round(median * factor) / factor;
 }
 
+// Collects numeric values from form items matching target names, stopping when an attached item is encountered (first-to-last order).
 function populateList(form, targetItem, attachedItem, maxCount) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j;

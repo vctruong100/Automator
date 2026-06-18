@@ -53,15 +53,17 @@ try {
     return null;
 }
 
+// Checks if the input string contains the specified keyword (case-insensitive). Returns false for null/undefined input.
 function containsValue(input, keyword) {
     if (input == null) {
         return false;
     }
 
-    var value = input.toString().toLowerCase();
-    return value.indexOf(keyword) !== -1;
+    var normalizedInput = input.toString().toLowerCase();
+    return normalizedInput.indexOf(keyword) !== -1;
 }
 
+// Calculates the arithmetic mean of an array of numeric values, ignoring non-numeric entries.
 function calculateAverage(values) {
     if (values.length === 0) return null;
     var sum = 0;
@@ -71,6 +73,7 @@ function calculateAverage(values) {
     return Math.round(sum / values.length).toString().split('.')[0];
 }
 
+// Retrieves the name of the item group containing the current item.
 function getItemGroupName(form) {
     for (var i = 0; i < form.form.itemGroups.length; i++) {
         var group = form.form.itemGroups[i];
@@ -78,8 +81,8 @@ function getItemGroupName(form) {
         if (!items || items.length < 1) continue;
     
         for (var j = 0; j < items.length; j++) {
-            var it = items[j];
-            if (it.id === item.id) {
+            var currentItem = items[j];
+            if (currentItem.id === item.id) {
                 return group.name;
             }
         }
@@ -87,6 +90,7 @@ function getItemGroupName(form) {
     return null;
 }
 
+// Collects numeric values from form items matching target names, stopping when an attached item is encountered (first-to-last order).
 function populateList(form, targetItem, attachedItem, repeat) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;

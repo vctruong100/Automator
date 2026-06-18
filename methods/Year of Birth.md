@@ -10,6 +10,7 @@ try {
     return null;
 }
 
+// Extracts the year component from an ISO 8601 date string.
 function getYearOnly(dateString) {
     if (!dateString) return "";
     return dateString.split("-")[0];

@@ -68,6 +68,7 @@ try {
     return null;
 }
 
+// Evaluates whether: checkRange.
 function checkRange(repeat, min, max) {
     if (repeat && (item.value < min || item.value > max)) {
         customErrorMessage(RepeatErrorMsg);
@@ -80,15 +81,17 @@ function checkRange(repeat, min, max) {
     return true;
 }
 
+// Checks if the input string contains the specified keyword (case-insensitive). Returns false for null/undefined input.
 function containsValue(input, keyword) {
     if (input == null) {
         return false;
     }
 
-    var value = input.toString().toLowerCase();
-    return value.indexOf(keyword) !== -1;
+    var normalizedInput = input.toString().toLowerCase();
+    return normalizedInput.indexOf(keyword) !== -1;
 }
 
+// Retrieves the name of the item group containing the current item.
 function getItemGroupName(form) {
     var groupName = "";
     for (var i = 0; i < form.form.itemGroups.length; i++) {
@@ -97,8 +100,8 @@ function getItemGroupName(form) {
         if (!items || items.length < 1) continue;
 
         for (var j = 0; j < items.length; j++) {
-            var it = items[j];
-            if (it.id === item.id) {
+            var currentItem = items[j];
+            if (currentItem.id === item.id) {
                 groupName = group.name;
                 return groupName;
             }
@@ -108,6 +111,7 @@ function getItemGroupName(form) {
     return groupName;
 }
 
+// Transforms data using: parseRange.
 function parseRange(input) {
     if (!input) return null;
 
@@ -135,6 +139,7 @@ function parseRange(input) {
     var min = null;
     var max = null;
 
+    // Helper function: adjustValue.
     function adjustValue(value, operator) {
         var num = parseFloat(value);
 
@@ -144,6 +149,7 @@ function parseRange(input) {
         return num;
     }
 
+    // Helper function: extractOpNum.
     function extractOpNum(str) {
         var opMatch = str.match(/(<=|>=|<|>)/);
         var numMatch = str.match(/-?[\d.]+/);
@@ -229,6 +235,7 @@ function parseRange(input) {
     return null;
 }
 
+// Transforms data using: parseMultiRange.
 function parseMultiRange(input) {
     logger("parseMultiRange input: " + input);
 

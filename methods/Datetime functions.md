@@ -1,3 +1,8 @@
+/* jshint strict: false */
+
+// Version: v1
+// Purpose: Provides reusable datetime parsing and formatting utilities for ClinSpark automation scripts.
+
 
 // Add time to input time. Uses datetime datatype.
 function getTimeRange(datetimeStr) {
@@ -25,6 +30,7 @@ function getTimeRange(datetimeStr) {
     // Add 45 minutes
     var maxSeconds = totalSeconds + (45 * 60);
 
+    // Transforms data using: formatTime.
     function formatTime(seconds) {
         var h = Math.floor(seconds / 3600);
         var m = Math.floor((seconds % 3600) / 60);

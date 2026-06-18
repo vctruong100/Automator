@@ -1,3 +1,8 @@
+/* jshint strict: false */
+
+// Version: v1
+// Purpose: Demonstrates the ClinSpark automation data message structure and sample condition evaluation logic.
+
 logger(JSON.stringify(message))
 {
   "type": "com.iqvia.clinspark.messaging.messages.ItemDataSavedMessage",
@@ -82,6 +87,7 @@ if (!isEcoaMeasurementCollectionMessage(message)) {
 // Condition helpers
 var conditions = [];
 
+// Adds a clinical condition to the conditions array if it does not already exist (prevents duplicates).
 function addCondition(oid, name) {
     var exists = false;
 
@@ -100,6 +106,7 @@ function addCondition(oid, name) {
     }
 }
 
+// Retrieves an item data object from the message by its parameter name.
 function parameter(name) {
     for (var i = 0; i < message.itemDataInfo.length; i++) {
         var itemData = message.itemDataInfo[i];

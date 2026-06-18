@@ -71,6 +71,7 @@ try {
     return null;
 }
 
+// Formats item values based on their dataType (datetime, date, or time) into a human-readable display string.
 function formatDateTimeByType(item) {
     if (!item || !item.value) return "";
 
@@ -143,6 +144,7 @@ function formatDateTimeByType(item) {
     return value;
 }
 
+// Searches a form's item groups for an item matching the target name and returns its value or the item object.
 function pullItemFromForm(form, targetItem, isRepeat) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
@@ -178,15 +180,17 @@ function pullItemFromForm(form, targetItem, isRepeat) {
     return null;
 }
 
+// Checks if the input string contains the specified keyword (case-insensitive). Returns false for null/undefined input.
 function containsValue(input, keyword) {
     if (input == null) {
         return false;
     }
 
-    var value = input.toString().toLowerCase();
-    return value.indexOf(keyword) !== -1;
+    var normalizedInput = input.toString().toLowerCase();
+    return normalizedInput.indexOf(keyword) !== -1;
 }
 
+// Retrieves the name of the item group containing the current item.
 function getItemGroupName(form) {
     var item = itemJson.item;
     for (var i = 0; i < form.form.itemGroups.length; i++) {
@@ -195,8 +199,8 @@ function getItemGroupName(form) {
         if (!items || items.length < 1) continue;
 
         for (var j = 0; j < items.length; j++) {
-            var it = items[j];
-            if (it.id === item.id) {
+            var currentItem = items[j];
+            if (currentItem.id === item.id) {
                 return group.name;
             }
         }

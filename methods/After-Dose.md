@@ -50,6 +50,7 @@ try {
     return null;
 }
 
+// Converts a human-readable date string back to ISO 8601 format (YYYY-MM-DDTHH:MM:SS).
 function convertToOriginalFormat(displayString) {
     if (!displayString) return "";
 
@@ -75,6 +76,7 @@ function convertToOriginalFormat(displayString) {
     return year + "-" + month + "-" + day + "T" + time;
 }
 
+// Parses an ISO 8601 datetime string into a JavaScript Date object and returns its timestamp in milliseconds.
 function parseDateTime(doseTime) {
     var splitDT = doseTime.value.split("T");
     var datePart = splitDT[0];
@@ -95,6 +97,7 @@ function parseDateTime(doseTime) {
     var doseTimeMs = doseDate.getTime();    
     return doseTimeMs;
 }
+// Extracts the upper bound of a time interval from a study event name (e.g., 'Day 1 to 4' returns 4).
 function getUpperIntervalValue(studyEventName) {
     if (!studyEventName) return null;
 
@@ -110,6 +113,7 @@ function getUpperIntervalValue(studyEventName) {
     return null;
 }
 
+// Formats a Date object into a human-readable string: 'DD MMM YYYY HH:MM:SS'.
 function formatDateObject(dateObj) {
     if (!dateObj) return "";
 
@@ -128,6 +132,7 @@ function formatDateObject(dateObj) {
            + hour + ":" + minute + ":" + second;
 }
 
+// Searches a form's item groups for an item matching the target name and returns its value or the item object.
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
@@ -145,15 +150,17 @@ function pullItemFromForm(form, targetItem) {
     return null;
 }
 
+// Iterates through study events and form names to find the first matching completed form.
 function pullForm(studyeventList, formNameList) {
     for (var i = 0; i < studyeventList.length; i++) {
         for (var j = 0; j < formNameList.length; j++) {
-            var temp = checkForm(studyeventList[i], formNameList[j]);
-            if (temp) return temp;
+            var matchedForm = checkForm(studyeventList[i], formNameList[j]);
+            if (matchedForm) return matchedForm;
         }
     }
 }
 
+// Retrieves the first completed (or nonconformant) form instance from a study event.
 function checkForm(studyevent, form) {
     var arrayForms = findFormData(studyevent, form);
     var completedForm = collectCompleted(arrayForms, true);
@@ -161,22 +168,24 @@ function checkForm(studyevent, form) {
     return completedForm[0];
 }
 
+// Filters an array of form data to return only entries with valid completion status (Complete, Nonconformant, or Incomplete).
 function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     if (formDataArray == null) { return []; }
-    var keepers = [];
+    var completedForms = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
         if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' || 
                 (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
-            keepers.push(formData);
+            completedForms.push(formData);
         } else {
 
         }
     }
-    return keepers;
+    return completedForms;
 }
 
 
+// Formats item values based on their dataType (datetime, date, or time) into a human-readable display string.
 function formatDateTimeByType(item) {
     if (!item || !item.value) return "";
 

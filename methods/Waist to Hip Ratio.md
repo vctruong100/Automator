@@ -32,21 +32,24 @@ try {
     return null;
 }
 
+// Logs the current values of sys, dia, and hr variables for debugging purposes.
 function log() {
     logger("Max count: " + maxCount);
     logger("Waist: " + waist);
     logger("Hip: " + hip);
 }
 
+// Iterates through study events and form names to find the first matching completed form.
 function pullForm(studyeventList, formNameList) {
     for (var i = 0; i < studyeventList.length; i++) {
         for (var j = 0; j < formNameList.length; j++) {
-            var temp = checkForm(studyeventList[i], formNameList[j]);
-            if (temp) return temp;
+            var matchedForm = checkForm(studyeventList[i], formNameList[j]);
+            if (matchedForm) return matchedForm;
         }
     }
 }
 
+// Collects numeric values from form items matching target names, stopping when an attached item is encountered (first-to-last order).
 function populateList(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
@@ -70,6 +73,7 @@ function populateList(form, targetItem) {
     return list;
 }
 
+// Calculates the arithmetic mean of an array of numeric values, ignoring non-numeric entries.
 function calculateAverage(values, sigfig) {
     if (values.length === 0) return null;
     var sum = 0;
@@ -87,6 +91,7 @@ function calculateAverage(values, sigfig) {
     return Math.round(avg * factor) / factor;
 }
 
+// Retrieves the first completed (or nonconformant) form instance from a study event.
 function checkForm(studyevent, form) {
     if (!form) {
         return formJson.form;
@@ -98,21 +103,23 @@ function checkForm(studyevent, form) {
     }
 }
 
+// Filters an array of form data to return only entries with valid completion status (Complete, Nonconformant, or Incomplete).
 function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     if (formDataArray == null) { return []; }
-    var keepers = [];
+    var completedForms = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
         if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' || 
                 (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
-            keepers.push(formData);
+            completedForms.push(formData);
         } else {
 
         }
     }
-    return keepers;
+    return completedForms;
 }
 
+// Searches a form's item groups for an item matching the target name and returns its value or the item object.
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;

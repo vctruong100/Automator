@@ -7,6 +7,7 @@ logger(val);
 
 return isFutureDate(val);
 
+// Evaluates whether: isFutureDate.
 function isFutureDate(dateStr) {
     var parts = dateStr.split("-");
 

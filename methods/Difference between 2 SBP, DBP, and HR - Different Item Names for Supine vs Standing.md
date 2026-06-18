@@ -84,6 +84,7 @@ try {
     return null;
 }
 
+// Evaluates whether: checkDifference.
 function checkDifference(range, semi, standing) {
     logger("Semi: " + semi);
     logger("Standing: " + standing);
@@ -94,6 +95,7 @@ function checkDifference(range, semi, standing) {
     else if (diff < 0) return "NO, increase by " + diff + " mmHg.";
 }
 
+// Retrieves data for: pullFirstItemFromForm.
 function pullFirstItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
@@ -111,6 +113,7 @@ function pullFirstItemFromForm(form, targetItem) {
     return null;
 }
 
+// Retrieves data for: pullLastItemFromForm.
 function pullLastItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;

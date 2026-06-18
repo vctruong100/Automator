@@ -40,21 +40,24 @@ try {
     return null;
 }
 
+// Logs the current values of sys, dia, and hr variables for debugging purposes.
 function log() {
     logger("Study event: " + studyEventName);
     logger("Form Name: " + formName)
     logger("Confirmation: " + confirmation);
     logger("Start Time from ECG: " + result);
 }
+// Iterates through study events and form names to find the first matching completed form.
 function pullForm(studyeventList, formNameList) {
     for (var i = 0; i < studyeventList.length; i++) {
         for (var j = 0; j < formNameList.length; j++) {
-            var temp = checkForm(studyeventList[i], formNameList[j]);
-            if (temp) return temp;
+            var matchedForm = checkForm(studyeventList[i], formNameList[j]);
+            if (matchedForm) return matchedForm;
         }
     }
 }
 
+// Transforms data using: formatDate.
 function formatDate(dateStr) {
     if (!dateStr) return null;
 
@@ -78,6 +81,7 @@ function formatDate(dateStr) {
 }
 
 
+// Searches a form's item groups for an item matching the target name and returns its value or the item object.
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
@@ -96,6 +100,7 @@ function pullItemFromForm(form, targetItem) {
 }
 
 
+// Retrieves the first completed (or nonconformant) form instance from a study event.
 function checkForm(studyEvent, formName) {
   var forms = findFormData(studyEvent, formName);
   var completed = collectCompleted(forms, true);
@@ -103,9 +108,10 @@ function checkForm(studyEvent, formName) {
   return completed[completed.length - 1]; // most recent
 }
 
+// Filters an array of form data to return only entries with valid completion status (Complete, Nonconformant, or Incomplete).
 function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
   if (!formDataArray) return [];
-  var keepers = [];
+  var completedForms = [];
   for (var i = formDataArray.length - 1; i >= 0; i--) {
     var f = formDataArray[i];
     if (
@@ -117,8 +123,13 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
          f.form.dataCollectionStatus === "Nonconformant")
       )
     ) {
-      keepers.push(f);
+      completedForms.push(f);
     }
   }
+<<<<<<< Updated upstream
   return keepers;
 }
+=======
+  return completedForms;
+}
+>>>>>>> Stashed changes

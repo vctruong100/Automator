@@ -24,6 +24,7 @@ try {
     return null;
 }
 
+// Helper function: GetNetTotal.
 function GetNetTotal(form, urineItem, emptyItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j;

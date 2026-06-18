@@ -33,6 +33,7 @@ try {
     return null;
 }
 
+// Returns the ID of the item group containing the current item within the given form.
 function getItemGroupID(form) {
     for (var i = 0; i < form.itemGroups.length; i++) {
     var group = form.itemGroups[i];
@@ -40,8 +41,8 @@ function getItemGroupID(form) {
     if (!items || items.length < 1) continue;
 
     for (var j = 0; j < items.length; j++) {
-        var it = items[j];
-        if (it.id === item.id) {
+        var currentItem = items[j];
+        if (currentItem.id === item.id) {
             groupid = group.id;
             break;
         }
@@ -50,6 +51,7 @@ function getItemGroupID(form) {
     }
 }
 
+// Retrieves data for: getItemValueFromSameGroup.
 function getItemValueFromSameGroup(form, itemName) {
     var value = null;
     for (var i = 0; i < form.itemGroups.length; i++) {

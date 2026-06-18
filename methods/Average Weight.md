@@ -28,6 +28,7 @@ try {
     return null;
 }
 
+// Collects numeric values from form items matching target names, stopping when an attached item is encountered (first-to-last order).
 function populateList(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
@@ -50,6 +51,7 @@ function populateList(form, targetItem) {
     return list;
 }
 
+// Calculates the arithmetic mean of an array of numeric values, ignoring non-numeric entries.
 function calculateAverage(values, sigfig) {
     if (values.length === 0) return null;
     var sum = 0;
