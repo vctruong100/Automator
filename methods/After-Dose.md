@@ -52,6 +52,7 @@ try {
     return null;
 }
 
+// Converts a human-readable date string back to ClinSpark ISO format (YYYY-MM-DDTHH:MM:SS)
 function convertToOriginalFormat(displayString) {
     if (!displayString) return "";
 
@@ -77,6 +78,7 @@ function convertToOriginalFormat(displayString) {
     return year + "-" + month + "-" + day + "T" + time;
 }
 
+// Parses an ISO datetime string into JS Date object and return its timestamp in ms (or use itemJson.item.dateValueMs)
 function parseDateTime(doseTime) {
     var splitDT = doseTime.value.split("T");
     var datePart = splitDT[0];
@@ -97,6 +99,8 @@ function parseDateTime(doseTime) {
     var doseTimeMs = doseDate.getTime();
     return doseTimeMs;
 }
+
+// Extracts the upperbound of a time interval from a study event name (e.g., "Day 1 to 4" returns 4)
 function getUpperIntervalValue(studyEventName) {
     if (!studyEventName) return null;
 
@@ -112,6 +116,7 @@ function getUpperIntervalValue(studyEventName) {
     return null;
 }
 
+// Formats a Date object into a human-readable string: "DD MMM YYYY HH:MM:SS"
 function formatDateObject(dateObj) {
     if (!dateObj) return "";
 
@@ -178,7 +183,7 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     return keepers;
 }
 
-
+// Formats item values based on their dataType (datetime, date, or time) into a human-readable display string.
 function formatDateTimeByType(item) {
     if (!item || !item.value) return "";
 
