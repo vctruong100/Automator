@@ -87,6 +87,22 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     return keepers;
 }
 
+function log(reason, value) {
+    if (reason === "500") {
+        customErrorMessage("OOR > " + maxRange + ": REPEAT 2 TIMES: " + value);
+        return false;
+    } else if (reason === "male") {
+        customErrorMessage("Male QTcF OOR > " + maleRange + ": " + value);
+        return false;
+    } else if (reason === "female") {
+        customErrorMessage("Female QTcF OOR > " + femaleRange + ": " + value);
+        return false;
+    } else if (reason === "base") {
+        customErrorMessage("QTcF Difference from BaselineOOR > " + differenceRange + ". REPEAT 2 TIMES:" + value);
+        return false;
+    }
+}
+
 try {
     logger("Is it male: " + sexMale);
     logger("Qtcf value: " + item.value);

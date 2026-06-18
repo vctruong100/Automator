@@ -155,21 +155,11 @@ try {
     logger("Average QtcF: " + avgQTcF);
     logger("Average HR: " + avgHR);
 
-    if (PRattach.indexOf(item.name) !== -1) {
-        return avgPR;
-    }
-    if (QRSattach.indexOf(item.name) !== -1) {
-        return avgQRS;
-    }
-    if (QTcFattach.indexOf(item.name) !== -1) {
-        return avgQTcF;
-    }
-    if (QTattach.indexOf(item.name) !== -1) {
-        return avgQT;
-    }
-    if (HRattach.indexOf(item.name) !== -1) {
-        return avgHR;
-    }
+    if (PRattach.indexOf(item.name) !== -1) return avgPR;
+    if (QRSattach.indexOf(item.name) !== -1) return avgQRS;
+    if (QTcFattach.indexOf(item.name) !== -1) return avgQTcF;
+    if (QTattach.indexOf(item.name) !== -1) return avgQT;
+    if (HRattach.indexOf(item.name) !== -1) return avgHR;
 
     return null;
 } catch (e) {

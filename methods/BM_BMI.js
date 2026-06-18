@@ -33,13 +33,10 @@ var currentStudyEvent = formJson.form.studyEventName;
 var item = itemJson.item;
 var sigfig = itemJson.item.significantDigits;
 
-var weight = 0;
-var height = 0;
-var bmi = 0;
-
-function populateList(form, targetItem, list) {
+function populateList(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
+    var list = [];
     var count = 0;
 	if (!itemGroups || itemGroups.length < 1) return null;
 
@@ -126,33 +123,28 @@ function calculateAverage(values, sigfig) {
 }
 
 try {
-    height = pullItemFromForm(formJson, heightitemList);
-
+    var height = pullItemFromForm(formJson, heightitemList);
+    var weight = 0;
     if (!height || height == null) {
         var form = pullForm(screeningStudyEvent, screeningBMI_Form);
         if (form) {
-           height = pullItemFromForm(form, heightitemList);
+        height = pullItemFromForm(form, heightitemList);
         }
     }
+    
+    var list = populateList(formJson, weightitemList);
+    if (list.length < 1) return null;
+    if (list.length == 1) weight = list[0];
+    else weight = calculateAverage(list, sigfig);
 
-    var maxCount = 0;
-    var list = [];
-    var avg = 0;
-
-    list = populateList(formJson, weightitemList, list);
-
-    avg = calculateAverage(list, sigfig);
-
-    if (list.length === maxCount) {
-        weight = avg;
-    }
-
+    logger("Weight: " + weight);
+    logger("Height: " + height);
     if (!weight || weight == 0 || !height || height == 0) return null;
     var heightMtr = height / 100;
 
     var factor = Math.pow(10, sigfig);
 
-    bmi = Math.round((weight / (heightMtr * heightMtr)) * factor) / factor;
+    var bmi = Math.round((weight / (heightMtr * heightMtr)) * factor) / factor;
 
     if (bmi) return bmi.toFixed(sigfig);
 

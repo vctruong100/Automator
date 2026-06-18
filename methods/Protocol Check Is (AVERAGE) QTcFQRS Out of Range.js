@@ -22,32 +22,43 @@ var QRSitems = [
 // Inclusive (Edit)
 var QTcF_max_range = 450;
 var QRS_max_range = 120;
-
-var QTcFmaxCount = 3;
-var QTcFlist = [];
-var QTcFavg = 0;
-
-var QRSmaxCount = 3;
-var QRSlist = [];
-var QRSavg = 0;
+var count = 0;
 
 var item = itemJson.item.id;
 
-function populateList(form, targetItem, list, maxCount) {
+function populateList(form, targetItem, isRepeat) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    var count = 0;
+    var list = [];
 	if (!itemGroups || itemGroups.length < 1) return null;
 
-    for (i = 0; i < itemGroups.length; i++) {
-        group = itemGroups[i];
-        if (!group || group.canceled) continue;
-        for (j = 0; j < group.items.length; j++) {
-            item = group.items[j];
-            if (item && targetItem.indexOf(item.name) !== -1) {
-                if (item.value !== null && !isNaN(item.value) && item.value !== "") {
-                    list.push(parseFloat(item.value));
-                    if (list.length >= maxCount) return list;
+    if (!isRepeat) {
+        for (i = 0; i < itemGroups.length; i++) {
+            group = itemGroups[i];
+            if (!group || group.canceled) continue;
+            for (j = 0; j < group.items.length; j++) {
+                item = group.items[j];
+                if (item && targetItem.indexOf(item.name) !== -1) {
+                    count++;
+                    if (item.value !== null && !isNaN(item.value) && item.value !== "") {
+                        list.push(parseFloat(item.value));
+                        if (list.length >= count) return list;
+                    }
+                }
+            }
+        }
+    }
+    else {
+        for (i = itemGroups.length - 1; i >= 0; i--) {
+            group = itemGroups[i];
+            if (!group || group.canceled) continue;
+            for (j = 0; j < group.items.length; j++) {
+                item = group.items[j];
+                if (item && targetItem.indexOf(item.name) !== -1) {
+                    if (item.value !== null && !isNaN(item.value) && item.value !== "") {
+                        list.push(parseFloat(item.value));
+                        if (list.length >= count) return list;
+                    }
                 }
             }
         }
@@ -102,21 +113,33 @@ function calculateAverage(values) {
     return avg;
 }
 
+function containsValue(input, keyword) {
+    if (input == null) {
+        return false;
+    }
+
+    var normalizedInput = input.toString().toLowerCase();
+    return normalizedInput.indexOf(keyword) !== -1;
+}
+
 try {
+    var isRepeat = false;
     var itemRaw = getItemDataContextByItemDataId(item.id);
     var context = JSON.parse(itemRaw);
-    QTcFlist = populateList(formJson, QTcFitems, QTcFlist, QTcFmaxCount);
-    QTcFavg = calculateAverage(QTcFlist);
+    if (containsValue(context.foundItemGroupName, "repeat")) isRepeat = true;
 
-    QRSlist = populateList(formJson, QRSitems, QRSlist, QRSmaxCount);
-    QRSavg = calculateAverage(QRSlist);
+    var QTcFlist = populateList(formJson, QTcFitems, isRepeat);
+    var QTcFavg = calculateAverage(QTcFlist);
 
-    if (QTcFlist.length !== QTcFmaxCount || QRSlist.length !== QRSmaxCount) return itemJson.item.codeListItems[0].codedValue; // return pending result
+    var QRSlist = populateList(formJson, QRSitems, isRepeat);
+    var QRSavg = calculateAverage(QRSlist);
+
+    if (QTcFlist.length < count || QRSlist.length < count) return itemJson.item.codeListItems[0].codedValue; // return pending result
 
     if (QTcFavg > QTcF_max_range || QRSavg > QRS_max_range) return itemJson.item.codeListItems[2].codedValue; // return Out of protocol range
     else if (QTcFavg <= QTcF_max_range || QRSavg > QRS_max_range) return itemJson.item.codeListItems[1].codedValue; // return within protocol range
 
-    return attachedItemCodeList[0];
+    return itemJson.item.codeListItems[0].codedValue;
 } catch (e) {
     logger("Error in main execution logic: " + e);
     return null;

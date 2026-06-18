@@ -22,24 +22,6 @@ var valueItem = [
     "LDL-C Value at Week 8",
 ]
 
-try {
-    var form = pullForm(studyEventNames, formName);
-    if (!form) return null;
-
-    var item = itemJson.item;
-    var groupName, groupID = getItemGroupName(formJson);
-
-    var baseline = pullItemFromForm(form, baselineItem, null);
-    var value = pullItemFromForm(formJson, valueItem, groupID);
-
-    if (!baseline || baseline == null || !value || value == null) return null;
-
-    return String(calculateReduction(baseline, value));
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
 function calculateReduction(baseline, value) {
     var parsedBaseline = parseInt(baseline);
     var parsedValue = parseInt(value);
@@ -95,16 +77,7 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     return keepers;
 }
 
-function containsValue(input, keyword) {
-    if (input == null) {
-        return false;
-    }
-
-    var value = input.toString().toLowerCase();
-    return value.indexOf(keyword) !== -1;
-}
-
-function getItemGroupName(form) {
+function getItemGroupNameId(form) {
     for (var i = 0; i < form.form.itemGroups.length; i++) {
         var group = form.form.itemGroups[i];
         var items = group.items;
@@ -113,9 +86,27 @@ function getItemGroupName(form) {
         for (var j = 0; j < items.length; j++) {
             var it = items[j];
             if (it.id === item.id) {
-                return group.name, group.id;
+                return [group.name, group.id];
             }
         }
     }
+    return null;
+}
+
+try {
+    var form = pullForm(studyEventNames, formName);
+    if (!form) return null;
+
+    var item = itemJson.item;
+    var groupName, groupID = getItemGroupNameId(formJson);
+
+    var baseline = pullItemFromForm(form, baselineItem, null);
+    var value = pullItemFromForm(formJson, valueItem, groupID);
+
+    if (!baseline || baseline == null || !value || value == null) return null;
+
+    return String(calculateReduction(baseline, value));
+} catch (e) {
+    logger("Error in main execution logic: " + e);
     return null;
 }

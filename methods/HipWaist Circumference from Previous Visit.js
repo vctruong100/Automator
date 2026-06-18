@@ -93,11 +93,9 @@ function pullItemFromForm(form, targetItem) {
 try {
     var newEvent = studyEvents[currentEvent];
     var form = null;
-    if (screeningStudyEvent.indexOf(newEvent) !== -1) {
-        form = pullForm([newEvent], screeningFormName);
-    } else {
-        form = pullForm([newEvent], formName);
-    }
+    if (screeningStudyEvent.indexOf(newEvent) !== -1) form = pullForm([newEvent], screeningFormName);
+    else form = pullForm([newEvent], formName);
+
     if (!form) return null;
     if (itemName == waistItem1) return pullItemFromForm(form, waistItem1);
     if (itemName == waistItem2) return pullItemFromForm(form, waistItem2);

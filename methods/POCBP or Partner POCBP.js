@@ -1,20 +1,28 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Pulls weight from Screening body measurements.
+// Purpose: Handles point-of-care blood pressure data capture.
 
-var formName = [
-    "BM_Height / Weight / BMI",
-    "BM_Height/Weight/BMI",
-    "📏 SCREEN BODY MEASUREMENTS (HEIGHT / WEIGHT / BMI)"
-];
-var studyevent = [
-    "Screening",
+var studyEvent = [
     "SCREENING",
-]
+    "Screening"
+];
+var formName = [
+    "REM_Study Reminders (SCRN)",
+];
 var itemName = [
-    "VS_WEIGHT",
+    "POCBP or Partner POCBP"
+];
+var attachedItemCodeList = [
+    "YES",
+    "NO",
 ]
+var pulledItemCodeList = [
+    "YES",
+    "NO",
+]
+
+var gender = formJson.form.subject.volunteer.sexMale;
 
 function pullForm(studyeventList, formNameList) {
     for (var i = 0; i < studyeventList.length; i++) {
@@ -36,7 +44,7 @@ function pullItemFromForm(form, targetItem) {
         if (!group || group.canceled) continue;
         for (j = 0; j < group.items.length; j++) {
             item = group.items[j];
-            if (targetItem.indexOf(item.name) !== -1 && item.value !== null) return item.value;
+            if (targetItem.indexOf(item.name) !== -1 && item.value !== null) return item;
         }
     }
     return null;
@@ -69,12 +77,18 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
 }
 
 try {
-    var form = pullForm(studyevent, formName);
+    if (gender) return itemJson.item.codeListItems[1].codedValue; // return no
+
+    var form = pullForm(studyEvent, formName);
     if (!form) return null;
 
-    var weight = pullItemFromForm(form, itemName);
+    var POCBP = pullItemFromForm(form, itemName);
+    logger("POCBP: " + POCBP);
+    if (!POCBP || POCBP.value == null) return null;
 
-    return weight;
+    if (POCBP.value == POCBP.codeListItems[0].codedValue) return itemJson.item.codeListItems[0].codedValue; // return yes
+    else if (POCBP.value == POCBP.codeListItems[1].codedValue) return itemJson.item.codeListItems[1].codedValue; // return no
+    return null;
 } catch (e) {
     logger("Error in main execution logic: " + e);
     return null;

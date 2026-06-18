@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Evaluates pregnancy test results and sets flags.
+// Purpose: Evaluates FSH and pregnancy test result logic.
 
 var formName = formJson.form.name;
 
@@ -25,11 +25,6 @@ var statusItem = [
 
 var gender = formJson.form.subject.volunteer.sexMale;
 var age = formJson.form.subject.volunteer.age;
-
-function log() {
-    logger("Childbearing: " + childbearing);
-    logger("Status: " + status);
-}
 
 function pullForm(studyeventList, formNameList) {
     for (var i = 0; i < studyeventList.length; i++) {
@@ -83,31 +78,22 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     return keepers;
 }
 
-function containsValue(input, keyword) {
-    if (input == null) {
-        return false;
-    }
-
-    var value = input.toString().toLowerCase();
-    return value.indexOf(keyword) !== -1;
-}
-
 try {
     logger(age);
     logger(gender);
-    if (gender) return itemJson.item.codeListItems[3].codedValue; // return None
+    if (gender) return "None";
 
     var form = pullForm(studyEvent, formNames);
     if (!form) return null;
 
     var childbearing = pullItemFromForm(form, childbearingItem);
-    if (childbearing && childbearing.value !== null && childbearing.value == childbearing.codeListItems[0].codedValue) return itemJson.item.codeListItems[0].codedValue; // if childbearing = Yes, return
+    if (childbearing && childbearing.value !== null && childbearing.value == "Y") return "Pregnancy";
 
     var status = pullItemFromForm(form, statusItem);
-    if (status && status.value !== null && (status.value == status.codeListItems[2].codedValue)) return itemJson.item.codeListItems[3].codedValue; // return None
-    else if (status && status.value !== null) return itemJson.item.codeListItems[0]; // return pregnancy for other status
+    if (status && status.value !== null && (status.value == status.codeListItems[2].codedValue)) return "FSH";
+    else if (status && status.value !== null) return "Pregnancy";
 
-    return itemJson.item.codeListItems[3].codedValue; // return none
+    return "None";
 } catch (e) {
     logger("Error in main execution logic: " + e);
     return null;

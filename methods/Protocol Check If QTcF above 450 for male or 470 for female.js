@@ -9,8 +9,6 @@ var qtcfItems = [
     "QTcF (P: < 450 (male), < 470 (female))",
 ]
 
-var yesCodeList = item.codeListItems[1].codedValue;
-var noCodeList = item.codeListItems[0].codedValue;
 var maleRange = 450;
 var femaleRange = 470;
 
@@ -38,9 +36,9 @@ try {
 
     logger("Is it male: " + sexMale);
     logger("Qtcf value: " + item.value);
-    if ((sexMale && item.value > maleRange) || (!sexMale && item.value > femaleRange)) return yesCodeList;
+    if ((sexMale && item.value > maleRange) || (!sexMale && item.value > femaleRange)) return item.codeListItems[1].codedValue; // yes
 
-    return noCodeList;
+    return item.codeListItems[0].codedValue; // no
 } catch (e) {
     logger("Error in main execution logic: " + e);
     return null;

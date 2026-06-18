@@ -31,34 +31,30 @@ function pullForm(studyeventList, formNameList) {
     }
 }
 
-function pullBaselineItemFromForm(form, targetItem) {
+function pullItemFromForm(form, targetItem, isBaseline) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
 
 	if (!itemGroups || itemGroups.length < 1) return null;
 
-    for (i = 0; i < itemGroups.length; i++) {
-        group = itemGroups[i];
-        if (!group || group.canceled) continue;
-        for (j = 0; j < group.items.length; j++) {
-            item = group.items[j];
-            if (targetItem.indexOf(item.name) !== -1 && item.value !== null && !item.canceled) return parseInt(item.value);
+    if (!isBaseline) {
+        for (i = itemGroups.length - 1; i >= 0; i--) {
+            group = itemGroups[i];
+            if (!group || group.canceled) continue;
+            for (j = 0; j < group.items.length; j++) {
+                item = group.items[j];
+                if (targetItem.indexOf(item.name) !== -1 && item.value !== null && !item.canceled) return parseInt(item.value);
+            }
         }
     }
-    return null;
-}
-function pullItemFromForm(form, targetItem) {
-    var itemGroups = form.form.itemGroups;
-    var group, items, item, i, j, value;
-
-	if (!itemGroups || itemGroups.length < 1) return null;
-
-    for (i = itemGroups.length - 1; i >= 0; i--) {
-        group = itemGroups[i];
-        if (!group || group.canceled) continue;
-        for (j = 0; j < group.items.length; j++) {
-            item = group.items[j];
-            if (targetItem.indexOf(item.name) !== -1 && item.value !== null && !item.canceled) return parseInt(item.value);
+    else {
+        for (i = 0; i < itemGroups.length; i++) {
+            group = itemGroups[i];
+            if (!group || group.canceled) continue;
+            for (j = 0; j < group.items.length; j++) {
+                item = group.items[j];
+                if (targetItem.indexOf(item.name) !== -1 && item.value !== null && !item.canceled) return parseInt(item.value);
+            }
         }
     }
     return null;
@@ -90,11 +86,11 @@ try {
     var form = pullForm(baselineStudyEvent, baselineFormName);
     if (!form) return null;
 
-    var baseline = pullBaselineItemFromForm(form, qtcfItem);
-    var qtcfValue = pullItemFromForm(formJson, qtcfItem)
+    var baseline = pullItemFromForm(form, qtcfItem, true);
+    var qtcfValue = pullItemFromForm(formJson, qtcfItem, false);
     if (!qtcfValue || qtcfValue == null || !baseline || baseline == null) return null;
     logger("qtcfValue: " + qtcfValue);
-    logger("Baselien: " + baseline);
+    logger("Baseline: " + baseline);
 
     var difference = Math.round(qtcfValue - baseline).toFixed(sigfig);
     logger("Difference: " + difference);

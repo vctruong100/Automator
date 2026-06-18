@@ -1,17 +1,19 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Handles process number generation/tracking for lab samples.
+// Purpose: Pulls height from Screening body measurements.
 
-var studyevent = [
-    "Visit 2 Week 1 Day 0",
-]
 var formName = [
-    "(*)🩸Visit 2 W1_ Safeties + ADA/PK/Biomarkers_PREDOSE - 8 TUBES",
-
+    "BM_Height/Weight/BMI",
+    "📏 SCREEN BODY MEASUREMENTS (HEIGHT / WEIGHT / BMI)"
+];
+var studyevent = [
+    "Screening",
+    "SCREENING",
 ]
 var itemName = [
-    "Process No.",
+    "BM_HT",
+    "BMI_HEIGHT"
 ]
 
 function pullForm(studyeventList, formNameList) {
@@ -70,11 +72,8 @@ try {
     var form = pullForm(studyevent, formName);
     if (!form) return null;
 
-    var result = pullItemFromForm(form, itemName);
+    return pullItemFromForm(form, itemName);
 
-    log()
-
-    return result;
 } catch (e) {
     logger("Error in main execution logic: " + e);
     return null;

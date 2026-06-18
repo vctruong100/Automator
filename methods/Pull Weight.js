@@ -1,9 +1,10 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Pulls height from Screening body measurements.
+// Purpose: Pulls weight from Screening body measurements.
 
 var formName = [
+    "BM_Height / Weight / BMI",
     "BM_Height/Weight/BMI",
     "📏 SCREEN BODY MEASUREMENTS (HEIGHT / WEIGHT / BMI)"
 ];
@@ -12,10 +13,8 @@ var studyevent = [
     "SCREENING",
 ]
 var itemName = [
-    "BM_HT",
-    "BMI_HEIGHT"
+    "VS_WEIGHT",
 ]
-
 
 function pullForm(studyeventList, formNameList) {
     for (var i = 0; i < studyeventList.length; i++) {
@@ -73,9 +72,8 @@ try {
     var form = pullForm(studyevent, formName);
     if (!form) return null;
 
-    var height = pullItemFromForm(form, itemName);
+    return pullItemFromForm(form, itemName);
 
-    return height;
 } catch (e) {
     logger("Error in main execution logic: " + e);
     return null;

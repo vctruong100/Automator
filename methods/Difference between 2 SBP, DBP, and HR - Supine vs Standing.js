@@ -73,35 +73,29 @@ function checkDifference(range, semi, standing) {
     else if (diff < 0) return "NO, increase by " + diff + " mmHg.";
 }
 
-function pullFirstItemFromForm(form, targetItem) {
+function pullItemFromForm(form, targetItem, lastToFirst) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
 
 	if (!itemGroups || itemGroups.length < 1) return null;
 
-    for (i = 0; i < itemGroups.length; i++) {
-        group = itemGroups[i];
-        if (!group || group.canceled) continue;
-        for (j = 0; j < group.items.length; j++) {
-            item = group.items[j];
-            if (targetItem.indexOf(item.name) !== -1 && item.value !== null && !item.canceled && item.value !== "") return item.value;
+    if (lastToFirst) {
+        for (i = itemGroups.length - 1; i >= 0; i--) {
+            group = itemGroups[i];
+            if (!group || group.canceled) continue;
+            for (j = 0; j < group.items.length; j++) {
+                item = group.items[j];
+                if (targetItem.indexOf(item.name) !== -1 && item.value !== null && !item.canceled && item.value !== "") return item.value;
+            }
         }
-    }
-    return null;
-}
-
-function pullLastItemFromForm(form, targetItem) {
-    var itemGroups = form.form.itemGroups;
-    var group, items, item, i, j, value;
-
-	if (!itemGroups || itemGroups.length < 1) return null;
-
-    for (i = itemGroups.length - 1; i >= 0; i--) {
-        group = itemGroups[i];
-        if (!group || group.canceled) continue;
-        for (j = 0; j < group.items.length; j++) {
-            item = group.items[j];
-            if (targetItem.indexOf(item.name) !== -1 && item.value !== null && !item.canceled && item.value !== "") return item.value;
+    } else {
+        for (i = 0; i < itemGroups.length; i++) {
+            group = itemGroups[i];
+            if (!group || group.canceled) continue;
+            for (j = 0; j < group.items.length; j++) {
+                item = group.items[j];
+                if (targetItem.indexOf(item.name) !== -1 && item.value !== null && !item.canceled && item.value !== "") return item.value;
+            }
         }
     }
     return null;
@@ -110,16 +104,16 @@ function pullLastItemFromForm(form, targetItem) {
 try {
     logger("Attached item: " + item.name);
     if (sysAttachedItem.indexOf(item.name) !== -1) {
-        sysSemi = pullLastItemFromForm(formJson, sysItem);
-        sysStanding = pullFirstItemFromForm(formJson, sysStandingItem);
+        sysSemi = pullItemFromForm(formJson, sysItem, true);
+        sysStanding = pullItemFromForm(formJson, sysStandingItem, false);
         return checkDifference(sysDifferenceRange, sysSemi, sysStanding);
     } else if (diaAttachedItem.indexOf(item.name) !== -1) {
-        diaSemi = pullLastItemFromForm(formJson, diaItem);
-        diaStanding = pullFirstItemFromForm(formJson, diaStandingItem);
+        diaSemi = pullItemFromForm(formJson, diaItem, true);
+        diaStanding = pullItemFromForm(formJson, diaStandingItem, false);
         return checkDifference(diaDifferenceRange, diaSemi, diaStanding);
     } else if (hrAttachedItem.indexOf(item.name) !== -1) {
-        hrSemi = pullLastItemFromForm(formJson, hrItem);
-        hrStanding = pullFirstItemFromForm(formJson, hrStandingItem);
+        hrSemi = pullItemFromForm(formJson, hrItem, true);
+        hrStanding = pullItemFromForm(formJson, hrStandingItem, false);
         return checkDifference(hrDifferenceRange, hrSemi, hrStanding);
     }
 

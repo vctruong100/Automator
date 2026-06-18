@@ -1,32 +1,18 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Handles point-of-care blood pressure data capture.
+// Purpose: Handles process number generation/tracking for lab samples.
 
-var studyEvent = [
-    "SCREENING",
-    "Screening"
-];
+var studyevent = [
+    "Visit 2 Week 1 Day 0",
+]
 var formName = [
-    "REM_Study Reminders (SCRN)",
-];
+    "(*)🩸Visit 2 W1_ Safeties + ADA/PK/Biomarkers_PREDOSE - 8 TUBES",
+
+]
 var itemName = [
-    "POCBP or Partner POCBP"
-];
-var attachedItemCodeList = [
-    "YES",
-    "NO",
+    "Process No.",
 ]
-var pulledItemCodeList = [
-    "YES",
-    "NO",
-]
-
-var gender = formJson.form.subject.volunteer.sexMale;
-
-function log() {
-    logger("POCBP: " + POCBP);
-}
 
 function pullForm(studyeventList, formNameList) {
     for (var i = 0; i < studyeventList.length; i++) {
@@ -48,7 +34,7 @@ function pullItemFromForm(form, targetItem) {
         if (!group || group.canceled) continue;
         for (j = 0; j < group.items.length; j++) {
             item = group.items[j];
-            if (targetItem.indexOf(item.name) !== -1 && item.value !== null) return item;
+            if (targetItem.indexOf(item.name) !== -1 && item.value !== null) return item.value;
         }
     }
     return null;
@@ -81,19 +67,11 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
 }
 
 try {
-    if (gender) return itemJson.item.codeListItems[1].codedValue; // return no
-
-    var form = pullForm(studyEvent, formName);
+    var form = pullForm(studyevent, formName);
     if (!form) return null;
 
-    var POCBP = pullItemFromForm(form, itemName);
-    if (!POCBP || POCBP.value == null) return null;
+    return pullItemFromForm(form, itemName);
 
-    log();
-
-    if (POCBP.value == POCBP.codeListItems[0].codedValue) return itemJson.item.codeListItems[0].codedValue; // return yes
-    else if (POCBP.value == POCBP.codeListItems[1].codedValue) return itemJson.item.codeListItems[1].codedValue; // return no
-    return null;
 } catch (e) {
     logger("Error in main execution logic: " + e);
     return null;
