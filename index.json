@@ -855,9 +855,6 @@
       "Functions"
     ],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Datetime%20functions.md",
-<<<<<<< Updated upstream
-    "updated": "2026-06-15"
-=======
     "updated": "2026-06-17"
   },
   {
@@ -880,7 +877,7 @@
       "Data",
       "Structure"
     ],
-    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Automation%20Data%20Structure",
+    "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Automation%20Data%20Structure.md",
     "updated": "2026-06-17"
   },
   {
@@ -918,7 +915,7 @@
   },
   {
     "id": "M-100",
-    "title": "Protocol Check Any QTcF increase \u226560 msec from Baseline OR average QTcF 500 msec",
+    "title": "Protocol Check Any QTcF increase 60 msec from Baseline OR average QTcF 500 msec",
     "tags": [
       "Increase",
       "Msec",
@@ -939,6 +936,5 @@
     ],
     "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Average%20Vital%20Signs%20Range%20SYS%2C%20DIA.md",
     "updated": "2026-06-17"
->>>>>>> Stashed changes
   }
 ]
