@@ -1,11 +1,13 @@
-# ClinSpark Test Automator
+# ClinSpark Automators
 
 Scripts to automate basic tasks in ClinSpark.
 
-**File:** `ClinSpark Test Automator.js`  
-**Version:** 3.8.7  
-**Platform:** Tampermonkey / Greasemonkey userscript  
-**Target:** `https://cenexeltest.clinspark.com/*`
+| File | Target | Version |
+|------|--------|---------|
+| `ClinSpark Test Automator.js` | `https://cenexeltest.clinspark.com/*` | 3.8.7 |
+| `ClinSpark Automator.js` | `https://cenexel.clinspark.com/*` | 3.8.7 |
+
+**Platform:** Tampermonkey / Greasemonkey userscript
 
 ---
 
@@ -434,14 +436,20 @@ processAESOnPageLoad()                          // On each page load
 
 **Button:** "Search Methods"
 
+**Features:**
+- **Fullscreen mode** — Toggle fullscreen via the header button to expand the modal to full viewport.
+- **Resizable** — Drag the bottom-right resize handle to adjust modal dimensions when not in fullscreen. Size is persisted across sessions.
+- **Favorites & Pins** — Star methods as favorites or pin them to the top of results.
+- **Recent methods** — Quickly access recently viewed methods.
+- **Search body content** — Optional checkbox to search inside method file contents.
+- **Copy to clipboard** — One-click copy of the selected method's code.
+
 ```
 [Button Click]
 └── openMethodsLibraryModal()
     ├── fetchMethodsIndex(forceRefresh)
     │   ├── getMethodsCache()
     │   └── setMethodsCache()
-    ├── buildTagList()
-    ├── populateTagSelect()
     ├── doSearch()
     │   ├── filterAndSortMethods()
     │   │   └── scoreMethod()
@@ -452,7 +460,9 @@ processAESOnPageLoad()                          // On each page load
     │   ├── addRecent()
     │   └── saveLastMethod()
     ├── toggleFavorite() / togglePin()
-    ├── saveLastSearch() / saveLastTag() / saveSortOrder()
+    ├── saveLastSearch() / saveSortOrder()
+    ├── toggleFullscreen()
+    ├── saveModalSize() / getSavedModalSize()
     └── closeModal()
 ```
 
@@ -905,6 +915,45 @@ injectThemeStylesIfNeeded()
 removeThemeStyles()
 applyThemeToUiRoots()
 ```
+
+---
+
+## ClinSpark Automator.js Features
+
+The production automator (`ClinSpark Automator.js`) shares many core features with the test automator but is tailored for the production environment. Its panel includes the following features:
+
+### Data Collection
+- **Pull Barcode** — Automatically fills in the subject barcode for a subject.
+- **Pull Lab Barcode** — Scans all barcode fields on the current data collection page and fills each one in automatically.
+
+### CRF Design & Library
+- **PLAP Builder** — Drag forms into segments, assign study events and time references, then let the automator fill in and submit all procedure log entries.
+- **Import From Library** — Import forms from the study library into your current study.
+- **Archive/Update Forms** — Batch archives or renames forms in the study library across multiple studies.
+- **Copy Activity Forms** — Copies scheduled activity forms from one study to another.
+- **Search Methods** — Opens the method library containing all coded methods/edit checks (fullscreen, resizable, favorites, pins, recents, body search, copy to clipboard).
+- **Parse Deviation** — Navigate to Study -> Data page and parse deviation forms for copy.
+- **Import I/E** — Automatically map I/E items to the correct Activity Plan -> Forms -> Items.
+- **Set Visibility Condition** — Sets show/hide conditions on scheduled activity forms.
+- **Item Method Forms** — Locates all forms that contain a specific calculation method item.
+- **Parse Study Event** — Navigates to and collects data from study events in the study library.
+- **Edit Study Events List** — Manage the study events list in the library (add, rename, reorder, save).
+
+### Navigation
+- **Find Adverse Event** — Jumps directly to the Adverse Event data page for a specific subject.
+- **Find Form & Events** — Navigates directly to a form or study event data page.
+
+### Eligibility
+- **Cohort Eligibility** — Runs eligibility checks for all subjects in a cohort.
+- **Subject Eligibility** — Runs eligibility checks for a single subject.
+
+### Reports
+- **Download DTS Report** — Automatically generates and downloads Clinical Data Text (Delimited) reports for one or more selected studies.
+
+### Panel Controls
+- **Pause** — Pauses any automation that is currently running.
+- **Clear Logs** — Clears all entries from the activity log panel.
+- **Hide Logs** — Toggles the activity log panel on or off.
 
 ---
 

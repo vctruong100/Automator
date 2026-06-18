@@ -10511,7 +10511,6 @@
     var STORAGE_METHODS_RECENTS = "activityPlanState.methodsLibrary.recents";
     var STORAGE_METHODS_PINS = "activityPlanState.methodsLibrary.pins";
     var STORAGE_METHODS_LAST_SEARCH = "activityPlanState.methodsLibrary.lastSearch";
-    var STORAGE_METHODS_LAST_TAG = "activityPlanState.methodsLibrary.lastTag";
     var STORAGE_METHODS_LAST_METHOD = "activityPlanState.methodsLibrary.lastMethod";
     var STORAGE_METHODS_SORT_ORDER = "activityPlanState.methodsLibrary.sortOrder";
     var MAX_RECENTS = 10;
@@ -10599,17 +10598,6 @@
         }
     }
 
-    function buildTagList(methods) {
-        var tagSet = {};
-        for (var i = 0; i < methods.length; i++) {
-            var tags = methods[i].tags || [];
-            for (var j = 0; j < tags.length; j++) {
-                tagSet[tags[j]] = true;
-            }
-        }
-        return Object.keys(tagSet).sort();
-    }
-
     function scoreMethod(method, query, searchBody, bodyText) {
         if (!query || query.trim().length === 0) return 100;
         var q = query.toLowerCase().trim();
@@ -10641,21 +10629,10 @@
         return score;
     }
 
-    function filterAndSortMethods(methods, query, tagFilter, searchBody, bodiesMap, sortOrder, favorites, pins) {
+    function filterAndSortMethods(methods, query, searchBody, bodiesMap, sortOrder, favorites, pins) {
         var results = [];
         for (var i = 0; i < methods.length; i++) {
             var m = methods[i];
-            if (tagFilter && tagFilter !== "all") {
-                var tags = m.tags || [];
-                var hasTag = false;
-                for (var j = 0; j < tags.length; j++) {
-                    if (tags[j] === tagFilter) {
-                        hasTag = true;
-                        break;
-                    }
-                }
-                if (!hasTag) continue;
-            }
             var bodyText = bodiesMap[m.url] || "";
             var score = scoreMethod(m, query, searchBody, bodyText);
             if (query && query.trim().length > 0 && score === 0) continue;
@@ -10695,16 +10672,70 @@
         return results.map(function(r) { return r.method; });
     }
 
+    function getSavedModalSize() {
+        try {
+            var raw = localStorage.getItem(STORAGE_METHODS_MODAL_SIZE);
+            if (raw) {
+                var parsed = JSON.parse(raw);
+                if (parsed && parsed.width > 0 && parsed.height > 0) return parsed;
+            }
+        } catch (e) {}
+        return null;
+    }
+
+    function saveModalSize(width, height) {
+        try {
+            localStorage.setItem(STORAGE_METHODS_MODAL_SIZE, JSON.stringify({ width: width, height: height }));
+        } catch (e) {}
+    }
+
+    function injectModalStyles() {
+        var id = "methods-library-modal-styles";
+        if (document.getElementById(id)) return;
+        var style = document.createElement("style");
+        style.id = id;
+        style.textContent = [
+            "#methods-library-modal ::-webkit-scrollbar { width: 6px; height: 6px; }",
+            "#methods-library-modal ::-webkit-scrollbar-track { background: transparent; }",
+            "#methods-library-modal ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }",
+            "#methods-library-modal ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }",
+            "#methods-library-modal .resize-handle { position:absolute; bottom:0; right:0; width:16px; height:16px; cursor:nwse-resize; z-index:10; opacity:0.4; transition:opacity 0.2s; }",
+            "#methods-library-modal .resize-handle:hover { opacity:1; }",
+            "#methods-library-modal .resize-handle::after { content:''; position:absolute; right:3px; bottom:3px; width:8px; height:8px; border-right:2px solid rgba(255,255,255,0.5); border-bottom:2px solid rgba(255,255,255,0.5); border-radius:0 0 2px 0; }",
+            "#methods-library-modal.is-fullscreen { top:0 !important; left:0 !important; transform:none !important; width:100vw !important; height:100vh !important; max-width:none !important; max-height:none !important; border-radius:0 !important; }",
+            "#methods-library-modal.is-fullscreen .resize-handle { display:none !important; }"
+        ].join("\n");
+        document.head.appendChild(style);
+    }
+
     function openMethodsLibraryModal() {
         var glass = isGlassTheme();
         if (glass) injectThemeStylesIfNeeded();
+        injectModalStyles();
+        var bootstrapBackdrops = document.querySelectorAll('.modal-backdrop');
+        for (var i = 0; i < bootstrapBackdrops.length; i++) {
+            bootstrapBackdrops[i].style.display = 'none';
+        }
+
+        var openBootstrapModals = document.querySelectorAll('.modal.in, .modal.show');
+
+        // >>> NEW: disable Bootstrap focus trap and neutralize #ajaxModal if present
+        disableBootstrapModalFocusTrap();
+        neutralizeAjaxModal();
+        // <<< NEW
+
         if (METHODS_LIBRARY_MODAL_REF && document.body.contains(METHODS_LIBRARY_MODAL_REF)) {
+            var existingSearchInput = METHODS_LIBRARY_MODAL_REF.querySelector('input[type="text"]');
+            if (existingSearchInput) {
+                existingSearchInput.disabled = false;
+                existingSearchInput.readOnly = false;
+                existingSearchInput.focus();
+            }
             METHODS_LIBRARY_MODAL_REF.focus();
             return;
         }
 
         var allMethods = [];
-        var allTags = [];
         var selectedMethod = null;
         var currentBodyText = "";
 
@@ -10717,7 +10748,12 @@
         overlay.style.background = glass ? "rgba(0,0,0,0.4)" : "rgba(0,0,0,0.6)";
         overlay.style.zIndex = glass ? String(THEME_Z_OVERLAY - 1) : "999997";
 
+        var savedSize = getSavedModalSize();
+        var modalWidth = savedSize ? savedSize.width : 900;
+        var modalHeight = savedSize ? savedSize.height : 600;
+
         var modal = document.createElement("div");
+        modal.id = "methods-library-modal";
         modal.setAttribute("role", "dialog");
         modal.setAttribute("aria-modal", "true");
         modal.setAttribute("aria-label", "ClinSpark Methods Library");
@@ -10726,10 +10762,12 @@
         modal.style.top = "50%";
         modal.style.left = "50%";
         modal.style.transform = "translate(-50%, -50%)";
-        modal.style.width = "900px";
-        modal.style.maxWidth = "95vw";
-        modal.style.height = "600px";
-        modal.style.maxHeight = "90vh";
+        modal.style.width = modalWidth + "px";
+        modal.style.maxWidth = "98vw";
+        modal.style.minWidth = "640px";
+        modal.style.height = modalHeight + "px";
+        modal.style.maxHeight = "96vh";
+        modal.style.minHeight = "420px";
         if (glass) {
             modal.classList.add(THEME_SCOPE_CLASS);
             modal.classList.add("ie-glass-panel");
@@ -10770,6 +10808,26 @@
         if (glass) titleEl.style.color = THEME_TEXT_PRIMARY;
         header.appendChild(titleEl);
 
+        var headerBtns = document.createElement("div");
+        headerBtns.style.display = "flex";
+        headerBtns.style.alignItems = "center";
+        headerBtns.style.gap = "4px";
+
+        var fullscreenBtn = document.createElement("button");
+        fullscreenBtn.textContent = "⛶";
+        fullscreenBtn.title = "Toggle fullscreen";
+        fullscreenBtn.setAttribute("aria-label", "Toggle fullscreen");
+        fullscreenBtn.style.background = "transparent";
+        fullscreenBtn.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
+        fullscreenBtn.style.border = "none";
+        fullscreenBtn.style.fontSize = "16px";
+        fullscreenBtn.style.cursor = "pointer";
+        fullscreenBtn.style.padding = "4px 8px";
+        fullscreenBtn.style.borderRadius = "4px";
+        fullscreenBtn.onmouseenter = function() { fullscreenBtn.style.background = glass ? THEME_SURFACE_BG_HEAVY : "#333"; };
+        fullscreenBtn.onmouseleave = function() { fullscreenBtn.style.background = "transparent"; };
+        headerBtns.appendChild(fullscreenBtn);
+
         var closeBtn = document.createElement("button");
         closeBtn.textContent = "✕";
         closeBtn.setAttribute("aria-label", "Close");
@@ -10782,7 +10840,8 @@
         closeBtn.style.borderRadius = "4px";
         closeBtn.onmouseenter = function() { closeBtn.style.background = glass ? THEME_SURFACE_BG_HEAVY : "#333"; };
         closeBtn.onmouseleave = function() { closeBtn.style.background = "transparent"; };
-        header.appendChild(closeBtn);
+        headerBtns.appendChild(closeBtn);
+        header.appendChild(headerBtns);
         modal.appendChild(header);
 
         var toolbar = document.createElement("div");
@@ -10810,18 +10869,6 @@
         searchInput.onfocus = function() { searchInput.style.borderColor = glass ? THEME_ACCENT : "#5b43c7"; };
         searchInput.onblur = function() { searchInput.style.borderColor = glass ? THEME_SURFACE_BORDER : "#444"; };
         toolbar.appendChild(searchInput);
-
-        var tagSelect = document.createElement("select");
-        tagSelect.setAttribute("aria-label", "Filter by tag");
-        tagSelect.style.padding = "8px 12px";
-        tagSelect.style.background = glass ? THEME_SURFACE_BG : "#2a2a2a";
-        tagSelect.style.border = glass ? ("1px solid " + THEME_SURFACE_BORDER) : "1px solid #444";
-        tagSelect.style.borderRadius = "6px";
-        tagSelect.style.color = glass ? THEME_TEXT_PRIMARY : "#fff";
-        tagSelect.style.fontSize = "14px";
-        tagSelect.style.cursor = "pointer";
-        if (glass) tagSelect.className = "ie-select";
-        toolbar.appendChild(tagSelect);
 
         var sortSelect = document.createElement("select");
         sortSelect.setAttribute("aria-label", "Sort order");
@@ -10973,23 +11020,101 @@
         statusBar.textContent = "Loading...";
         modal.appendChild(statusBar);
 
+        // Resize handle
+        var resizeHandle = document.createElement("div");
+        resizeHandle.className = "resize-handle";
+        resizeHandle.setAttribute("aria-hidden", "true");
+        modal.appendChild(resizeHandle);
+
+        // Fullscreen toggle
+        var isFullscreen = false;
+        var savedWindowedSize = null;
+        fullscreenBtn.onclick = function() {
+            isFullscreen = !isFullscreen;
+            if (isFullscreen) {
+                savedWindowedSize = { width: modal.offsetWidth, height: modal.offsetHeight };
+                modal.classList.add("is-fullscreen");
+                fullscreenBtn.textContent = "⛶";
+                fullscreenBtn.title = "Exit fullscreen";
+            } else {
+                modal.classList.remove("is-fullscreen");
+                fullscreenBtn.title = "Enter fullscreen";
+                if (savedWindowedSize) {
+                    modal.style.width = savedWindowedSize.width + "px";
+                    modal.style.height = savedWindowedSize.height + "px";
+                    modal.style.top = "50%";
+                    modal.style.left = "50%";
+                    modal.style.transform = "translate(-50%, -50%)";
+                    saveModalSize(savedWindowedSize.width, savedWindowedSize.height);
+                } else {
+                    var s = getSavedModalSize();
+                    if (s) {
+                        modal.style.width = s.width + "px";
+                        modal.style.height = s.height + "px";
+                        modal.style.top = "50%";
+                        modal.style.left = "50%";
+                        modal.style.transform = "translate(-50%, -50%)";
+                    }
+                }
+            }
+        };
+
+        // Resizing logic
+        var isResizing = false;
+        var startX, startY, startWidth, startHeight;
+        resizeHandle.onmousedown = function(e) {
+            if (isFullscreen) return;
+            isResizing = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            startWidth = modal.offsetWidth;
+            startHeight = modal.offsetHeight;
+            e.preventDefault();
+        };
+        document.addEventListener("mousemove", function(e) {
+            if (!isResizing) return;
+            var newWidth = startWidth + (e.clientX - startX);
+            var newHeight = startHeight + (e.clientY - startY);
+            newWidth = Math.max(640, Math.min(newWidth, window.innerWidth * 0.98));
+            newHeight = Math.max(420, Math.min(newHeight, window.innerHeight * 0.96));
+            modal.style.width = newWidth + "px";
+            modal.style.height = newHeight + "px";
+            saveModalSize(newWidth, newHeight);
+        });
+        document.addEventListener("mouseup", function() {
+            isResizing = false;
+        });
+
+        // Dragging logic
+        var isDragging = false;
+        var dragStartX, dragStartY, dragInitialLeft, dragInitialTop;
+        header.onmousedown = function(e) {
+            if (isFullscreen) return;
+            isDragging = true;
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
+            var rect = modal.getBoundingClientRect();
+            dragInitialLeft = rect.left;
+            dragInitialTop = rect.top;
+            modal.style.transform = "none";
+            modal.style.left = dragInitialLeft + "px";
+            modal.style.top = dragInitialTop + "px";
+            e.preventDefault();
+        };
+        document.addEventListener("mousemove", function(e) {
+            if (!isDragging) return;
+            var newLeft = dragInitialLeft + (e.clientX - dragStartX);
+            var newTop = dragInitialTop + (e.clientY - dragStartY);
+            modal.style.left = newLeft + "px";
+            modal.style.top = newTop + "px";
+        });
+        document.addEventListener("mouseup", function() {
+            isDragging = false;
+        });
+
         function updateStatus(msg, isError) {
             statusBar.textContent = msg;
             statusBar.style.color = isError ? "#e74c3c" : (glass ? THEME_TEXT_MUTED : "#888");
-        }
-
-        function populateTagSelect() {
-            tagSelect.innerHTML = "";
-            var allOpt = document.createElement("option");
-            allOpt.value = "all";
-            allOpt.textContent = "All tags";
-            tagSelect.appendChild(allOpt);
-            for (var i = 0; i < allTags.length; i++) {
-                var opt = document.createElement("option");
-                opt.value = allTags[i];
-                opt.textContent = allTags[i];
-                tagSelect.appendChild(opt);
-            }
         }
 
         function renderList(methods) {
@@ -11187,14 +11312,12 @@
 
         function doSearch() {
             var query = searchInput.value;
-            var tagFilter = tagSelect.value;
             var searchBody = searchBodyCheckbox.checked;
             var sortOrder = sortSelect.value;
             var showOnlyFavorites = favoritesCheckbox.checked;
 
             // Save session state
             saveLastSearch(query);
-            saveLastTag(tagFilter);
             saveSortOrder(sortOrder);
 
             var favorites = getFavorites();
@@ -11207,7 +11330,7 @@
                 });
             }
 
-            var filtered = filterAndSortMethods(methodsToFilter, query, tagFilter, searchBody, METHODS_BODY_CACHE, sortOrder, favorites, pins);
+            var filtered = filterAndSortMethods(methodsToFilter, query, searchBody, METHODS_BODY_CACHE, sortOrder, favorites, pins);
             renderList(filtered);
             updateStatus(filtered.length + " of " + allMethods.length + " methods");
         }
@@ -11221,8 +11344,6 @@
                 return;
             }
             allMethods = result.data;
-            allTags = buildTagList(allMethods);
-            populateTagSelect();
 
             if (METHODS_PRELOAD_BODIES) {
                 updateStatus("Preloading method bodies...");
@@ -11234,14 +11355,12 @@
             }
 
             searchInput.value = getLastSearch();
-            tagSelect.value = getLastTag();
             sortSelect.value = getSortOrder();
 
             doSearch();
         }
 
         searchInput.oninput = doSearch;
-        tagSelect.onchange = doSearch;
         searchBodyCheckbox.onchange = doSearch;
         sortSelect.onchange = doSearch;
         favoritesCheckbox.onchange = doSearch;
@@ -11474,20 +11593,6 @@
     function saveLastSearch(query) {
         try {
             localStorage.setItem(STORAGE_METHODS_LAST_SEARCH, query);
-        } catch (e) {}
-    }
-
-    function getLastTag() {
-        try {
-            return localStorage.getItem(STORAGE_METHODS_LAST_TAG) || "all";
-        } catch (e) {
-            return "all";
-        }
-    }
-
-    function saveLastTag(tag) {
-        try {
-            localStorage.setItem(STORAGE_METHODS_LAST_TAG, tag);
         } catch (e) {}
     }
 
