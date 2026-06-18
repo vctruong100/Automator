@@ -24,7 +24,6 @@ var waistAttachedItem = [
     "Average Waist Circumference"
 ]
 
-// ======== Don't modify ========
 var item = itemJson.item;
 var sigfig = item.significantDigits;
 var maxCount = 2;
@@ -33,32 +32,6 @@ var hipList = [];
 var waistAvg = 0;
 var hipAvg = 0;
 
-try {
-    waistList = populateList(formJson, waistItemList);
-    hipList = populateList(formJson, hipItemList);
-
-    waistAvg = calculateAverage(waistList, sigfig);
-    hipAvg = calculateAverage(hipList, sigfig);
-
-    logger("Waist List: " + waistList);
-    logger("Hip List: " + hipList);
-
-    logger("Waist List length: " + waistList.length);
-    logger("Hip List length: " + hipList.length);
-
-    logger("Max count: " + maxCount);
-
-    logger("Waist Average: " + waistAvg);
-    logger("Hip Average: " + hipAvg);
-
-    if (hipAttachedItem.indexOf(item.name) !== -1 && hipList.length === maxCount) return hipAvg;
-    if (waistAttachedItem.indexOf(item.name) !== -1 && waistList.length === maxCount) return waistAvg;
-
-    return null;
-} catch (e) {
-    logger("Error in main method: " + e);
-    return null;
-}
 
 function populateList(form, targetItem) {
     var itemGroups = form.form.itemGroups;
@@ -98,4 +71,31 @@ function calculateAverage(values, sigfig) {
     var avg = sum / count;
     var factor = Math.pow(10, sigfig);
     return (Math.round(avg * factor) / factor).toFixed(sigfig);
+}
+
+try {
+    waistList = populateList(formJson, waistItemList);
+    hipList = populateList(formJson, hipItemList);
+
+    waistAvg = calculateAverage(waistList, sigfig);
+    hipAvg = calculateAverage(hipList, sigfig);
+
+    logger("Waist List: " + waistList);
+    logger("Hip List: " + hipList);
+
+    logger("Waist List length: " + waistList.length);
+    logger("Hip List length: " + hipList.length);
+
+    logger("Max count: " + maxCount);
+
+    logger("Waist Average: " + waistAvg);
+    logger("Hip Average: " + hipAvg);
+
+    if (hipAttachedItem.indexOf(item.name) !== -1 && hipList.length === maxCount) return hipAvg;
+    if (waistAttachedItem.indexOf(item.name) !== -1 && waistList.length === maxCount) return waistAvg;
+
+    return null;
+} catch (e) {
+    logger("Error in main method: " + e);
+    return null;
 }

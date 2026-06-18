@@ -23,37 +23,6 @@ var mealForms = [
     'STOP BREAKFAST', "Breakfast End", "BREAKFAST END",
 ];
 
-try {
-    var parsedEvent = null;
-    var lowerEvent = currentEvent ? currentEvent.toLowerCase() : "";
-
-    // Filter study event names
-    for (var key in studyevents) {
-        if (lowerEvent.indexOf(key.toLowerCase()) !== -1) {
-            parsedEvent = key;
-            break;
-        }
-    }
-    logger("Parsed event: " + parsedEvent)
-    if (!parsedEvent) return null;
-
-    var prevEvent = studyevents[parsedEvent];
-    logger("Previous event: " + prevEvent);
-    var form = pullForm([prevEvent], mealForms);
-    if (!form) {
-        var preprevEvent = studyevents[prevEvent];
-        form = pullForm([preprevEvent], mealForms)
-    }
-    if (!form) return null;
-    var mealTime = form.form.itemGroups[0].items[0].value;
-    if (mealTime && mealTime !== null) return mealTime;
-
-    return null;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
@@ -109,4 +78,35 @@ function containsValue(input, keyword) {
 
     var value = input.toString().toLowerCase();
     return value.indexOf(keyword) !== -1;
+}
+
+try {
+    var parsedEvent = null;
+    var lowerEvent = currentEvent ? currentEvent.toLowerCase() : "";
+
+    // Filter study event names
+    for (var key in studyevents) {
+        if (lowerEvent.indexOf(key.toLowerCase()) !== -1) {
+            parsedEvent = key;
+            break;
+        }
+    }
+    logger("Parsed event: " + parsedEvent)
+    if (!parsedEvent) return null;
+
+    var prevEvent = studyevents[parsedEvent];
+    logger("Previous event: " + prevEvent);
+    var form = pullForm([prevEvent], mealForms);
+    if (!form) {
+        var preprevEvent = studyevents[prevEvent];
+        form = pullForm([preprevEvent], mealForms)
+    }
+    if (!form) return null;
+    var mealTime = form.form.itemGroups[0].items[0].value;
+    if (mealTime && mealTime !== null) return mealTime;
+
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

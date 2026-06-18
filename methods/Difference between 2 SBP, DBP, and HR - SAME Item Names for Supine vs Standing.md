@@ -31,27 +31,6 @@ var item = itemJson.item;
 var isRepeat = false;
 var semiValue, standing;
 
-try {
-    var groupName = getItemGroupName(formJson);
-    if (containsValue(groupName, "repeat")) isRepeat = true;
-    logger("Is repeat: " + isRepeat)
-    logger("Attached item: " + item.name);
-    if (sysAttachedItem.indexOf(item.name) !== -1) {
-        semi = pullItemFromForm(formJson, sysItem, isRepeat, false);
-        standing = pullItemFromForm(formJson, sysItem, isRepeat, true);
-    } else if (diaAttachedItem.indexOf(item.name) !== -1) {
-        semi = pullItemFromForm(formJson, diaItem, isRepeat, false);
-        standing = pullItemFromForm(formJson, diaItem, isRepeat, true);
-    }
-    logger("Semi: " + semi);
-    logger("Standing: " + standing);
-    if (semi && standing) return String(semi - standing);
-    return null;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
 function getItemGroupName(form) {
     for (var i = 0; i < form.form.itemGroups.length; i++) {
         var group = form.form.itemGroups[i];
@@ -109,4 +88,25 @@ function containsValue(input, keyword) {
 
     var value = input.toString().toLowerCase();
     return value.indexOf(keyword) !== -1;
+}
+
+try {
+    var groupName = getItemGroupName(formJson);
+    if (containsValue(groupName, "repeat")) isRepeat = true;
+    logger("Is repeat: " + isRepeat)
+    logger("Attached item: " + item.name);
+    if (sysAttachedItem.indexOf(item.name) !== -1) {
+        semi = pullItemFromForm(formJson, sysItem, isRepeat, false);
+        standing = pullItemFromForm(formJson, sysItem, isRepeat, true);
+    } else if (diaAttachedItem.indexOf(item.name) !== -1) {
+        semi = pullItemFromForm(formJson, diaItem, isRepeat, false);
+        standing = pullItemFromForm(formJson, diaItem, isRepeat, true);
+    }
+    logger("Semi: " + semi);
+    logger("Standing: " + standing);
+    if (semi && standing) return String(semi - standing);
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

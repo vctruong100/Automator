@@ -14,44 +14,8 @@ var sysAttach = ["SYS MEAN AVERAGE"];
 var diaAttach = ["DIA MEAN AVERAGE"];
 var hrAttach = ["HR MEAN AVERAGE"];
 
-// ======== Don't modify ========
 var form = formJson.form;
 var item = itemJson.item;
-
-try {
-    var isRepeat = false;
-    var groupName = getItemGroupName(formJson);
-    logger("Group Name: " + groupName)
-    if (groupName) {
-        isRepeat = containsValue(groupName, "repeat")
-    }
-
-    var sysList = populateList(formJson, sysItem, sysAttach, isRepeat);
-    var diaList = populateList(formJson, diaItem, diaAttach, isRepeat);
-    var hrList = populateList(formJson, hrItem, hrAttach, isRepeat);
-
-    logger("Is it a repeat? " + isRepeat);
-    logger("sysList: " + sysList);
-    logger("diaList: " + diaList);
-    logger("hrList: " + hrList);
-
-    var avgSys = calculateAverage(sysList);
-    var avgDia = calculateAverage(diaList);
-    var avgHR = calculateAverage(hrList);
-
-    logger("Average PR: " + avgSys);
-    logger("AVerage QRS: " + avgDia);
-    logger("Average QT: " + avgHR);
-
-    if (sysAttach.indexOf(item.name) !== -1) return avgSys;
-    if (diaAttach.indexOf(item.name) !== -1) return avgDia;
-    if (hrAttach.indexOf(item.name) !== -1) return avgHR;
-
-    return null;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
 
 function containsValue(input, keyword) {
     if (input == null) {
@@ -126,4 +90,39 @@ function populateList(form, targetItem, attachedItem, repeat) {
         }
     }
     return list;
+}
+
+try {
+    var isRepeat = false;
+    var groupName = getItemGroupName(formJson);
+    logger("Group Name: " + groupName)
+    if (groupName) {
+        isRepeat = containsValue(groupName, "repeat")
+    }
+
+    var sysList = populateList(formJson, sysItem, sysAttach, isRepeat);
+    var diaList = populateList(formJson, diaItem, diaAttach, isRepeat);
+    var hrList = populateList(formJson, hrItem, hrAttach, isRepeat);
+
+    logger("Is it a repeat? " + isRepeat);
+    logger("sysList: " + sysList);
+    logger("diaList: " + diaList);
+    logger("hrList: " + hrList);
+
+    var avgSys = calculateAverage(sysList);
+    var avgDia = calculateAverage(diaList);
+    var avgHR = calculateAverage(hrList);
+
+    logger("Average PR: " + avgSys);
+    logger("AVerage QRS: " + avgDia);
+    logger("Average QT: " + avgHR);
+
+    if (sysAttach.indexOf(item.name) !== -1) return avgSys;
+    if (diaAttach.indexOf(item.name) !== -1) return avgDia;
+    if (hrAttach.indexOf(item.name) !== -1) return avgHR;
+
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

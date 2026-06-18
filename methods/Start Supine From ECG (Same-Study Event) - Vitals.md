@@ -22,32 +22,6 @@ var ecgFormNames = [
   "⚡12-LEAD ECG (BASELINE) (SINGLE) 1.0",
 ];
 
-try {
-    var confirmation = pullItemFromForm(formJson, confirmationItems)
-
-    if (!confirmation || confirmation == null) return "N/A";
-    if (confirmation == "YES") return "N/A";
-
-    form = pullForm(studyevent, ecgFormNames);
-    if (!form) return "N/A";
-
-    var result = pullItemFromForm(form, item);
-    if (!result || result == null) return "N/A";
-
-    log();
-
-    return formatDate(result);
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
-function log() {
-    logger("Study event: " + studyEventName);
-    logger("Form Name: " + formName)
-    logger("Confirmation: " + confirmation);
-    logger("Start Time from ECG: " + result);
-}
 function pullForm(studyeventList, formNameList) {
     for (var i = 0; i < studyeventList.length; i++) {
         for (var j = 0; j < formNameList.length; j++) {
@@ -123,4 +97,22 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     }
   }
   return keepers;
+}
+
+try {
+    var confirmation = pullItemFromForm(formJson, confirmationItems)
+
+    if (!confirmation || confirmation == null) return "N/A";
+    if (confirmation == "YES") return "N/A";
+
+    form = pullForm(studyevent, ecgFormNames);
+    if (!form) return "N/A";
+
+    var result = pullItemFromForm(form, item);
+    if (!result || result == null) return "N/A";
+
+    return formatDate(result);
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

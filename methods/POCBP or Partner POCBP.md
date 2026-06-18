@@ -24,25 +24,6 @@ var pulledItemCodeList = [
 
 var gender = formJson.form.subject.volunteer.sexMale;
 
-try {
-    if (gender) return itemJson.item.codeListItems[1].codedValue; // return no
-
-    var form = pullForm(studyEvent, formName);
-    if (!form) return null;
-
-    var POCBP = pullItemFromForm(form, itemName);
-    if (!POCBP || POCBP.value == null) return null;
-
-    log();
-
-    if (POCBP.value == POCBP.codeListItems[0].codedValue) return itemJson.item.codeListItems[0].codedValue; // return yes
-    else if (POCBP.value == POCBP.codeListItems[1].codedValue) return itemJson.item.codeListItems[1].codedValue; // return no
-    return null;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
 function log() {
     logger("POCBP: " + POCBP);
 }
@@ -97,4 +78,23 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
         }
     }
     return keepers;
+}
+
+try {
+    if (gender) return itemJson.item.codeListItems[1].codedValue; // return no
+
+    var form = pullForm(studyEvent, formName);
+    if (!form) return null;
+
+    var POCBP = pullItemFromForm(form, itemName);
+    if (!POCBP || POCBP.value == null) return null;
+
+    log();
+
+    if (POCBP.value == POCBP.codeListItems[0].codedValue) return itemJson.item.codeListItems[0].codedValue; // return yes
+    else if (POCBP.value == POCBP.codeListItems[1].codedValue) return itemJson.item.codeListItems[1].codedValue; // return no
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

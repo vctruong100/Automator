@@ -29,8 +29,6 @@ var screeningBMI_Form = [
     "📏 BM_BODY MEASUREMENTS (HEIGHT / WEIGHT / BMI)"
 ];
 
-// ======== Don't modify ========
-
 var currentStudyEvent = formJson.form.studyEventName;
 var item = itemJson.item;
 var sigfig = itemJson.item.significantDigits;
@@ -39,56 +37,6 @@ var weight = 0;
 var height = 0;
 var bmi = 0;
 
-try {
-    height = pullItemFromForm(formJson, heightitemList);
-
-    if (!height || height == null) {
-        var form = pullForm(screeningStudyEvent, screeningBMI_Form);
-        if (form) {
-           height = pullItemFromForm(form, heightitemList);
-        }
-    }
-
-    var maxCount = 0;
-    var list = [];
-    var avg = 0;
-
-    list = populateList(formJson, weightitemList, list);
-
-    avg = calculateAverage(list, sigfig);
-
-    if (list.length === maxCount) {
-        weight = avg;
-    }
-
-    if (!weight || weight == 0 || !height || height == 0) return null;
-    var heightMtr = height / 100;
-
-    var factor = Math.pow(10, sigfig);
-
-    bmi = Math.round((weight / (heightMtr * heightMtr)) * factor) / factor;
-
-    log();
-
-    if (bmi) return bmi.toFixed(sigfig);
-
-    return null;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
-function log() {
-    logger("List: " + list);
-    logger("List length: " + list.length)
-    logger("Max count: " + maxCount);
-    logger("Average: " + avg)
-    logger("Weight: " + weight);
-    logger("Height: " + height);
-    logger("Height in meter: " + heightMtr)
-    logger("Factor: " + factor);
-    logger("BMI: " + bmi);
-}
 function populateList(form, targetItem, list) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
@@ -175,4 +123,41 @@ function calculateAverage(values, sigfig) {
     var avg = sum / count;
     // var factor = Math.pow(10, sigfig);
     return avg;
+}
+
+try {
+    height = pullItemFromForm(formJson, heightitemList);
+
+    if (!height || height == null) {
+        var form = pullForm(screeningStudyEvent, screeningBMI_Form);
+        if (form) {
+           height = pullItemFromForm(form, heightitemList);
+        }
+    }
+
+    var maxCount = 0;
+    var list = [];
+    var avg = 0;
+
+    list = populateList(formJson, weightitemList, list);
+
+    avg = calculateAverage(list, sigfig);
+
+    if (list.length === maxCount) {
+        weight = avg;
+    }
+
+    if (!weight || weight == 0 || !height || height == 0) return null;
+    var heightMtr = height / 100;
+
+    var factor = Math.pow(10, sigfig);
+
+    bmi = Math.round((weight / (heightMtr * heightMtr)) * factor) / factor;
+
+    if (bmi) return bmi.toFixed(sigfig);
+
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

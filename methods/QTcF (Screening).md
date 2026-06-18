@@ -21,16 +21,6 @@ var itemName = [
     "Repeat QTcF"
 ];
 
-try {
-    var form = pullForm(studyevent, formName);
-    if (!form) return null;
-
-    return pullItemFromForm(form, itemName);
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
@@ -77,4 +67,14 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
         }
     }
     return keepers;
+}
+
+try {
+    var form = pullForm(studyevent, formName);
+    if (!form) return null;
+
+    return pullItemFromForm(form, itemName);
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

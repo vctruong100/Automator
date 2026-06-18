@@ -16,17 +16,6 @@ var itemName = [
     "BMI_HEIGHT"
 ]
 
-try {
-    var form = pullForm(studyevent, formName);
-    if (!form) return null;
-
-    var height = pullItemFromForm(form, itemName);
-
-    return height;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
 
 function pullForm(studyeventList, formNameList) {
     for (var i = 0; i < studyeventList.length; i++) {
@@ -78,4 +67,16 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
         }
     }
     return keepers;
+}
+
+try {
+    var form = pullForm(studyevent, formName);
+    if (!form) return null;
+
+    var height = pullItemFromForm(form, itemName);
+
+    return height;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

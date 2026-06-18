@@ -44,28 +44,10 @@ var QtcFRangeMale = [380, 450];
 var QtcFRangeFemale = [380, 470];
 var QtRange = [400, 500];
 
-// ======== Don't modify ========
 var item = itemJson.item;
 var isMale = formJson.form.subject.volunteer.sexMale;
 var groupName = getItemGroupName(formJson);
 var isRepeat = containsValue(groupName, "repeat");
-
-try {
-    if (SYS.indexOf(item.name) !== -1) return checkRange(SysRange, isRepeat);
-    if (DIA.indexOf(item.name) !== -1) return checkRange(DiaRange, isRepeat);
-    if (HR.indexOf(item.name) !== -1) return checkRange(HrRange, isRepeat);
-    if (RR.indexOf(item.name) !== -1) return checkRange(RrRange, isRepeat);
-    if (PR.indexOf(item.name) !== -1) return checkRange(PrRange, isRepeat);
-    if (QRS.indexOf(item.name) !== -1) return checkRange(QrsRange, isRepeat);
-    if (QTC.indexOf(item.name) !== -1) return checkRange(QtcRange, isRepeat);
-    if (QtcF.indexOf(item.name) !== -1) return checkRange(isMale ? QtcFRangeMale : QtcFRangeFemale, isRepeat);
-    if (QT.indexOf(item.name) !== -1) return checkRange(QtRange, isRepeat);
-
-    return false;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
 
 function checkRange(range, isRepeat) {
     const [min, max] = range;
@@ -109,4 +91,21 @@ function getItemGroupName(form) {
         if (groupName) break;
     }
     return groupName;
+}
+
+try {
+    if (SYS.indexOf(item.name) !== -1) return checkRange(SysRange, isRepeat);
+    if (DIA.indexOf(item.name) !== -1) return checkRange(DiaRange, isRepeat);
+    if (HR.indexOf(item.name) !== -1) return checkRange(HrRange, isRepeat);
+    if (RR.indexOf(item.name) !== -1) return checkRange(RrRange, isRepeat);
+    if (PR.indexOf(item.name) !== -1) return checkRange(PrRange, isRepeat);
+    if (QRS.indexOf(item.name) !== -1) return checkRange(QrsRange, isRepeat);
+    if (QTC.indexOf(item.name) !== -1) return checkRange(QtcRange, isRepeat);
+    if (QtcF.indexOf(item.name) !== -1) return checkRange(isMale ? QtcFRangeMale : QtcFRangeFemale, isRepeat);
+    if (QT.indexOf(item.name) !== -1) return checkRange(QtRange, isRepeat);
+
+    return false;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

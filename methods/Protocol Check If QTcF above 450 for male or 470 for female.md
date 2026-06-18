@@ -16,19 +16,6 @@ var femaleRange = 470;
 
 var sexMale = formJson.form.subject.volunteer.sexMale;
 
-try {
-    var qtcf = pullItemFromForm(formJson, qtcfItems);
-
-    logger("Is it male: " + sexMale);
-    logger("Qtcf value: " + item.value);
-    if ((sexMale && item.value > maleRange) || (!sexMale && item.value > femaleRange)) return yesCodeList;
-
-    return noCodeList;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
@@ -43,5 +30,18 @@ function pullItemFromForm(form, targetItem) {
             if (targetItem.indexOf(item.name) !== -1 && item.value !== null) return item.value;
         }
     }
+    return null;
+}
+
+try {
+    var qtcf = pullItemFromForm(formJson, qtcfItems);
+
+    logger("Is it male: " + sexMale);
+    logger("Qtcf value: " + item.value);
+    if ((sexMale && item.value > maleRange) || (!sexMale && item.value > femaleRange)) return yesCodeList;
+
+    return noCodeList;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
     return null;
 }

@@ -25,49 +25,9 @@ var maleRange = 450;
 var femaleRange = 470;
 var differenceRange = 60;
 
-// ======== Don't modify ========
 var item = itemJson.item;
 var sexMale = formJson.form.subject.volunteer.sexMale;
 var diff = 0;
-
-try {
-    logger("Is it male: " + sexMale);
-    logger("Qtcf value: " + item.value);
-    if (item.value > maxRange) return log("500", item.value);
-    else if (sexMale && item.value > maleRange) return log("male", item.value);
-    else if (!sexMale && item.value > femaleRange) return log("female", item.value);
-
-    var form = pullForm(baselineEvent, baselineForm);
-    if (!form) return null;
-    var baseline = pullItemFromForm(form, baselineItem);
-    logger("Baseline: " + baseline);
-
-    if (checkBaseline(itemJson.item.value)) return log("base", diff);
-
-    return true;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
-function log(type, val)  {
-    if (type == "500") {
-        customErrorMessage("OOR > " + maxRange + ". REPEAT 2 TIMES: " + val);
-        return false;
-    }
-    else if (type == "male") {
-        customErrorMessage("Male QTcF OOR > " + maleRange + ": " + val);
-        return false;
-    }
-    else if (type == "female") {
-        customErrorMessage("Female QTcF OOR > " + femaleRange + ": " + val);
-        return false;
-    }
-    else if (type == "base") {
-        customErrorMessage("Difference From Baseline OOR > " + differenceRange + ". REPEAT 2 TIMES: " + val);
-        return false;
-    }
-}
 
 function pullForm(studyeventList, formNameList) {
     for (var i = 0; i < studyeventList.length; i++) {
@@ -125,4 +85,24 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
         }
     }
     return keepers;
+}
+
+try {
+    logger("Is it male: " + sexMale);
+    logger("Qtcf value: " + item.value);
+    if (item.value > maxRange) return log("500", item.value);
+    else if (sexMale && item.value > maleRange) return log("male", item.value);
+    else if (!sexMale && item.value > femaleRange) return log("female", item.value);
+
+    var form = pullForm(baselineEvent, baselineForm);
+    if (!form) return null;
+    var baseline = pullItemFromForm(form, baselineItem);
+    logger("Baseline: " + baseline);
+
+    if (checkBaseline(itemJson.item.value)) return log("base", diff);
+
+    return true;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

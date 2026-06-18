@@ -41,37 +41,6 @@ var D18events = [
     "Day 18 (PRE)"
 ]
 
-try {
-    if (containsValue(currentStudyEvent, "day 18")) {
-        logger('P5 D18');
-        form = pullForm(D18events, formNames);
-    }
-    else if (containsValue(currentStudyEvent, "day 5")) {
-        logger("P2 D5");
-        form = pullForm(D5events, formNames);
-    }
-    else if (containsValue(currentStudyEvent, "d15")) {
-        form = pullForm(D15events, formNames);
-    }
-    else if (containsValue(currentStudyEvent, "d14")) {
-        form = pullForm(D14events, formNames);
-    }
-    else if (containsValue(currentStudyEvent, "day 1")) {
-        form = pullForm(D1events, formNames);
-    }
-    else if (containsValue(currentStudyEvent, "d1")) {
-        form = pullForm(D1events, d1FormNames);
-    }
-
-    if (!form) return null;
-    var result = pullItemFromForm(form, itemName);
-
-    return result;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
 function pullForm(studyeventList, formNameList) {
     for (var i = 0; i < studyeventList.length; i++) {
         for (var j = formNameList.length - 1; j >= 0; j--) {
@@ -126,4 +95,35 @@ function containsValue(input, keyword) {
 
     var value = input.toString().toLowerCase();
     return value.indexOf(keyword) !== -1;
+}
+
+try {
+    if (containsValue(currentStudyEvent, "day 18")) {
+        logger('P5 D18');
+        form = pullForm(D18events, formNames);
+    }
+    else if (containsValue(currentStudyEvent, "day 5")) {
+        logger("P2 D5");
+        form = pullForm(D5events, formNames);
+    }
+    else if (containsValue(currentStudyEvent, "d15")) {
+        form = pullForm(D15events, formNames);
+    }
+    else if (containsValue(currentStudyEvent, "d14")) {
+        form = pullForm(D14events, formNames);
+    }
+    else if (containsValue(currentStudyEvent, "day 1")) {
+        form = pullForm(D1events, formNames);
+    }
+    else if (containsValue(currentStudyEvent, "d1")) {
+        form = pullForm(D1events, d1FormNames);
+    }
+
+    if (!form) return null;
+    var result = pullItemFromForm(form, itemName);
+
+    return result;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

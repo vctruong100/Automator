@@ -30,45 +30,6 @@ var expectedDays = 0;
 var screeningNumber = formJson.form.subject.screeningNumber;
 logger("Subject ID: " + screeningNumber);
 
-try {
-    var expectedDays = 0;
-    var day = parseInt(studyevent.split(" ")[2]);
-    var prevDay = studyeventMap[studyevent];
-    var prevPrevVisit = studyeventMap[prevDay];
-
-    logger("Studyevent: " + studyevent)
-    logger("Previous visit: " + prevDay)
-    var prevVisitform = pullForm([prevDay], formNames);
-
-    var placebo = pullItemFromForm(prevVisitform, placeboItem);
-    var tablet = pullItemFromForm(prevVisitform, numTabletsItem);
-
-    if (!placebo || !tablet || placebo == null || tablet == null) {
-        var prevPrevVisitform = pullForm([prevPrevVisit], formNames);
-        placebo = pullItemFromForm(prevPrevVisitform, placeboItem);
-        tablet = pullItemFromForm(prevPrevVisitform, numTabletsItem);
-    }
-    logger("Placebo: " + placebo);
-    logger("Tablet: " + tablet);
-
-    var parts = placebo.split(" ");
-
-    var count = parseInt(parts[0], 10);
-    var description = parts.slice(1).join(" ");
-
-    logger("Count: " + count);
-    logger("Description: " + description);
-
-    var total = parseInt(count) * tablet;
-
-    return total + " " + description;
-
-} catch (e) {
-    logger("Error in main execution logic: " + e.message);
-    return null;
-}
-
-
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
@@ -116,3 +77,42 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     }
     return keepers;
 }
+
+try {
+    var expectedDays = 0;
+    var day = parseInt(studyevent.split(" ")[2]);
+    var prevDay = studyeventMap[studyevent];
+    var prevPrevVisit = studyeventMap[prevDay];
+
+    logger("Studyevent: " + studyevent)
+    logger("Previous visit: " + prevDay)
+    var prevVisitform = pullForm([prevDay], formNames);
+
+    var placebo = pullItemFromForm(prevVisitform, placeboItem);
+    var tablet = pullItemFromForm(prevVisitform, numTabletsItem);
+
+    if (!placebo || !tablet || placebo == null || tablet == null) {
+        var prevPrevVisitform = pullForm([prevPrevVisit], formNames);
+        placebo = pullItemFromForm(prevPrevVisitform, placeboItem);
+        tablet = pullItemFromForm(prevPrevVisitform, numTabletsItem);
+    }
+    logger("Placebo: " + placebo);
+    logger("Tablet: " + tablet);
+
+    var parts = placebo.split(" ");
+
+    var count = parseInt(parts[0], 10);
+    var description = parts.slice(1).join(" ");
+
+    logger("Count: " + count);
+    logger("Description: " + description);
+
+    var total = parseInt(count) * tablet;
+
+    return total + " " + description;
+
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
+

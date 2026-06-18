@@ -5,13 +5,6 @@
 
 var value = itemJson.item.value;
 
-try {
-    return isValidFormat(value);
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
 function isValidFormat(value)
 {
     var pattern = /^[A-Za-z]{2}[0-9]{5}$/;
@@ -29,4 +22,11 @@ function isValidFormat(value)
     {
         return false;
     }
+}
+
+try {
+    return isValidFormat(value);
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

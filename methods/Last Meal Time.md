@@ -28,23 +28,6 @@ var mealForms = [
     'STOP BREAKFAST', "Breakfast End",
 ];
 
-try {
-    var prevEvent = studyevents[currentEvent];
-    var form = pullForm([prevEvent], mealForms);
-    if (!form) {
-        var preprevEvent = studyevents[prevEvent];
-        form = pullForm([preprevEvent], mealForms)
-    }
-    if (!form) return null;
-    var mealTime = form.form.itemGroups[0].items[0].value;
-    if (mealTime && mealTime !== null) return mealTime;
-
-    return null;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
@@ -91,4 +74,21 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
         }
     }
     return keepers;
+}
+
+try {
+    var prevEvent = studyevents[currentEvent];
+    var form = pullForm([prevEvent], mealForms);
+    if (!form) {
+        var preprevEvent = studyevents[prevEvent];
+        form = pullForm([preprevEvent], mealForms)
+    }
+    if (!form) return null;
+    var mealTime = form.form.itemGroups[0].items[0].value;
+    if (mealTime && mealTime !== null) return mealTime;
+
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

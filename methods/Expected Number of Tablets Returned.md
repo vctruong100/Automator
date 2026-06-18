@@ -35,45 +35,6 @@ var expectedDays = 0;
 var screeningNumber = formJson.form.subject.screeningNumber;
 logger("Subject ID: " + screeningNumber);
 
-try {
-    var day = parseInt(studyevent.split(" ")[2]);
-    var prevDay = studyeventMap[studyevent];
-    logger("studyevent: " + studyevent + ", previous visit: " + prevDay)
-    var pastVisitform = pullForm([prevDay], formNames);
-    var currentVisitform = pullForm([studyevent], formNames);
-    if (!pastVisitform) {
-        if (day > 43 && day <= 84) expectedDays = 7;
-        else if (day <= 43) expectedDays = 4;
-    }
-    else {
-        var pastdate = pullItemFromForm(pastVisitform, itemName);
-        var currentdate = pullItemFromForm(currentVisitform, itemName);
-        logger(pastdate);
-        logger(currentdate);
-
-        var pastday = pastdate.split("-")[2];
-        var currentday = currentdate.split("-")[2];
-        expectedDays = currentday - pastday - 1;
-    }
-    var dispensed = pullItemFromForm(formJson, dispensedItem);
-    var prescribed = pullItemFromForm(formJson, prescribedItem);
-    if (!dispensed || dispensed == null || !prescribed || prescribed == null) return null;
-
-    logger("Current Day: " + day);
-    logger("expectedDays: " + expectedDays);
-
-    var totalPrescribed = expectedDays * prescribed;
-    logger("Tablets Dispensed: " + dispensed)
-    logger("Tablet Prescribed: " + totalPrescribed)
-    var expectedReturn = dispensed - totalPrescribed;
-    return String(expectedReturn.toFixed(0));
-
-} catch (e) {
-    logger("Error in main execution logic: " + e.message);
-    return null;
-}
-
-
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
@@ -121,3 +82,42 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     }
     return keepers;
 }
+
+try {
+    var day = parseInt(studyevent.split(" ")[2]);
+    var prevDay = studyeventMap[studyevent];
+    logger("studyevent: " + studyevent + ", previous visit: " + prevDay)
+    var pastVisitform = pullForm([prevDay], formNames);
+    var currentVisitform = pullForm([studyevent], formNames);
+    if (!pastVisitform) {
+        if (day > 43 && day <= 84) expectedDays = 7;
+        else if (day <= 43) expectedDays = 4;
+    }
+    else {
+        var pastdate = pullItemFromForm(pastVisitform, itemName);
+        var currentdate = pullItemFromForm(currentVisitform, itemName);
+        logger(pastdate);
+        logger(currentdate);
+
+        var pastday = pastdate.split("-")[2];
+        var currentday = currentdate.split("-")[2];
+        expectedDays = currentday - pastday - 1;
+    }
+    var dispensed = pullItemFromForm(formJson, dispensedItem);
+    var prescribed = pullItemFromForm(formJson, prescribedItem);
+    if (!dispensed || dispensed == null || !prescribed || prescribed == null) return null;
+
+    logger("Current Day: " + day);
+    logger("expectedDays: " + expectedDays);
+
+    var totalPrescribed = expectedDays * prescribed;
+    logger("Tablets Dispensed: " + dispensed)
+    logger("Tablet Prescribed: " + totalPrescribed)
+    var expectedReturn = dispensed - totalPrescribed;
+    return String(expectedReturn.toFixed(0));
+
+} catch (e) {
+    logger("Error in main execution logic: " + e.message);
+    return null;
+}
+

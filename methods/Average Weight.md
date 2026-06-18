@@ -9,26 +9,10 @@ var itemList = [
     "BMI_WEIGHT #2"
 ];
 
-// ======== Don't modify ========
 var sigfig = itemJson.item.significantDigits;
 var maxCount = 0;
 var list = [];
 var avg = 0;
-
-try {
-    list = populateList(formJson, itemList, list);
-
-    avg = calculateAverage(list, sigfig);
-    logger("List: " + list);
-    logger("List length: " + list.length)
-    logger("Max count: " + maxCount);
-    logger("Average: " + avg)
-    if (list.length === maxCount) return (avg).toFixed(sigfig);
-    return null;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
 
 function populateList(form, targetItem) {
     var itemGroups = form.form.itemGroups;
@@ -67,4 +51,19 @@ function calculateAverage(values, sigfig) {
     var avg = sum / count;
     var factor = Math.pow(10, sigfig);
     return Math.round(avg * factor) / factor;
+}
+
+try {
+    list = populateList(formJson, itemList, list);
+
+    avg = calculateAverage(list, sigfig);
+    logger("List: " + list);
+    logger("List length: " + list.length)
+    logger("Max count: " + maxCount);
+    logger("Average: " + avg)
+    if (list.length === maxCount) return (avg).toFixed(sigfig);
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

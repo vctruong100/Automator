@@ -43,39 +43,8 @@ var repeatItem = [
 var sysAvg_maxRange = 170;
 var diaAvg_maxRange = 100;
 
-// ======== Don't modify ========
 var item = itemJson.item;
 var sigfig = item.significantDigits;
-
-try {
-    var repeat = pullItemFromForm(formJson, repeatItem);
-    var isRepeat = containsValue(repeat, "yes");
-
-    logger("Repeat: " + repeat);
-
-    var sysList = populateList(formJson, sysItem, sysAttachedItem, isRepeat);
-    var diaList = populateList(formJson, dbpItems, dbpAttachedItem, isRepeat);
-
-    var sysAvg = calculateAverage(sysList, sigfig);
-    var diaAvg = calculateAverage(diaList, sigfig);
-
-    logger("Sys Avg: " + sysAvg);
-    logger("Dia Avg: " + diaAvg);
-
-    if (
-        sysAvg !== null &&
-        diaAvg !== null &&
-        (sysAvg >= sysAvg_maxRange || diaAvg >= diaAvg_maxRange)
-    ) {
-        return item.codeListItems[1].codedValue; // Yes
-    }
-
-    return item.codeListItems[2].codedValue; // No
-}
-catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
 
 function pullItemFromForm(form, targetItems) {
     var itemGroups = form.form.itemGroups;
@@ -207,4 +176,34 @@ function populateList(form, targetItems, attachedItems, repeat) {
     }
 
     return list;
+}
+
+try {
+    var repeat = pullItemFromForm(formJson, repeatItem);
+    var isRepeat = containsValue(repeat, "yes");
+
+    logger("Repeat: " + repeat);
+
+    var sysList = populateList(formJson, sysItem, sysAttachedItem, isRepeat);
+    var diaList = populateList(formJson, dbpItems, dbpAttachedItem, isRepeat);
+
+    var sysAvg = calculateAverage(sysList, sigfig);
+    var diaAvg = calculateAverage(diaList, sigfig);
+
+    logger("Sys Avg: " + sysAvg);
+    logger("Dia Avg: " + diaAvg);
+
+    if (
+        sysAvg !== null &&
+        diaAvg !== null &&
+        (sysAvg >= sysAvg_maxRange || diaAvg >= diaAvg_maxRange)
+    ) {
+        return item.codeListItems[1].codedValue; // Yes
+    }
+
+    return item.codeListItems[2].codedValue; // No
+}
+catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

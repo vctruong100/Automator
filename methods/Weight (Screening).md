@@ -16,19 +16,6 @@ var itemName = [
     "VS_WEIGHT",
 ]
 
-try {
-    var form = pullForm(studyevent, formName);
-    if (!form) return null;
-
-    var weight = pullItemFromForm(form, itemName);
-    log();
-
-    return weight;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
 function pullForm(studyeventList, formNameList) {
     for (var i = 0; i < studyeventList.length; i++) {
         for (var j = 0; j < formNameList.length; j++) {
@@ -79,4 +66,16 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
         }
     }
     return keepers;
+}
+
+try {
+    var form = pullForm(studyevent, formName);
+    if (!form) return null;
+
+    var weight = pullItemFromForm(form, itemName);
+
+    return weight;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

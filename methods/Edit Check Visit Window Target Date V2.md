@@ -16,42 +16,6 @@ var itemName = [
 var currentStudyName = formJson.form.studyEventName;
 var item = itemJson.item;
 
-try {
-    logger("Study event: " + currentStudyName);
-    if (currentStudyName == "Screening") return true;
-    var day = parseInt(currentStudyName.split(" ")[1]);
-    logger("Day: " + day);
-
-    if (day < 9) return true;
-
-    var form = pullForm(studyevents, formName);
-
-    if (!form) return null;
-    var val = pullItemFromForm(form, itemName);
-
-    if (!val || !item || !item.dateValueMs) return false;
-    logger("Start Date: " + val.value);
-    logger("Collected Date: " + item.value);
-    var baseDate = parseDate(val.value);
-    if (!baseDate) return false;
-
-    var addDays = day - 1;
-    logger("Add days: " + addDays)
-    var allowedRange = day <= 15 ? 1 : 2;
-
-    logger("Allowed range: " + allowedRange)
-
-    var targetMs = baseDate.getTime() + addDays * 86400000;
-    var diffDays = Math.floor(Math.abs(item.dateValueMs - targetMs) / 86400000);
-    logger("Differences: " + diffDays);
-    return diffDays <= allowedRange;
-
-}
-catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
 function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     if (formDataArray == null) { return []; }
     var keepers = [];
@@ -118,5 +82,41 @@ function pullItemFromForm(form, targetItem) {
             if (targetItem.indexOf(item.name) !== -1 && item.value !== null && !item.canceled && item.value !== "") return item;
         }
     }
+    return null;
+}
+
+try {
+    logger("Study event: " + currentStudyName);
+    if (currentStudyName == "Screening") return true;
+    var day = parseInt(currentStudyName.split(" ")[1]);
+    logger("Day: " + day);
+
+    if (day < 9) return true;
+
+    var form = pullForm(studyevents, formName);
+
+    if (!form) return null;
+    var val = pullItemFromForm(form, itemName);
+
+    if (!val || !item || !item.dateValueMs) return false;
+    logger("Start Date: " + val.value);
+    logger("Collected Date: " + item.value);
+    var baseDate = parseDate(val.value);
+    if (!baseDate) return false;
+
+    var addDays = day - 1;
+    logger("Add days: " + addDays)
+    var allowedRange = day <= 15 ? 1 : 2;
+
+    logger("Allowed range: " + allowedRange)
+
+    var targetMs = baseDate.getTime() + addDays * 86400000;
+    var diffDays = Math.floor(Math.abs(item.dateValueMs - targetMs) / 86400000);
+    logger("Differences: " + diffDays);
+    return diffDays <= allowedRange;
+
+}
+catch (e) {
+    logger("Error in main execution logic: " + e);
     return null;
 }

@@ -21,33 +21,6 @@ var valueItem = [
     "LDL-C Value at Week 10",
     "LDL-C Value at Week 8",
 ]
-try {
-    var form = pullForm(studyEventNames, formName);
-    if (!form) return null;
-
-    var item = itemJson.item;
-    var groupName, groupID = getItemGroupName(formJson);
-
-    var baseline = pullItemFromForm(form, baselineItem, null);
-    var value = pullItemFromForm(formJson, valueItem, groupID);
-
-    if (!baseline || baseline == null || !value || value == null) return null;
-    var percentRed = calculateReduction(baseline, value);
-
-    if (containsValue(groupName, "no ascvd")) {
-        if (percentRed >= 50 && value < 55) return item.codeListItems[1].codedValue;
-        else if (percentRed < 50 || value >= 55) return item.codeListItems[0].codedValue;
-    }
-    else {
-        if (percentRed >= 50 && value < 70) return item.codeListItems[1].codedValue;
-        else if (percentRed < 50 || value >= 70) return item.codeListItems[0].codedValue;
-    }
-
-    return null;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
 
 function calculateReduction(baseline, value) {
     var parsedBaseline = parseInt(baseline);
@@ -126,5 +99,33 @@ function getItemGroupName(form) {
             }
         }
     }
+    return null;
+}
+
+try {
+    var form = pullForm(studyEventNames, formName);
+    if (!form) return null;
+
+    var item = itemJson.item;
+    var groupName, groupID = getItemGroupName(formJson);
+
+    var baseline = pullItemFromForm(form, baselineItem, null);
+    var value = pullItemFromForm(formJson, valueItem, groupID);
+
+    if (!baseline || baseline == null || !value || value == null) return null;
+    var percentRed = calculateReduction(baseline, value);
+
+    if (containsValue(groupName, "no ascvd")) {
+        if (percentRed >= 50 && value < 55) return item.codeListItems[1].codedValue;
+        else if (percentRed < 50 || value >= 55) return item.codeListItems[0].codedValue;
+    }
+    else {
+        if (percentRed >= 50 && value < 70) return item.codeListItems[1].codedValue;
+        else if (percentRed < 50 || value >= 70) return item.codeListItems[0].codedValue;
+    }
+
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
     return null;
 }

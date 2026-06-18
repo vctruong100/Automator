@@ -14,18 +14,6 @@ var emptyJugItem = [
 
 var sigfig = itemJson.item.significantDigits;
 
-try {
-    var netTotal = GetNetTotal(formJson, urineJugItem, emptyJugItem);
-
-    if (netTotal) return netTotal.toFixed(sigfig);
-    if (netTotal == 0) return (0).toFixed(sigfig);
-
-    return null;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
 function GetNetTotal(form, urineItem, emptyItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j;
@@ -46,4 +34,16 @@ function GetNetTotal(form, urineItem, emptyItem) {
     }
     logger("Total: " + total);
     return total;
+}
+
+try {
+    var netTotal = GetNetTotal(formJson, urineJugItem, emptyJugItem);
+
+    if (netTotal) return netTotal.toFixed(sigfig);
+    if (netTotal == 0) return (0).toFixed(sigfig);
+
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

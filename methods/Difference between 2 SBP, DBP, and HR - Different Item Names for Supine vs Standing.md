@@ -52,7 +52,6 @@ var sysDifferenceRange = 20;
 var diaDifferenceRange = 10;
 var hrDifferenceRange = 30;
 
-// ======== Don't modify ========
 var sysSemi = null;
 var sysStanding = null;
 
@@ -63,28 +62,6 @@ var hrSemi = null;
 var hrStanding = null;
 
 var item = itemJson.item;
-
-try {
-    logger("Attached item: " + item.name);
-    if (sysAttachedItem.indexOf(item.name) !== -1) {
-        sysSemi = pullLastItemFromForm(formJson, sysItem);
-        sysStanding = pullFirstItemFromForm(formJson, sysStandingItem);
-        return checkDifference(sysDifferenceRange, sysSemi, sysStanding);
-    } else if (diaAttachedItem.indexOf(item.name) !== -1) {
-        diaSemi = pullLastItemFromForm(formJson, diaItem);
-        diaStanding = pullFirstItemFromForm(formJson, diaStandingItem);
-        return checkDifference(diaDifferenceRange, diaSemi, diaStanding);
-    } else if (hrAttachedItem.indexOf(item.name) !== -1) {
-        hrSemi = pullLastItemFromForm(formJson, hrItem);
-        hrStanding = pullFirstItemFromForm(formJson, hrStandingItem);
-        return checkDifference(hrDifferenceRange, hrSemi, hrStanding);
-    }
-
-    return null;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
 
 function checkDifference(range, semi, standing) {
     logger("Semi: " + semi);
@@ -127,5 +104,27 @@ function pullLastItemFromForm(form, targetItem) {
             if (targetItem.indexOf(item.name) !== -1 && item.value !== null && !item.canceled && item.value !== "") return item.value;
         }
     }
+    return null;
+}
+
+try {
+    logger("Attached item: " + item.name);
+    if (sysAttachedItem.indexOf(item.name) !== -1) {
+        sysSemi = pullLastItemFromForm(formJson, sysItem);
+        sysStanding = pullFirstItemFromForm(formJson, sysStandingItem);
+        return checkDifference(sysDifferenceRange, sysSemi, sysStanding);
+    } else if (diaAttachedItem.indexOf(item.name) !== -1) {
+        diaSemi = pullLastItemFromForm(formJson, diaItem);
+        diaStanding = pullFirstItemFromForm(formJson, diaStandingItem);
+        return checkDifference(diaDifferenceRange, diaSemi, diaStanding);
+    } else if (hrAttachedItem.indexOf(item.name) !== -1) {
+        hrSemi = pullLastItemFromForm(formJson, hrItem);
+        hrStanding = pullFirstItemFromForm(formJson, hrStandingItem);
+        return checkDifference(hrDifferenceRange, hrSemi, hrStanding);
+    }
+
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
     return null;
 }

@@ -20,26 +20,7 @@ var qtcfItem = [
     "Baseline QTcF"
 ];
 
-// ======== Don't modify ========
 var sigfig = itemJson.item.significantDigits;
-
-try {
-    var form = pullForm(baselineStudyEvent, baselineFormName);
-    if (!form) return null;
-
-    var baseline = pullBaselineItemFromForm(form, qtcfItem);
-    var qtcfValue = pullItemFromForm(formJson, qtcfItem)
-    if (!qtcfValue || qtcfValue == null || !baseline || baseline == null) return null;
-    logger("qtcfValue: " + qtcfValue);
-    logger("Baselien: " + baseline);
-
-    var difference = Math.round(qtcfValue - baseline).toFixed(sigfig);
-    logger("Difference: " + difference);
-    return difference;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
 
 function pullForm(studyeventList, formNameList) {
     for (var i = 0; i < studyeventList.length; i++) {
@@ -103,4 +84,22 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
         }
     }
     return keepers;
+}
+
+try {
+    var form = pullForm(baselineStudyEvent, baselineFormName);
+    if (!form) return null;
+
+    var baseline = pullBaselineItemFromForm(form, qtcfItem);
+    var qtcfValue = pullItemFromForm(formJson, qtcfItem)
+    if (!qtcfValue || qtcfValue == null || !baseline || baseline == null) return null;
+    logger("qtcfValue: " + qtcfValue);
+    logger("Baselien: " + baseline);
+
+    var difference = Math.round(qtcfValue - baseline).toFixed(sigfig);
+    logger("Difference: " + difference);
+    return difference;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

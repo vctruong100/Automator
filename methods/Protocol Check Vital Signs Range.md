@@ -25,48 +25,7 @@ var dia_max_range = 110;
 var hr_min_range = 30;
 var hr_max_range = 200;
 
-// ======== Don't modify ========
 var item = itemJson.item;
-
-try {
-    var isRepeat = isItemInRepeat(formJson);
-
-    var sys = pullItemFromForm(formJson, sysItems, isRepeat);
-    var dia = pullItemFromForm(formJson, diaItems, isRepeat);
-    var hr = pullItemFromForm(formJson, hrItems, isRepeat);
-
-    log();
-
-    if (!sys || sys === null || !dia || dia == null || !hr || hr == null) return itemJson.item.codeListItems[4].codedValue;
-    // OOR
-    if (
-        sys > sys_max_range ||
-        sys < sys_min_range ||
-        dia > dia_max_range ||
-        dia < dia_min_range ||
-        hr > hr_max_range ||
-        hr < hr_min_range
-    ) return itemJson.item.codeListItems[1].codedValue; // Out of Protocol Range
-    else if ( // IR
-        sys <= sys_max_range &&
-        sys >= sys_min_range &&
-        dia <= dia_max_range &&
-        dia >= dia_min_range &&
-        hr <= hr_max_range &&
-        hr >= hr_min_range
-    ) return itemJson.item.codeListItems[0].codedValue; // Within Normal Range
-
-    return itemJson.item.codeListItems[4].codedValue;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
-function log() {
-    logger("sys: " + sys);
-    logger("dia:  " + dia);
-    logger("hr: " + hr);
-}
 
 function pullForm(studyeventList, formNameList) {
     for (var i = 0; i < studyeventList.length; i++) {
@@ -130,7 +89,6 @@ function pullItemFromForm(form, targetItem, repeat) {
     return null;
 }
 
-
 function calculateAverage(values) {
     if (values.length === 0) return null;
     var sum = 0;
@@ -169,4 +127,36 @@ function isItemInRepeat(form) {
         }
     }
     return false;
+}
+
+try {
+    var isRepeat = isItemInRepeat(formJson);
+
+    var sys = pullItemFromForm(formJson, sysItems, isRepeat);
+    var dia = pullItemFromForm(formJson, diaItems, isRepeat);
+    var hr = pullItemFromForm(formJson, hrItems, isRepeat);
+
+    if (!sys || sys === null || !dia || dia == null || !hr || hr == null) return itemJson.item.codeListItems[4].codedValue;
+    // OOR
+    if (
+        sys > sys_max_range ||
+        sys < sys_min_range ||
+        dia > dia_max_range ||
+        dia < dia_min_range ||
+        hr > hr_max_range ||
+        hr < hr_min_range
+    ) return itemJson.item.codeListItems[1].codedValue; // Out of Protocol Range
+    else if ( // IR
+        sys <= sys_max_range &&
+        sys >= sys_min_range &&
+        dia <= dia_max_range &&
+        dia >= dia_min_range &&
+        hr <= hr_max_range &&
+        hr >= hr_min_range
+    ) return itemJson.item.codeListItems[0].codedValue; // Within Normal Range
+
+    return itemJson.item.codeListItems[4].codedValue;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

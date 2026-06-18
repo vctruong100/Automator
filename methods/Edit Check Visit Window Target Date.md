@@ -35,58 +35,8 @@ var range = {
     "V6 (Within 4 weeks)": 28
 };
 
-// ======== Don't modify ========
 var studyEvent = formJson.form.studyEventName;
 var item = itemJson.item;
-
-try {
-    var form = pullForm(formNames, studyEventNames);
-    var day1Date = pullItemFromForm(form, startDateItem);
-
-    if (!day1Date || !item || item.value == null || item.dateValueMs == null) return true;
-
-    var day1DateMs = isoToLocalMidnight(day1Date.value);
-    var day1Dateformat = msToDate(day1DateMs);
-
-    var addDays = map[studyEvent];
-    var allowedRange = range[studyEvent];
-    if (addDays == null || allowedRange == null) return true;
-
-    var targetMs = day1DateMs + addDays * 86400000;
-    var allowedRangeMs = allowedRange * 86400000;
-
-    var collectedMs = isoToLocalMidnight(itemJson.item.value);
-    var diffDays = Math.abs((collectedMs - targetMs) / 86400000);
-
-    var collectedDateformat = msToDate(collectedMs);
-    var targetDateformat = msToDate(targetMs);
-    var minTargeDateformat = msToDate(targetMs - allowedRangeMs);
-    var maxTargetDateformat = msToDate(targetMs + allowedRangeMs);
-
-    log();
-
-    if (diffDays > allowedRange) {
-        customErrorMessage(
-            "Target Date: " + targetDateformat +
-            ", Allowed Range: ±" + allowedRange + " day(s)"
-        );
-        return false;
-    }
-    return true;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
-function log() {
-    logger("Study event: " + studyEvent);
-    logger("Day 1 Date: " + day1Dateformat);
-    logger("Collected Date: " + collectedDateformat);
-    logger("Days to add from Day 1: " + addDays);
-    logger("Allowed range: " + allowedRange);
-    logger("Target date: " + targetDateformat);
-    logger("Target date range: " + minTargeDateformat + " to " + maxTargetDateformat);
-}
 
 function collectCompleted(formDataArray) {
     if (formDataArray == null) return [];
@@ -160,4 +110,41 @@ function isoToLocalMidnight(isoStr) {
     var d = isoStr.split("T")[0];
     var p = d.split("-");
     return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])).getTime();
+}
+
+try {
+    var form = pullForm(formNames, studyEventNames);
+    var day1Date = pullItemFromForm(form, startDateItem);
+
+    if (!day1Date || !item || item.value == null || item.dateValueMs == null) return true;
+
+    var day1DateMs = isoToLocalMidnight(day1Date.value);
+    var day1Dateformat = msToDate(day1DateMs);
+
+    var addDays = map[studyEvent];
+    var allowedRange = range[studyEvent];
+    if (addDays == null || allowedRange == null) return true;
+
+    var targetMs = day1DateMs + addDays * 86400000;
+    var allowedRangeMs = allowedRange * 86400000;
+
+    var collectedMs = isoToLocalMidnight(itemJson.item.value);
+    var diffDays = Math.abs((collectedMs - targetMs) / 86400000);
+
+    var collectedDateformat = msToDate(collectedMs);
+    var targetDateformat = msToDate(targetMs);
+    var minTargeDateformat = msToDate(targetMs - allowedRangeMs);
+    var maxTargetDateformat = msToDate(targetMs + allowedRangeMs);
+
+    if (diffDays > allowedRange) {
+        customErrorMessage(
+            "Target Date: " + targetDateformat +
+            ", Allowed Range: ±" + allowedRange + " day(s)"
+        );
+        return false;
+    }
+    return true;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

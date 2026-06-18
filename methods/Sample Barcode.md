@@ -14,18 +14,18 @@ var itemNames = [
 
 ]
 
-try {
-    return parseItemContext(itemNames);
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
 function parseItemContext(item) {
     for (var i = 0; i < item.length; i++) {
         var context = JSON.parse(getRelatedItemDataContext(item[i]))
         var collectedBarcodes = context.collectedBarcodes;
         if (collectedBarcodes && collectedBarcodes != null) return collectedBarcodes;
     }
+    return null;
+}
+
+try {
+    return parseItemContext(itemNames);
+} catch (e) {
+    logger("Error in main execution logic: " + e);
     return null;
 }

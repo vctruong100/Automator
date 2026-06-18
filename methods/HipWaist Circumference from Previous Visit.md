@@ -43,26 +43,6 @@ var studyEvents = {
 var itemName = itemJson.item.name;
 var currentEvent = formJson.form.studyEventName;
 
-try {
-    var newEvent = studyEvents[currentEvent];
-    var form = null;
-    if (screeningStudyEvent.indexOf(newEvent) !== -1) {
-        form = pullForm([newEvent], screeningFormName);
-    } else {
-        form = pullForm([newEvent], formName);
-    }
-    if (!form) return null;
-    if (itemName == waistItem1) return pullItemFromForm(form, waistItem1);
-    if (itemName == waistItem2) return pullItemFromForm(form, waistItem2);
-    if (itemName == hipItem1) return pullItemFromForm(form, hipItem1);
-    if (itemName == hipItem2) return pullItemFromForm(form, hipItem2);
-
-    return null;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
 function pullForm(studyeventList, formNameList) {
     for (var i = 0; i < studyeventList.length; i++) {
         for (var j = 0; j < formNameList.length; j++) {
@@ -107,5 +87,25 @@ function pullItemFromForm(form, targetItem) {
             if (targetItem.indexOf(item.name) !== -1 && item.value !== null) return item.value;
         }
     }
+    return null;
+}
+
+try {
+    var newEvent = studyEvents[currentEvent];
+    var form = null;
+    if (screeningStudyEvent.indexOf(newEvent) !== -1) {
+        form = pullForm([newEvent], screeningFormName);
+    } else {
+        form = pullForm([newEvent], formName);
+    }
+    if (!form) return null;
+    if (itemName == waistItem1) return pullItemFromForm(form, waistItem1);
+    if (itemName == waistItem2) return pullItemFromForm(form, waistItem2);
+    if (itemName == hipItem1) return pullItemFromForm(form, hipItem1);
+    if (itemName == hipItem2) return pullItemFromForm(form, hipItem2);
+
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
     return null;
 }

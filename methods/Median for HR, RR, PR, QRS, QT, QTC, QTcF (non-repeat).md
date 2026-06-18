@@ -57,50 +57,6 @@ var median = 0;
 var item = itemJson.item;
 var sigfig = item.significantDigits;
 
-try {
-    logger("Attached item: " + item.name);
-    if (HRAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, HRItem, HRAttachedItem)) {
-        median = calculateMedian(list, sigfig);
-        if (list.length == maxCount) return (median).toFixed(sigfig);
-    }
-
-    if (RRAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, RRItem, RRAttachedItem)) {
-        median = calculateMedian(list, sigfig);
-        if (list.length == maxCount) return (median).toFixed(sigfig);
-    }
-
-    if (PRAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, PRItem, PRAttachedItem)) {
-        median = calculateMedian(list, sigfig);
-        if (list.length == maxCount) return (median).toFixed(sigfig);
-    }
-
-    logger(QRSAttachedItem.indexOf(item.name.trim()) !== -1)
-    if (QRSAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, QRSItem, QRSAttachedItem)) {
-        median = calculateMedian(list, sigfig);
-        if (list.length == maxCount) return (median).toFixed(sigfig);
-    }
-
-    if (QTAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, QTItem, QTAttachedItem)) {
-        median = calculateMedian(list, sigfig);
-        if (list.length == maxCount) return (median).toFixed(sigfig);
-    }
-
-    if (QTCAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, QTCItem, QTCAttachedItem)) {
-        median = calculateMedian(list, sigfig);
-        if (list.length == maxCount) return (median).toFixed(sigfig);
-    }
-
-    if (QTcFAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, QTcFitem, QTcFAttachedItem)) {
-        median = calculateMedian(list, sigfig);
-        if (list.length == maxCount) return (median).toFixed(sigfig);
-    }
-
-    return null;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
 function log() {
     logger("List: " + list);
     logger("List length: " + list.length)
@@ -149,4 +105,48 @@ function populateList(form, targetItem, attachedItem) {
     }
     if (list.length == 0) return false;
     return list;
+}
+
+try {
+    logger("Attached item: " + item.name);
+    if (HRAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, HRItem, HRAttachedItem)) {
+        median = calculateMedian(list, sigfig);
+        if (list.length == maxCount) return (median).toFixed(sigfig);
+    }
+
+    if (RRAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, RRItem, RRAttachedItem)) {
+        median = calculateMedian(list, sigfig);
+        if (list.length == maxCount) return (median).toFixed(sigfig);
+    }
+
+    if (PRAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, PRItem, PRAttachedItem)) {
+        median = calculateMedian(list, sigfig);
+        if (list.length == maxCount) return (median).toFixed(sigfig);
+    }
+
+    logger(QRSAttachedItem.indexOf(item.name.trim()) !== -1)
+    if (QRSAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, QRSItem, QRSAttachedItem)) {
+        median = calculateMedian(list, sigfig);
+        if (list.length == maxCount) return (median).toFixed(sigfig);
+    }
+
+    if (QTAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, QTItem, QTAttachedItem)) {
+        median = calculateMedian(list, sigfig);
+        if (list.length == maxCount) return (median).toFixed(sigfig);
+    }
+
+    if (QTCAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, QTCItem, QTCAttachedItem)) {
+        median = calculateMedian(list, sigfig);
+        if (list.length == maxCount) return (median).toFixed(sigfig);
+    }
+
+    if (QTcFAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, QTcFitem, QTcFAttachedItem)) {
+        median = calculateMedian(list, sigfig);
+        if (list.length == maxCount) return (median).toFixed(sigfig);
+    }
+
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

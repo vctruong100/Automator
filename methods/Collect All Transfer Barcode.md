@@ -18,22 +18,6 @@ var itemNames = [
 
 var allMappings = [];
 
-try {
-    for (var i = 0; i < formsList.length; i++) {
-        var formData = findFormDataAcrossStudyEvents(formsList[i], false);
-        var result = getItemMapping(formData);
-
-        for (var j = 0; j < result.length; j++) {
-            allMappings.push(result[j]);
-        }
-    }
-
-    return allMappings.join(' | ');
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
 function getItemMapping(formData) {
     var mapping = [];
     logger('Form data length: ' + formData.length);
@@ -73,4 +57,20 @@ function getItemMapping(formData) {
     }
 
     return mapping;
+}
+
+try {
+    for (var i = 0; i < formsList.length; i++) {
+        var formData = findFormDataAcrossStudyEvents(formsList[i], false);
+        var result = getItemMapping(formData);
+
+        for (var j = 0; j < result.length; j++) {
+            allMappings.push(result[j]);
+        }
+    }
+
+    return allMappings.join(' | ');
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

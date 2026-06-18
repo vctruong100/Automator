@@ -12,26 +12,10 @@ var attachedItem = [
     "Average Hip Circumference"
 ];
 
-// ======== Don't modify ========
 var sigfig = itemJson.item.significantDigits;
 var maxCount = 0;
 var list = [];
 var avg = 0;
-
-try {
-    list = populateList(formJson, itemList, list);
-
-    avg = calculateAverage(list, sigfig);
-    logger("List: " + list);
-    logger("List length: " + list.length)
-    logger("Max count: " + maxCount);
-    logger("Average: " + avg)
-    if (list.length === maxCount) return (avg).toFixed(sigfig);
-    return null;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
 
 function populateList(form, targetItem, ilist) {
     var itemGroups = form.form.itemGroups;
@@ -155,4 +139,19 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
         }
     }
     return keepers;
+}
+
+try {
+    list = populateList(formJson, itemList, list);
+
+    avg = calculateAverage(list, sigfig);
+    logger("List: " + list);
+    logger("List length: " + list.length)
+    logger("Max count: " + maxCount);
+    logger("Average: " + avg)
+    if (list.length === maxCount) return (avg).toFixed(sigfig);
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

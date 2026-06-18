@@ -5,6 +5,25 @@
 
 var itemid = itemJson.item.id;
 
+function pullItemFromForm(form) {
+    var itemGroups = form.form.itemGroups;
+    var group, items, item, i, j, value;
+
+	if (!itemGroups || itemGroups.length < 1) return null;
+
+    var firstItem = null;
+    for (i = 0; i < itemGroups.length; i++) {
+        group = itemGroups[i];
+        if (!group || group.canceled) continue;
+        for (j = 0; j < group.items.length; j++) {
+            item = group.items[j];
+            if (j == 0) firstItem = item;
+            if (item.id === itemid) return firstItem;
+        }
+    }
+    return null;
+}
+
 try {
     var item = pullItemFromForm(formJson);
     logger("Item name: " + item.name + ", value: " + item.value);
@@ -28,24 +47,5 @@ try {
     return "YES";
 } catch (e) {
     logger("Error in main execution logic: " + e);
-    return null;
-}
-
-function pullItemFromForm(form) {
-    var itemGroups = form.form.itemGroups;
-    var group, items, item, i, j, value;
-
-	if (!itemGroups || itemGroups.length < 1) return null;
-
-    var firstItem = null;
-    for (i = 0; i < itemGroups.length; i++) {
-        group = itemGroups[i];
-        if (!group || group.canceled) continue;
-        for (j = 0; j < group.items.length; j++) {
-            item = group.items[j];
-            if (j == 0) firstItem = item;
-            if (item.id === itemid) return firstItem;
-        }
-    }
     return null;
 }

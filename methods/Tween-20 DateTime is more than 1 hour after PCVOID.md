@@ -19,34 +19,6 @@ var difference = 60;
 var item = itemJson.item;
 var groupid = null;
 
-try {
-    getItemGroupID(formJson.form);
-    var pcvoid = getItemValueFromSameGroup(formJson, pcvoidItem);
-
-    var enteredTime = getItemValueFromSameGroup(formJson, enteredTimeItem);
-    if (!pcvoid || pcvoid == null || !enteredTime || enteredTime == null) return null;
-
-    var pcvoidMs = pcvoid.dateValueMs;
-    var collectedTimeMs = enteredTime.dateValueMs;
-
-    var differenceMs = collectedTimeMs - pcvoidMs;
-    logger(differenceMs)
-    if (differenceMs < 0) {
-        return attachedCodeList[0]; // return YES
-    }
-    var differenceInMins = Math.abs(Math.floor(differenceMs / (1000 * 60)))
-
-    logger(differenceInMins)
-    if(differenceInMins >= difference){
-        return attachedCodeList[0]; // return YES
-    }
-
-    return attachedCodeList[1]; // return NO
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
 function getItemGroupID(form) {
     for (var i = 0; i < form.itemGroups.length; i++) {
     var group = form.itemGroups[i];
@@ -79,5 +51,33 @@ function getItemValueFromSameGroup(formJ, itemName) {
             }
         }
     }
+    return null;
+}
+
+try {
+    getItemGroupID(formJson.form);
+    var pcvoid = getItemValueFromSameGroup(formJson, pcvoidItem);
+
+    var enteredTime = getItemValueFromSameGroup(formJson, enteredTimeItem);
+    if (!pcvoid || pcvoid == null || !enteredTime || enteredTime == null) return null;
+
+    var pcvoidMs = pcvoid.dateValueMs;
+    var collectedTimeMs = enteredTime.dateValueMs;
+
+    var differenceMs = collectedTimeMs - pcvoidMs;
+    logger(differenceMs)
+    if (differenceMs < 0) {
+        return attachedCodeList[0]; // return YES
+    }
+    var differenceInMins = Math.abs(Math.floor(differenceMs / (1000 * 60)))
+
+    logger(differenceInMins)
+    if(differenceInMins >= difference){
+        return attachedCodeList[0]; // return YES
+    }
+
+    return attachedCodeList[1]; // return NO
+} catch (e) {
+    logger("Error in main execution logic: " + e);
     return null;
 }

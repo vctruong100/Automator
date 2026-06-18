@@ -20,24 +20,7 @@ var qtcfItems = [
     "QTcF #3"
 ];
 
-// ======== Don't modify ========
 var item = itemJson.item;
-
-try {
-    var form = pullForm(baselineFormStudyEvents, baselineForms);
-    if (!form) return true;
-    var baseline = pullItemFromForm(form, baselineItem);
-    var qtcf = pullItemFromForm(formJson, qtcfItems);
-
-    if (!baseline || baseline == null || !qtcf || qtcf == null) return null;
-    var diff = qtcf - baseline;
-    if (diff >= 60 || qtcf > 500) return "Y";
-    else if (diff < 60 || qtcf <= 500) return "N";
-    return null;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
 
 function pullForm(studyeventList, formNameList) {
     for (var i = 0; i < studyeventList.length; i++) {
@@ -85,4 +68,20 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
         }
     }
     return keepers;
+}
+
+try {
+    var form = pullForm(baselineFormStudyEvents, baselineForms);
+    if (!form) return true;
+    var baseline = pullItemFromForm(form, baselineItem);
+    var qtcf = pullItemFromForm(formJson, qtcfItems);
+
+    if (!baseline || baseline == null || !qtcf || qtcf == null) return null;
+    var diff = qtcf - baseline;
+    if (diff >= 60 || qtcf > 500) return "Y";
+    else if (diff < 60 || qtcf <= 500) return "N";
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

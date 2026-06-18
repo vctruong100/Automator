@@ -23,7 +23,6 @@ var weightAttachedItem = [
     "Average Weight"
 ];
 
-// ======== Don't modify ========
 var item = itemJson.item;
 var sigfig = item.significantDigits;
 var maxCount = 0;
@@ -32,33 +31,6 @@ var weightList = [];
 var heightAvg = 0;
 var weightAvg = 0;
 
-try {
-    heightList = populateList(formJson, heightItemList);
-    weightList = populateList(formJson, weightItemList);
-
-    heightAvg = calculateAverage(heightList, sigfig);
-    weightAvg = calculateAverage(weightList, sigfig);
-    logger("Height List: " + heightList);
-    logger("Weight List: " + weightList);
-
-    logger("Height List length: " + heightList.length);
-    logger("Weight List length: " + weightList.length)
-
-    logger("Max count: " + maxCount);
-    logger("Height Average: " + heightAvg);
-    logger("Weight Average: " + weightAvg);
-
-    if (heightAttachedItem.indexOf(item.name) !== -1) {
-        return heightAvg;
-    }
-    if (weightAttachedItem.indexOf(item.name) !== -1) {
-        return weightAvg;
-    }
-    return null;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
 
 function populateList(form, targetItem) {
     var itemGroups = form.form.itemGroups;
@@ -97,4 +69,32 @@ function calculateAverage(values, sigfig) {
     var avg = sum / count;
     var factor = Math.pow(10, sigfig);
     return (Math.round(avg * factor) / factor).toFixed(sigfig);
+}
+
+try {
+    heightList = populateList(formJson, heightItemList);
+    weightList = populateList(formJson, weightItemList);
+
+    heightAvg = calculateAverage(heightList, sigfig);
+    weightAvg = calculateAverage(weightList, sigfig);
+    logger("Height List: " + heightList);
+    logger("Weight List: " + weightList);
+
+    logger("Height List length: " + heightList.length);
+    logger("Weight List length: " + weightList.length)
+
+    logger("Max count: " + maxCount);
+    logger("Height Average: " + heightAvg);
+    logger("Weight Average: " + weightAvg);
+
+    if (heightAttachedItem.indexOf(item.name) !== -1) {
+        return heightAvg;
+    }
+    if (weightAttachedItem.indexOf(item.name) !== -1) {
+        return weightAvg;
+    }
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

@@ -20,59 +20,6 @@ var difference = 5; // in minutes
 
 var methodType = "B";
 
-// ======== Don't modify ========
-try {
-    var isRepeat = containsValue(getItemGroupName(formJson), "repeat");
-
-    var startTime = pullItemFromForm(formJson, startTimeItem, isRepeat);
-    var endTime = itemJson.item;
-
-    logger("Collected Time: " + endTime.value);
-
-    if (!startTime || startTime.value == null || !endTime || endTime.value == null) return null;
-
-    var startTimeMs = startTime.dateValueMs;
-    var endTimeMs = endTime.dateValueMs;
-
-    var differenceInMins;
-
-    if (methodType === "A") {
-
-        // Method A: true difference, then floor
-        var diffMs = endTimeMs - startTimeMs;
-        differenceInMins = Math.floor(diffMs / (1000 * 60));
-
-        logger("Method A used");
-
-    } else {
-
-        // Method B: floor each first, then subtract
-        var startMin = Math.floor(startTimeMs / (1000 * 60));
-        var endMin = Math.floor(endTimeMs / (1000 * 60));
-
-        differenceInMins = endMin - startMin;
-
-        logger("Method B used");
-        logger("Start (min): " + startMin);
-        logger("End (min): " + endMin);
-    }
-
-    logger("Diff (min): " + differenceInMins);
-
-    if (differenceInMins < 0) {
-        return false;
-    }
-
-    if (differenceInMins >= difference) {
-        return true;
-    }
-
-    return false;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
 function formatDateTimeByType(item) {
     if (!item || !item.value) return "";
 
@@ -203,5 +150,57 @@ function getItemGroupName(form) {
             }
         }
     }
+    return null;
+}
+
+try {
+    var isRepeat = containsValue(getItemGroupName(formJson), "repeat");
+
+    var startTime = pullItemFromForm(formJson, startTimeItem, isRepeat);
+    var endTime = itemJson.item;
+
+    logger("Collected Time: " + endTime.value);
+
+    if (!startTime || startTime.value == null || !endTime || endTime.value == null) return null;
+
+    var startTimeMs = startTime.dateValueMs;
+    var endTimeMs = endTime.dateValueMs;
+
+    var differenceInMins;
+
+    if (methodType === "A") {
+
+        // Method A: true difference, then floor
+        var diffMs = endTimeMs - startTimeMs;
+        differenceInMins = Math.floor(diffMs / (1000 * 60));
+
+        logger("Method A used");
+
+    } else {
+
+        // Method B: floor each first, then subtract
+        var startMin = Math.floor(startTimeMs / (1000 * 60));
+        var endMin = Math.floor(endTimeMs / (1000 * 60));
+
+        differenceInMins = endMin - startMin;
+
+        logger("Method B used");
+        logger("Start (min): " + startMin);
+        logger("End (min): " + endMin);
+    }
+
+    logger("Diff (min): " + differenceInMins);
+
+    if (differenceInMins < 0) {
+        return false;
+    }
+
+    if (differenceInMins >= difference) {
+        return true;
+    }
+
+    return false;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
     return null;
 }

@@ -15,18 +15,7 @@ var baselineItem = [
     "Baseline QTcF"
 ];
 
-// ======== Don't modify ========
 var sigfig = itemJson.item.significantDigits;
-
-try {
-    var form = pullForm(baselineStudyEvent, baselineFormName);
-    if (!form) return null;
-
-    return (pullItemFromForm(form, baselineItem)).toFixed(sigfig);
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
 
 function pullForm(studyeventList, formNameList) {
     for (var i = 0; i < studyeventList.length; i++) {
@@ -73,4 +62,14 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
         }
     }
     return keepers;
+}
+
+try {
+    var form = pullForm(baselineStudyEvent, baselineFormName);
+    if (!form) return null;
+
+    return (pullItemFromForm(form, baselineItem)).toFixed(sigfig);
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

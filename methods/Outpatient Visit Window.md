@@ -22,6 +22,87 @@ var sampleItem = [
 var currentStudyName = formJson.form.studyEventName;
 var item = itemJson.item;
 
+function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
+    if (formDataArray == null) { return []; }
+    var keepers = [];
+    for (var i = formDataArray.length - 1; i >= 0; i--) {
+        var formData = formDataArray[i];
+        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' ||
+                (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
+            keepers.push(formData);
+        } else {
+
+        }
+    }
+    return keepers;
+}
+
+function checkForm(studyevent, form) {
+    var arrayForms = findFormData(studyevent, form);
+    var completedForm = collectCompleted(arrayForms, true);
+    if (!completedForm || completedForm.length === 0) return null;
+    return completedForm[0];
+}
+
+function pullForm(studyeventList, formNameList) {
+    for (var i = 0; i < studyeventList.length; i++) {
+        for (var j = 0; j < formNameList.length; j++) {
+            var temp = checkForm(studyeventList[i], formNameList[j]);
+            if (temp) return temp;
+        }
+    }
+    return null;
+}
+
+function pullItemFromForm(form, targetItem) {
+    var itemGroups = form.form.itemGroups;
+    var group, items, item, i, j, value;
+
+	if (!itemGroups || itemGroups.length < 1) return null;
+
+    for (i = 0; i < itemGroups.length; i++) {
+        group = itemGroups[i];
+        if (!group || group.canceled) continue;
+        for (j = 0; j < group.items.length; j++) {
+            item = group.items[j];
+            if (targetItem.indexOf(item.name) !== -1 && item.value !== null && !item.canceled && item.value !== "") return item;
+        }
+    }
+    return null;
+}
+
+function containsValue(input, keyword) {
+    if (input == null) {
+        return false;
+    }
+
+    var value = input.toString().toLowerCase();
+    return value.indexOf(keyword) !== -1;
+}
+
+function msToDaysHours(milliseconds) {
+    var totalMinutes = Math.floor(milliseconds / (1000 * 60));
+
+    var days = Math.floor(totalMinutes / (60 * 24));
+    var hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+    var minutes = totalMinutes % 60;
+
+    return days + ":" + hours + ":" + minutes;
+}
+
+function parseDateOnly(value) {
+    if (!value) return null;
+
+    var datePart = value.split("T")[0];
+    var parts = datePart.split("-");
+
+    var year = parseInt(parts[0], 10);
+    var month = parseInt(parts[1], 10) - 1;
+    var day = parseInt(parts[2], 10);
+
+    return new Date(year, month, day);
+}
+
 try {
 
     logger("Study event: " + currentStudyName);
@@ -113,85 +194,4 @@ try {
 catch (e) {
     logger("Error in main execution logic: " + e);
     return null;
-}
-
-function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
-    if (formDataArray == null) { return []; }
-    var keepers = [];
-    for (var i = formDataArray.length - 1; i >= 0; i--) {
-        var formData = formDataArray[i];
-        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' ||
-                (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
-            keepers.push(formData);
-        } else {
-
-        }
-    }
-    return keepers;
-}
-
-function checkForm(studyevent, form) {
-    var arrayForms = findFormData(studyevent, form);
-    var completedForm = collectCompleted(arrayForms, true);
-    if (!completedForm || completedForm.length === 0) return null;
-    return completedForm[0];
-}
-
-function pullForm(studyeventList, formNameList) {
-    for (var i = 0; i < studyeventList.length; i++) {
-        for (var j = 0; j < formNameList.length; j++) {
-            var temp = checkForm(studyeventList[i], formNameList[j]);
-            if (temp) return temp;
-        }
-    }
-    return null;
-}
-
-function pullItemFromForm(form, targetItem) {
-    var itemGroups = form.form.itemGroups;
-    var group, items, item, i, j, value;
-
-	if (!itemGroups || itemGroups.length < 1) return null;
-
-    for (i = 0; i < itemGroups.length; i++) {
-        group = itemGroups[i];
-        if (!group || group.canceled) continue;
-        for (j = 0; j < group.items.length; j++) {
-            item = group.items[j];
-            if (targetItem.indexOf(item.name) !== -1 && item.value !== null && !item.canceled && item.value !== "") return item;
-        }
-    }
-    return null;
-}
-
-function containsValue(input, keyword) {
-    if (input == null) {
-        return false;
-    }
-
-    var value = input.toString().toLowerCase();
-    return value.indexOf(keyword) !== -1;
-}
-
-function msToDaysHours(milliseconds) {
-    var totalMinutes = Math.floor(milliseconds / (1000 * 60));
-
-    var days = Math.floor(totalMinutes / (60 * 24));
-    var hours = Math.floor((totalMinutes % (60 * 24)) / 60);
-    var minutes = totalMinutes % 60;
-
-    return days + ":" + hours + ":" + minutes;
-}
-
-function parseDateOnly(value) {
-    if (!value) return null;
-
-    var datePart = value.split("T")[0];
-    var parts = datePart.split("-");
-
-    var year = parseInt(parts[0], 10);
-    var month = parseInt(parts[1], 10) - 1;
-    var day = parseInt(parts[2], 10);
-
-    return new Date(year, month, day);
 }

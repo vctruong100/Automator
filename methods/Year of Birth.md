@@ -5,6 +5,11 @@
 
 var dob = formJson.form.subject.volunteer.dateOfBirth;
 
+function getYearOnly(dateString) {
+    if (!dateString) return "";
+    return dateString.split("-")[0];
+}
+
 try {
     return getYearOnly(dob);
 } catch (e) {
@@ -12,7 +17,3 @@ try {
     return null;
 }
 
-function getYearOnly(dateString) {
-    if (!dateString) return "";
-    return dateString.split("-")[0];
-}

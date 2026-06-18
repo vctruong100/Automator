@@ -26,32 +26,6 @@ var statusItem = [
 var gender = formJson.form.subject.volunteer.sexMale;
 var age = formJson.form.subject.volunteer.age;
 
-try {
-    logger(age);
-    logger(gender);
-    if (gender) return "None";
-
-    var form = pullForm(studyEvent, formNames);
-    if (!form) return null;
-
-    var childbearing = pullItemFromForm(form, childbearingItem);
-    if (childbearing && childbearing.value !== null && childbearing.value == "Y") return "Pregnancy";
-
-    var status = pullItemFromForm(form, statusItem);
-    if (status && status.value !== null && (status.value == status.codeListItems[2].codedValue)) return "FSH";
-    else if (status && status.value !== null) return "Pregnancy";
-
-    return "None";
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
-function log() {
-    logger("Childbearing: " + childbearing);
-    logger("Status: " + status);
-}
-
 function pullForm(studyeventList, formNameList) {
     for (var i = 0; i < studyeventList.length; i++) {
         for (var j = 0; j < formNameList.length; j++) {
@@ -111,4 +85,25 @@ function containsValue(input, keyword) {
 
     var value = input.toString().toLowerCase();
     return value.indexOf(keyword) !== -1;
+}
+
+try {
+    logger(age);
+    logger(gender);
+    if (gender) return "None";
+
+    var form = pullForm(studyEvent, formNames);
+    if (!form) return null;
+
+    var childbearing = pullItemFromForm(form, childbearingItem);
+    if (childbearing && childbearing.value !== null && childbearing.value == "Y") return "Pregnancy";
+
+    var status = pullItemFromForm(form, statusItem);
+    if (status && status.value !== null && (status.value == status.codeListItems[2].codedValue)) return "FSH";
+    else if (status && status.value !== null) return "Pregnancy";
+
+    return "None";
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

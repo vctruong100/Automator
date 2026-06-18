@@ -32,38 +32,6 @@ var QRSmaxCount = 3;
 var QRSlist = [];
 var QRSavg = 0;
 
-try {
-    QTcFlist = populateList(formJson, QTcFitems, QTcFlist, QTcFmaxCount);
-    QTcFavg = calculateAverage(QTcFlist);
-
-    QRSlist = populateList(formJson, QRSitems, QRSlist, QRSmaxCount);
-    QRSavg = calculateAverage(QRSlist);
-
-    log();
-
-    if (QTcFlist.length !== QTcFmaxCount || QRSlist.length !== QRSmaxCount) return itemJson.item.codeListItems[0].codedValue; // return pending result
-
-    if (QTcFavg > QTcF_max_range || QRSavg > QRS_max_range) return itemJson.item.codeListItems[2].codedValue; // return out of protocol range
-    else if (QTcFavg <= QTcF_max_range || QRSavg > QRS_max_range) return itemJson.item.codeListItems[1].codedValue; // Within protocol range
-
-    return attachedItemCodeList[0];
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
-function log() {
-    logger("List: " + QTcFlist);
-    logger("List length: " + QTcFlist.length);
-    logger("Max count: " + QTcFmaxCount);
-    logger("Average: " + QTcFavg);
-
-    logger("List: " + QRSlist);
-    logger("List length: " + QRSlist.length);
-    logger("Max count: " + QRSmaxCount);
-    logger("Average: " + QRSavg);
-}
-
 function populateList(form, targetItem, list, maxCount) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
@@ -131,4 +99,22 @@ function calculateAverage(values) {
 
     var avg = sum / count;
     return avg;
+}
+
+try {
+    QTcFlist = populateList(formJson, QTcFitems, QTcFlist, QTcFmaxCount);
+    QTcFavg = calculateAverage(QTcFlist);
+
+    QRSlist = populateList(formJson, QRSitems, QRSlist, QRSmaxCount);
+    QRSavg = calculateAverage(QRSlist);
+
+    if (QTcFlist.length !== QTcFmaxCount || QRSlist.length !== QRSmaxCount) return itemJson.item.codeListItems[0].codedValue; // return pending result
+
+    if (QTcFavg > QTcF_max_range || QRSavg > QRS_max_range) return itemJson.item.codeListItems[2].codedValue; // return out of protocol range
+    else if (QTcFavg <= QTcF_max_range || QRSavg > QRS_max_range) return itemJson.item.codeListItems[1].codedValue; // Within protocol range
+
+    return attachedItemCodeList[0];
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

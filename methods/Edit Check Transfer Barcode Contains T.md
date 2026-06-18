@@ -5,22 +5,6 @@
 
 var item = itemJson.item;
 
-try {
-    var itemGroupName = getItemGroupName(formJson);
-
-    if (containsValue(itemGroupName, "self-collection") || containsValue(itemGroupName, "pg dna")) {
-        if (containsValue(item.value, "t")) {
-            customErrorMessage("Barcode cannot contain 'T'")
-            return false;
-        }
-    }
-
-    return true;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
 function getItemGroupName(form) {
     for (var i = 0; i < form.form.itemGroups.length; i++) {
         var group = form.form.itemGroups[i];
@@ -44,4 +28,20 @@ function containsValue(input, keyword) {
 
     var value = input.toString().toLowerCase();
     return value.indexOf(keyword) !== -1;
+}
+
+try {
+    var itemGroupName = getItemGroupName(formJson);
+
+    if (containsValue(itemGroupName, "self-collection") || containsValue(itemGroupName, "pg dna")) {
+        if (containsValue(item.value, "t")) {
+            customErrorMessage("Barcode cannot contain 'T'")
+            return false;
+        }
+    }
+
+    return true;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

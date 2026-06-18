@@ -12,22 +12,6 @@ var emptyJugItem = [
 
 var sigfig = itemJson.item.significantDigits;
 
-try {
-    var urineJug = pullItemFromForm(formJson, urineJugItem);
-    var voidJug = pullItemFromForm(formJson, emptyJugItem);
-
-    var total = (urineJug - voidJug);
-
-    if (total) return total.toFixed(sigfig);
-
-    if (total == 0) return (0).toFixed(sigfig);
-
-    return null;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j;
@@ -47,4 +31,20 @@ function pullItemFromForm(form, targetItem) {
     }
     logger("Total: " + total);
     return total;
+}
+
+try {
+    var urineJug = pullItemFromForm(formJson, urineJugItem);
+    var voidJug = pullItemFromForm(formJson, emptyJugItem);
+
+    var total = (urineJug - voidJug);
+
+    if (total) return total.toFixed(sigfig);
+
+    if (total == 0) return (0).toFixed(sigfig);
+
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Calculates BMI from Screening height and weight.
+// Purpose: Calculates BMI from Screening height and weight (multiple measurements).
 
 
 // Add item names
@@ -20,7 +20,6 @@ var weightitemList = [
     "BMI_WEIGHT #2"
 ];
 
-// ======== Don't modify ========
 var currentStudyEvent = formJson.form.studyEventName;
 var item = itemJson.item;
 var sigfig = itemJson.item.significantDigits;
@@ -34,39 +33,6 @@ var htavg = 0;
 var wtmaxCount = 2;
 var wtlist = [];
 var wtavg = 0;
-
-try {
-    htlist = populateList(formJson, heightitemList, htmaxCount);
-    htavg = calculateAverage(htlist, sigfig);
-
-    wtlist = populateList(formJson, weightitemList, wtmaxCount);
-    wtavg = calculateAverage(wtlist, sigfig);
-
-    logger(htavg);
-    logger(wtavg);
-
-    if (htlist.length !== htmaxCount && wtlist.length !== wtmaxCount) return null;
-
-    var heightMtr = htavg / 100;
-
-    var factor = Math.pow(10, sigfig);
-    bmi = Math.round((wtavg / (heightMtr * heightMtr)) * factor) / factor;
-
-    log();
-
-    if (bmi) return bmi.toFixed(sigfig);
-
-    return null;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
-function log() {
-    logger("Height in meter: " + heightMtr)
-    logger("Factor: " + factor);
-    logger("BMI: " + bmi);
-}
 
 function populateList(form, targetItem, maxCount) {
     var itemGroups = form.form.itemGroups;
@@ -106,4 +72,29 @@ function calculateAverage(values, sigfig) {
     var avg = sum / count;
     var factor = Math.pow(10, sigfig);
     return Math.round(avg * factor) / factor;
+}
+
+try {
+    htlist = populateList(formJson, heightitemList, htmaxCount);
+    htavg = calculateAverage(htlist, sigfig);
+
+    wtlist = populateList(formJson, weightitemList, wtmaxCount);
+    wtavg = calculateAverage(wtlist, sigfig);
+
+    logger(htavg);
+    logger(wtavg);
+
+    if (htlist.length !== htmaxCount && wtlist.length !== wtmaxCount) return null;
+
+    var heightMtr = htavg / 100;
+
+    var factor = Math.pow(10, sigfig);
+    bmi = Math.round((wtavg / (heightMtr * heightMtr)) * factor) / factor;
+
+    if (bmi) return bmi.toFixed(sigfig);
+
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

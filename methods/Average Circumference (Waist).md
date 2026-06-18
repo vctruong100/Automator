@@ -9,26 +9,11 @@ var itemList = [
     "Waist Circumference #2"
 ];
 
-// ======== Don't modify ========
 var sigfig = itemJson.item.significantDigits;
 var maxCount = 2;
 var list = [];
 var avg = 0;
 
-try {
-    list = populateList(formJson, itemList);
-
-    avg = calculateAverage(list, sigfig);
-    logger("List: " + list);
-    logger("List length: " + list.length)
-    logger("Max count: " + maxCount);
-    logger("Average: " + avg)
-    if (list.length === maxCount) return (avg);
-    return null;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
 
 function populateList(form, targetItem) {
     var itemGroups = form.form.itemGroups;
@@ -68,4 +53,19 @@ function calculateAverage(values, sigfig) {
     var avg = sum / count;
     var factor = Math.pow(10, sigfig);
     return (Math.round(avg * factor) / factor).toFixed(sigfig);
+}
+
+try {
+    list = populateList(formJson, itemList);
+
+    avg = calculateAverage(list, sigfig);
+    logger("List: " + list);
+    logger("List length: " + list.length)
+    logger("Max count: " + maxCount);
+    logger("Average: " + avg)
+    if (list.length === maxCount) return (avg);
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

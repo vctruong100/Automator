@@ -5,15 +5,6 @@
 
 var val = itemJson.item.value;
 
-try {
-    if (!val) return null;
-    logger(val);
-    return isFutureDate(val);
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
 function isFutureDate(dateStr) {
     var parts = dateStr.split("-");
 
@@ -30,4 +21,13 @@ function isFutureDate(dateStr) {
     logger("today: " + today);
 
     return inputDate > today;
+}
+
+try {
+    if (!val) return null;
+    logger(val);
+    return isFutureDate(val);
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

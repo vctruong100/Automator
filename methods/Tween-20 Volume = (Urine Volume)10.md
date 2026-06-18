@@ -12,29 +12,6 @@ var emptyJugItem = [
 var item = itemJson.item;
 var groupid = null;
 
-try {
-    getItemGroupID(formJson.form);
-
-    var urineJug = getItemValueFromSameGroup(formJson.form, urineJugItem);
-    var voidJug = getItemValueFromSameGroup(formJson.form, emptyJugItem);
-
-    var sigfig = item.significantDigits;
-
-    var weight = (urineJug - voidJug).toFixed(0);
-    if (!weight) return null;
-
-    var volume = weight / 1.02;
-    if (!volume) return null;
-
-    var tween = volume / 10;
-    if (tween) return tween.toFixed(sigfig);
-
-    return null;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
 function getItemGroupID(form) {
     for (var i = 0; i < form.itemGroups.length; i++) {
     var group = form.itemGroups[i];
@@ -67,5 +44,28 @@ function getItemValueFromSameGroup(form, itemName) {
             }
         }
     }
+    return null;
+}
+
+try {
+    getItemGroupID(formJson.form);
+
+    var urineJug = getItemValueFromSameGroup(formJson.form, urineJugItem);
+    var voidJug = getItemValueFromSameGroup(formJson.form, emptyJugItem);
+
+    var sigfig = item.significantDigits;
+
+    var weight = (urineJug - voidJug).toFixed(0);
+    if (!weight) return null;
+
+    var volume = weight / 1.02;
+    if (!volume) return null;
+
+    var tween = volume / 10;
+    if (tween) return tween.toFixed(sigfig);
+
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
     return null;
 }

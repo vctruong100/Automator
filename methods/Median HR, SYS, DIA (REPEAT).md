@@ -42,40 +42,6 @@ var hrMaxCount = 6;
 var item = itemJson.item;
 var sigfig = item.significantDigits;
 
-try {
-    if (HRAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, hrItem, HRAttachedItem, hrMaxCount)) {
-        list = filterList(list);
-        median = calculateMedian(list, sigfig);
-        log()
-        return (median).toFixed(sigfig);
-    }
-
-    if (sysAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, sysItem, sysAttachedItem, sysMaxCount)) {
-        list = filterList(list);
-        median = calculateMedian(list, sigfig);
-        log()
-        return (median).toFixed(sigfig);
-    }
-
-    if (diaAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, diaItem, diaAttachedItem, diaMaxCount)) {
-        list = filterList(list);
-        median = calculateMedian(list, sigfig);
-        log()
-        return (median).toFixed(sigfig);
-    }
-
-    return null;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
-function log() {
-    logger("List: " + list);
-    logger("List length: " + list.length)
-    logger("Median: " + median)
-}
-
 function calculateMedian(values, sigfig) {
     if (values.length === 0) return null;
 
@@ -122,4 +88,29 @@ function populateList(form, targetItem, attachedItem, maxCount) {
     }
     if (list.length == 0) return false;
     return list;
+}
+
+try {
+    if (HRAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, hrItem, HRAttachedItem, hrMaxCount)) {
+        list = filterList(list);
+        median = calculateMedian(list, sigfig);
+        return (median).toFixed(sigfig);
+    }
+
+    if (sysAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, sysItem, sysAttachedItem, sysMaxCount)) {
+        list = filterList(list);
+        median = calculateMedian(list, sigfig);
+        return (median).toFixed(sigfig);
+    }
+
+    if (diaAttachedItem.indexOf(item.name.trim()) !== -1 && populateList(formJson, diaItem, diaAttachedItem, diaMaxCount)) {
+        list = filterList(list);
+        median = calculateMedian(list, sigfig);
+        return (median).toFixed(sigfig);
+    }
+
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

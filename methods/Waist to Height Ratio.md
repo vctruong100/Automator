@@ -21,30 +21,6 @@ var heightItemList = [
 
 var sigfig = itemJson.item.significantDigits;
 var maxCount = 2;
-
-try {
-    var form = pullForm(screeningStudyEvent, screeningBMI_Form);
-    if (!form) return null;
-
-    var height = pullItemFromForm(form, heightItemList);
-    var waist = calculateAverage(populateList(formJson, waistItemList), sigfig);
-
-    log();
-
-    if (height && waist && height !== null && waist !== null) return (waist / height).toFixed(sigfig);
-
-    return null;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
-
-function log() {
-    logger("Max count: " + maxCount);
-    logger("Waist: " + waist);
-    logger("Height: " + height);
-}
-
 function pullForm(studyeventList, formNameList) {
     for (var i = 0; i < studyeventList.length; i++) {
         for (var j = 0; j < formNameList.length; j++) {
@@ -136,3 +112,22 @@ function pullItemFromForm(form, targetItem) {
     }
     return null;
 }
+
+try {
+    var form = pullForm(screeningStudyEvent, screeningBMI_Form);
+    if (!form) return null;
+
+    var height = pullItemFromForm(form, heightItemList);
+    var waist = calculateAverage(populateList(formJson, waistItemList), sigfig);
+
+    logger("Max count: " + maxCount);
+    logger("Waist: " + waist);
+    logger("Height: " + height);
+    if (height && waist && height !== null && waist !== null) return (waist / height).toFixed(sigfig);
+
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
+}
+

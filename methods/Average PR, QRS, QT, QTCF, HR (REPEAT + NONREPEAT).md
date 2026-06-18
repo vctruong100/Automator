@@ -22,64 +22,8 @@ var HRattach = ["HR", "Avg_HR", "HR AVERAGE (30- 200)",];
 var QtcBattach = ["QTcB AVERAGE (I: >470)"]
 var RRattach = ["RR AVERAGE (I: 120-200)"];
 
-// ======== Don't modify ========
 var form = formJson.form;
 var item = itemJson.item;
-
-try {
-    var isRepeat = false;
-    var groupName = getItemGroupName(formJson);
-    logger("Group Name: " + groupName)
-    if (groupName) {
-        isRepeat = containsValue(groupName, "repeat")
-    }
-
-    var PRlist = populateList(formJson, PRitem, PRattach, isRepeat);
-    var QRSlist = populateList(formJson, QRSitem, QRSattach, isRepeat);
-    var Qtlist = populateList(formJson, Qtitem, QTattach, isRepeat);
-    var QTcFlist = populateList(formJson, QTcFitem, QTcFattach, isRepeat);
-    var HRlist = populateList(formJson, HRitem, HRattach, isRepeat);
-    var QTcBlist = populateList(formJson, QtcBitem, QtcBattach, isRepeat);
-    var RRlist = populateList(formJson, RRitem, RRattach, isRepeat);
-
-    logger("Is it a repeat? " + isRepeat);
-    logger("PRlist: " + PRlist);
-    logger("QRSlist: " + QRSlist);
-    logger("Qtlist: " + Qtlist);
-    logger("QTcFlist: " + QTcFlist);
-    logger("HRlist: " + HRlist);
-    logger("QTcBlist: " + QTcBlist);
-    logger("RRlist: " + RRlist);
-
-    var avgPR = calculateAverage(PRlist);
-    var avgQRS = calculateAverage(QRSlist);
-    var avgQT = calculateAverage(Qtlist);
-    var avgQTcF = calculateAverage(QTcFlist);
-    var avgHR = calculateAverage(HRlist);
-    var avgQtcB = calculateAverage(QTcBlist);
-    var avgRR = calculateAverage(RRlist);
-
-    logger("Average PR: " + avgPR);
-    logger("AVerage QRS: " + avgQRS);
-    logger("Average QT: " + avgQT);
-    logger("Average QtcF: " + avgQTcF);
-    logger("Average HR: " + avgHR);
-    logger("Average QtcB: " + avgQtcB);
-    logger("Average RR: " + avgRR);
-
-    if (PRattach.indexOf(item.name) !== -1) return avgPR;
-    if (QRSattach.indexOf(item.name) !== -1) return avgQRS;
-    if (QTcFattach.indexOf(item.name) !== -1) return avgQTcF;
-    if (QTattach.indexOf(item.name) !== -1) return avgQT;
-    if (HRattach.indexOf(item.name) !== -1) return avgHR;
-    if (QtcBattach.indexOf(item.name) !== -1) return avgQtcB;
-    if (RRattach.indexOf(item.name) !== -1) return avgRR;
-
-    return null;
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
 
 function containsValue(input, keyword) {
     if (input == null) {
@@ -154,4 +98,59 @@ function populateList(form, targetItem, attachedItem, repeat) {
         }
     }
     return list;
+}
+
+try {
+    var isRepeat = false;
+    var groupName = getItemGroupName(formJson);
+    logger("Group Name: " + groupName)
+    if (groupName) {
+        isRepeat = containsValue(groupName, "repeat")
+    }
+
+    var PRlist = populateList(formJson, PRitem, PRattach, isRepeat);
+    var QRSlist = populateList(formJson, QRSitem, QRSattach, isRepeat);
+    var Qtlist = populateList(formJson, Qtitem, QTattach, isRepeat);
+    var QTcFlist = populateList(formJson, QTcFitem, QTcFattach, isRepeat);
+    var HRlist = populateList(formJson, HRitem, HRattach, isRepeat);
+    var QTcBlist = populateList(formJson, QtcBitem, QtcBattach, isRepeat);
+    var RRlist = populateList(formJson, RRitem, RRattach, isRepeat);
+
+    logger("Is it a repeat? " + isRepeat);
+    logger("PRlist: " + PRlist);
+    logger("QRSlist: " + QRSlist);
+    logger("Qtlist: " + Qtlist);
+    logger("QTcFlist: " + QTcFlist);
+    logger("HRlist: " + HRlist);
+    logger("QTcBlist: " + QTcBlist);
+    logger("RRlist: " + RRlist);
+
+    var avgPR = calculateAverage(PRlist);
+    var avgQRS = calculateAverage(QRSlist);
+    var avgQT = calculateAverage(Qtlist);
+    var avgQTcF = calculateAverage(QTcFlist);
+    var avgHR = calculateAverage(HRlist);
+    var avgQtcB = calculateAverage(QTcBlist);
+    var avgRR = calculateAverage(RRlist);
+
+    logger("Average PR: " + avgPR);
+    logger("AVerage QRS: " + avgQRS);
+    logger("Average QT: " + avgQT);
+    logger("Average QtcF: " + avgQTcF);
+    logger("Average HR: " + avgHR);
+    logger("Average QtcB: " + avgQtcB);
+    logger("Average RR: " + avgRR);
+
+    if (PRattach.indexOf(item.name) !== -1) return avgPR;
+    if (QRSattach.indexOf(item.name) !== -1) return avgQRS;
+    if (QTcFattach.indexOf(item.name) !== -1) return avgQTcF;
+    if (QTattach.indexOf(item.name) !== -1) return avgQT;
+    if (HRattach.indexOf(item.name) !== -1) return avgHR;
+    if (QtcBattach.indexOf(item.name) !== -1) return avgQtcB;
+    if (RRattach.indexOf(item.name) !== -1) return avgRR;
+
+    return null;
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }

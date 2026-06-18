@@ -9,21 +9,6 @@ const itemName = [
 
 var item = itemJson.item;
 
-try {
-    var rawItem = getItemDataContextByItemDataId(item.id);
-    var context = JSON.parse(rawItem);
-    var groupName = context.foundItemGroupName;
-    logger("Group Name: " + groupName)
-    var datetime = pullItemFromForm(formJson, itemName, groupName);
-    logger("Datetime: " + datetime)
-    if (!datetime || datetime == null || datetime == "") return null;
-    return getTimeRange(datetime);
-} catch (e) {
-    customErrorMessage("Error: " + e);
-    return null;
-}
-
-
 function pullItemFromForm(form, targetItem, groupName) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
@@ -84,3 +69,18 @@ function getTimeRange(datetimeStr) {
 
     return formatTime(minSeconds) + " to " + formatTime(maxSeconds);
 }
+
+try {
+    var rawItem = getItemDataContextByItemDataId(item.id);
+    var context = JSON.parse(rawItem);
+    var groupName = context.foundItemGroupName;
+    logger("Group Name: " + groupName)
+    var datetime = pullItemFromForm(formJson, itemName, groupName);
+    logger("Datetime: " + datetime)
+    if (!datetime || datetime == null || datetime == "") return null;
+    return getTimeRange(datetime);
+} catch (e) {
+    customErrorMessage("Error: " + e);
+    return null;
+}
+
