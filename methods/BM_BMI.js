@@ -37,7 +37,6 @@ function populateList(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
     var list = [];
-    var count = 0;
 	if (!itemGroups || itemGroups.length < 1) return null;
 
     for (i = 0; i < itemGroups.length; i++) {
@@ -47,7 +46,6 @@ function populateList(form, targetItem) {
             item = group.items[j];
             if (["Average Weight"].indexOf(item.name) !== -1) return list;
             if (item && targetItem.indexOf(item.name) !== -1) {
-                maxCount++;
                 if (item.value !== null && !isNaN(item.value) && item.value !== "") {
                     list.push(parseFloat(item.value));
                 }
