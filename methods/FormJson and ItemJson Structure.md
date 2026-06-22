@@ -159,7 +159,9 @@ incomplete time: 08:40:22
 time: 08:40:22
 date: 2026-02-17
 
-getItemDataContextByItemDataId
+var rawgroupName = getItemDataContextByItemDataId(item.id);
+var parsedGroupName = JSON.parse(rawgroupName).foundItemGroupName;
+logger("Group name: " + parsedGroupName);
 {
 "collectedBarcodes": "F6059441-C5",
 "transferBarcodes": "F6059441-C5",

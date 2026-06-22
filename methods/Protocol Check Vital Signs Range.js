@@ -3,27 +3,19 @@
 // Version: v1
 // Purpose: General vital signs range protocol check.
 
-var sysItems = [
-    "SYS (60 - 200) mmHg", "SYS (60 - 200)",
-];
-
-var diaItems = [
-    "DIA (40 - 110) mmHg", "DIA (40 - 110)",
-];
-
-var hrItems = [
-    "HR (50 - 100) bpm", "HR (30 - 200)",
-]
+const sysItems = ["SYS (P: 91 - 150)", "SYS (60 - 200) mmHg", "SYS  (I: 90 - 150)", "SYS (60 - 200)"];
+const diaItems = ["DIA (P:  51 - 100)", "DIA (40 - 110) mmHg", "DIA (I: 50 - 100)", "DIA (40 - 110)",];
+const hrItems = ["HR (P: 61 - 100)", "HR (50 - 100) bpm", "HR (30 - 100)"];
 
 // Inclusive
-var sys_min_range = 60;
-var sys_max_range = 200;
+var sys_min_range = 91;
+var sys_max_range = 150;
 
-var dia_min_range = 40
-var dia_max_range = 110;
+var dia_min_range = 51;
+var dia_max_range = 100;
 
-var hr_min_range = 30;
-var hr_max_range = 200;
+var hr_min_range = 61;
+var hr_max_range = 100;
 
 var item = itemJson.item;
 
@@ -58,31 +50,19 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     return keepers;
 }
 
-function pullItemFromForm(form, targetItem, repeat) {
+function pullItemFromForm(form, targetItem, groupName) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
 
 	if (!itemGroups || itemGroups.length < 1) return null;
+	
+    for (i = 0; i < itemGroups.length; i++) {
+        group = itemGroups[i];
+        if (!group || group.canceled || group.name !== groupName) continue;
 
-    if (repeat) {
-        for (i = itemGroups.length - 1; i >= 0; i--) {
-            group = itemGroups[i];
-            if (!group || group.canceled) continue;
-            if (group.id !== groupid) continue;
-            for (j = group.items.length - 1; j >= 0; j--) {
-                item = group.items[j];
-                if (targetItem.indexOf(item.name) !== -1 && item.value !== null) return item.value;
-            }
-        }
-    }
-    else {
-        for (i = 0; i < itemGroups.length; i++) {
-            group = itemGroups[i];
-            if (!group || group.canceled) continue;
-            for (j = 0; j < group.items.length; j++) {
-                item = group.items[j];
-                if (targetItem.indexOf(item.name) !== -1 && item.value !== null) return item.value;
-            }
+        for (j = 0; j < group.items.length; j++) {
+            item = group.items[j];
+            if (targetItem.indexOf(item.name) !== -1 && item.value !== null) return item.value;
         }
     }
 
@@ -130,12 +110,16 @@ function isItemInRepeat(form) {
 }
 
 try {
-    var isRepeat = isItemInRepeat(formJson);
+    var rawgroupName = getItemDataContextByItemDataId(item.id);
+    var parsedGroupName = JSON.parse(rawgroupName).foundItemGroupName;
+    logger("Group name: " + parsedGroupName);
+    var sys = pullItemFromForm(formJson, sysItems, parsedGroupName);
+    var dia = pullItemFromForm(formJson, diaItems, parsedGroupName);
+    var hr = pullItemFromForm(formJson, hrItems, parsedGroupName);
 
-    var sys = pullItemFromForm(formJson, sysItems, isRepeat);
-    var dia = pullItemFromForm(formJson, diaItems, isRepeat);
-    var hr = pullItemFromForm(formJson, hrItems, isRepeat);
-
+    logger("Systolic: " + sys);
+    logger("Diastolic: " + dia);
+    logger("Heart rate: " + hr);
     if (!sys || sys === null || !dia || dia == null || !hr || hr == null) return itemJson.item.codeListItems[4].codedValue;
     // OOR
     if (

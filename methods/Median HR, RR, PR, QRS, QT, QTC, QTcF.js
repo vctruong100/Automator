@@ -128,8 +128,10 @@ try {
     var isRepeat = false;
     var list = [];
 
-    var groupName = getItemDataContextByItemDataId(item.id);
-    if (containsValue(groupName, "repeat")) isRepeat = true;
+    var rawgroupName = getItemDataContextByItemDataId(item.id);
+    var parsedGroupName = JSON.parse(rawgroupName).foundItemGroupName;
+    logger("Group name: " + parsedGroupName);
+    if (containsValue(parsedGroupName, "repeat")) isRepeat = true;
 
     logger("Attached item: " + item.name);
     if (HRAttachedItem.indexOf(item.name.trim()) !== -1) list = populateList(formJson, HRItem, HRAttachedItem, isRepeat);
