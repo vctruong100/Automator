@@ -74,7 +74,6 @@ function populateList(form, targetItem, attachedItem, isRepeat) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j;
     var list = [];
-    maxCount = 0;
 	if (!itemGroups || itemGroups.length < 1) return null;
 
     if (isRepeat) {
@@ -85,7 +84,6 @@ function populateList(form, targetItem, attachedItem, isRepeat) {
                 item = group.items[j];
                 if (attachedItem.indexOf(item.name.trim()) !== -1) return list;
                 if (item && targetItem.indexOf(item.name) !== -1) {
-                    maxCount++;
                     if (item.value !== null && !isNaN(item.value) && item.value !== "") {
                         list.push(parseFloat(item.value));
                         logger("Item name: " + item.name + ", value: " + item.value);
@@ -102,7 +100,6 @@ function populateList(form, targetItem, attachedItem, isRepeat) {
                 item = group.items[j];
                 if (attachedItem.indexOf(item.name.trim()) !== -1) return list;
                 if (item && targetItem.indexOf(item.name) !== -1) {
-                    maxCount++;
                     if (item.value !== null && !isNaN(item.value) && item.value !== "") {
                         list.push(parseFloat(item.value));
                         logger("Item name: " + item.name + ", value: " + item.value);
@@ -111,7 +108,6 @@ function populateList(form, targetItem, attachedItem, isRepeat) {
             }
         }
     }
-    if (list.length !== maxCount) return null;
     return list;
 }
 

@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 4.1.7
+// @version 4.2.1
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -11,6 +11,7 @@
 // @grant GM.openInTab
 // @grant GM_openInTab
 // @grant GM.xmlHttpRequest
+// @grant GM_xmlhttpRequest
 // ==/UserScript==
 (function () {
     var STORAGE_PANEL_WIDTH = "activityPlanState.panel.width";
@@ -18,7 +19,7 @@
     // UI Scale Constants
     var UI_SCALE = 1.0; // Master scale factor (will be initialized after function definitions)
     var PANEL_DEFAULT_WIDTH = 340;
-    var PANEL_DEFAULT_HEIGHT = "auto";
+    var PANEL_DEFAULT_HEIGHT = "480px";
     var PANEL_HEADER_HEIGHT_PX = 50;
     var PANEL_HEADER_GAP_PX = 8;
     var PANEL_MAX_WIDTH_PX = 60;
@@ -6011,6 +6012,15 @@
         setEpochIndex(idx);
 
         if (idx >= queue.length) {
+            var lastEpoch = queue[idx - 1];
+            if (lastEpoch && isScreeningLabel(lastEpoch.name)) {
+                // Screening was the only/last epoch; run ICF Barcode before completing
+                setRunMode("consentmid");
+                updateRunAllPopupStatus("Running ICF Barcode");
+                log("Screening epoch done (last epoch); routing to ICF Barcode");
+                location.href = STUDY_SHOW_URL + "?autoconsent=1";
+                return;
+            }
             // All epochs done — ICF Barcode already ran after Screening epoch; just complete.
             clearEpochQueueState();
             clearRunMode();
@@ -16136,9 +16146,10 @@
 
     function bplFetchSegmentsPageHtml(segmentsUrl) {
         return new Promise(function(resolve, reject) {
-            if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") {
-                log("BPL: fetching Segments page via GM.xmlHttpRequest: " + segmentsUrl);
-                GM.xmlHttpRequest({
+            var xhr = getXHR();
+            if (xhr) {
+                log("BPL: fetching Segments page via GM XHR: " + segmentsUrl);
+                xhr({
                     method: "GET",
                     url: segmentsUrl,
                     onload: function(response) {
@@ -16147,12 +16158,24 @@
                     },
                     onerror: function(err) {
                         log("BPL: Segments page fetch error: " + String(err));
-                        reject(new Error("GM.xmlHttpRequest error fetching Segments page"));
+                        reject(new Error("GM XHR error fetching Segments page"));
                     }
                 });
+            } else if (typeof fetch === "function") {
+                log("BPL: falling back to fetch for Segments page: " + segmentsUrl);
+                fetch(segmentsUrl, { credentials: "include" })
+                    .then(function(response) { return response.text(); })
+                    .then(function(text) {
+                        log("BPL: Segments page fetched via fetch, length=" + text.length);
+                        resolve(text);
+                    })
+                    .catch(function(err) {
+                        log("BPL: fetch error for Segments page: " + String(err));
+                        reject(err);
+                    });
             } else {
-                log("BPL: GM.xmlHttpRequest not available for Segments fetch");
-                reject(new Error("GM.xmlHttpRequest not available"));
+                log("BPL: No HTTP API available for Segments fetch");
+                reject(new Error("No HTTP API available (tried GM.xmlHttpRequest, GM_xmlhttpRequest, fetch)"));
             }
         });
     }
@@ -21549,12 +21572,54 @@
     // Helper functions for making background HTTP requests without opening tabs
     //==========================
 
+    function getXHR() {
+        var apis = [
+            { name: "GM.xmlHttpRequest", fn: (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") ? GM.xmlHttpRequest.bind(GM) : null },
+            { name: "GM_xmlhttpRequest", fn: (typeof GM_xmlhttpRequest === "function") ? GM_xmlhttpRequest : null },
+            { name: "window.GM.xmlHttpRequest", fn: (typeof window !== "undefined" && window.GM && typeof window.GM.xmlHttpRequest === "function") ? window.GM.xmlHttpRequest.bind(window.GM) : null },
+            { name: "window.GM_xmlhttpRequest", fn: (typeof window !== "undefined" && typeof window.GM_xmlhttpRequest === "function") ? window.GM_xmlhttpRequest : null },
+            { name: "window.GM_xmlHttpRequest", fn: (typeof window !== "undefined" && typeof window.GM_xmlHttpRequest === "function") ? window.GM_xmlHttpRequest : null }
+        ];
+        for (var i = 0; i < apis.length; i++) {
+            if (apis[i].fn) {
+                return apis[i].fn;
+            }
+        }
+        return null;
+    }
+
+    // Diagnostic: log available GM APIs once at startup
+    (function logXHRDiagnostics() {
+        var found = [];
+        if (typeof GM !== "undefined") {
+            found.push("GM");
+            if (typeof GM.xmlHttpRequest === "function") found.push("GM.xmlHttpRequest");
+            if (typeof GM_xmlhttpRequest === "function") found.push("GM_xmlhttpRequest");
+        }
+        if (typeof window !== "undefined") {
+            if (window.GM) {
+                found.push("window.GM");
+                if (typeof window.GM.xmlHttpRequest === "function") found.push("window.GM.xmlHttpRequest");
+            }
+            if (typeof window.GM_xmlhttpRequest === "function") found.push("window.GM_xmlhttpRequest");
+            if (typeof window.GM_xmlHttpRequest === "function") found.push("window.GM_xmlHttpRequest");
+        }
+        if (getXHR()) {
+            found.push("getXHR() resolved");
+        } else {
+            found.push("getXHR() returned NULL");
+        }
+        console.log("[Automator] GM API diagnostics: " + found.join(", "));
+    })();
+
     function fetchPage(url) {
         return new Promise(function(resolve, reject) {
-            if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") {
-                GM.xmlHttpRequest({
+            var xhr = getXHR();
+            if (xhr) {
+                xhr({
                     method: "GET",
                     url: url,
+                    withCredentials: true,
                     onload: function(response) {
                         resolve(response.responseText);
                     },
@@ -21562,18 +21627,25 @@
                         reject(error);
                     }
                 });
+            } else if (typeof fetch === "function") {
+                fetch(url, { credentials: "include" })
+                    .then(function(response) { return response.text(); })
+                    .then(resolve)
+                    .catch(reject);
             } else {
-                reject(new Error("GM.xmlHttpRequest not available"));
+                reject(new Error("No HTTP API available (tried GM.xmlHttpRequest, GM_xmlhttpRequest, fetch)"));
             }
         });
     }
 
     function submitForm(url, formData) {
         return new Promise(function(resolve, reject) {
-            if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") {
-                GM.xmlHttpRequest({
+            var xhr = getXHR();
+            if (xhr) {
+                xhr({
                     method: "POST",
                     url: url,
+                    withCredentials: true,
                     headers: {
                         "Content-Type": "application/x-www-form-urlencoded"
                     },
@@ -21585,8 +21657,21 @@
                         reject(error);
                     }
                 });
+            } else if (typeof fetch === "function") {
+                fetch(url, {
+                    method: "POST",
+                    credentials: "include",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "X-Requested-With": "XMLHttpRequest"
+                    },
+                    body: formData
+                })
+                    .then(function(response) { return response.text(); })
+                    .then(resolve)
+                    .catch(reject);
             } else {
-                reject(new Error("GM.xmlHttpRequest not available"));
+                reject(new Error("No HTTP API available (tried GM.xmlHttpRequest, GM_xmlhttpRequest, fetch)"));
             }
         });
     }
@@ -36866,19 +36951,17 @@
             var secondFormGroup = formGroups[1];
             var formControlStatic = secondFormGroup.querySelector('p.form-control-static');
 
-            var hasReadyState = false;
+            var isLockedState = false;
             if (formControlStatic) {
                 var staticText = (formControlStatic.textContent + "").trim();
-                var hasLockIcon = formControlStatic.querySelector('i.fa.fa-lock');
-                if (staticText.indexOf("Ready") !== -1 || hasLockIcon) {
-                    hasReadyState = true;
-                    log("Activity Plan " + planName + " is in Ready state, will lock");
+                if (staticText.indexOf("Locked") !== -1) {
+                    isLockedState = true;
+                    log("Activity Plan " + planName + " is already locked, skipping");
                 }
             }
 
-            if (!hasReadyState) {
-                log("Activity Plan " + planName + " is not in Ready state, skipping");
-                return { success: true, message: "Not in Ready state, skipped" };
+            if (isLockedState) {
+                return { success: true, message: "Already locked, skipped" };
             }
 
             var formElement = modalDoc.querySelector('form');
@@ -36889,6 +36972,38 @@
 
             var allInputs = formElement.querySelectorAll('input, textarea, select');
             log("Found " + String(allInputs.length) + " form inputs");
+
+            var selects = formElement.querySelectorAll('select');
+            var lockedSet = false;
+            var s = 0;
+            while (s < selects.length) {
+                var sel = selects[s];
+                var opts = sel.querySelectorAll('option');
+                var o = 0;
+                while (o < opts.length) {
+                    var opt = opts[o];
+                    var optText = (opt.textContent || "").trim().toLowerCase();
+                    var optVal = (opt.value || "").trim().toLowerCase();
+                    if (optText.indexOf("locked") !== -1 || optVal.indexOf("locked") !== -1 || optVal === "lock") {
+                        sel.value = opt.value;
+                        opt.setAttribute("selected", "selected");
+                        var p = 0;
+                        while (p < opts.length) {
+                            if (p !== o) opts[p].removeAttribute("selected");
+                            p = p + 1;
+                        }
+                        lockedSet = true;
+                        log("Set state dropdown '" + String(sel.getAttribute("name") || "") + "' to Locked (value=" + opt.value + ")");
+                        break;
+                    }
+                    o = o + 1;
+                }
+                if (lockedSet) break;
+                s = s + 1;
+            }
+            if (!lockedSet) {
+                log("No state dropdown with 'Locked' option found; will submit form as-is");
+            }
 
             var formData = "";
             var i = 0;
@@ -36914,8 +37029,7 @@
                         if (selectedOption) {
                             value = selectedOption.value || selectedOption.getAttribute("value") || "";
                         } else {
-                            var firstOption = input.querySelector("option");
-                            value = firstOption ? (firstOption.value || firstOption.getAttribute("value") || "") : "";
+                            value = input.value || "";
                         }
                     } else {
                         value = input.value || input.getAttribute("value") || "";
@@ -36931,12 +37045,19 @@
 
             var formAction = formElement.getAttribute("action");
             var formMethod = formElement.getAttribute("method") || "POST";
-            log("Form action (ignored): " + formAction);
+            log("Form action: " + formAction);
             log("Form method: " + formMethod);
             log("Form data: " + formData);
             log("Submitting lock for: " + planName);
 
             var submitUrl = updateUrl;
+            if (formAction) {
+                if (formAction.indexOf("/") === 0) {
+                    submitUrl = location.origin + formAction;
+                } else if (formAction.indexOf("http") === 0) {
+                    submitUrl = formAction;
+                }
+            }
 
             log("Submit URL: " + submitUrl);
             var resultHtml = await submitForm(submitUrl, formData);
@@ -36948,6 +37069,18 @@
                 if (errorText.indexOf("Each segment must contain at least one visible activity") !== -1) {
                     log("Activity Plan " + planName + " has validation error (no visible activities), skipping");
                     return { success: true, message: "Validation error, skipped" };
+                } else {
+                    log("Activity Plan " + planName + " has error: " + errorText);
+                    return { success: false, message: "Error: " + errorText };
+                }
+            }
+
+            var successAlert = resultDoc.querySelector('div.alert.alert-success.alert-dismissable');
+            if (successAlert) {
+                var successText = (successAlert.textContent + "").trim().toLowerCase();
+                if (successText.indexOf("activity plan has been updated") !== -1 || successText.indexOf("plan has been updated") !== -1 || successText.indexOf("updated successfully") !== -1 || successText.indexOf("successfully updated") !== -1) {
+                    log("Successfully locked: " + planName);
+                    return { success: true, message: "Locked successfully" };
                 }
             }
 
@@ -36959,8 +37092,8 @@
 
             var verifyAlert = verifyDoc.querySelector('div.alert.alert-success.alert-dismissable');
             if (verifyAlert) {
-                var verifyText = (verifyAlert.textContent + "").trim();
-                if (verifyText.indexOf("activity plan has been updated") !== -1 || verifyText.indexOf("Activity plan has been updated") !== -1) {
+                var verifyText = (verifyAlert.textContent + "").trim().toLowerCase();
+                if (verifyText.indexOf("activity plan has been updated") !== -1 || verifyText.indexOf("plan has been updated") !== -1 || verifyText.indexOf("updated successfully") !== -1 || verifyText.indexOf("successfully updated") !== -1) {
                     log("Successfully locked: " + planName);
                     return { success: true, message: "Locked successfully" };
                 }
@@ -37017,8 +37150,17 @@
                 var href = a.getAttribute("href") + "";
                 var planName = (a.textContent + "").trim();
                 if (href.length > 0) {
-                    var fullUrl = location.origin + href;
-                    planData.push({ url: fullUrl, name: planName });
+                    var tds = row.querySelectorAll("td");
+                    var stateText = "";
+                    if (tds.length > 0) {
+                        stateText = (tds[tds.length - 1].textContent || "").trim();
+                    }
+                    if (stateText === "Locked") {
+                        log("Skipping already locked plan: " + planName);
+                    } else {
+                        var fullUrl = location.origin + href;
+                        planData.push({ url: fullUrl, name: planName });
+                    }
                 }
             }
             i = i + 1;
@@ -38342,7 +38484,8 @@
         if (!w) {
             w = scale(PANEL_DEFAULT_WIDTH);
         }
-        if (!h) {
+        // Reject "auto" or any non-pixel stored height so calc(100% - 50px) works
+        if (!h || h === "auto" || !String(h).endsWith("px")) {
             h = PANEL_DEFAULT_HEIGHT;
         }
         return { width: w, height: h };
@@ -38375,6 +38518,9 @@
             if (bodyContainer) {
                 bodyContainer.style.display = "flex";
                 bodyContainer.style.flexDirection = "column";
+                bodyContainer.style.height = "calc(100% - " + scale(PANEL_HEADER_HEIGHT_PX) + ")";
+                bodyContainer.style.maxHeight = "calc(100% - " + scale(PANEL_HEADER_HEIGHT_PX) + ")";
+                bodyContainer.style.overflow = "hidden";
             }
             if (resizeHandle) {
                 resizeHandle.style.display = "block";
@@ -40450,9 +40596,9 @@
             if (bodyContainer) {
                 bodyContainer.style.display = "flex";
                 bodyContainer.style.flexDirection = "column";
-                bodyContainer.style.height = "calc(100% - " + String(scale(PANEL_HEADER_HEIGHT_PX)) + "px)";
-                bodyContainer.style.maxHeight = "calc(100% - " + String(scale(PANEL_HEADER_HEIGHT_PX)) + "px)";
-                bodyContainer.style.overflowY = "auto";
+                bodyContainer.style.height = "calc(100% - " + scale(PANEL_HEADER_HEIGHT_PX) + ")";
+                bodyContainer.style.maxHeight = "calc(100% - " + scale(PANEL_HEADER_HEIGHT_PX) + ")";
+                bodyContainer.style.overflowY = "hidden";
             }
         });
 
@@ -40610,11 +40756,11 @@
         panel.style.fontSize = scale(PANEL_FONT_SIZE_PX);
         panel.style.minWidth = scale(PANEL_DEFAULT_WIDTH);
         panel.style.width = savedSize.width || scale(PANEL_DEFAULT_WIDTH);
-        if (savedSize.height && savedSize.height !== PANEL_DEFAULT_HEIGHT) {
-            panel.style.height = savedSize.height;
-        } else {
-            panel.style.height = PANEL_DEFAULT_HEIGHT;
+        var appliedHeight = savedSize.height;
+        if (!appliedHeight || appliedHeight === "auto" || !String(appliedHeight).endsWith("px")) {
+            appliedHeight = PANEL_DEFAULT_HEIGHT;
         }
+        panel.style.height = appliedHeight;
         panel.style.boxSizing = "border-box";
         panel.style.overflow = "hidden";
 
@@ -40627,8 +40773,8 @@
         headerBar.style.display = "grid";
         headerBar.style.gridTemplateColumns = "auto 1fr auto";
         headerBar.style.alignItems = "center";
-        headerBar.style.gap = String(scale(PANEL_HEADER_GAP_PX)) + "px";
-        headerBar.style.height = String(scale(PANEL_HEADER_HEIGHT_PX)) + "px";
+        headerBar.style.gap = scale(PANEL_HEADER_GAP_PX);
+        headerBar.style.height = scale(PANEL_HEADER_HEIGHT_PX);
         headerBar.style.boxSizing = "border-box";
         headerBar.style.cursor = "grab";
         headerBar.style.userSelect = "none";
@@ -40713,11 +40859,11 @@
         var bodyContainer = document.createElement("div");
         bodyContainer.style.display = "flex";
         bodyContainer.style.flexDirection = "column";
-        bodyContainer.style.height = "calc(100% - " + String(scale(PANEL_HEADER_HEIGHT_PX)) + "px)";
-        bodyContainer.style.maxHeight = "calc(100% - " + String(scale(PANEL_HEADER_HEIGHT_PX)) + "px)";
-        bodyContainer.style.overflowY = "auto";
+        bodyContainer.style.height = "calc(100% - " + scale(PANEL_HEADER_HEIGHT_PX) + ")";
+        bodyContainer.style.maxHeight = "calc(100% - " + scale(PANEL_HEADER_HEIGHT_PX) + ")";
+        bodyContainer.style.overflowY = "hidden";
         bodyContainer.style.boxSizing = "border-box";
-        bodyContainer.style.padding = scale(12) + "px";
+        bodyContainer.style.padding = scale(12);
         var btnRow = document.createElement("div");
         btnRow.style.display = "grid";
         btnRow.style.gridTemplateColumns = "1fr 1fr";
@@ -41264,8 +41410,9 @@
         logBox.id = LOG_ID;
         logBox.style.marginTop = scale(LOG_MARGIN_TOP_PX);
         logBox.style.flex = "1";
-        logBox.style.minHeight = scale(LOG_HEIGHT_PX);
+        logBox.style.minHeight = "0px";
         logBox.style.overflowY = "auto";
+        logBox.style.position = "relative";
         logBox.style.background = glass ? THEME_SURFACE_BG : "#141414";
         logBox.style.border = glass ? ("1px solid " + THEME_SURFACE_INNER_BORDER) : "1px solid #333";
         logBox.style.borderRadius = scale(LOG_BORDER_RADIUS_PX);
