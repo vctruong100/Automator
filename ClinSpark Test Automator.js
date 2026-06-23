@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 4.2.1
+// @version 4.2.3
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -36942,29 +36942,13 @@
                 log("Save button NOT found in modal");
             }
 
-            var formGroups = modalDoc.querySelectorAll('.form-group');
-            if (!formGroups || formGroups.length < 2) {
-                log("Form groups not found for: " + planName);
-                return { success: false, message: "Form groups not found" };
+            var formElement = null;
+            if (saveButton) {
+                formElement = saveButton.closest('form');
             }
-
-            var secondFormGroup = formGroups[1];
-            var formControlStatic = secondFormGroup.querySelector('p.form-control-static');
-
-            var isLockedState = false;
-            if (formControlStatic) {
-                var staticText = (formControlStatic.textContent + "").trim();
-                if (staticText.indexOf("Locked") !== -1) {
-                    isLockedState = true;
-                    log("Activity Plan " + planName + " is already locked, skipping");
-                }
+            if (!formElement) {
+                formElement = modalDoc.querySelector('form');
             }
-
-            if (isLockedState) {
-                return { success: true, message: "Already locked, skipped" };
-            }
-
-            var formElement = modalDoc.querySelector('form');
             if (!formElement) {
                 log("Form not found for: " + planName);
                 return { success: false, message: "Form not found" };
@@ -37003,6 +36987,20 @@
             }
             if (!lockedSet) {
                 log("No state dropdown with 'Locked' option found; will submit form as-is");
+            }
+
+            var reasonInput = formElement.querySelector('textarea[name="reasonForChange"]');
+            if (!reasonInput) {
+                reasonInput = modalDoc.querySelector('textarea[name="reasonForChange"]');
+            }
+            if (reasonInput) {
+                var currentReason = (reasonInput.value || "").trim();
+                if (!currentReason) {
+                    reasonInput.value = "Locking";
+                    log("Filled reasonForChange with 'Locking'");
+                } else {
+                    log("reasonForChange already has value: '" + currentReason + "'");
+                }
             }
 
             var formData = "";
@@ -37051,14 +37049,6 @@
             log("Submitting lock for: " + planName);
 
             var submitUrl = updateUrl;
-            if (formAction) {
-                if (formAction.indexOf("/") === 0) {
-                    submitUrl = location.origin + formAction;
-                } else if (formAction.indexOf("http") === 0) {
-                    submitUrl = formAction;
-                }
-            }
-
             log("Submit URL: " + submitUrl);
             var resultHtml = await submitForm(submitUrl, formData);
             var resultDoc = parseHtml(resultHtml);
