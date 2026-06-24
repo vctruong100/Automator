@@ -5,12 +5,11 @@
 
 // Add Item Names
 var startTimeItem = [
-    "Start Semirecumbent Time",
-    "VS_Repeat Start supine time",
-    "VS_COLLECTION_DATE/TIME",
+    "VS_Resting time (NEW)", "VS_Resting time",
+    
 ]
 
-var difference = 5; // in minutes
+var difference = 3; // in minutes
 
 // Two Approaches: Method A and Method B
 // Let's say Start Time is 10:00:59 and End Time is 10:10:00
@@ -106,7 +105,7 @@ function pullItemFromForm(form, targetItem, isRepeat) {
                 item = group.items[j];
                 if (targetItem.indexOf(item.name) !== -1) {
                     logger("Start Time: " + item.value);
-                    if (item.value !== null && !item.canceled && item.value !== "") return item;
+                    if (item.value !== null && !item.canceled && item.value !== "" && item.dataType == "datetime") return item;
                 }
             }
         }
@@ -119,7 +118,7 @@ function pullItemFromForm(form, targetItem, isRepeat) {
                 item = group.items[j];
                 if (targetItem.indexOf(item.name) !== -1) {
                     logger("Start Time: " + item.value);
-                    if (item.value !== null && !item.canceled && item.value !== "") return item;
+                    if (item.value !== null && !item.canceled && item.value !== "" && item.dataType == "datetime") return item;
                 }
             }
         }
@@ -155,7 +154,7 @@ function getItemGroupName(form) {
 
 try {
     var isRepeat = containsValue(getItemGroupName(formJson), "repeat");
-
+    logger("Is repeat:" + isRepeat)
     var startTime = pullItemFromForm(formJson, startTimeItem, isRepeat);
     var endTime = itemJson.item;
 
@@ -164,6 +163,7 @@ try {
     if (!startTime || startTime.value == null || !endTime || endTime.value == null) return null;
 
     var startTimeMs = startTime.dateValueMs;
+    logger("STart time ms: " + startTimeMs)
     var endTimeMs = endTime.dateValueMs;
 
     var differenceInMins;

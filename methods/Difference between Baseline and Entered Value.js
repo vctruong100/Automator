@@ -4,21 +4,10 @@
 // Purpose: Calculates delta between baseline and currently entered value.
 
 // Add Item Names
-var baselineStudyEvent = [
-    "Period 1 Day 1",
-    "Visit 2 Week 1 Day 0",
-];
-var baselineFormName = [
-    "ECG_Single 12 - Lead ECG + Triplicate",
-    "ECG_Predose_Triplicate ECG (baseline) (SPONSOR PROVIDED MACHINE)",
-    "ECG_Single 12 - Lead ECG + Triplicate (baseline - PREDOSE)"
-];
+var baselineStudyEvent = ["Period 1 Day 1","Visit 2 Week 1 Day 0",];
+var baselineFormName = ["ECG_Single 12 - Lead ECG + Triplicate"];
 
-var qtcfItem = [
-    "QTcF (protocol range)",
-    "QTcF (baseline)",
-    "Baseline QTcF"
-];
+var qtcfItem = ["Baseline QTcF"];
 
 var sigfig = itemJson.item.significantDigits;
 

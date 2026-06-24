@@ -4,62 +4,25 @@
 // Purpose: Computes differences between supine and standing vitals (different item names).
 
 // Add item names
-var sysItem = [
-    "SYS (I: 90-150)",
-    "Systolic Blood Pressure",
-]
-var diaItem = [
-    "DIA (I: 50-99)",
-    "DIA (I: 50-90)"
-]
+var sysItem = ["SYS (I: 90-150)", "Systolic Blood Pressure",]
+var diaItem = ["DIA (I: 50-99)", "DIA (I: 50-90)"]
+var hrItem = ["HR (I: 45-100)"]
 
-var hrItem = [
-    "HR (I: 45-100)"
-]
+var sysStandingItem = ["SYS (I: 90-145) standing", "SYS (I: 90-150) standing",]
+var diaStandingItem = ["DIA (I: 50-90) standing","DIA (I: 50-99) standing",]
+var hrStandingItem = ["HR (I: 45-90) standing", "HR (I: 45-100) standing",]
 
-var sysStandingItem = [
-    "SYS (I: 90-145) standing",
-    "SYS (I: 90-150) standing",
-]
+var sysAttachedItem = ["Systolic_BP_Diff", "ortho sbp check",]
+var diaAttachedItem = ["Diastolic_BP_Diff","Repeat_ortho dbp check",]
 
-var diaStandingItem = [
-    "DIA (I: 50-90) standing",
-    "DIA (I: 50-99) standing",
-]
+var hrAttachedItem = ["HR_Diff", "Repeat_ortho hr check",]
 
-var hrStandingItem = [
-    "HR (I: 45-90) standing",
-    "HR (I: 45-100) standing",
-]
-
-var sysAttachedItem = [
-    "Systolic_BP_Diff",
-    "ortho sbp check",
-]
-
-var diaAttachedItem = [
-    "Diastolic_BP_Diff",
-    "Repeat_ortho dbp check",
-]
-
-var hrAttachedItem = [
-    "HR_Diff",
-    "Repeat_ortho hr check",
-]
-
-// Inclusive (editable)
 var sysDifferenceRange = 20;
 var diaDifferenceRange = 10;
 var hrDifferenceRange = 30;
 
-var sysSemi = null;
-var sysStanding = null;
-
-var diaSemi = null;
-var diaStanding = null;
-
-var hrSemi = null;
-var hrStanding = null;
+var semi = null;
+var standing = null;
 
 var item = itemJson.item;
 
@@ -104,17 +67,17 @@ function pullItemFromForm(form, targetItem, lastToFirst) {
 try {
     logger("Attached item: " + item.name);
     if (sysAttachedItem.indexOf(item.name) !== -1) {
-        sysSemi = pullItemFromForm(formJson, sysItem, true);
-        sysStanding = pullItemFromForm(formJson, sysStandingItem, false);
-        return checkDifference(sysDifferenceRange, sysSemi, sysStanding);
+        semi = pullItemFromForm(formJson, sysItem, true);
+        standing = pullItemFromForm(formJson, sysStandingItem, false);
+        return checkDifference(sysDifferenceRange, semi, standing);
     } else if (diaAttachedItem.indexOf(item.name) !== -1) {
-        diaSemi = pullItemFromForm(formJson, diaItem, true);
-        diaStanding = pullItemFromForm(formJson, diaStandingItem, false);
-        return checkDifference(diaDifferenceRange, diaSemi, diaStanding);
+        semi = pullItemFromForm(formJson, diaItem, true);
+        standing = pullItemFromForm(formJson, diaStandingItem, false);
+        return checkDifference(diaDifferenceRange, semi, standing);
     } else if (hrAttachedItem.indexOf(item.name) !== -1) {
-        hrSemi = pullItemFromForm(formJson, hrItem, true);
-        hrStanding = pullItemFromForm(formJson, hrStandingItem, false);
-        return checkDifference(hrDifferenceRange, hrSemi, hrStanding);
+        semi = pullItemFromForm(formJson, hrItem, true);
+        standing = pullItemFromForm(formJson, hrStandingItem, false);
+        return checkDifference(hrDifferenceRange, semi, standing);
     }
 
     return null;

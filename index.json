@@ -121,7 +121,7 @@
                      "ItemJson",
                      "Structure"
                  ],
-        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/FormJson%20and%20ItemJson%20Structure.js",
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/FormJson%20and%20ItemJson%20Structure.md",
         "updated":  "2026-02-12"
     },
     {
@@ -717,16 +717,16 @@
     },
     {
         "id":  "M-097",
-        "title":  "Difference between 2 SBP, DBP, and HR - Supine vs Standing",
+        "title":  "Difference between 2 SBP, DBP, and HR - Supine vs Standing (Orthostasis)",
         "tags":  [
                      "Difference",
-                     "between",
                      "SBP",
                      "DBP",
-                     "and"
+                     "HR",
+                     "Orthostasis"
                  ],
-        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Difference%20between%202%20SBP%2C%20DBP%2C%20and%20HR%20-%20Supine%20vs%20Standing.js",
-        "updated":  "2026-06-18"
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Difference%20between%202%20SBP%2C%20DBP%2C%20and%20HR%20-%20Supine%20vs%20Standing%20(Orthostasis).js",
+        "updated":  "2026-06-24"
     },
     {
         "id":  "M-098",
@@ -776,5 +776,30 @@
                  ],
         "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Pull%20Weight.js",
         "updated":  "2026-06-18"
+    },
+    {
+        "id":  "M-102",
+        "title":  "Difference between 2 SBP, DBP, and HR - Supine vs Standing (Orthostasis) v2",
+        "tags":  [
+                     "Difference",
+                     "SBP",
+                     "DBP",
+                     "HR",
+                     "Orthostasis"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Difference%20between%202%20SBP%2C%20DBP%2C%20and%20HR%20-%20Supine%20vs%20Standing%20(Orthostasis)%20v2.js",
+        "updated":  "2026-06-24"
+    },
+    {
+        "id":  "M-103",
+        "title":  "Protocol Check Median Vital Sign Eligibility",
+        "tags":  [
+                     "Protocol Check",
+                     "Median",
+                     "Vital Signs",
+                     "Eligibility"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Median%20Vital%20Sign%20Eligibility.js",
+        "updated":  "2026-06-24"
     }
 ]
