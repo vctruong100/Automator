@@ -153,7 +153,9 @@ function getItemGroupName(form) {
 }
 
 try {
-    var isRepeat = containsValue(getItemGroupName(formJson), "repeat");
+    var groupName = getItemGroupName(formJson);
+    var isRepeat = false;
+    if (containsValue(groupName, "repeat") || containsValue(groupName, "standing")) isRepeat = true;
     logger("Is repeat:" + isRepeat)
     var startTime = pullItemFromForm(formJson, startTimeItem, isRepeat);
     var endTime = itemJson.item;
