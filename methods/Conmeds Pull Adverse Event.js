@@ -1,20 +1,36 @@
-const formname = formJson.form.name;
+/* jshint strict: false */
 
-if (containsValue(formname, "hypoglycemic event")) {
-    return "Hypoglycemic event";
-}
+// Version: v1
+// Purpose: Populate adverse event item in conmeds item group
 
-const AE = findFirstItemValueByName(formJson, "AE_Adverse event");
+var itemName = [
+    "AE_Adverse event",
+    "AE_TERM"
+]
 
-if (AE) return AE;
+function pullItemFromForm(form, targetItem) {
+    var itemGroups = form.form.itemGroups;
+    var group, item, i, j;
 
-return null;
+    if (!itemGroups || itemGroups.length < 1) return null;
 
-function containsValue(input, keyword) {
-    if (input == null) {
-        return false;
+    for (i = 0; i < itemGroups.length; i++) {
+        group = itemGroups[i];
+        if (!group || group.canceled) continue;
+        for (j = 0; j < group.items.length; j++) {
+            item = group.items[j];
+            if (targetItem.indexOf(item.name) !== -1 && item.value !== null && !item.canceled && item.value !== "") {
+                return item.value;
+            }
+        }
     }
-
-    var value = input.toString().toLowerCase();
-    return value.indexOf(keyword) !== -1;
+    return null;
 }
+
+try {
+    return pullItemFromForm(formJson, itemName);
+} catch (e) {
+    logger("Error: " + e);
+    return null;
+}
+
