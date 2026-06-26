@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     2.9.0
+// @version     3.1.0
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -31,8 +31,6 @@
     var STORAGE_CONSENT_SCAN_INDEX = "activityPlanState.consent.scanIndex";
     var STORAGE_PAUSED = "activityPlanState.paused";
     var STORAGE_CHECK_ELIG_LOCK = "activityPlanState.checkEligLock";
-    var btnRowRef = null;
-    var PENDING_BUTTONS = [];
     var STUDY_METADATA_URL = "https://cenexel.clinspark.com/secure/crfdesign/studylibrary/show/studymetadata";
     var STORAGE_BARCODE_SUBJECT_TEXT = "activityPlanState.barcode.subjectText";
     var STORAGE_BARCODE_SUBJECT_ID = "activityPlanState.barcode.subjectId";
@@ -31277,6 +31275,985 @@
         clearBarcodeSubjectId();
     }
 
+    //==========================
+    // AUTO-RESAVER FEATURE
+    //==========================
+    const RUNMODE_AUTO_RESAVER = "autoResaver";
+    const STORAGE_AR_STATE = "activityPlanState.autoResaver.state";
+    const STORAGE_AR_STOP = "activityPlanState.autoResaver.stop";
+    const AR_REASON = "Re-collecting to trigger method";
+    var AR_POPUP_REF = null;
+    var AR_STATUS_REF = null;
+
+    function arIsDataListPage() {
+        var h = location.hostname;
+        var p = location.pathname;
+        return (h === "cenexeltest.clinspark.com" || h === "cenexel.clinspark.com") && p === "/secure/study/data/list";
+    }
+
+    function arIsVisible(el) {
+        if (!el) return false;
+        var style = window.getComputedStyle(el);
+        return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
+    }
+
+    function arGetActiveModal() {
+        var modals = document.querySelectorAll('.modal:not(.bootbox)');
+        // Prefer a modal that actually has visible content.
+        for (var i = 0; i < modals.length; i++) {
+            var content = modals[i].querySelector('.modal-content');
+            if (content && arIsVisible(content)) return modals[i];
+        }
+        // Then fall back to any visible modal.
+        for (var i = 0; i < modals.length; i++) {
+            if (arIsVisible(modals[i])) return modals[i];
+        }
+        // Last resort: visible backdrop with the legacy ajax modal present.
+        var ajax = document.querySelector('#ajaxModal');
+        var backdrop = document.querySelector('.modal-backdrop');
+        if (backdrop && arIsVisible(backdrop) && ajax) return ajax;
+        return null;
+    }
+
+    function arLogModalState() {
+        var ajax = document.querySelector('#ajaxModal');
+        log("AutoResaver: #ajaxModal present=" + !!ajax + " visible=" + (ajax ? arIsVisible(ajax) : false) + " classes=" + (ajax ? ajax.className : "n/a"));
+        var content = ajax ? ajax.querySelector('.modal-content') : null;
+        log("AutoResaver: #ajaxModal .modal-content present=" + !!content + " visible=" + (content ? arIsVisible(content) : false));
+        var backdrop = document.querySelector('.modal-backdrop');
+        log("AutoResaver: .modal-backdrop present=" + !!backdrop + " visible=" + (backdrop ? arIsVisible(backdrop) : false) + " body.modal-open=" + document.body.classList.contains('modal-open'));
+        var all = document.querySelectorAll('.modal:not(.bootbox)');
+        for (var i = 0; i < all.length; i++) {
+            log("AutoResaver: candidate modal #" + all[i].id + " classes=" + all[i].className + " visible=" + arIsVisible(all[i]));
+        }
+    }
+
+    function arFindDropdownToggle(link) {
+        if (!link) return null;
+        var menu = null;
+        if (link.closest) {
+            menu = link.closest('.dropdown-menu');
+        }
+        if (!menu) {
+            var el = link.parentElement;
+            while (el && el !== document.body) {
+                if (el.classList && el.classList.contains('dropdown-menu')) { menu = el; break; }
+                el = el.parentElement;
+            }
+        }
+        if (!menu) return null;
+        var dropdown = menu.parentElement;
+        if (!dropdown) return null;
+        var toggle = dropdown.querySelector('a.dropdown-toggle, button.dropdown-toggle, [data-toggle="dropdown"]');
+        return toggle;
+    }
+
+    async function arClickDropdownLink(link) {
+        if (!link) return false;
+        if (arIsVisible(link)) {
+            link.click();
+            return true;
+        }
+        var toggle = arFindDropdownToggle(link);
+        if (toggle && arIsVisible(toggle)) {
+            toggle.click();
+            await sleep(350);
+            if (arIsVisible(link)) {
+                link.click();
+                return true;
+            }
+        }
+        link.click();
+        return true;
+    }
+
+    async function arClickCollectAnchor(anchor) {
+        if (!anchor) return false;
+        if (arIsVisible(anchor)) {
+            anchor.click();
+            return true;
+        }
+        var toggle = arFindDropdownToggle(anchor);
+        if (toggle && arIsVisible(toggle)) {
+            toggle.click();
+            await sleep(400);
+            if (arIsVisible(anchor)) {
+                anchor.click();
+                return true;
+            }
+        }
+        if (typeof anchor.onclick === 'function') {
+            try { anchor.onclick(); return true; } catch (e) { log("AutoResaver: collect onclick error: " + String(e && e.message ? e.message : e)); }
+        }
+        anchor.click();
+        return true;
+    }
+
+    function arIsStopRequested() {
+        var raw = null;
+        try { raw = localStorage.getItem(STORAGE_AR_STOP); } catch (e) {}
+        return raw === "1";
+    }
+
+    function arSetStop(flag) {
+        try { localStorage.setItem(STORAGE_AR_STOP, flag ? "1" : "0"); } catch (e) {}
+    }
+
+    function arSaveState(state) {
+        try {
+            state.lastTs = Date.now();
+            localStorage.setItem(STORAGE_AR_STATE, JSON.stringify(state));
+        } catch (e) {}
+    }
+
+    function arLoadState() {
+        var raw = null;
+        try { raw = localStorage.getItem(STORAGE_AR_STATE); } catch (e) {}
+        if (!raw) return null;
+        try { return JSON.parse(raw); } catch (e) { return null; }
+    }
+
+    function arClearState() {
+        try {
+            localStorage.removeItem(STORAGE_AR_STATE);
+            localStorage.removeItem(STORAGE_AR_STOP);
+            localStorage.removeItem(STORAGE_RUN_MODE);
+        } catch (e) {}
+    }
+
+    function arFindButtonByText(root, text) {
+        if (!root) return null;
+        var all = root.querySelectorAll("button, a.btn, span[data-dismiss=\"modal\"], [onclick]");
+        var i = 0;
+        while (i < all.length) {
+            var t = (all[i].textContent + "").replace(/\s+/g, " ").trim();
+            if (t === text) return all[i];
+            i = i + 1;
+        }
+        return null;
+    }
+
+    function arGetCurrentPage() {
+        var pageLi = document.querySelector('ul.pagination.bootpag li.disabled[data-lp]:not(.prev):not(.next)');
+        if (pageLi) {
+            var n = parseInt(pageLi.getAttribute("data-lp"), 10);
+            if (!isNaN(n)) return n;
+        }
+        var activeLi = document.querySelector('ul.pagination.bootpag li.active');
+        if (activeLi) {
+            var n2 = parseInt(activeLi.getAttribute("data-lp"), 10);
+            if (!isNaN(n2)) return n2;
+        }
+        return 1;
+    }
+
+    function arGetTotalPages() {
+        var lis = document.querySelectorAll('ul.pagination.bootpag li[data-lp]');
+        var max = 1;
+        var i = 0;
+        while (i < lis.length) {
+            var n = parseInt(lis[i].getAttribute("data-lp"), 10);
+            if (!isNaN(n) && n > max) max = n;
+            i = i + 1;
+        }
+        return max;
+    }
+
+    function arHasNextPage() {
+        var nextLi = document.querySelector('ul.pagination.bootpag li.next');
+        if (!nextLi) return false;
+        return nextLi.classList.contains("disabled") === false;
+    }
+
+    function arClickNextPage() {
+        var nextA = document.querySelector('ul.pagination.bootpag li.next a');
+        if (!nextA) return false;
+        nextA.click();
+        return true;
+    }
+
+    function arShowProgress() {
+        var container = document.createElement("div");
+        container.style.cssText = "padding:16px;";
+        var status = document.createElement("div");
+        status.style.cssText = "font-size:14px;color:#fff;margin-bottom:12px;";
+        status.textContent = "Auto-Resaver: starting...";
+        var stopBtn = document.createElement("button");
+        stopBtn.textContent = "Stop";
+        stopBtn.style.cssText = "padding:6px 14px;border-radius:4px;border:none;background:#dc3545;color:#fff;cursor:pointer;font-size:13px;";
+        stopBtn.addEventListener("click", function() { arStop(); });
+        container.appendChild(status);
+        container.appendChild(stopBtn);
+        var popup = createPopup({
+            title: "Auto-Resaver",
+            content: container,
+            width: "380px",
+            height: "auto"
+        });
+        AR_POPUP_REF = popup;
+        AR_STATUS_REF = status;
+        return popup;
+    }
+
+    function arSetStatus(msg) {
+        log("AutoResaver: " + msg);
+        if (AR_STATUS_REF) AR_STATUS_REF.textContent = msg;
+    }
+
+    function arStop() {
+        arSetStop(true);
+        arClearState();
+        if (AR_POPUP_REF) {
+            try { AR_POPUP_REF.close(); } catch (e) {}
+            AR_POPUP_REF = null;
+        }
+        AR_STATUS_REF = null;
+    }
+
+    function arFinish() {
+        arClearState();
+        if (AR_POPUP_REF) {
+            try { AR_POPUP_REF.close(); } catch (e) {}
+            AR_POPUP_REF = null;
+        }
+        AR_STATUS_REF = null;
+    }
+
+    function arShowWarning(title, message) {
+        var container = document.createElement("div");
+        container.style.cssText = "padding:20px;text-align:center;";
+        var icon = document.createElement("div");
+        icon.innerHTML = "⚠️";
+        icon.style.fontSize = "48px";
+        icon.style.marginBottom = "15px";
+        var t = document.createElement("div");
+        t.textContent = title;
+        t.style.cssText = "font-size:18px;font-weight:bold;color:#ff6b6b;margin-bottom:10px;";
+        var m = document.createElement("div");
+        m.textContent = message;
+        m.style.cssText = "font-size:14px;color:#ccc;margin-bottom:20px;";
+        var ok = document.createElement("button");
+        ok.textContent = "OK";
+        ok.style.cssText = "background:#5b43c7;color:#fff;border:none;border-radius:4px;padding:8px 24px;cursor:pointer;font-size:14px;";
+        container.appendChild(icon);
+        container.appendChild(t);
+        container.appendChild(m);
+        container.appendChild(ok);
+        var popup = createPopup({ title: "Auto-Resaver - Warning", content: container, width: "400px", height: "auto" });
+        ok.addEventListener("click", function() { popup.close(); });
+        return popup;
+    }
+
+    function arParseTable() {
+        var tbody = document.querySelector("tbody#studyDataTableBody");
+        if (!tbody) return [];
+        var rows = tbody.querySelectorAll(':scope > tr');
+        var tasks = [];
+        var seen = {};
+        var seenName = {};
+        var i = 0;
+        while (i < rows.length) {
+            var row = rows[i];
+            var subjectA = row.querySelector('span.tooltips[data-original-title="Subject"] a[href*="/show/subject/"]');
+            var formA = row.querySelector('span.tooltips[data-original-title="Form"] a[href*="/show/formdata/"]');
+            var eventA = row.querySelector('span.tooltips[data-original-title="Study Event"] a[href*="/show/studyeventdata/"]');
+            var collectA = row.querySelector('a[onclick*="doCollect("]');
+            if (!subjectA || !formA || !eventA || !collectA) { i = i + 1; continue; }
+            var subjectHref = subjectA.getAttribute("href") || "";
+            var formHref = formA.getAttribute("href") || "";
+            var eventHref = eventA.getAttribute("href") || "";
+            var subjectMatch = subjectHref.match(/\/show\/subject\/(\d+)/);
+            var formMatch = formHref.match(/\/show\/formdata\/(\d+)/);
+            var eventMatch = eventHref.match(/\/show\/studyeventdata\/(\d+)/);
+            if (!subjectMatch || !formMatch || !eventMatch) { i = i + 1; continue; }
+            var subjectId = subjectMatch[1];
+            var formId = formMatch[1];
+            var eventDataId = eventMatch[1];
+            var subjectText = getText(subjectA);
+            var formName = getText(formA);
+            var eventText = getText(eventA);
+            var onclick = collectA.getAttribute("onclick") || "";
+            var igMatch = onclick.match(/doCollect\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
+            var itemGroupId = igMatch ? igMatch[3] : "";
+            var key = [subjectId, formId, eventDataId].join("|");
+            var nameKey = [subjectId, String(formName).replace(/\s+/g, " ").trim().toLowerCase(), eventDataId].join("|");
+            log("AutoResaver: parsed row key=" + key + " nameKey=" + nameKey + " subject=" + subjectText + " form=" + formName + " event=" + eventText + " itemGroup=" + itemGroupId);
+            if (seen[key] || seenName[nameKey]) { i = i + 1; continue; }
+            seen[key] = true;
+            seenName[nameKey] = true;
+            tasks.push({
+                row: row,
+                collectAnchor: collectA,
+                subjectId: subjectId,
+                subjectText: subjectText,
+                formId: formId,
+                formName: formName,
+                eventDataId: eventDataId,
+                eventText: eventText,
+                itemGroupId: itemGroupId,
+                key: key,
+                nameKey: nameKey
+            });
+            i = i + 1;
+        }
+        return tasks;
+    }
+
+    async function arFillAuditInputs(container, reason) {
+        if (!container) return;
+        // Wait for at least one visible audit reason field to appear.
+        var s2Containers = [];
+        var inputs = [];
+        var start = Date.now();
+        var found = false;
+        while (Date.now() - start < 10000) {
+            if (arIsStopRequested()) return;
+            s2Containers = container.querySelectorAll('.select2-container.auditReasonForChange');
+            inputs = container.querySelectorAll('input.auditReasonForChange, input[id$="_auditRecord"], select.auditReasonForChange, select[id$="_auditRecord"]');
+            found = false;
+            var k = 0;
+            while (k < s2Containers.length) {
+                if (arIsVisible(s2Containers[k])) { found = true; break; }
+                k = k + 1;
+            }
+            if (!found) {
+                k = 0;
+                while (k < inputs.length) {
+                    if (inputs[k].offsetParent !== null) { found = true; break; }
+                    k = k + 1;
+                }
+            }
+            if (found) break;
+            await sleep(200);
+        }
+        log("AutoResaver: found " + s2Containers.length + " Select2 audit reason(s) and " + inputs.length + " plain audit reason(s)");
+        function arGetSelect2DisplayText(s2) {
+            var chosen = s2.querySelector('.select2-chosen, .select2-selection__rendered, .select2-search-choice div, .select2-selection__choice');
+            return chosen ? (chosen.textContent || '').trim() : '';
+        }
+        // Fill Select2 audit reasons one at a time by simulating the user.
+        var j = 0;
+        while (j < s2Containers.length) {
+            var s2 = s2Containers[j];
+            if (!arIsVisible(s2)) { j = j + 1; continue; }
+            if (s2.classList.contains('select2-container-disabled')) {
+                log("AutoResaver: skipping disabled Select2 audit reason " + s2.id);
+                j = j + 1; continue;
+            }
+            var originalId = s2.id ? s2.id.replace(/^s2id_/, '') : '';
+            var original = originalId ? document.getElementById(originalId) : null;
+            if (!original) {
+                var prev = s2.previousElementSibling;
+                if (prev && prev.classList && (prev.classList.contains('auditReasonForChange') || (prev.id && /_auditRecord$/.test(prev.id)))) {
+                    original = prev;
+                }
+            }
+            if (!original) {
+                log("AutoResaver: could not find original element for Select2 audit reason " + s2.id);
+                j = j + 1; continue;
+            }
+            log("AutoResaver: filling Select2 audit reason " + s2.id + " originalId=" + originalId);
+            // Try the direct Select2 API first (avoids brittle UI typing).
+            if (window.jQuery && window.jQuery.fn && window.jQuery.fn.select2) {
+                try {
+                    var $orig = window.jQuery(original);
+                    var apiValue = reason;
+                    if (original.tagName === 'SELECT') {
+                        // For a real SELECT, set the option value whose text matches the reason.
+                        var $match = $orig.find('option').filter(function () {
+                            return window.jQuery(this).text().trim().toLowerCase() === reason.toLowerCase().trim();
+                        });
+                        if ($match.length) {
+                            apiValue = $match.first().val();
+                        } else {
+                            // Let the UI click the correct option instead of creating a fake one.
+                            throw new Error('No option text matches reason');
+                        }
+                    }
+                    $orig.val(apiValue).trigger('change');
+                    await sleep(200);
+                    if (arGetSelect2DisplayText(s2) === reason) {
+                        log("AutoResaver: set via Select2 API " + s2.id);
+                        j = j + 1;
+                        continue;
+                    }
+                } catch (e) {
+                    log("AutoResaver: Select2 API set skipped, using UI: " + String(e && e.message ? e.message : e));
+                }
+            }
+            // Ensure the previous Select2 dropdown is closed before touching the next field.
+            if (window.jQuery && window.jQuery.fn && window.jQuery.fn.select2) {
+                try { window.jQuery(original).select2('close'); } catch (e) {}
+            }
+            var bodyEl = document.querySelector('body');
+            if (bodyEl) {
+                bodyEl.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+                bodyEl.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+            }
+            await sleep(100);
+            // Open the dropdown by clicking the container's choice element.
+            var choice = s2.querySelector('a.select2-choice') || s2.querySelector('ul.select2-choices');
+            if (choice) {
+                choice.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+                choice.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+                choice.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+            } else {
+                // Fallback: try the API open.
+                if (window.jQuery && window.jQuery.fn && window.jQuery.fn.select2) {
+                    try { window.jQuery(original).select2('open'); } catch (e) { log("AutoResaver: Select2 open error: " + String(e && e.message ? e.message : e)); }
+                }
+            }
+            await sleep(250);
+            // Wait for the active dropdown to appear.
+            var start2 = Date.now();
+            var activeDrop = null;
+            while (Date.now() - start2 < 3000) {
+                activeDrop = document.querySelector('.select2-drop-active, .select2-dropdown--open, .select2-dropdown');
+                if (activeDrop) break;
+                await sleep(100);
+            }
+            if (!activeDrop) {
+                log("AutoResaver: Select2 dropdown did not appear");
+                j = j + 1;
+                continue;
+            }
+            // Wait for the results list to populate (Select2 may need a moment after open).
+            var startResults = Date.now();
+            var resultItems = [];
+            while (Date.now() - startResults < 3000) {
+                resultItems = activeDrop.querySelectorAll('.select2-results .select2-result, .select2-results__option');
+                if (resultItems.length > 0) break;
+                // Focus the search input to encourage Select2 to render results.
+                var searchInput = activeDrop.querySelector('.select2-input, .select2-search__field, .select2-search input[type="text"], .select2-search input[type="search"]');
+                if (searchInput) {
+                    searchInput.click();
+                    searchInput.focus();
+                }
+                await sleep(150);
+            }
+            log("AutoResaver: dropdown has " + resultItems.length + " option(s)");
+            // Try to select an existing option by matching text.
+            var matched = false;
+            var reasonLower = reason.toLowerCase().trim();
+            for (var r = 0; r < resultItems.length; r++) {
+                var resultText = (resultItems[r].querySelector('.select2-result-label, .select2-results__option') || resultItems[r]).textContent.trim();
+                if (resultText.toLowerCase() === reasonLower || resultText.toLowerCase().indexOf(reasonLower) === 0) {
+                    resultItems[r].scrollIntoView({ block: 'nearest' });
+                    resultItems[r].dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+                    resultItems[r].dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+                    resultItems[r].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+                    matched = true;
+                    log("AutoResaver: selected option '" + resultText + "'");
+                    break;
+                }
+            }
+            if (!matched) {
+                // Fallback: type into the search input and press Enter.
+                var searchInput = activeDrop.querySelector('.select2-input, .select2-search__field, .select2-search input[type="text"], .select2-search input[type="search"]');
+                if (!searchInput) {
+                    searchInput = s2.querySelector('.select2-input, .select2-search__field, .select2-search-field input[type="text"], .select2-search-field input[type="search"]');
+                }
+                if (searchInput) {
+                    searchInput.click();
+                    searchInput.focus();
+                    searchInput.value = reason;
+                    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    var searchCharCode = reason.charCodeAt(reason.length - 1) || 65;
+                    if (window.jQuery) {
+                        var $input = window.jQuery(searchInput);
+                        $input.trigger(jQuery.Event('keydown', { keyCode: searchCharCode, which: searchCharCode }));
+                        $input.trigger(jQuery.Event('keypress', { keyCode: searchCharCode, which: searchCharCode }));
+                        $input.trigger(jQuery.Event('keyup', { keyCode: searchCharCode, which: searchCharCode }));
+                    } else {
+                        ['keydown', 'keypress', 'keyup'].forEach(function (keyEventName) {
+                            searchInput.dispatchEvent(new KeyboardEvent(keyEventName, { key: String.fromCharCode(searchCharCode), code: 'Key' + String.fromCharCode(searchCharCode).toUpperCase(), keyCode: searchCharCode, which: searchCharCode, bubbles: true, cancelable: true }));
+                        });
+                    }
+                    await sleep(400);
+                    if (window.jQuery) {
+                        var $input2 = window.jQuery(searchInput);
+                        $input2.trigger(jQuery.Event('keydown', { keyCode: 13, which: 13 }));
+                        $input2.trigger(jQuery.Event('keypress', { keyCode: 13, which: 13 }));
+                        $input2.trigger(jQuery.Event('keyup', { keyCode: 13, which: 13 }));
+                    } else {
+                        ['keydown', 'keypress', 'keyup'].forEach(function (keyEventName) {
+                            searchInput.dispatchEvent(new KeyboardEvent(keyEventName, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+                        });
+                    }
+                } else {
+                    log("AutoResaver: Select2 search input did not appear");
+                }
+            }
+            // Wait for the dropdown to close before moving to the next field.
+            var start3 = Date.now();
+            while (Date.now() - start3 < 3000) {
+                if (!document.querySelector('.select2-drop-active')) break;
+                await sleep(100);
+            }
+            // Force close if it is still stuck.
+            if (document.querySelector('.select2-drop-active')) {
+                if (window.jQuery && window.jQuery.fn && window.jQuery.fn.select2) {
+                    try { window.jQuery(original).select2('close'); } catch (e) {}
+                }
+                if (bodyEl) {
+                    bodyEl.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+                }
+                await sleep(100);
+            }
+            // Safety net: update the underlying element value as well.
+            if (original.tagName === 'SELECT') {
+                var $orig = window.jQuery(original);
+                var $match = $orig.find('option').filter(function () {
+                    return window.jQuery(this).text().trim().toLowerCase() === reason.toLowerCase().trim();
+                });
+                if ($match.length) {
+                    original.value = $match.first().val();
+                } else {
+                    var opt = document.createElement('option');
+                    opt.value = reason;
+                    opt.textContent = reason;
+                    original.appendChild(opt);
+                    original.value = reason;
+                }
+            } else if (original.tagName === 'INPUT') {
+                original.value = reason;
+            }
+            original.dispatchEvent(new Event('input', { bubbles: true }));
+            original.dispatchEvent(new Event('change', { bubbles: true }));
+            if (window.jQuery && window.jQuery.fn && window.jQuery.fn.select2) {
+                try {
+                    window.jQuery(original).select2('val', original.value);
+                    window.jQuery(original).trigger('change');
+                } catch (e) {}
+            }
+            await sleep(100);
+            j = j + 1;
+        }
+        // Plain text/audit inputs as before.
+        var i = 0;
+        while (i < inputs.length) {
+            var inp = inputs[i];
+            if (inp.classList && inp.classList.contains('select2-offscreen')) { i = i + 1; continue; }
+            if (inp.offsetParent === null) { i = i + 1; continue; }
+            inp.value = reason;
+            var evt1 = new Event("input", { bubbles: true });
+            var evt2 = new Event("change", { bubbles: true });
+            inp.dispatchEvent(evt1);
+            inp.dispatchEvent(evt2);
+            if (window.jQuery && window.jQuery.fn && window.jQuery.fn.select2) {
+                try { window.jQuery(inp).trigger("change"); } catch (e) {}
+            }
+            i = i + 1;
+        }
+    }
+
+    async function arWaitForModal(timeoutMs) {
+        var start = Date.now();
+        var requested = timeoutMs || 8000;
+        var hardMax = 20000;
+        var deadline = requested;
+        while (Date.now() - start < hardMax) {
+            if (arIsStopRequested()) return null;
+            var modal = arGetActiveModal();
+            if (modal) return modal;
+            if (Date.now() - start >= deadline) {
+                var backdrop = document.querySelector('.modal-backdrop');
+                var modalOpen = document.body.classList.contains('modal-open');
+                if (!backdrop && !modalOpen) break; // no modal is opening
+                // Modal is still loading; give it more time.
+                deadline = hardMax;
+                if (Date.now() - start >= hardMax - 100) break;
+            }
+            await sleep(200);
+        }
+        arLogModalState();
+        return null;
+    }
+
+    async function arWaitForModalClose(timeoutMs) {
+        var start = Date.now();
+        while (Date.now() - start < timeoutMs) {
+            if (!arGetActiveModal()) return true;
+            await sleep(200);
+        }
+        return false;
+    }
+
+    async function arWaitForFormContent(timeoutMs) {
+        var start = Date.now();
+        var max = timeoutMs || 20000;
+        while (Date.now() - start < max) {
+            if (arIsStopRequested()) return { type: "stopped" };
+            var modal = arGetActiveModal();
+            if (!modal) return { type: "closed" };
+            if (arModalHasBarcodeVerify()) return { type: "barcode" };
+            if (arFindButtonByText(modal, "Save and Close")) return { type: "stepA" };
+            var groups = modal.querySelectorAll('div[id^="itemGroupData_"]');
+            var k = 0;
+            while (k < groups.length) {
+                var g = groups[k];
+                if (arIsVisible(g)) {
+                    var id = g.id.replace("itemGroupData_", "");
+                    var link = g.querySelector('a[onclick*="/itemgroupdata/collect/"]');
+                    if (link && !link.closest('li.disabled')) return { type: "stepB" };
+                }
+                k = k + 1;
+            }
+            await sleep(300);
+        }
+        return { type: "timeout" };
+    }
+
+    function arModalHasBarcodeVerify() {
+        var modal = arGetActiveModal();
+        if (!modal) return false;
+        var div = modal.querySelector('#requireSubjectBarcodeVerifyDiv');
+        return div && arIsVisible(div);
+    }
+
+    async function arHandleBarcodeVerify(subjectId) {
+        var modal = arGetActiveModal();
+        if (!modal) return false;
+        var div = modal.querySelector('#requireSubjectBarcodeVerifyDiv');
+        if (!div || !arIsVisible(div)) return false;
+        var link = div.querySelector('a[onclick*="inputBarcodeInModal"]');
+        if (link) {
+            link.click();
+            arSetStatus("Barcode verification required");
+            await sleep(300);
+        }
+        var input = await waitForSelector("input.bootbox-input.bootbox-input-text.form-control", 8000);
+        if (!input) {
+            log("AutoResaver: barcode input did not appear");
+            return false;
+        }
+        var barcode = "S" + String(subjectId);
+        input.value = barcode;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        var okBtn = document.querySelector('button[data-bb-handler="confirm"].btn.btn-primary');
+        if (!okBtn) okBtn = document.querySelector('button.btn.btn-primary[data-bb-handler="confirm"]');
+        if (okBtn) {
+            okBtn.click();
+            log("AutoResaver: barcode entered and confirmed");
+            await sleep(500);
+        } else {
+            log("AutoResaver: barcode OK button not found");
+        }
+        var start = Date.now();
+        while (Date.now() - start < 8000) {
+            var m = arGetActiveModal();
+            if (!m) return true;
+            var v = m.querySelector('#requireSubjectBarcodeVerifyDiv');
+            if (!v || !arIsVisible(v)) return true;
+            await sleep(200);
+        }
+        return false;
+    }
+
+    async function arProcessStepA(subjectId) {
+        var modal = arGetActiveModal();
+        if (!modal) return false;
+        arSetStatus("Filling audit reason and saving form");
+        await arFillAuditInputs(modal, AR_REASON);
+        await sleep(400);
+        var saveBtn = arFindButtonByText(modal, "Save and Close");
+        if (!saveBtn) {
+            log("AutoResaver: Save and Close button not found (Step A)");
+            return false;
+        }
+        saveBtn.click();
+        log("AutoResaver: clicked Save and Close");
+        await sleep(500);
+        var closed = await arWaitForModalClose(15000);
+        if (!closed) {
+            log("AutoResaver: modal did not close after Save and Close");
+            var closeBtn = arFindButtonByText(modal, "Close");
+            if (closeBtn) {
+                closeBtn.click();
+                await arWaitForModalClose(3000);
+            }
+        }
+        return true;
+    }
+
+    async function arProcessItemGroupCollect(itemGroupId, formId, subjectId) {
+        var modal = arGetActiveModal();
+        if (!modal) return false;
+        var link = modal.querySelector('a[onclick*="/itemgroupdata/collect/' + formId + '/' + itemGroupId + '"]');
+        if (!link) {
+            log("AutoResaver: item group " + itemGroupId + " collect link not found");
+            return false;
+        }
+        arSetStatus("Collecting item group " + itemGroupId);
+        await arClickDropdownLink(link);
+        log("AutoResaver: clicked item group " + itemGroupId + " Collect");
+        await sleep(600);
+        var start = Date.now();
+        while (Date.now() - start < 15000) {
+            if (arIsStopRequested()) return false;
+            var m = arGetActiveModal();
+            if (!m) return true;
+            if (arModalHasBarcodeVerify()) {
+                await arHandleBarcodeVerify(subjectId);
+                await sleep(500);
+            }
+            var saveBtn = arFindButtonByText(m, "Save and Return");
+            if (saveBtn) {
+                await arFillAuditInputs(m, AR_REASON);
+                await sleep(400);
+                saveBtn.click();
+                log("AutoResaver: clicked Save and Return for item group " + itemGroupId);
+                await sleep(500);
+                var start2 = Date.now();
+                while (Date.now() - start2 < 15000) {
+                    if (arIsStopRequested()) return false;
+                    if (!arGetActiveModal()) return true;
+                    var formInput = document.querySelector('form#modalInput');
+                    if (formInput && arIsVisible(formInput)) {
+                        return true;
+                    }
+                    var formDetails = arFindButtonByText(arGetActiveModal(), "Form Details");
+                    if (formDetails) {
+                        formDetails.click();
+                        log("AutoResaver: clicked Form Details to return");
+                        await sleep(500);
+                        break;
+                    }
+                    await sleep(300);
+                }
+                return true;
+            }
+            await sleep(300);
+        }
+        log("AutoResaver: timed out waiting for item group " + itemGroupId + " collect view");
+        return false;
+    }
+
+    async function arProcessStepB(subjectId, formId, preferredItemGroupId) {
+        var modal = arGetActiveModal();
+        if (!modal) return false;
+        var groups = modal.querySelectorAll('div[id^="itemGroupData_"]');
+        var ids = [];
+        var i = 0;
+        while (i < groups.length) {
+            var g = groups[i];
+            if (!arIsVisible(g)) { i = i + 1; continue; }
+            var id = g.id.replace("itemGroupData_", "");
+            var link = g.querySelector('a[onclick*="/itemgroupdata/collect/' + formId + '/' + id + '"]');
+            if (link && !link.closest('li.disabled')) ids.push(id);
+            i = i + 1;
+        }
+        if (ids.length === 0) {
+            log("AutoResaver: Step B no enabled item groups found for form " + formId);
+            return false;
+        }
+        var targetIds = [];
+        if (preferredItemGroupId && ids.indexOf(preferredItemGroupId) >= 0) {
+            targetIds.push(preferredItemGroupId);
+        } else {
+            targetIds.push(ids[0]);
+            if (ids.length > 1) {
+                log("AutoResaver: preferred item group " + preferredItemGroupId + " not available, using first available " + ids[0]);
+            }
+        }
+        log("AutoResaver: Step B item groups to collect: " + targetIds.join(", "));
+        var j = 0;
+        while (j < targetIds.length) {
+            if (arIsStopRequested()) return false;
+            arSetStatus("Step B: processing item group " + (j + 1) + " of " + targetIds.length);
+            await arProcessItemGroupCollect(targetIds[j], formId, subjectId);
+            modal = arGetActiveModal();
+            if (modal) {
+                var saveClose = arFindButtonByText(modal, "Save and Close");
+                if (saveClose) {
+                    saveClose.click();
+                    log("AutoResaver: clicked Save and Close after item group collection");
+                    await arWaitForModalClose(15000);
+                    return true;
+                }
+            }
+            j = j + 1;
+        }
+        modal = arGetActiveModal();
+        if (modal) {
+            var closeBtn = arFindButtonByText(modal, "Close");
+            if (closeBtn) {
+                closeBtn.click();
+                log("AutoResaver: clicked Close after Step B");
+                await arWaitForModalClose(3000);
+            } else {
+                var dismiss = modal.querySelector('button.close[data-dismiss="modal"], span[data-dismiss="modal"]');
+                if (dismiss) { dismiss.click(); await arWaitForModalClose(3000); }
+            }
+        }
+        return true;
+    }
+
+    async function arProcessForm(task) {
+        arSetStatus("Opening: " + task.formName + " | " + task.subjectText + " | " + task.eventText);
+        if (!task.collectAnchor) return false;
+        await arClickCollectAnchor(task.collectAnchor);
+        log("AutoResaver: clicked row Collect for item group " + task.itemGroupId);
+        await sleep(800);
+        var modal = await arWaitForModal(15000);
+        if (!modal) {
+            log("AutoResaver: first attempt did not open modal for " + task.key + ", retrying...");
+            await arClickCollectAnchor(task.collectAnchor);
+            await sleep(1000);
+            modal = await arWaitForModal(15000);
+            if (!modal) {
+                log("AutoResaver: modal did not open for " + task.key);
+                return false;
+            }
+        }
+
+        var contentType = await arWaitForFormContent(20000);
+        if (contentType.type === "barcode") {
+            await arHandleBarcodeVerify(task.subjectId);
+            await sleep(500);
+            contentType = await arWaitForFormContent(20000);
+        }
+        if (contentType.type === "closed") {
+            log("AutoResaver: modal closed after opening form " + task.key);
+            return true;
+        }
+        if (contentType.type === "timeout" || contentType.type === "stopped") {
+            log("AutoResaver: form content did not load for " + task.key + " (type=" + contentType.type + ")");
+            arLogModalState();
+            return false;
+        }
+
+        modal = arGetActiveModal();
+        if (!modal) {
+            log("AutoResaver: modal lost after content loaded");
+            return true;
+        }
+        if (contentType.type === "stepA") {
+            return await arProcessStepA(task.subjectId);
+        } else {
+            return await arProcessStepB(task.subjectId, task.formId, task.itemGroupId);
+        }
+    }
+
+    async function arProcessCurrentPage() {
+        var state = arLoadState();
+        if (!state) {
+            arFinish();
+            return;
+        }
+        if (arIsStopRequested()) {
+            arSetStatus("Stopped");
+            arFinish();
+            return;
+        }
+        var currentPage = arGetCurrentPage();
+        var totalPages = arGetTotalPages();
+        state.currentPage = currentPage;
+        state.totalPages = totalPages;
+        arSaveState(state);
+        var allTasks = arParseTable();
+        var tasks = [];
+        var i = 0;
+        while (i < allTasks.length) {
+            if (state.processedKeys.indexOf(allTasks[i].key) === -1) tasks.push(allTasks[i]);
+            i = i + 1;
+        }
+        arSetStatus("Page " + currentPage + "/" + totalPages + " — " + tasks.length + " form(s) to resave");
+        if (tasks.length === 0) {
+            if (arHasNextPage()) {
+                arSetStatus("Page " + currentPage + " complete — moving to next page");
+                state.currentPage = currentPage + 1;
+                arSaveState(state);
+                arClickNextPage();
+                return;
+            } else {
+                arSetStatus("All pages complete");
+                arShowWarning("Finished", "Auto-Resaver has processed all forms.");
+                arFinish();
+                return;
+            }
+        }
+        var idx = 0;
+        while (idx < tasks.length) {
+            if (arIsStopRequested()) {
+                arSetStatus("Stopped");
+                arFinish();
+                return;
+            }
+            var task = tasks[idx];
+            arSetStatus("Processing " + (idx + 1) + " of " + tasks.length + ": " + task.formName);
+            try {
+                await arProcessForm(task);
+            } catch (e) {
+                log("AutoResaver: error processing form " + task.key + ": " + String(e && e.message ? e.message : e));
+            }
+            if (state.processedKeys.indexOf(task.key) === -1) state.processedKeys.push(task.key);
+            arSaveState(state);
+            await sleep(500);
+            idx = idx + 1;
+        }
+        if (arIsStopRequested()) {
+            arFinish();
+            return;
+        }
+        if (arHasNextPage()) {
+            arSetStatus("Page " + currentPage + " complete — moving to next page");
+            state.currentPage = currentPage + 1;
+            arSaveState(state);
+            arClickNextPage();
+            return;
+        } else {
+            arSetStatus("All pages complete");
+            arShowWarning("Finished", "Auto-Resaver has processed all forms.");
+            arFinish();
+        }
+    }
+
+    async function arResume() {
+        var state = arLoadState();
+        if (!state) {
+            arClearState();
+            return;
+        }
+        if (!arIsDataListPage()) {
+            log("AutoResaver: resume called but not on data list page");
+            arClearState();
+            return;
+        }
+        if (state.lastTs && (Date.now() - state.lastTs > 300000)) {
+            log("AutoResaver: state is older than 5 minutes; abandoning");
+            arClearState();
+            arShowWarning("Auto-Resaver", "A previous Auto-Resaver session was abandoned (older than 5 minutes). Please start again if needed.");
+            return;
+        }
+        arSetStop(false);
+        arShowProgress();
+        arSetStatus("Resuming on page " + arGetCurrentPage());
+        await sleep(1000);
+        await arProcessCurrentPage();
+    }
+
+    async function APS_RunAutoResaver() {
+        if (!arIsDataListPage()) {
+            var arUrl = location.origin + "/secure/study/data/list";
+            showWrongPagePopup("Auto-Resaver", "/secure/study/data/list", location.pathname + location.search, arUrl);
+            return;
+        }
+        var tasks = arParseTable();
+        if (tasks.length === 0) {
+            arShowWarning("No Data Found", 'The study data table does not contain any rows with a "Collect" action.');
+            return;
+        }
+        arClearState();
+        arSetStop(false);
+        try { localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_AUTO_RESAVER); } catch (e) {}
+        arSaveState({ processedKeys: [], currentPage: arGetCurrentPage(), totalPages: arGetTotalPages() });
+        arShowProgress();
+        arSetStatus("Starting Auto-Resaver — " + tasks.length + " unique form(s) on page " + arGetCurrentPage());
+        await sleep(500);
+        await arProcessCurrentPage();
+    }
+
     function isPaused() {
         var raw = null;
         try {
@@ -35929,7 +36906,7 @@
         };
     }
 
-    function showWrongPagePopup(featureName, requiredPage, currentPath) {
+    function showWrongPagePopup(featureName, requiredPage, currentPath, linkUrl) {
         // Create warning popup content
         var warningContainer = document.createElement("div");
         warningContainer.style.padding = "20px";
@@ -35998,32 +36975,29 @@
             log(featureName + ": warning popup acknowledged by user");
         });
 
+        if (linkUrl) {
+            var navButton = document.createElement("button");
+            navButton.textContent = "Go to Required Page";
+            navButton.style.background = "#28a745";
+            navButton.style.color = "#fff";
+            navButton.style.border = "none";
+            navButton.style.borderRadius = "4px";
+            navButton.style.padding = "8px 24px";
+            navButton.style.cursor = "pointer";
+            navButton.style.fontSize = "14px";
+            navButton.style.marginLeft = "10px";
+            navButton.onmouseenter = function() { this.style.background = "#1e7e34"; };
+            navButton.onmouseleave = function() { this.style.background = "#28a745"; };
+            navButton.addEventListener("click", function () {
+                warningPopup.close();
+                log(featureName + ": navigating to required page " + linkUrl);
+                window.location.href = linkUrl;
+            });
+            warningContainer.appendChild(navButton);
+        }
+
         return warningPopup;
     }
-
-    function addButtonToPanel(label, handler) {
-        if (!btnRowRef) {
-            PENDING_BUTTONS.push({ label: label, handler: handler });
-            return;
-        }
-        var btn = document.createElement("button");
-        btn.textContent = label;
-        btn.style.background = "#ddd";
-        btn.style.color = "#000";
-        btn.style.border = "none";
-        btn.style.borderRadius = "6px";
-        btn.style.padding = "8px";
-        btn.style.cursor = "pointer";
-        btn.addEventListener("click", function () {
-            try {
-                handler();
-            } catch (e) {
-                log("Button handler error: " + String(e && e.message ? e.message : e));
-            }
-        });
-        btnRowRef.appendChild(btn);
-    }
-
 
     function makePanel() {
         var glass = isGlassTheme();
@@ -36168,7 +37142,6 @@
         btnRow.style.display = "grid";
         btnRow.style.gridTemplateColumns = "1fr 1fr";
         btnRow.style.gap = scale(BUTTON_GAP_PX);
-        btnRowRef = btnRow;
         var pauseBtn = document.createElement("button");
         pauseBtn.textContent = isPaused() ? "Resume" : "Pause";
         pauseBtn.style.background = "#6c757d";
@@ -36533,9 +37506,27 @@
             runPrintBarcodes();
         });
 
+        var autoResaverBtn = document.createElement("button");
+        autoResaverBtn.textContent = "Auto-Resaver";
+        autoResaverBtn.style.background = "#0d9488";
+        autoResaverBtn.style.color = "#fff";
+        autoResaverBtn.style.border = "none";
+        autoResaverBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        autoResaverBtn.style.padding = scale(BUTTON_PADDING_PX);
+        autoResaverBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
+        autoResaverBtn.style.cursor = "pointer";
+        autoResaverBtn.style.fontWeight = "500";
+        autoResaverBtn.style.transition = "background 0.2s";
+        autoResaverBtn.onmouseenter = function() { this.style.background = "#0f766e"; };
+        autoResaverBtn.onmouseleave = function() { this.style.background = "#0d9488"; };
+        autoResaverBtn.addEventListener("click", function() {
+            log("Auto-Resaver: button clicked");
+            APS_RunAutoResaver();
+        });
+
         // Apply glassmorphism theme to all panel buttons if glass theme is active
         if (glass) {
-            var allPanelBtns = [svcBtn, runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, importFromLibBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, bplBtn, importEligBtn, findAeBtn, findFormAndEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, parseFormsBtn, editStudyEventsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn, downloadDtsBtn, printBarcodesBtn];
+            var allPanelBtns = [svcBtn, runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, importFromLibBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, bplBtn, importEligBtn, findAeBtn, findFormAndEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, parseFormsBtn, editStudyEventsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn, downloadDtsBtn, printBarcodesBtn, autoResaverBtn];
             for (var gi = 0; gi < allPanelBtns.length; gi++) {
                 var gb = allPanelBtns[gi];
                 gb.className = "ie-btn-primary";
@@ -36574,6 +37565,7 @@
             { el: svcBtn, label: "Set Visibility Condition" },
             { el: downloadDtsBtn, label: "Download DTS Report" },
             { el: printBarcodesBtn, label: "Print Barcodes" },
+            { el: autoResaverBtn, label: "Auto-Resaver" },
             { el: pauseBtn, label: "Pause" },
             { el: clearLogsBtn, label: "Clear Logs" },
             { el: toggleLogsBtn, label: "Hide Logs" }
@@ -36868,24 +37860,12 @@
             } catch (e4) {}
         }
 
-        if (PENDING_BUTTONS.length > 0) {
-            var ia = 0;
-            while (ia < PENDING_BUTTONS.length) {
-                var it = PENDING_BUTTONS[ia];
-                addButtonToPanel(it.label, it.handler);
-                ia = ia + 1;
-            }
-            PENDING_BUTTONS = [];
-        }
         log("Panel ready");
         return panel;
     }
 
     function init() {
         makePanel();
-        window.APS_AddButton = function (label, handler) {
-            addButtonToPanel(label, handler);
-        };
         bindPanelHotkeyOnce();
 
         // Resume Edit Study Events after page reload (Add Batch triggers reload)
@@ -37047,6 +38027,17 @@
             runModeRaw = localStorage.getItem(STORAGE_RUN_MODE);
         } catch (e) {
             runModeRaw = null;
+        }
+
+        if (runModeRaw === RUNMODE_AUTO_RESAVER) {
+            if (!arIsDataListPage()) {
+                log("AutoResaver: run mode set but not on data list page; clearing");
+                arClearState();
+            } else {
+                log("AutoResaver: resuming after page reload");
+                setTimeout(function() { arResume(); }, 1500);
+            }
+            return;
         }
 
         if (pendingPopup === "1" && runModeRaw !== RUNMODE_ELIG_IMPORT && !isEligibilityListPage()) {
