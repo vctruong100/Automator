@@ -810,5 +810,14 @@
                  ],
         "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Conmeds%20Pull%20Adverse%20Event.js",
         "updated":  "2026-06-24"
+    },
+    {
+        "id":  "M-105",
+        "title":  "Protocol Check Median ECG Eligibility",
+        "tags":  [
+                     "Protocol Check"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Median%20ECG%20Eligibility.js",
+        "updated":  "2026-06-29"
     }
 ]

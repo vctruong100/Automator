@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     3.1.0
+// @version     3.1.1
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -16346,6 +16346,7 @@
         { id: "Edit Study Events List", label: "Edit Study Events List" },
         { id: "Download DTS Report", label: "Download DTS Report" },
         { id: "Print Barcodes", label: "Print Barcodes" },
+        { id: "Auto-Resaver", label: "Auto-Resaver" },
         { id: "Pause", label: "Pause" },
         { id: "Clear Logs", label: "Clear Logs" },
         { id: "Hide Logs", label: "Hide Logs" }
@@ -31704,11 +31705,37 @@
                 }
             }
             await sleep(250);
-            // Wait for the active dropdown to appear.
+            // Wait for the active dropdown to appear — scoped to THIS container.
             var start2 = Date.now();
             var activeDrop = null;
             while (Date.now() - start2 < 3000) {
-                activeDrop = document.querySelector('.select2-drop-active, .select2-dropdown--open, .select2-dropdown');
+                // Try Select2's internal data object first (most reliable).
+                if (window.jQuery && window.jQuery.fn && window.jQuery.fn.select2) {
+                    try {
+                        var s2data = window.jQuery(original).data('select2');
+                        if (s2data && s2data.dropdown) {
+                            activeDrop = s2data.dropdown[0] || s2data.dropdown;
+                        }
+                    } catch (e) {}
+                }
+                // Fallback: find the dropdown whose search input ID starts with the same s2id_autogen prefix as this container.
+                if (!activeDrop && s2.id) {
+                    var containerNum = s2.id.match(/autogen(\d+)/);
+                    if (containerNum) {
+                        var allDrops = document.querySelectorAll('.select2-drop-active, .select2-dropdown--open');
+                        for (var d = 0; d < allDrops.length; d++) {
+                            var dropSearch = allDrops[d].querySelector('input[id*="_search"]');
+                            if (dropSearch && dropSearch.id.indexOf('autogen' + containerNum[1]) !== -1) {
+                                activeDrop = allDrops[d];
+                                break;
+                            }
+                        }
+                    }
+                }
+                // Last fallback: any visible dropdown.
+                if (!activeDrop) {
+                    activeDrop = document.querySelector('.select2-drop-active, .select2-dropdown--open, .select2-dropdown');
+                }
                 if (activeDrop) break;
                 await sleep(100);
             }
