@@ -31632,6 +31632,42 @@
             var chosen = s2.querySelector('.select2-chosen, .select2-selection__rendered, .select2-search-choice div, .select2-selection__choice');
             return chosen ? (chosen.textContent || '').trim() : '';
         }
+        function arNormalizeMatchText(text) {
+            return String(text || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+        }
+        function arGetSelect2Dropdown(s2, original) {
+            if (window.jQuery && window.jQuery.fn && window.jQuery.fn.select2) {
+                try {
+                    var s2data = window.jQuery(original).data('select2');
+                    if (s2data && s2data.dropdown) {
+                        var drop = s2data.dropdown[0] || s2data.dropdown;
+                        if (drop && document.body.contains(drop) && arIsVisible(drop)) {
+                            return drop;
+                        }
+                    }
+                } catch (e) {}
+            }
+            var autogenNum = null;
+            var focusInput = s2.querySelector('input[id^="s2id_autogen"]');
+            if (focusInput && focusInput.id) {
+                var m = focusInput.id.match(/autogen(\d+)/);
+                if (m) autogenNum = m[1];
+            }
+            if (!autogenNum && s2.id) {
+                var m2 = s2.id.match(/autogen(\d+)/);
+                if (m2) autogenNum = m2[1];
+            }
+            if (autogenNum) {
+                var allDrops = document.querySelectorAll('.select2-drop-active, .select2-dropdown--open');
+                for (var d = 0; d < allDrops.length; d++) {
+                    var dropSearch = allDrops[d].querySelector('input[id*="_search"]');
+                    if (dropSearch && dropSearch.id.indexOf('autogen' + autogenNum) !== -1) {
+                        return allDrops[d];
+                    }
+                }
+            }
+            return document.querySelector('.select2-drop-active, .select2-dropdown--open') || null;
+        }
         // Fill Select2 audit reasons one at a time by simulating the user.
         var j = 0;
         while (j < s2Containers.length) {
@@ -31658,22 +31694,21 @@
             if (window.jQuery && window.jQuery.fn && window.jQuery.fn.select2) {
                 try {
                     var $orig = window.jQuery(original);
+                    var reasonNorm = arNormalizeMatchText(reason);
                     var apiValue = reason;
                     if (original.tagName === 'SELECT') {
-                        // For a real SELECT, set the option value whose text matches the reason.
                         var $match = $orig.find('option').filter(function () {
-                            return window.jQuery(this).text().trim().toLowerCase() === reason.toLowerCase().trim();
+                            return arNormalizeMatchText(window.jQuery(this).text()) === reasonNorm;
                         });
                         if ($match.length) {
                             apiValue = $match.first().val();
                         } else {
-                            // Let the UI click the correct option instead of creating a fake one.
                             throw new Error('No option text matches reason');
                         }
                     }
                     $orig.val(apiValue).trigger('change');
-                    await sleep(200);
-                    if (arGetSelect2DisplayText(s2) === reason) {
+                    await sleep(100);
+                    if (arNormalizeMatchText(arGetSelect2DisplayText(s2)) === reasonNorm) {
                         log("AutoResaver: set via Select2 API " + s2.id);
                         j = j + 1;
                         continue;
@@ -31691,7 +31726,7 @@
                 bodyEl.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
                 bodyEl.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
             }
-            await sleep(100);
+            await sleep(50);
             // Open the dropdown by clicking the container's choice element.
             var choice = s2.querySelector('a.select2-choice') || s2.querySelector('ul.select2-choices');
             if (choice) {
@@ -31704,40 +31739,14 @@
                     try { window.jQuery(original).select2('open'); } catch (e) { log("AutoResaver: Select2 open error: " + String(e && e.message ? e.message : e)); }
                 }
             }
-            await sleep(250);
+            await sleep(150);
             // Wait for the active dropdown to appear — scoped to THIS container.
             var start2 = Date.now();
             var activeDrop = null;
-            while (Date.now() - start2 < 3000) {
-                // Try Select2's internal data object first (most reliable).
-                if (window.jQuery && window.jQuery.fn && window.jQuery.fn.select2) {
-                    try {
-                        var s2data = window.jQuery(original).data('select2');
-                        if (s2data && s2data.dropdown) {
-                            activeDrop = s2data.dropdown[0] || s2data.dropdown;
-                        }
-                    } catch (e) {}
-                }
-                // Fallback: find the dropdown whose search input ID starts with the same s2id_autogen prefix as this container.
-                if (!activeDrop && s2.id) {
-                    var containerNum = s2.id.match(/autogen(\d+)/);
-                    if (containerNum) {
-                        var allDrops = document.querySelectorAll('.select2-drop-active, .select2-dropdown--open');
-                        for (var d = 0; d < allDrops.length; d++) {
-                            var dropSearch = allDrops[d].querySelector('input[id*="_search"]');
-                            if (dropSearch && dropSearch.id.indexOf('autogen' + containerNum[1]) !== -1) {
-                                activeDrop = allDrops[d];
-                                break;
-                            }
-                        }
-                    }
-                }
-                // Last fallback: any visible dropdown.
-                if (!activeDrop) {
-                    activeDrop = document.querySelector('.select2-drop-active, .select2-dropdown--open, .select2-dropdown');
-                }
+            while (Date.now() - start2 < 2000) {
+                activeDrop = arGetSelect2Dropdown(s2, original);
                 if (activeDrop) break;
-                await sleep(100);
+                await sleep(50);
             }
             if (!activeDrop) {
                 log("AutoResaver: Select2 dropdown did not appear");
@@ -31747,7 +31756,7 @@
             // Wait for the results list to populate (Select2 may need a moment after open).
             var startResults = Date.now();
             var resultItems = [];
-            while (Date.now() - startResults < 3000) {
+            while (Date.now() - startResults < 2000) {
                 resultItems = activeDrop.querySelectorAll('.select2-results .select2-result, .select2-results__option');
                 if (resultItems.length > 0) break;
                 // Focus the search input to encourage Select2 to render results.
@@ -31756,15 +31765,16 @@
                     searchInput.click();
                     searchInput.focus();
                 }
-                await sleep(150);
+                await sleep(100);
             }
             log("AutoResaver: dropdown has " + resultItems.length + " option(s)");
             // Try to select an existing option by matching text.
             var matched = false;
-            var reasonLower = reason.toLowerCase().trim();
+            var reasonNorm = arNormalizeMatchText(reason);
             for (var r = 0; r < resultItems.length; r++) {
                 var resultText = (resultItems[r].querySelector('.select2-result-label, .select2-results__option') || resultItems[r]).textContent.trim();
-                if (resultText.toLowerCase() === reasonLower || resultText.toLowerCase().indexOf(reasonLower) === 0) {
+                var resultNorm = arNormalizeMatchText(resultText);
+                if (resultNorm === reasonNorm || resultNorm.indexOf(reasonNorm) === 0) {
                     resultItems[r].scrollIntoView({ block: 'nearest' });
                     resultItems[r].dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
                     resultItems[r].dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
@@ -31772,6 +31782,21 @@
                     matched = true;
                     log("AutoResaver: selected option '" + resultText + "'");
                     break;
+                }
+            }
+            if (!matched) {
+                for (var r = 0; r < resultItems.length; r++) {
+                    var resultText = (resultItems[r].querySelector('.select2-result-label, .select2-results__option') || resultItems[r]).textContent.trim();
+                    var resultNorm = arNormalizeMatchText(resultText);
+                    if (resultNorm.indexOf(reasonNorm) >= 0 || reasonNorm.indexOf(resultNorm) >= 0) {
+                        resultItems[r].scrollIntoView({ block: 'nearest' });
+                        resultItems[r].dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+                        resultItems[r].dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+                        resultItems[r].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+                        matched = true;
+                        log("AutoResaver: selected option (fuzzy) '" + resultText + "'");
+                        break;
+                    }
                 }
             }
             if (!matched) {
@@ -31796,7 +31821,7 @@
                             searchInput.dispatchEvent(new KeyboardEvent(keyEventName, { key: String.fromCharCode(searchCharCode), code: 'Key' + String.fromCharCode(searchCharCode).toUpperCase(), keyCode: searchCharCode, which: searchCharCode, bubbles: true, cancelable: true }));
                         });
                     }
-                    await sleep(400);
+                    await sleep(250);
                     if (window.jQuery) {
                         var $input2 = window.jQuery(searchInput);
                         $input2.trigger(jQuery.Event('keydown', { keyCode: 13, which: 13 }));
@@ -31812,10 +31837,13 @@
                 }
             }
             // Wait for the dropdown to close before moving to the next field.
+            if (window.jQuery && window.jQuery.fn && window.jQuery.fn.select2) {
+                try { window.jQuery(original).select2('close'); } catch (e) {}
+            }
             var start3 = Date.now();
-            while (Date.now() - start3 < 3000) {
+            while (Date.now() - start3 < 1200) {
                 if (!document.querySelector('.select2-drop-active')) break;
-                await sleep(100);
+                await sleep(50);
             }
             // Force close if it is still stuck.
             if (document.querySelector('.select2-drop-active')) {
@@ -31825,13 +31853,14 @@
                 if (bodyEl) {
                     bodyEl.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
                 }
-                await sleep(100);
+                await sleep(50);
             }
             // Safety net: update the underlying element value as well.
             if (original.tagName === 'SELECT') {
                 var $orig = window.jQuery(original);
+                var reasonNorm = arNormalizeMatchText(reason);
                 var $match = $orig.find('option').filter(function () {
-                    return window.jQuery(this).text().trim().toLowerCase() === reason.toLowerCase().trim();
+                    return arNormalizeMatchText(window.jQuery(this).text()) === reasonNorm;
                 });
                 if ($match.length) {
                     original.value = $match.first().val();
@@ -31853,7 +31882,7 @@
                     window.jQuery(original).trigger('change');
                 } catch (e) {}
             }
-            await sleep(100);
+            await sleep(50);
             j = j + 1;
         }
         // Plain text/audit inputs as before.

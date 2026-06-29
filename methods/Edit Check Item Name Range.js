@@ -187,6 +187,7 @@ function parseRange(input) {
     return null;
 }
 
+
 function parseMultiRange(input) {
     logger("parseMultiRange input: " + input);
 
@@ -274,7 +275,7 @@ try {
 
         var min = range[0];
         var max = range[1];
-
+        logger("Range: " + min + " - " + max);
         if (!checkRange(isRepeat, min, max)) return false;
     } else {
         var minMax = parseRange(item.name);
