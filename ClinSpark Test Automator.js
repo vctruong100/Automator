@@ -39378,6 +39378,25 @@
         document.head.appendChild(style);
     }
 
+    function injectSelect2ZIndexFix() {
+        var id = "ie-select2-zindex-fix";
+        if (document.getElementById(id)) return;
+        var style = document.createElement("style");
+        style.id = id;
+        style.textContent = [
+            ".select2-drop,",
+            ".select2-drop-active,",
+            ".select2-dropdown,",
+            ".select2-dropdown--open,",
+            ".select2-container--open .select2-dropdown {",
+            "  z-index: " + (THEME_Z_TOAST + 1) + " !important;",
+            "}",
+            ""
+        ].join("\n");
+        document.head.appendChild(style);
+    }
+
+
     function removeThemeStyles() {
         var existing = document.getElementById(THEME_STYLE_TAG_ID);
         if (existing) existing.remove();
@@ -42413,6 +42432,7 @@
 
     // Initialize the panel, register APS_AddButton, and route to the appropriate processing function.
     function init() {
+        injectSelect2ZIndexFix();
         makePanel();
         window.APS_AddButton = function (label, handler) {
             addButtonToPanel(label, handler);

@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     3.1.1
+// @version     3.1.2
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -3753,6 +3753,26 @@
             "}",
             "." + THEME_SCOPE_CLASS + " ::-webkit-scrollbar-thumb:hover {",
             "  background: rgba(255,255,255,0.5);",
+            "}",
+            ""
+        ].join("\n");
+        document.head.appendChild(style);
+    }
+
+    // Ensure Select2 dropdowns render above Bootstrap modals and the script's own popups/panels.
+    // This fixes the issue where dropdowns appear behind the form modal after Pull Barcode runs.
+    function injectSelect2ZIndexFix() {
+        var id = "ie-select2-zindex-fix";
+        if (document.getElementById(id)) return;
+        var style = document.createElement("style");
+        style.id = id;
+        style.textContent = [
+            ".select2-drop,",
+            ".select2-drop-active,",
+            ".select2-dropdown,",
+            ".select2-dropdown--open,",
+            ".select2-container--open .select2-dropdown {",
+            "  z-index: " + (THEME_Z_TOAST + 1) + " !important;",
             "}",
             ""
         ].join("\n");
@@ -37921,6 +37941,7 @@
     }
 
     function init() {
+        injectSelect2ZIndexFix();
         makePanel();
         bindPanelHotkeyOnce();
 
