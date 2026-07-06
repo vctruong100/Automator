@@ -13,6 +13,21 @@ var standing = null;
 
 var item = itemJson.item;
 
+function normalizeItemName(name) {
+    if (!name) return "";
+    return name.toString().replace(/\s+/g, "").toLowerCase();
+}
+
+function containsItemName(itemList, itemName) {
+    var normalizedName = normalizeItemName(itemName);
+
+    for (var i = 0; i < itemList.length; i++) {
+        if (normalizeItemName(itemList[i]) === normalizedName) {
+            return true;
+        }
+    }
+    return false;
+}
 function containsValue(input, keyword) {
     if (input == null) {
         return false;
@@ -46,7 +61,7 @@ function getOrthostasis(form, targetItems, isRepeat) {
             item = group.items[j];
 
             if (
-                targetItems.indexOf(item.name) !== -1 &&
+                containsItemName(targetItems, item.name) &&
                 item.value !== null &&
                 item.value !== "" &&
                 !item.canceled

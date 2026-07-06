@@ -33,6 +33,21 @@ var waistAvg = 0;
 var hipAvg = 0;
 
 
+function normalizeItemName(name) {
+    if (!name) return "";
+    return name.toString().replace(/\s+/g, "").toLowerCase();
+}
+
+function containsItemName(itemList, itemName) {
+    var normalizedName = normalizeItemName(itemName);
+
+    for (var i = 0; i < itemList.length; i++) {
+        if (normalizeItemName(itemList[i]) === normalizedName) {
+            return true;
+        }
+    }
+    return false;
+}
 function populateList(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var list = [];
@@ -45,7 +60,7 @@ function populateList(form, targetItem) {
         if (!group || group.canceled) continue;
         for (j = 0; j < group.items.length; j++) {
             item = group.items[j];
-            if (item && targetItem.indexOf(item.name) !== -1) {
+            if (item && containsItemName(targetItem, item.name)) {
                 list.push(parseFloat(item.value));
                 if (list.length >= maxCount) {
                     return list;
@@ -91,8 +106,8 @@ try {
     logger("Waist Average: " + waistAvg);
     logger("Hip Average: " + hipAvg);
 
-    if (hipAttachedItem.indexOf(item.name) !== -1 && hipList.length === maxCount) return hipAvg;
-    if (waistAttachedItem.indexOf(item.name) !== -1 && waistList.length === maxCount) return waistAvg;
+    if (containsItemName(hipAttachedItem, item.name) && hipList.length === maxCount) return hipAvg;
+    if (containsItemName(waistAttachedItem, item.name) && waistList.length === maxCount) return waistAvg;
 
     return null;
 } catch (e) {

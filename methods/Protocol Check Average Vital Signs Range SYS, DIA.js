@@ -46,6 +46,21 @@ var diaAvg_maxRange = 100;
 var item = itemJson.item;
 var sigfig = item.significantDigits;
 
+function normalizeItemName(name) {
+    if (!name) return "";
+    return name.toString().replace(/\s+/g, "").toLowerCase();
+}
+
+function containsItemName(itemList, itemName) {
+    var normalizedName = normalizeItemName(itemName);
+
+    for (var i = 0; i < itemList.length; i++) {
+        if (normalizeItemName(itemList[i]) === normalizedName) {
+            return true;
+        }
+    }
+    return false;
+}
 function pullItemFromForm(form, targetItems) {
     var itemGroups = form.form.itemGroups;
     var group, item, i, j;
@@ -65,7 +80,7 @@ function pullItemFromForm(form, targetItems) {
             item = group.items[j];
 
             if (
-                targetItems.indexOf(item.name) !== -1 &&
+                containsItemName(targetItems, item.name) &&
                 item.value !== null &&
                 item.value !== "" &&
                 !item.canceled
@@ -133,7 +148,7 @@ function populateList(form, targetItems, attachedItems, repeat) {
 
                 if (
                     item &&
-                    targetItems.indexOf(item.name) !== -1 &&
+                    containsItemName(targetItems, item.name) &&
                     item.value !== null &&
                     item.value !== "" &&
                     !isNaN(item.value)
@@ -160,7 +175,7 @@ function populateList(form, targetItems, attachedItems, repeat) {
 
                 if (
                     item &&
-                    targetItems.indexOf(item.name) !== -1 &&
+                    containsItemName(targetItems, item.name) &&
                     item.value !== null &&
                     item.value !== "" &&
                     !isNaN(item.value)

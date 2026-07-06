@@ -23,6 +23,21 @@ var mealForms = [
     'STOP BREAKFAST', "Breakfast End", "BREAKFAST END",
 ];
 
+function normalizeItemName(name) {
+    if (!name) return "";
+    return name.toString().replace(/\s+/g, "").toLowerCase();
+}
+
+function containsItemName(itemList, itemName) {
+    var normalizedName = normalizeItemName(itemName);
+
+    for (var i = 0; i < itemList.length; i++) {
+        if (normalizeItemName(itemList[i]) === normalizedName) {
+            return true;
+        }
+    }
+    return false;
+}
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
@@ -34,7 +49,7 @@ function pullItemFromForm(form, targetItem) {
         if (!group || group.canceled) continue;
         for (j = 0; j < group.items.length; j++) {
             item = group.items[j];
-            if (targetItem.indexOf(item.name) !== -1 && item.value !== null) return item.value;
+            if (containsItemName(targetItem, item.name) && item.value !== null) return item.value;
         }
     }
     return null;

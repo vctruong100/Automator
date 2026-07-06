@@ -17,6 +17,21 @@ var hrAttach = ["HR MEAN AVERAGE"];
 var form = formJson.form;
 var item = itemJson.item;
 
+function normalizeItemName(name) {
+    if (!name) return "";
+    return name.toString().replace(/\s+/g, "").toLowerCase();
+}
+
+function containsItemName(itemList, itemName) {
+    var normalizedName = normalizeItemName(itemName);
+
+    for (var i = 0; i < itemList.length; i++) {
+        if (normalizeItemName(itemList[i]) === normalizedName) {
+            return true;
+        }
+    }
+    return false;
+}
 function containsValue(input, keyword) {
     if (input == null) {
         return false;
@@ -64,8 +79,8 @@ function populateList(form, targetItem, attachedItem, repeat) {
             if (!group || group.canceled) continue;
             for (j = group.items.length - 1; j >= 0; j--) {
                 item = group.items[j];
-                if (attachedItem.indexOf(item.name) !== -1 && list.length > 1) return list;
-                if (item && targetItem.indexOf(item.name) !== -1) {
+                if (containsItemName(attachedItem, item.name) && list.length > 1) return list;
+                if (item && containsItemName(targetItem, item.name)) {
                     logger(item.value);
                     if (item.value !== null && !isNaN(item.value) && item.value !== "") {
                         list.push(parseInt(item.value));
@@ -80,8 +95,8 @@ function populateList(form, targetItem, attachedItem, repeat) {
             if (!group || group.canceled) continue;
             for (j = 0; j < group.items.length; j++) {
                 item = group.items[j];
-                if (attachedItem.indexOf(item.name) !== -1) return list;
-                if (item && targetItem.indexOf(item.name) !== -1) {
+                if (containsItemName(attachedItem, item.name)) return list;
+                if (item && containsItemName(targetItem, item.name)) {
                     if (item.value !== null && !isNaN(item.value) && item.value !== "") {
                         list.push(parseInt(item.value));
                     }
@@ -117,9 +132,9 @@ try {
     logger("AVerage QRS: " + avgDia);
     logger("Average QT: " + avgHR);
 
-    if (sysAttach.indexOf(item.name) !== -1) return avgSys;
-    if (diaAttach.indexOf(item.name) !== -1) return avgDia;
-    if (hrAttach.indexOf(item.name) !== -1) return avgHR;
+    if (containsItemName(sysAttach, item.name)) return avgSys;
+    if (containsItemName(diaAttach, item.name)) return avgDia;
+    if (containsItemName(hrAttach, item.name)) return avgHR;
 
     return null;
 } catch (e) {

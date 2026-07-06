@@ -33,6 +33,21 @@ var currentStudyEvent = formJson.form.studyEventName;
 var item = itemJson.item;
 var sigfig = itemJson.item.significantDigits;
 
+function normalizeItemName(name) {
+    if (!name) return "";
+    return name.toString().replace(/\s+/g, "").toLowerCase();
+}
+
+function containsItemName(itemList, itemName) {
+    var normalizedName = normalizeItemName(itemName);
+
+    for (var i = 0; i < itemList.length; i++) {
+        if (normalizeItemName(itemList[i]) === normalizedName) {
+            return true;
+        }
+    }
+    return false;
+}
 function populateList(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
@@ -44,8 +59,8 @@ function populateList(form, targetItem) {
         if (!group || group.canceled) continue;
         for (j = 0; j < group.items.length; j++) {
             item = group.items[j];
-            if (["Average Weight"].indexOf(item.name) !== -1) return list;
-            if (item && targetItem.indexOf(item.name) !== -1) {
+            if (containsItemName(["Average Weight"], item.name)) return list;
+            if (item && containsItemName(targetItem, item.name)) {
                 if (item.value !== null && !isNaN(item.value) && item.value !== "") {
                     list.push(parseFloat(item.value));
                 }
@@ -75,7 +90,7 @@ function pullItemFromForm(form, targetItem) {
         if (!group || group.canceled) continue;
         for (j = 0; j < group.items.length; j++) {
             item = group.items[j];
-            if (targetItem.indexOf(item.name) !== -1 && item.value !== null) return item.value;
+            if (containsItemName(targetItem, item.name) && item.value !== null) return item.value;
         }
     }
     return null;

@@ -20,6 +20,21 @@ var isRepeatRequiredItem = ["3️⃣ ▶VS_Required repeat (Triplicate)"]
 var form = formJson.form;
 var item = itemJson.item;
 
+function normalizeItemName(name) {
+    if (!name) return "";
+    return name.toString().replace(/\s+/g, "").toLowerCase();
+}
+
+function containsItemName(itemList, itemName) {
+    var normalizedName = normalizeItemName(itemName);
+
+    for (var i = 0; i < itemList.length; i++) {
+        if (normalizeItemName(itemList[i]) === normalizedName) {
+            return true;
+        }
+    }
+    return false;
+}
 function calculateMedian(values, sigfig) {
     if (values.length === 0) return null;
     values.sort(function(a, b) { return a - b; });
@@ -48,8 +63,8 @@ function populateList(form, targetItem, attachedItem, isRepeat) {
             if (!group || group.canceled) continue;
             for (j = group.items.length -1; j >= 0; j--) {
                 item = group.items[j];
-                if (attachedItem.indexOf(item.name.trim()) !== -1 && list.length > 1) return list;
-                if (item && targetItem.indexOf(item.name) !== -1) {
+                if (containsItemName(attachedItem, item.name.trim()) && list.length > 1) return list;
+                if (item && containsItemName(targetItem, item.name)) {
                     if (item.value !== null && !isNaN(item.value) && item.value !== "") {
                         list.push(parseFloat(item.value));
                         logger("Item name: " + item.name + ", value: " + item.value);
@@ -64,8 +79,8 @@ function populateList(form, targetItem, attachedItem, isRepeat) {
             if (!group || group.canceled) continue;
             for (j = 0; j < group.items.length; j++) {
                 item = group.items[j];
-                if (attachedItem.indexOf(item.name.trim()) !== -1) return list;
-                if (item && targetItem.indexOf(item.name) !== -1) {
+                if (containsItemName(attachedItem, item.name.trim())) return list;
+                if (item && containsItemName(targetItem, item.name)) {
                     if (item.value !== null && !isNaN(item.value) && item.value !== "") {
                         list.push(parseFloat(item.value));
                         logger("Item name: " + item.name + ", value: " + item.value);
@@ -97,7 +112,7 @@ function pullItemFromForm(form, targetItem) {
         if (!group || group.canceled) continue;
         for (j = 0; j < group.items.length; j++) {
             item = group.items[j];
-            if (targetItem.indexOf(item.name) !== -1 && item.value !== null && !item.canceled && item.value !== "") {
+            if (containsItemName(targetItem, item.name) && item.value !== null && !item.canceled && item.value !== "") {
                 return item;
             }
         }
@@ -132,11 +147,11 @@ try {
     logger("Dia Median: " + diaMedian);
     logger("Hr Median: " + hrMedian);
     
-    if (EXC04Item.indexOf(item.name) !== -1) {
+    if (containsItemName(EXC04Item, item.name)) {
         if (sysMedian  > 150 || diaMedian >= 100) return "YES, SF";
         return "NO";
     }
-    if (EXC05Item.indexOf(item.name) !== -1) {
+    if (containsItemName(EXC05Item, item.name)) {
         if (hrMedian > 100) return "YES, SF";
         return "NO";
     }

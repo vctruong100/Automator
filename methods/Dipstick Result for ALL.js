@@ -5,6 +5,21 @@
 
 var itemid = itemJson.item.id;
 
+function normalizeItemName(name) {
+    if (!name) return "";
+    return name.toString().replace(/\s+/g, "").toLowerCase();
+}
+
+function containsItemName(itemList, itemName) {
+    var normalizedName = normalizeItemName(itemName);
+
+    for (var i = 0; i < itemList.length; i++) {
+        if (normalizeItemName(itemList[i]) === normalizedName) {
+            return true;
+        }
+    }
+    return false;
+}
 function pullItemFromForm(form) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;

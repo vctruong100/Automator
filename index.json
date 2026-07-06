@@ -819,5 +819,14 @@
                  ],
         "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Median%20ECG%20Eligibility.js",
         "updated":  "2026-06-29"
+    },
+    {
+        "id":  "M-106",
+        "title":  "Pull ECG Start Time for Vitals (VS)",
+        "tags":  [
+                     "Protocol Check"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Pull%20ECG%20Start%20Time%20for%20Vitals%20(VS).js",
+        "updated":  "2026-06-29"
     }
 ]

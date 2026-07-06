@@ -14,6 +14,21 @@ var emptyJugItem = [
 
 var sigfig = itemJson.item.significantDigits;
 
+function normalizeItemName(name) {
+    if (!name) return "";
+    return name.toString().replace(/\s+/g, "").toLowerCase();
+}
+
+function containsItemName(itemList, itemName) {
+    var normalizedName = normalizeItemName(itemName);
+
+    for (var i = 0; i < itemList.length; i++) {
+        if (normalizeItemName(itemList[i]) === normalizedName) {
+            return true;
+        }
+    }
+    return false;
+}
 function GetNetTotal(form, urineItem, emptyItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j;
@@ -27,8 +42,8 @@ function GetNetTotal(form, urineItem, emptyItem) {
         if (!group || group.canceled) continue;
         for (j = 0; j < group.items.length; j++) {
             item = group.items[j];
-            if (item && urineItem.indexOf(item.name) !== -1 && item.value !== null) urineJug = item.value;
-            if (item && emptyItem.indexOf(item.name) !== -1 && item.value !== null) voidJug = item.value;
+            if (item && containsItemName(urineItem, item.name) && item.value !== null) urineJug = item.value;
+            if (item && containsItemName(emptyItem, item.name) && item.value !== null) voidJug = item.value;
         }
         total += urineJug - voidJug;
     }

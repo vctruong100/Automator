@@ -16,6 +16,21 @@ var itemName = [
 var currentStudyName = formJson.form.studyEventName;
 var item = itemJson.item;
 
+function normalizeItemName(name) {
+    if (!name) return "";
+    return name.toString().replace(/\s+/g, "").toLowerCase();
+}
+
+function containsItemName(itemList, itemName) {
+    var normalizedName = normalizeItemName(itemName);
+
+    for (var i = 0; i < itemList.length; i++) {
+        if (normalizeItemName(itemList[i]) === normalizedName) {
+            return true;
+        }
+    }
+    return false;
+}
 function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     if (formDataArray == null) { return []; }
     var keepers = [];
@@ -79,7 +94,7 @@ function pullItemFromForm(form, targetItem) {
         if (!group || group.canceled) continue;
         for (j = 0; j < group.items.length; j++) {
             item = group.items[j];
-            if (targetItem.indexOf(item.name) !== -1 && item.value !== null && !item.canceled && item.value !== "") return item;
+            if (containsItemName(targetItem, item.name) && item.value !== null && !item.canceled && item.value !== "") return item;
         }
     }
     return null;

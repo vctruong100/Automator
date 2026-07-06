@@ -26,6 +26,21 @@ var count = 0;
 
 var item = itemJson.item.id;
 
+function normalizeItemName(name) {
+    if (!name) return "";
+    return name.toString().replace(/\s+/g, "").toLowerCase();
+}
+
+function containsItemName(itemList, itemName) {
+    var normalizedName = normalizeItemName(itemName);
+
+    for (var i = 0; i < itemList.length; i++) {
+        if (normalizeItemName(itemList[i]) === normalizedName) {
+            return true;
+        }
+    }
+    return false;
+}
 function populateList(form, targetItem, isRepeat) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
@@ -38,7 +53,7 @@ function populateList(form, targetItem, isRepeat) {
             if (!group || group.canceled) continue;
             for (j = 0; j < group.items.length; j++) {
                 item = group.items[j];
-                if (item && targetItem.indexOf(item.name) !== -1) {
+                if (item && containsItemName(targetItem, item.name)) {
                     count++;
                     if (item.value !== null && !isNaN(item.value) && item.value !== "") {
                         list.push(parseFloat(item.value));
@@ -54,7 +69,7 @@ function populateList(form, targetItem, isRepeat) {
             if (!group || group.canceled) continue;
             for (j = 0; j < group.items.length; j++) {
                 item = group.items[j];
-                if (item && targetItem.indexOf(item.name) !== -1) {
+                if (item && containsItemName(targetItem, item.name)) {
                     if (item.value !== null && !isNaN(item.value) && item.value !== "") {
                         list.push(parseFloat(item.value));
                         if (list.length >= count) return list;

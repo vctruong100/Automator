@@ -24,6 +24,21 @@ var hr_max_range = 100;
 var isRepeat = false;
 var item = itemJson.item;
 
+function normalizeItemName(name) {
+    if (!name) return "";
+    return name.toString().replace(/\s+/g, "").toLowerCase();
+}
+
+function containsItemName(itemList, itemName) {
+    var normalizedName = normalizeItemName(itemName);
+
+    for (var i = 0; i < itemList.length; i++) {
+        if (normalizeItemName(itemList[i]) === normalizedName) {
+            return true;
+        }
+    }
+    return false;
+}
 function pullForm(studyeventList, formNameList) {
     for (var i = 0; i < studyeventList.length; i++) {
         for (var j = 0; j < formNameList.length; j++) {
@@ -72,7 +87,7 @@ function pullItemFromForm(form, targetItem, itemAvg, groupName, isRepeat) {
             item = group.items[j];
             
             logger("Item name: " + item.name);
-            if (itemAvg.indexOf(item.name) !== -1) list = populateList(formJson, targetItem, itemAvg, isRepeat);
+            if (containsItemName(itemAvg, item.name)) list = populateList(formJson, targetItem, itemAvg, isRepeat);
             if (list.length > 0) {
                 logger("List: " + list)
                 average = calculateAverage(list);
@@ -80,7 +95,7 @@ function pullItemFromForm(form, targetItem, itemAvg, groupName, isRepeat) {
             }
             
             if (average !== null) return average;
-            if (targetItem.indexOf(item.name) !== -1 && item.value !== null) return item.value;
+            if (containsItemName(targetItem, item.name) && item.value !== null) return item.value;
         }
     }
 
@@ -150,7 +165,7 @@ function populateList(form, targetItem, attachedItem, repeat) {
             for (j = group.items.length - 1; j >= 0; j--) {
                 item = group.items[j];
 
-                if (item && targetItem.indexOf(item.name) !== -1) {
+                if (item && containsItemName(targetItem, item.name)) {
                     if (item.value !== null && !isNaN(item.value) && item.value !== "") {
                         list.push(parseInt(item.value));
                     }
@@ -165,8 +180,8 @@ function populateList(form, targetItem, attachedItem, repeat) {
             if (!group || group.canceled) continue;
             for (j = 0; j < group.items.length; j++) {
                 item = group.items[j];
-                if (attachedItem.indexOf(item.name) !== -1) return list;
-                if (item && targetItem.indexOf(item.name) !== -1) {
+                if (containsItemName(attachedItem, item.name)) return list;
+                if (item && containsItemName(targetItem, item.name)) {
                     if (item.value !== null && !isNaN(item.value) && item.value !== "") {
                         list.push(parseInt(item.value));
                     }

@@ -19,6 +19,21 @@ var difference = 3; // in minutes
 
 var methodType = "B";
 
+function normalizeItemName(name) {
+    if (!name) return "";
+    return name.toString().replace(/\s+/g, "").toLowerCase();
+}
+
+function containsItemName(itemList, itemName) {
+    var normalizedName = normalizeItemName(itemName);
+
+    for (var i = 0; i < itemList.length; i++) {
+        if (normalizeItemName(itemList[i]) === normalizedName) {
+            return true;
+        }
+    }
+    return false;
+}
 function formatDateTimeByType(item) {
     if (!item || !item.value) return "";
 
@@ -103,7 +118,7 @@ function pullItemFromForm(form, targetItem, isRepeat) {
             if (!group || group.canceled) continue;
             for (j = 0; j < group.items.length; j++) {
                 item = group.items[j];
-                if (targetItem.indexOf(item.name) !== -1) {
+                if (containsItemName(targetItem, item.name)) {
                     logger("Start Time: " + item.value);
                     if (item.value !== null && !item.canceled && item.value !== "" && item.dataType == "datetime") return item;
                 }
@@ -116,7 +131,7 @@ function pullItemFromForm(form, targetItem, isRepeat) {
             if (!group || group.canceled) continue;
             for (j = group.items.length - 1; j >= 0; j--) {
                 item = group.items[j];
-                if (targetItem.indexOf(item.name) !== -1) {
+                if (containsItemName(targetItem, item.name)) {
                     logger("Start Time: " + item.value);
                     if (item.value !== null && !item.canceled && item.value !== "" && item.dataType == "datetime") return item;
                 }

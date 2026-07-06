@@ -15,6 +15,21 @@ var list = [];
 var avg = 0;
 
 
+function normalizeItemName(name) {
+    if (!name) return "";
+    return name.toString().replace(/\s+/g, "").toLowerCase();
+}
+
+function containsItemName(itemList, itemName) {
+    var normalizedName = normalizeItemName(itemName);
+
+    for (var i = 0; i < itemList.length; i++) {
+        if (normalizeItemName(itemList[i]) === normalizedName) {
+            return true;
+        }
+    }
+    return false;
+}
 function populateList(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
@@ -26,7 +41,7 @@ function populateList(form, targetItem) {
         if (!group || group.canceled) continue;
         for (j = 0; j < group.items.length; j++) {
             item = group.items[j];
-            if (item && targetItem.indexOf(item.name) !== -1) {
+            if (item && containsItemName(targetItem, item.name)) {
                 maxCount++;
                 if (item.value !== null && !isNaN(item.value) && item.value !== "") {
                     list.push(parseFloat(item.value));

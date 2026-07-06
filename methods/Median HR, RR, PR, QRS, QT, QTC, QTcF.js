@@ -53,6 +53,21 @@ var QTcFAttachedItem = [
 var item = itemJson.item;
 var sigfig = item.significantDigits;
 
+function normalizeItemName(name) {
+    if (!name) return "";
+    return name.toString().replace(/\s+/g, "").toLowerCase();
+}
+
+function containsItemName(itemList, itemName) {
+    var normalizedName = normalizeItemName(itemName);
+
+    for (var i = 0; i < itemList.length; i++) {
+        if (normalizeItemName(itemList[i]) === normalizedName) {
+            return true;
+        }
+    }
+    return false;
+}
 function calculateMedian(values, sigfig) {
     if (values.length === 0) return null;
     values.sort(function(a, b) { return a - b; });
@@ -82,8 +97,8 @@ function populateList(form, targetItem, attachedItem, isRepeat) {
             if (!group || group.canceled) continue;
             for (j = 0; j < group.items.length; j++) {
                 item = group.items[j];
-                if (attachedItem.indexOf(item.name.trim()) !== -1) return list;
-                if (item && targetItem.indexOf(item.name) !== -1) {
+                if (containsItemName(attachedItem, item.name.trim())) return list;
+                if (item && containsItemName(targetItem, item.name)) {
                     if (item.value !== null && !isNaN(item.value) && item.value !== "") {
                         list.push(parseFloat(item.value));
                         logger("Item name: " + item.name + ", value: " + item.value);
@@ -98,8 +113,8 @@ function populateList(form, targetItem, attachedItem, isRepeat) {
             if (!group || group.canceled) continue;
             for (j = 0; j < group.items.length; j++) {
                 item = group.items[j];
-                if (attachedItem.indexOf(item.name.trim()) !== -1) return list;
-                if (item && targetItem.indexOf(item.name) !== -1) {
+                if (containsItemName(attachedItem, item.name.trim())) return list;
+                if (item && containsItemName(targetItem, item.name)) {
                     if (item.value !== null && !isNaN(item.value) && item.value !== "") {
                         list.push(parseFloat(item.value));
                         logger("Item name: " + item.name + ", value: " + item.value);
@@ -130,13 +145,13 @@ try {
     if (containsValue(parsedGroupName, "repeat")) isRepeat = true;
 
     logger("Attached item: " + item.name);
-    if (HRAttachedItem.indexOf(item.name.trim()) !== -1) list = populateList(formJson, HRItem, HRAttachedItem, isRepeat);
-    if (RRAttachedItem.indexOf(item.name.trim()) !== -1) list = populateList(formJson, RRItem, RRAttachedItem, isRepeat);
-    if (PRAttachedItem.indexOf(item.name.trim()) !== -1) list = populateList(formJson, PRItem, PRAttachedItem, isRepeat);
-    if (QRSAttachedItem.indexOf(item.name.trim()) !== -1) list = populateList(formJson, QRSItem, QRSAttachedItem, isRepeat);
-    if (QTAttachedItem.indexOf(item.name.trim()) !== -1) list = populateList(formJson, QTItem, QTAttachedItem, isRepeat);
-    if (QTCAttachedItem.indexOf(item.name.trim()) !== -1) list = populateList(formJson, QTCItem, QTCAttachedItem, isRepeat);
-    if (QTcFAttachedItem.indexOf(item.name.trim()) !== -1) list = populateList(formJson, QTcFitem, QTcFAttachedItem, isRepeat)
+    if (containsItemName(HRAttachedItem, item.name.trim())) list = populateList(formJson, HRItem, HRAttachedItem, isRepeat);
+    if (containsItemName(RRAttachedItem, item.name.trim())) list = populateList(formJson, RRItem, RRAttachedItem, isRepeat);
+    if (containsItemName(PRAttachedItem, item.name.trim())) list = populateList(formJson, PRItem, PRAttachedItem, isRepeat);
+    if (containsItemName(QRSAttachedItem, item.name.trim())) list = populateList(formJson, QRSItem, QRSAttachedItem, isRepeat);
+    if (containsItemName(QTAttachedItem, item.name.trim())) list = populateList(formJson, QTItem, QTAttachedItem, isRepeat);
+    if (containsItemName(QTCAttachedItem, item.name.trim())) list = populateList(formJson, QTCItem, QTCAttachedItem, isRepeat);
+    if (containsItemName(QTcFAttachedItem, item.name.trim())) list = populateList(formJson, QTcFitem, QTcFAttachedItem, isRepeat)
 
     var median = calculateMedian(list, sigfig);
     return (median).toFixed(sigfig);

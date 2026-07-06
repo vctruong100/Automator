@@ -49,6 +49,21 @@ var isMale = formJson.form.subject.volunteer.sexMale;
 var groupName = getItemGroupName(formJson);
 var isRepeat = containsValue(groupName, "repeat");
 
+function normalizeItemName(name) {
+    if (!name) return "";
+    return name.toString().replace(/\s+/g, "").toLowerCase();
+}
+
+function containsItemName(itemList, itemName) {
+    var normalizedName = normalizeItemName(itemName);
+
+    for (var i = 0; i < itemList.length; i++) {
+        if (normalizeItemName(itemList[i]) === normalizedName) {
+            return true;
+        }
+    }
+    return false;
+}
 function checkRange(range, isRepeat) {
     const [min, max] = range;
     var value = item.value;
@@ -94,15 +109,15 @@ function getItemGroupName(form) {
 }
 
 try {
-    if (SYS.indexOf(item.name) !== -1) return checkRange(SysRange, isRepeat);
-    if (DIA.indexOf(item.name) !== -1) return checkRange(DiaRange, isRepeat);
-    if (HR.indexOf(item.name) !== -1) return checkRange(HrRange, isRepeat);
-    if (RR.indexOf(item.name) !== -1) return checkRange(RrRange, isRepeat);
-    if (PR.indexOf(item.name) !== -1) return checkRange(PrRange, isRepeat);
-    if (QRS.indexOf(item.name) !== -1) return checkRange(QrsRange, isRepeat);
-    if (QTC.indexOf(item.name) !== -1) return checkRange(QtcRange, isRepeat);
-    if (QtcF.indexOf(item.name) !== -1) return checkRange(isMale ? QtcFRangeMale : QtcFRangeFemale, isRepeat);
-    if (QT.indexOf(item.name) !== -1) return checkRange(QtRange, isRepeat);
+    if (containsItemName(SYS, item.name)) return checkRange(SysRange, isRepeat);
+    if (containsItemName(DIA, item.name)) return checkRange(DiaRange, isRepeat);
+    if (containsItemName(HR, item.name)) return checkRange(HrRange, isRepeat);
+    if (containsItemName(RR, item.name)) return checkRange(RrRange, isRepeat);
+    if (containsItemName(PR, item.name)) return checkRange(PrRange, isRepeat);
+    if (containsItemName(QRS, item.name)) return checkRange(QrsRange, isRepeat);
+    if (containsItemName(QTC, item.name)) return checkRange(QtcRange, isRepeat);
+    if (containsItemName(QtcF, item.name)) return checkRange(isMale ? QtcFRangeMale : QtcFRangeFemale, isRepeat);
+    if (containsItemName(QT, item.name)) return checkRange(QtRange, isRepeat);
 
     return false;
 } catch (e) {

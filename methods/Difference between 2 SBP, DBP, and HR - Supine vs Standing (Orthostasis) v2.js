@@ -26,6 +26,21 @@ var standing = null;
 
 var item = itemJson.item;
 
+function normalizeItemName(name) {
+    if (!name) return "";
+    return name.toString().replace(/\s+/g, "").toLowerCase();
+}
+
+function containsItemName(itemList, itemName) {
+    var normalizedName = normalizeItemName(itemName);
+
+    for (var i = 0; i < itemList.length; i++) {
+        if (normalizeItemName(itemList[i]) === normalizedName) {
+            return true;
+        }
+    }
+    return false;
+}
 function checkDifference(range, semi, standing) {
     logger("Semi: " + semi);
     logger("Standing: " + standing);
@@ -48,7 +63,7 @@ function pullItemFromForm(form, targetItem, lastToFirst) {
             if (!group || group.canceled) continue;
             for (j = 0; j < group.items.length; j++) {
                 item = group.items[j];
-                if (targetItem.indexOf(item.name) !== -1 && item.value !== null && !item.canceled && item.value !== "") return item.value;
+                if (containsItemName(targetItem, item.name) && item.value !== null && !item.canceled && item.value !== "") return item.value;
             }
         }
     } else {
@@ -57,7 +72,7 @@ function pullItemFromForm(form, targetItem, lastToFirst) {
             if (!group || group.canceled) continue;
             for (j = 0; j < group.items.length; j++) {
                 item = group.items[j];
-                if (targetItem.indexOf(item.name) !== -1 && item.value !== null && !item.canceled && item.value !== "") return item.value;
+                if (containsItemName(targetItem, item.name) && item.value !== null && !item.canceled && item.value !== "") return item.value;
             }
         }
     }
@@ -66,15 +81,15 @@ function pullItemFromForm(form, targetItem, lastToFirst) {
 
 try {
     logger("Attached item: " + item.name);
-    if (sysAttachedItem.indexOf(item.name) !== -1) {
+    if (containsItemName(sysAttachedItem, item.name)) {
         semi = pullItemFromForm(formJson, sysItem, true);
         standing = pullItemFromForm(formJson, sysStandingItem, false);
         return checkDifference(sysDifferenceRange, semi, standing);
-    } else if (diaAttachedItem.indexOf(item.name) !== -1) {
+    } else if (containsItemName(diaAttachedItem, item.name)) {
         semi = pullItemFromForm(formJson, diaItem, true);
         standing = pullItemFromForm(formJson, diaStandingItem, false);
         return checkDifference(diaDifferenceRange, semi, standing);
-    } else if (hrAttachedItem.indexOf(item.name) !== -1) {
+    } else if (containsItemName(hrAttachedItem, item.name)) {
         semi = pullItemFromForm(formJson, hrItem, true);
         standing = pullItemFromForm(formJson, hrStandingItem, false);
         return checkDifference(hrDifferenceRange, semi, standing);

@@ -18,6 +18,21 @@ var itemNames = [
 
 var allMappings = [];
 
+function normalizeItemName(name) {
+    if (!name) return "";
+    return name.toString().replace(/\s+/g, "").toLowerCase();
+}
+
+function containsItemName(itemList, itemName) {
+    var normalizedName = normalizeItemName(itemName);
+
+    for (var i = 0; i < itemList.length; i++) {
+        if (normalizeItemName(itemList[i]) === normalizedName) {
+            return true;
+        }
+    }
+    return false;
+}
 function getItemMapping(formData) {
     var mapping = [];
     logger('Form data length: ' + formData.length);
@@ -35,7 +50,7 @@ function getItemMapping(formData) {
                     for (var k = 0; k < itemGroup.items.length; k++) {
                         var item = itemGroup.items[k];
 
-                        if (itemNames.indexOf(item.name) !== -1) {
+                        if (containsItemName(itemNames, item.name)) {
                             var contextRaw = getItemDataContextByItemDataId(item.id);
                             var context = JSON.parse(contextRaw);
                             if (typeof context === 'string') {

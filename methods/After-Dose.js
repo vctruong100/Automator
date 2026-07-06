@@ -22,6 +22,21 @@ var studyevent = formJson.form.studyEventName;
 var form = formJson.form;
 
 // Converts a human-readable date string back to ClinSpark ISO format (YYYY-MM-DDTHH:MM:SS)
+function normalizeItemName(name) {
+    if (!name) return "";
+    return name.toString().replace(/\s+/g, "").toLowerCase();
+}
+
+function containsItemName(itemList, itemName) {
+    var normalizedName = normalizeItemName(itemName);
+
+    for (var i = 0; i < itemList.length; i++) {
+        if (normalizeItemName(itemList[i]) === normalizedName) {
+            return true;
+        }
+    }
+    return false;
+}
 function convertToOriginalFormat(displayString) {
     if (!displayString) return "";
 
@@ -115,7 +130,7 @@ function pullItemFromForm(form, targetItem) {
         if (!group || group.canceled) continue;
         for (j = 0; j < group.items.length; j++) {
             item = group.items[j];
-            if (targetItem.indexOf(item.name) !== -1 && item.value !== null && !item.canceled && item.value !== "") return item;
+            if (containsItemName(targetItem, item.name) && item.value !== null && !item.canceled && item.value !== "") return item;
         }
     }
     return null;

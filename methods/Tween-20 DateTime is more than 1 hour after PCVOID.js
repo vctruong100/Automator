@@ -19,6 +19,21 @@ var difference = 60;
 var item = itemJson.item;
 var groupid = null;
 
+function normalizeItemName(name) {
+    if (!name) return "";
+    return name.toString().replace(/\s+/g, "").toLowerCase();
+}
+
+function containsItemName(itemList, itemName) {
+    var normalizedName = normalizeItemName(itemName);
+
+    for (var i = 0; i < itemList.length; i++) {
+        if (normalizeItemName(itemList[i]) === normalizedName) {
+            return true;
+        }
+    }
+    return false;
+}
 function getItemGroupID(form) {
     for (var i = 0; i < form.itemGroups.length; i++) {
     var group = form.itemGroups[i];
@@ -46,7 +61,7 @@ function getItemValueFromSameGroup(formJ, itemName) {
         var items = group.items;
         for (var j = 0; j < items.length; j++) {
             var item = items[j];
-            if (item && itemName.indexOf(item.name) !== -1) {
+            if (item && containsItemName(itemName, item.name)) {
                 if (item.value && item.value !== null) return item;
             }
         }
