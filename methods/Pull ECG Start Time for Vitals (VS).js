@@ -1,8 +1,5 @@
 /* jshint strict: false */
 
-    }
-    return false;
-}
 
 // Version: v1
 // Purpose: Pull ECG Start Time for Vitals (VS) from the most recent completed ECG form
@@ -30,6 +27,9 @@ function containsItemName(itemList, itemName) {
         if (normalizeItemName(itemList[i]) === normalizedName) {
             return true;
         }
+    }
+    return false;
+}
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
     var group, item, i, j;
