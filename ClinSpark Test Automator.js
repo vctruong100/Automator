@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 4.2.3
+// @version 4.2.4
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -36963,6 +36963,26 @@
             while (s < selects.length) {
                 var sel = selects[s];
                 var opts = sel.querySelectorAll('option');
+
+                // If the state dropdown is already Locked or Ready, skip this plan entirely
+                // to avoid accidentally changing it to a different state.
+                var selectedOpt = sel.querySelector('option[selected]');
+                if (!selectedOpt && sel.selectedIndex >= 0) {
+                    selectedOpt = sel.options[sel.selectedIndex];
+                }
+                if (selectedOpt) {
+                    var selectedText = (selectedOpt.textContent || "").trim().toLowerCase();
+                    var selectedVal = (selectedOpt.value || "").trim().toLowerCase();
+                    if (selectedText.indexOf("locked") !== -1 || selectedVal.indexOf("locked") !== -1 || selectedVal === "lock") {
+                        log("Activity Plan " + planName + " is already locked (selected state: " + (selectedOpt.textContent || "").trim() + "). Skipping.");
+                        return { success: true, message: "Already locked" };
+                    }
+                    if (selectedText.indexOf("ready") !== -1 || selectedVal.indexOf("ready") !== -1) {
+                        log("Activity Plan " + planName + " is in Ready state (selected state: " + (selectedOpt.textContent || "").trim() + "). Skipping.");
+                        return { success: true, message: "Already ready" };
+                    }
+                }
+
                 var o = 0;
                 while (o < opts.length) {
                     var opt = opts[o];
@@ -37099,6 +37119,45 @@
     }
 
     // Orchestrate opening plan show pages and queuing pending ids when run flag present.
+
+    // Determine the activity plan state for a row by inspecting the table header first,
+    // then falling back to the last non-empty cell. This avoids relying solely on the
+    // last column in case the table layout changes.
+    function getActivityPlanStateFromRow(row) {
+        var tds = row.querySelectorAll("td");
+        if (tds.length === 0) {
+            return "";
+        }
+
+        var table = row.closest("table");
+        if (table) {
+            var headers = table.querySelectorAll("thead tr th, thead tr td");
+            var stateIndex = -1;
+            var h = 0;
+            while (h < headers.length) {
+                var headerText = (headers[h].textContent || "").trim().toLowerCase();
+                if (headerText === "state" || headerText === "status" || headerText.indexOf("state") !== -1) {
+                    stateIndex = h;
+                    break;
+                }
+                h = h + 1;
+            }
+            if (stateIndex >= 0 && stateIndex < tds.length) {
+                return (tds[stateIndex].textContent || "").trim();
+            }
+        }
+
+        var lastIndex = tds.length - 1;
+        while (lastIndex >= 0) {
+            var text = (tds[lastIndex].textContent || "").trim();
+            if (text.length > 0) {
+                return text;
+            }
+            lastIndex = lastIndex - 1;
+        }
+        return "";
+    }
+
     async function processListPage() {
         log("processListPage start");
         var flag = null;
@@ -37140,13 +37199,10 @@
                 var href = a.getAttribute("href") + "";
                 var planName = (a.textContent + "").trim();
                 if (href.length > 0) {
-                    var tds = row.querySelectorAll("td");
-                    var stateText = "";
-                    if (tds.length > 0) {
-                        stateText = (tds[tds.length - 1].textContent || "").trim();
-                    }
-                    if (stateText === "Locked") {
-                        log("Skipping already locked plan: " + planName);
+                    var stateText = getActivityPlanStateFromRow(row);
+                    var lowerState = stateText.toLowerCase();
+                    if (lowerState === "locked" || lowerState === "ready") {
+                        log("Skipping plan (state is " + stateText + "): " + planName);
                     } else {
                         var fullUrl = location.origin + href;
                         planData.push({ url: fullUrl, name: planName });
