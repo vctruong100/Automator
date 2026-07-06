@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 4.2.4
+// @version 4.2.5
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -23036,20 +23036,67 @@
         return true;
     }
 
-    // Await modal close: waits until no visible Bootstrap modal remains or timeout.
+    // Await modal close: waits until no visible Bootstrap modal or backdrop remains or timeout.
     async function waitForAnyModalToClose(timeoutMs) {
         var max = typeof timeoutMs === "number" ? timeoutMs : 12000;
         var start = Date.now();
         while (Date.now() - start < max) {
             var openModal = document.querySelector(".modal.in, .modal.show");
-            if (!openModal) {
-                log("CollectAll: no .modal.in/.modal.show detected; assuming closed");
+            var backdrop = document.querySelector(".modal-backdrop");
+            var bodyLocked = document.body.classList.contains("modal-open");
+            if (!openModal && !backdrop && !bodyLocked) {
+                log("CollectAll: no .modal.in/.modal.show, backdrop, or modal-open body detected; assuming closed");
                 return true;
             }
             await sleep(200);
         }
         log("CollectAll: waitForAnyModalToClose reached timeout");
         return false;
+    }
+
+    // Forcibly remove leftover Bootstrap modal artifacts (backdrop, body scroll lock, stuck ajaxModal).
+    // This prevents the greyish-black fade from persisting while the automation continues.
+    function cleanupCollectAllModalArtifacts() {
+        try {
+            var ajaxModal = document.getElementById("ajaxModal");
+            if (ajaxModal) {
+                var isVisible = ajaxModal.classList.contains("in") || ajaxModal.classList.contains("show") || ajaxModal.style.display === "block";
+                if (isVisible) {
+                    log("CollectAll: ajaxModal is still visible; forcibly closing it");
+                    try {
+                        if (window.jQuery && window.jQuery.fn && typeof window.jQuery.fn.modal === "function") {
+                            window.jQuery(ajaxModal).modal("hide");
+                        }
+                    } catch (e) {
+                        log("CollectAll: jQuery modal hide failed - " + String(e));
+                    }
+                    ajaxModal.classList.remove("in", "show");
+                    ajaxModal.style.display = "none";
+                    ajaxModal.setAttribute("aria-hidden", "true");
+                    var modalDialog = ajaxModal.querySelector(".modal-dialog");
+                    if (modalDialog) {
+                        modalDialog.innerHTML = "";
+                    }
+                }
+            }
+
+            var backdrops = document.querySelectorAll(".modal-backdrop");
+            if (backdrops && backdrops.length > 0) {
+                log("CollectAll: removing " + String(backdrops.length) + " leftover modal-backdrop(s)");
+                for (var i = 0; i < backdrops.length; i++) {
+                    backdrops[i].parentNode.removeChild(backdrops[i]);
+                }
+            }
+
+            if (document.body.classList.contains("modal-open")) {
+                document.body.classList.remove("modal-open");
+                document.body.style.paddingRight = "";
+                document.body.style.overflow = "";
+                log("CollectAll: removed modal-open from body and restored scroll");
+            }
+        } catch (e) {
+            log("CollectAll: cleanupCollectAllModalArtifacts error - " + String(e));
+        }
     }
 
     // Wait for the form table to refresh (simple delay + presence check).
@@ -23354,6 +23401,9 @@
             return;
         }
 
+        // Clean up any stale modal/backdrop from a previous run before starting
+        cleanupCollectAllModalArtifacts();
+
         // Create popup container with status and list
         var popupContainer = document.createElement("div");
         popupContainer.style.display = "flex";
@@ -23629,6 +23679,9 @@
                 }
             }
 
+            // Ensure no stuck modal or leftover backdrop remains before moving to the next form
+            cleanupCollectAllModalArtifacts();
+
             // Add form to list after collection
             addFormToList(formName, formStatus, pickedFormId);
 
@@ -23644,6 +23697,8 @@
         statusDiv.textContent = "Completed";
         statusDiv.style.color = "#9f9";
         log("CollectAll: completed");
+
+        cleanupCollectAllModalArtifacts();
 
         try {
             clearBarcodeResult();
