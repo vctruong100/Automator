@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 4.2.6
+// @version 4.2.7
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -19915,40 +19915,21 @@
                     break;
                 }
 
-                // Check if studyEvent or form dropdowns are disabled — if so, skip this form
+                // Check if studyEvent or form dropdowns are disabled. When disabled, a reasonForChange
+                // field is present and required, so populate it with "Update" and continue updating.
                 var studyEventSel = document.getElementById("studyEvent");
                 var formSel = document.getElementById("form");
-                if ((studyEventSel && studyEventSel.disabled) || (formSel && formSel.disabled)) {
-                    log("BPL Update: studyEvent or form dropdown is disabled, skipping item " + item.label);
-                    // Find and click Cancel button
-                    var cancelBtns = modal.querySelectorAll('button[data-dismiss="modal"]');
-                    var cancelClicked = false;
-                    for (var ci = 0; ci < cancelBtns.length; ci++) {
-                        var btnText = cancelBtns[ci].textContent.trim().toLowerCase();
-                        if (btnText.indexOf("cancel") !== -1 || cancelBtns[ci].classList.contains("default")) {
-                            cancelBtns[ci].click();
-                            cancelClicked = true;
-                            log("BPL Update: Cancel button clicked");
-                            break;
-                        }
+                var needsReason = (studyEventSel && studyEventSel.disabled) || (formSel && formSel.disabled);
+                if (needsReason) {
+                    var reasonEl = document.getElementById("reasonForChange");
+                    if (reasonEl) {
+                        reasonEl.value = "Update";
+                        reasonEl.dispatchEvent(new Event("input", { bubbles: true }));
+                        reasonEl.dispatchEvent(new Event("change", { bubbles: true }));
+                        log("BPL Update: reasonForChange set to 'Update' for item " + item.label);
+                    } else {
+                        log("BPL Update: form/studyEvent dropdown disabled but reasonForChange not found for item " + item.label);
                     }
-                    if (!cancelClicked && cancelBtns.length > 0) {
-                        cancelBtns[0].click();
-                        cancelClicked = true;
-                        log("BPL Update: fallback Cancel button clicked");
-                    }
-                    if (!cancelClicked) {
-                        var closeModalBtn = modal.querySelector(".close, [data-dismiss='modal']");
-                        if (closeModalBtn) {
-                            closeModalBtn.click();
-                            log("BPL Update: close button clicked as fallback");
-                        }
-                    }
-                    await waitForSAModalClose(5000);
-                    item.status = "Skipped";
-                    progressContent.updateItem(idx, "Skipped");
-                    await sleep(500);
-                    continue;
                 }
 
                 // Update study event dropdown if item has a new event value

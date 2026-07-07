@@ -11,6 +11,7 @@ var ecgFormNames = [
     "⚡ ECG 12-LEAD (SINGLE) POST DOSE V2",
     "⚡ ECG 12-LEAD (SINGLE) PRE-DOSE",
     "⚡ ECG 12-LEAD (TRIPLICATE)",
+    "⚡ ECG 12-LEAD (SINGLE) POST DOSE"
 ];
 
 const difference = 10; // in minutes
