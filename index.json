@@ -837,5 +837,14 @@
                  ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Difference%20between%20Start%20Time%20and%20Collection%20Time%20(Minutes%20Only)%20(if%20used%20on%20Vital%20Sign%20Form%20that%20Pulls%20from%20ECG).js",
         "updated":  "2026-07-07"
+    },
+    {
+        "id":  "M-084",
+        "title":  "Combine Alcohol Substance Use (SU) Queries.js",
+        "tags":  [
+                     "Edit Check"
+                 ],
+        "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Combine%20Alcohol%20Substance%20Use%20(SU)%20Queries.js",
+        "updated":  "2026-07-09"
     }
 ]

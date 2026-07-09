@@ -125,8 +125,10 @@ function getItemGroupName(form) {
 try {
     var isRepeat = containsValue(getItemGroupName(formJson), "repeat");
     var form = pullForm([studyEventName], ecgFormNames);
-    var ecgStartTime = pullItemFromForm(form, ECGitems); // Pull ECG Time
-    
+    var ecgStartTime = null;
+    if (form) {
+        ecgStartTime = pullItemFromForm(form, ECGitems); // Pull ECG Time
+    }
     // Try to pull form Supine Start Time. Check if it exist; if not or N/A, then pull the other item
     var startTime = pullItemFromForm(formJson, sameAsECG, isRepeat);
     if (!startTime || startTime.value == "N/A" || startTime.value == null) {
@@ -135,7 +137,7 @@ try {
     }
     // If no Start Time exist on the current form, use ECG time.
     if (!startTime) startTime = ecgStartTime;
-    
+    if (!startTime) return null;
     var endTime = itemJson.item;
     logger("Start time: " + startTime.value)
     logger("Collected Time: " + endTime.value);
