@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     3.1.3
+// @version     3.2.2
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -186,6 +186,13 @@
     const IMPORT_IE_SHORT_DELAY_MIN = 150;
     const IMPORT_IE_SHORT_DELAY_MAX = 400;
     var IMPORT_IE_CANCELED = false;
+
+    // Clear Mapping Feature
+    const STORAGE_CLEAR_MAPPING_POPUP = "activityPlanState.clearMappingPopup";
+    var CLEAR_MAPPING_CANCELED = false;
+    var CLEAR_MAPPING_PAUSE = false;
+    var CLEAR_MAPPING_POPUP_REF = null;
+
     var RIGHT_PANEL_MODE = { HIERARCHY: "hierarchy", CODE: "code" };
     var CODE_SORT_TOGGLE_BUTTON_ID = "ieCodeSortToggle";
     var RIGHT_PANEL_BODY_ID = "ieRightPanelBody";
@@ -16336,6 +16343,7 @@
         { id: "Search Methods", label: "Search Methods" },
         { id: "Parse Deviation", label: "Parse Deviation" },
         { id: "Import I/E", label: "Import I/E" },
+        { id: "Clear Mapping", label: "Clear Mapping" },
         { id: "Find Adverse Event", label: "Find Adverse Event" },
         { id: "Find Form & Events", label: "Find Form & Events" },
         { id: "Set Visibility Condition", label: "Set Visibility Condition" },
@@ -24434,6 +24442,282 @@
 
 
     //==========================
+    // CLEAR SUBJECT ELIGIBILITY FEATURE
+    //==========================
+    // This section contains all functions related to clearing subject eligibility.
+    // This feature automates clearing all existing eligibility mapping in the table.
+    //==========================
+
+    function ClearEligibilityFunctions() {}
+
+    function showClearMappingConfirmPopup(onConfirm) {
+        var content = document.createElement("div");
+        content.style.padding = "20px";
+        content.style.textAlign = "center";
+
+        var warningIcon = document.createElement("div");
+        warningIcon.innerHTML = "⚠️";
+        warningIcon.style.fontSize = "48px";
+        warningIcon.style.marginBottom = "15px";
+
+        var warningTitle = document.createElement("div");
+        warningTitle.textContent = "Confirm Clear Mapping";
+        warningTitle.style.fontSize = "18px";
+        warningTitle.style.fontWeight = "bold";
+        warningTitle.style.marginBottom = "10px";
+        warningTitle.style.color = "#ff6b6b";
+
+        var warningMessage = document.createElement("div");
+        warningMessage.textContent = "You are about to delete all rows in the Eligibility Mapping table. This action cannot be undone.";
+        warningMessage.style.marginBottom = "8px";
+        warningMessage.style.lineHeight = "1.4";
+
+        var warningMessage2 = document.createElement("div");
+        warningMessage2.textContent = "Are you sure you want to continue?";
+        warningMessage2.style.fontWeight = "bold";
+        warningMessage2.style.marginBottom = "20px";
+
+        var cancelButton = document.createElement("button");
+        cancelButton.textContent = "Cancel";
+        cancelButton.style.background = "#444";
+        cancelButton.style.color = "#fff";
+        cancelButton.style.border = "none";
+        cancelButton.style.borderRadius = "4px";
+        cancelButton.style.padding = "8px 24px";
+        cancelButton.style.cursor = "pointer";
+        cancelButton.style.fontSize = "14px";
+        cancelButton.style.marginRight = "10px";
+        cancelButton.onmouseenter = function() { this.style.background = "#555"; };
+        cancelButton.onmouseleave = function() { this.style.background = "#444"; };
+
+        var confirmButton = document.createElement("button");
+        confirmButton.textContent = "Confirm Delete";
+        confirmButton.style.background = "#d93025";
+        confirmButton.style.color = "#fff";
+        confirmButton.style.border = "none";
+        confirmButton.style.borderRadius = "4px";
+        confirmButton.style.padding = "8px 24px";
+        confirmButton.style.cursor = "pointer";
+        confirmButton.style.fontSize = "14px";
+        confirmButton.onmouseenter = function() { this.style.background = "#b52a1f"; };
+        confirmButton.onmouseleave = function() { this.style.background = "#d93025"; };
+
+        content.appendChild(warningIcon);
+        content.appendChild(warningTitle);
+        content.appendChild(warningMessage);
+        content.appendChild(warningMessage2);
+        content.appendChild(cancelButton);
+        content.appendChild(confirmButton);
+
+        var popup = createPopup({
+            title: "Clear Mapping - Confirmation",
+            content: content,
+            width: "400px",
+            height: "auto",
+            onClose: function() {
+                log("ClearMapping: confirm popup closed");
+            }
+        });
+
+        cancelButton.addEventListener("click", function() {
+            popup.close();
+            log("ClearMapping: user cancelled");
+        });
+
+        confirmButton.addEventListener("click", function() {
+            popup.close();
+            if (typeof onConfirm === "function") onConfirm();
+        });
+    }
+
+    function startClearMapping() {
+        log("ClearMapping: startClearMapping invoked");
+        CLEAR_MAPPING_CANCELED = false;
+
+        if (!isEligibilityListPage()) {
+            log("ClearMapping: not on eligibility list page; showing warning");
+            showWrongPagePopup("Clear Mapping", ELIGIBILITY_LIST_PATH, location.pathname, null);
+            return;
+        }
+
+        showClearMappingConfirmPopup(function() {
+            log("ClearMapping: user confirmed; starting automation");
+            try {
+                localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_CLEAR_MAPPING);
+            } catch (e) {}
+
+            if (!isEligibilityListPage()) {
+                log("ClearMapping: page changed before confirm; aborting");
+                clearRunMode();
+                return;
+            }
+
+            executeClearMappingAutomation();
+        });
+    }
+
+    async function executeClearMappingAutomation() {
+        if (CLEAR_MAPPING_CANCELED) {
+            log("ClearMapping: executeClearMappingAutomation cancelled");
+            return;
+        }
+        log("ClearMapping: executor started");
+
+        var path = location.pathname;
+        if (path !== ELIGIBILITY_LIST_PATH) {
+            log("ClearMapping: wrong page; clearing run mode and stopping");
+            clearRunMode();
+            return;
+        }
+
+        // Loop until no more rows
+        while (true) {
+            if (CLEAR_MAPPING_CANCELED) {
+                log("ClearMapping: cancelled during loop");
+                clearRunMode();
+                return;
+            }
+
+            var tbody = await waitForSelector("tbody#eligibilityRefTableBody", 15000);
+            if (!tbody) {
+                log("ClearMapping: table body missing; stopping");
+                clearRunMode();
+                return;
+            }
+
+            var rows = tbody.querySelectorAll("tr");
+            log("ClearMapping: rows found=" + String(rows.length));
+
+            if (rows.length === 0) {
+                log("ClearMapping: no rows remain; clearing run mode");
+                clearRunMode();
+                return;
+            }
+
+            await deleteFirstEligibilityRow();
+
+            // Wait a bit after delete/reload before checking again
+            await sleep(2000);
+        }
+    }
+
+    async function deleteFirstEligibilityRow() {
+        if (CLEAR_MAPPING_CANCELED) {
+            log("ClearMapping: deleteFirstEligibilityRow cancelled");
+            return;
+        }
+        log("ClearMapping: deleteFirstEligibilityRow started");
+
+        var tbody = await waitForSelector("tbody#eligibilityRefTableBody", 15000);
+        if (!tbody) {
+            log("ClearMapping: tbody missing in deleteFirstEligibilityRow");
+            clearRunMode();
+            return;
+        }
+
+        var rows = tbody.querySelectorAll("tr");
+        if (rows.length === 0) {
+            log("ClearMapping: no rows present during deleteFirstEligibilityRow");
+            clearRunMode();
+            return;
+        }
+
+        var tr = rows[0];
+        var tds = tr.querySelectorAll("td");
+        if (!tds) {
+            log("ClearMapping: row has no tds; stopping");
+            clearRunMode();
+            return;
+        }
+        if (tds.length < 9) {
+            log("ClearMapping: row has insufficient columns; stopping");
+            clearRunMode();
+            return;
+        }
+
+        var actionTd = tds[8];
+        var btn = actionTd.querySelector("button.dropdown-toggle");
+        if (!btn) {
+            log("ClearMapping: dropdown toggle not found");
+            clearRunMode();
+            return;
+        }
+
+        btn.click();
+        log("ClearMapping: action dropdown opened");
+        await sleep(400);
+
+        var items = document.querySelectorAll("ul.dropdown-menu li a");
+        var deleteLink = null;
+
+        var i = 0;
+        while (i < items.length) {
+            if (CLEAR_MAPPING_CANCELED) {
+                log("ClearMapping: deleteFirstEligibilityRow cancelled");
+                return;
+            }
+            var a = items[i];
+            var txt = (a.textContent + "").trim().toLowerCase();
+            if (txt.indexOf("delete") >= 0) {
+                deleteLink = a;
+                break;
+            }
+            i = i + 1;
+        }
+
+        if (!deleteLink) {
+            log("ClearMapping: delete link not found");
+            clearRunMode();
+            return;
+        }
+
+        if (CLEAR_MAPPING_CANCELED) {
+            log("ClearMapping: deleteFirstEligibilityRow cancelled");
+            return;
+        }
+        log("ClearMapping: clicking delete link");
+        deleteLink.click();
+        await sleep(600);
+
+        var okBtn = null;
+        var waited = 0;
+        var step = 150;
+        var maxWait = 4000;
+
+        while (waited < maxWait) {
+            if (CLEAR_MAPPING_CANCELED) {
+                log("ClearMapping: deleteFirstEligibilityRow cancelled");
+                return;
+            }
+            okBtn = document.querySelector("button[data-bb-handler='confirm'].btn.btn-primary");
+            if (okBtn) {
+                break;
+            }
+            await sleep(step);
+            waited = waited + step;
+        }
+
+        if (!okBtn) {
+            log("ClearMapping: OK button not found in modal");
+            clearRunMode();
+            return;
+        }
+
+        log("ClearMapping: clicking OK button in modal");
+        okBtn.click();
+        await sleep(1500);
+
+        log("ClearMapping: delete confirmed; forcing page reload");
+        try {
+            localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_CLEAR_MAPPING);
+        } catch (e) {
+        }
+        await sleep(500);
+        location.href = getBaseUrl() + ELIGIBILITY_LIST_PATH;
+    }
+
+
+    //==========================
     // RUN SUBJECT ELIGIBILITY FEATURE
     //==========================
     // This section contains all functions related to subject eligibility.
@@ -24507,6 +24791,17 @@
             return false;
         }
         return raw === expectedMode;
+    }
+
+    function clearRunMode() {
+        try {
+            localStorage.removeItem(STORAGE_RUN_MODE);
+        } catch (e) {}
+    }
+
+    function clearAllRunState() {
+        clearRunMode();
+        CLEAR_MAPPING_CANCELED = true;
     }
 
     function setLastMatchSelection(planVal, saVal, itemVal) {
@@ -37353,6 +37648,20 @@
         importEligBtn.onmouseenter = function() { this.style.background = "#4a37a0"; };
         importEligBtn.onmouseleave = function() { this.style.background = "#5b43c7"; };
 
+        var clearMappingBtn = document.createElement("button");
+        clearMappingBtn.textContent = "Clear Mapping";
+        clearMappingBtn.style.background = "#38dae6";
+        clearMappingBtn.style.color = "#fff";
+        clearMappingBtn.style.border = "none";
+        clearMappingBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        clearMappingBtn.style.padding = scale(BUTTON_PADDING_PX);
+        clearMappingBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
+        clearMappingBtn.style.cursor = "pointer";
+        clearMappingBtn.style.fontWeight = "500";
+        clearMappingBtn.style.transition = "background 0.2s";
+        clearMappingBtn.onmouseenter = () => { clearMappingBtn.style.background = "#2bb9c4"; };
+        clearMappingBtn.onmouseleave = () => { clearMappingBtn.style.background = "#38dae6"; };
+
         var parseStudyEventBtn = document.createElement("button");
         parseStudyEventBtn.textContent = "Parse Study Event";
         parseStudyEventBtn.style.background = "#4a90e2";
@@ -37583,7 +37892,7 @@
 
         // Apply glassmorphism theme to all panel buttons if glass theme is active
         if (glass) {
-            var allPanelBtns = [svcBtn, runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, importFromLibBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, bplBtn, importEligBtn, findAeBtn, findFormAndEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, parseFormsBtn, editStudyEventsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn, downloadDtsBtn, printBarcodesBtn, autoResaverBtn];
+            var allPanelBtns = [svcBtn, runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, importFromLibBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, bplBtn, importEligBtn, clearMappingBtn, findAeBtn, findFormAndEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, parseFormsBtn, editStudyEventsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn, downloadDtsBtn, printBarcodesBtn, autoResaverBtn];
             for (var gi = 0; gi < allPanelBtns.length; gi++) {
                 var gb = allPanelBtns[gi];
                 gb.className = "ie-btn-primary";
@@ -37611,6 +37920,7 @@
             { el: searchMethodsBtn, label: "Search Methods" },
             { el: parseDeviationBtn, label: "Parse Deviation" },
             { el: importEligBtn, label: "Import I/E" },
+            { el: clearMappingBtn, label: "Clear Mapping" },
             { el: findAeBtn, label: "Find Adverse Event" },
             { el: findFormAndEventsBtn, label: "Find Form & Events" },
             { el: parseMethodBtn, label: "Item Method Forms" },
@@ -37728,6 +38038,10 @@
         importEligBtn.addEventListener("click", function () {
             log("ImportElig: button clicked");
             startImportEligibilityMapping();
+        });
+        clearMappingBtn.addEventListener("click", function () {
+            log("ClearMapping: button clicked");
+            startClearMapping();
         });
         parseMethodBtn.addEventListener("click", function () {
             openParseMethod();
@@ -38144,6 +38458,19 @@
                 executeEligibilityMappingAutomation();
             }, 3000);
 
+            return;
+        }
+        if (runModeRaw === RUNMODE_CLEAR_MAPPING) {
+            if (!isEligibilityListPage()) {
+                log("ClearMapping: run mode set but not on list page; redirecting");
+                location.href = getBaseUrl() + ELIGIBILITY_LIST_PATH;
+                return;
+            }
+            log("ClearMapping: resuming after page reload");
+            CLEAR_MAPPING_CANCELED = false;
+            setTimeout(function () {
+                executeClearMappingAutomation();
+            }, 2000);
             return;
         }
         if (runModeRaw === RUNMODE_DTS) {
