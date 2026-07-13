@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     3.2.3
+// @version     3.4.0
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -10984,6 +10984,8 @@
     var APR_PROGRESS_POPUP_REF = null;
     var APR_CANCELLED = false;
     var APR_TARGET_URL = "https://cenexel.clinspark.com/secure/crfdesign/activityplans/show/";
+    var STORAGE_APR_FULLSCREEN = "activityPlanState.apr.fullscreen";
+    var STORAGE_APR_SIZE = "activityPlanState.apr.size";
 
     function aprLog(msg) {
         log("APR: " + msg);
@@ -11243,11 +11245,13 @@
 
     function aprBuildSelectionGUI(tree) {
         var searchKeyword = "";
+        var showSelectedOnly = false;
         var selectedFormCountEl;
         var totalFormCountEl;
         var totalSegmentCountEl;
         var totalEventCountEl;
         var treeContainer;
+        var selectedListMode = false;
 
         function collectVisibleNodes() {
             var visible = { segments: [] };
@@ -11262,14 +11266,16 @@
                     var visibleForms = [];
                     for (var fi = 0; fi < ev.forms.length; fi++) {
                         var form = ev.forms[fi];
+                        if (showSelectedOnly && !form.checked) {
+                            continue;
+                        }
                         var formMatch = !searchKeyword || form.item.form.toLowerCase().indexOf(searchKeyword) !== -1;
                         if (formMatch || evMatch || segMatch) {
                             visibleForms.push(form);
                             segHasVisibleChildren = true;
                         }
                     }
-                    var effectiveExpanded = searchKeyword ? true : ev.expanded;
-                    if ((evMatch || segMatch || visibleForms.length > 0) && effectiveExpanded) {
+                    if (evMatch || segMatch || visibleForms.length > 0) {
                         visibleEvents.push({ event: ev, forms: visibleForms });
                     }
                 }
@@ -11280,8 +11286,42 @@
             return visible;
         }
 
+        function renderSelectedList() {
+            var selected = aprCollectSelectedForms(tree);
+            if (selected.length === 0) {
+                var emptyMsg = document.createElement("div");
+                emptyMsg.textContent = "No forms selected.";
+                emptyMsg.style.cssText = "padding:20px;text-align:center;color:#888;font-size:13px;";
+                treeContainer.appendChild(emptyMsg);
+                return;
+            }
+            for (var i = 0; i < selected.length; i++) {
+                var item = selected[i];
+                var row = document.createElement("div");
+                row.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 10px;background:#1f1f1f;border:1px solid #333;border-radius:4px;margin-bottom:2px;font-size:12px;color:#ddd;";
+                var label = document.createElement("span");
+                label.textContent = item.segment + " - " + item.studyEvent + " - " + item.form;
+                label.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+                label.title = label.textContent;
+                var icons = document.createElement("span");
+                icons.textContent = aprFormatStatusIcons(item);
+                icons.style.cssText = "font-size:11px;flex-shrink:0;white-space:nowrap;margin-right:6px;";
+                var time = document.createElement("span");
+                time.textContent = aprFormatTimeRef(item);
+                time.style.cssText = "font-size:11px;color:#fff;white-space:pre;flex-shrink:0;min-width:0;overflow:hidden;text-overflow:ellipsis;max-width:180px;";
+                row.appendChild(label);
+                row.appendChild(icons);
+                row.appendChild(time);
+                treeContainer.appendChild(row);
+            }
+        }
+
         function renderTree() {
             treeContainer.innerHTML = "";
+            if (selectedListMode) {
+                renderSelectedList();
+                return;
+            }
             var visible = collectVisibleNodes();
             for (var si = 0; si < visible.segments.length; si++) {
                 var segWrap = visible.segments[si];
@@ -11289,6 +11329,7 @@
                 var effectiveExpanded = searchKeyword ? true : seg.expanded;
 
                 var segRow = document.createElement("div");
+                segRow.dataset.segment = seg.name;
                 segRow.style.cssText = "display:flex;align-items:center;gap:8px;padding:8px 10px;background:#2a2a2a;border-radius:5px;margin-bottom:4px;font-weight:600;font-size:13px;color:#fff;cursor:pointer;user-select:none;";
                 var segExpand = document.createElement("span");
                 segExpand.textContent = effectiveExpanded ? "\u25BC" : "\u25B6";
@@ -11337,6 +11378,8 @@
                     var evEffectiveExpanded = searchKeyword ? true : ev.expanded;
 
                     var evRow = document.createElement("div");
+                    evRow.dataset.segment = seg.name;
+                    evRow.dataset.event = ev.name;
                     evRow.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 10px 6px 32px;background:#333;border-radius:4px;margin-bottom:3px;font-weight:500;font-size:12px;color:#eee;cursor:pointer;user-select:none;";
                     var evExpand = document.createElement("span");
                     evExpand.textContent = evEffectiveExpanded ? "\u25BC" : "\u25B6";
@@ -11414,23 +11457,126 @@
             }
         }
 
+        function getFilteredForms() {
+            var filtered = [];
+            for (var si = 0; si < tree.length; si++) {
+                var seg = tree[si];
+                var segMatch = !searchKeyword || seg.name.toLowerCase().indexOf(searchKeyword) !== -1;
+                for (var ei = 0; ei < seg.studyEventOrder.length; ei++) {
+                    var ev = seg.studyEvents[seg.studyEventOrder[ei]];
+                    var evMatch = !searchKeyword || ev.name.toLowerCase().indexOf(searchKeyword) !== -1;
+                    for (var fi = 0; fi < ev.forms.length; fi++) {
+                        var form = ev.forms[fi];
+                        if (showSelectedOnly && !form.checked) {
+                            continue;
+                        }
+                        var formMatch = !searchKeyword || form.item.form.toLowerCase().indexOf(searchKeyword) !== -1;
+                        if (formMatch || evMatch || segMatch) {
+                            filtered.push(form);
+                        }
+                    }
+                }
+            }
+            return filtered;
+        }
+
         function updateStats() {
             var stats = aprCountStats(tree);
             selectedFormCountEl.textContent = String(stats.selectedForms);
             totalFormCountEl.textContent = String(stats.totalForms);
             totalSegmentCountEl.textContent = String(stats.totalSegments);
             totalEventCountEl.textContent = String(stats.totalEvents);
-            if (stats.totalForms === 0) {
+            var filteredForms = getFilteredForms();
+            if (filteredForms.length === 0) {
                 selectAllBtn.textContent = "Select All";
-            } else if (stats.selectedForms === stats.totalForms) {
-                selectAllBtn.textContent = "Unselect All";
             } else {
-                selectAllBtn.textContent = "Select All";
+                var selectedFiltered = 0;
+                for (var fi = 0; fi < filteredForms.length; fi++) {
+                    if (filteredForms[fi].checked) {
+                        selectedFiltered++;
+                    }
+                }
+                selectAllBtn.textContent = selectedFiltered === filteredForms.length ? "Unselect All" : "Select All";
             }
         }
 
         var container = document.createElement("div");
-        container.style.cssText = "display:flex;flex-direction:column;gap:10px;max-height:80vh;";
+        container.style.cssText = "display:flex;flex-direction:column;gap:10px;height:100%;min-height:500px;";
+
+        var fullscreenBtn = document.createElement("button");
+        fullscreenBtn.id = "aprFullscreenBtn";
+        fullscreenBtn.textContent = "\u26F6";
+        fullscreenBtn.title = "Toggle Full Screen";
+        fullscreenBtn.style.cssText = "padding:4px 8px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:14px;cursor:pointer;line-height:1;width:32px;height:32px;display:flex;align-items:center;justify-content:center;";
+        fullscreenBtn.addEventListener("mouseenter", function() {
+            this.style.background = "#555";
+        });
+        fullscreenBtn.addEventListener("mouseleave", function() {
+            this.style.background = "#333";
+        });
+
+        var aprIsFullscreen = false;
+        try {
+            aprIsFullscreen = localStorage.getItem(STORAGE_APR_FULLSCREEN) === "true";
+        } catch (e) {}
+
+        var origPopupStyles = {};
+
+        function applyFullscreen() {
+            var popup = container.closest("[id^='clinsparkPopup_']");
+            if (!popup) {
+                popup = fullscreenBtn.closest("[id^='clinsparkPopup_']");
+            }
+            if (!popup) {
+                aprLog("fullscreen toggle - popup not found");
+                return;
+            }
+            if (aprIsFullscreen) {
+                origPopupStyles.width = popup.style.width;
+                origPopupStyles.maxWidth = popup.style.maxWidth;
+                origPopupStyles.height = popup.style.height;
+                origPopupStyles.maxHeight = popup.style.maxHeight;
+                origPopupStyles.top = popup.style.top;
+                origPopupStyles.left = popup.style.left;
+                origPopupStyles.transform = popup.style.transform;
+                origPopupStyles.borderRadius = popup.style.borderRadius;
+                popup.style.width = "100vw";
+                popup.style.maxWidth = "100vw";
+                popup.style.height = "100vh";
+                popup.style.maxHeight = "100vh";
+                popup.style.top = "0";
+                popup.style.left = "0";
+                popup.style.transform = "none";
+                popup.style.borderRadius = "0";
+                fullscreenBtn.textContent = "\u2716\u26F6";
+                fullscreenBtn.title = "Exit Full Screen";
+                aprLog("entered fullscreen");
+            } else {
+                popup.style.width = origPopupStyles.width || "96%";
+                popup.style.maxWidth = origPopupStyles.maxWidth || "1600px";
+                popup.style.height = origPopupStyles.height || "88%";
+                popup.style.maxHeight = origPopupStyles.maxHeight || "900px";
+                popup.style.top = origPopupStyles.top || "50%";
+                popup.style.left = origPopupStyles.left || "50%";
+                popup.style.transform = origPopupStyles.transform || "translate(-50%, -50%)";
+                popup.style.borderRadius = origPopupStyles.borderRadius || "";
+                fullscreenBtn.textContent = "\u26F6";
+                fullscreenBtn.title = "Toggle Full Screen";
+                aprLog("exited fullscreen");
+            }
+        }
+
+        fullscreenBtn.addEventListener("mousedown", function(e) {
+            e.stopPropagation();
+        });
+        fullscreenBtn.addEventListener("click", function(e) {
+            e.stopPropagation();
+            aprIsFullscreen = !aprIsFullscreen;
+            try {
+                localStorage.setItem(STORAGE_APR_FULLSCREEN, String(aprIsFullscreen));
+            } catch (err) {}
+            applyFullscreen();
+        });
 
         var headerRow = document.createElement("div");
         headerRow.style.cssText = "display:flex;gap:8px;align-items:center;";
@@ -11442,17 +11588,46 @@
         searchInput.addEventListener("input", function() {
             searchKeyword = this.value.trim().toLowerCase();
             renderTree();
+            updateStats();
         });
+
+        var searchClearBtn = document.createElement("button");
+        searchClearBtn.textContent = "×";
+        searchClearBtn.title = "Clear search";
+        searchClearBtn.style.cssText = "position:absolute;right:6px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:#aaa;font-size:16px;cursor:pointer;width:24px;height:24px;display:flex;align-items:center;justify-content:center;line-height:1;";
+        searchClearBtn.addEventListener("mouseenter", function() { this.style.color = "#fff"; });
+        searchClearBtn.addEventListener("mouseleave", function() { this.style.color = "#aaa"; });
+        searchClearBtn.addEventListener("click", function() {
+            searchInput.value = "";
+            searchKeyword = "";
+            renderTree();
+            updateStats();
+        });
+
+        var searchWrap = document.createElement("div");
+        searchWrap.style.cssText = "position:relative;flex:1;display:flex;align-items:center;min-width:0;";
+        searchWrap.appendChild(searchInput);
+        searchWrap.appendChild(searchClearBtn);
 
         var selectAllBtn = document.createElement("button");
         selectAllBtn.textContent = "Select All";
         selectAllBtn.style.cssText = "padding:6px 10px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:11px;cursor:pointer;min-width:82px;";
         selectAllBtn.addEventListener("click", function() {
-            var stats = aprCountStats(tree);
-            var select = stats.selectedForms < stats.totalForms;
-            for (var si = 0; si < tree.length; si++) {
-                aprSetSegmentChecked(tree[si], select);
+            var filteredForms = getFilteredForms();
+            if (filteredForms.length === 0) {
+                return;
             }
+            var selectedFiltered = 0;
+            for (var fi = 0; fi < filteredForms.length; fi++) {
+                if (filteredForms[fi].checked) {
+                    selectedFiltered++;
+                }
+            }
+            var select = selectedFiltered < filteredForms.length;
+            for (var fi = 0; fi < filteredForms.length; fi++) {
+                filteredForms[fi].checked = select;
+            }
+            aprUpdateParentStates(tree);
             renderTree();
             updateStats();
         });
@@ -11483,15 +11658,107 @@
             renderTree();
         });
 
-        headerRow.appendChild(searchInput);
+        var showSelectedBtn = document.createElement("button");
+        showSelectedBtn.textContent = "Selected Only";
+        showSelectedBtn.style.cssText = "padding:6px 10px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:11px;cursor:pointer;";
+        showSelectedBtn.addEventListener("click", function() {
+            showSelectedOnly = !showSelectedOnly;
+            showSelectedBtn.style.background = showSelectedOnly ? "#2a3a4a" : "#333";
+            showSelectedBtn.style.borderColor = showSelectedOnly ? "#4a6a8a" : "#555";
+            renderTree();
+            updateStats();
+        });
+
+        headerRow.appendChild(searchWrap);
         headerRow.appendChild(selectAllBtn);
+        headerRow.appendChild(showSelectedBtn);
         headerRow.appendChild(expandAllBtn);
         headerRow.appendChild(collapseAllBtn);
-        container.appendChild(headerRow);
 
         treeContainer = document.createElement("div");
-        treeContainer.style.cssText = "flex:1;overflow-y:auto;border:1px solid #333;border-radius:6px;padding:8px;background:#151515;min-height:300px;";
-        container.appendChild(treeContainer);
+        treeContainer.style.cssText = "flex:1;overflow-y:auto;border:1px solid #333;border-radius:6px;padding:8px;background:#151515;min-height:0;";
+
+        var leftPanel = document.createElement("div");
+        leftPanel.style.cssText = "width:180px;min-width:180px;display:flex;flex-direction:column;border:1px solid #333;border-radius:6px;background:#1a1a1a;overflow:hidden;";
+        var leftHeader = document.createElement("div");
+        leftHeader.textContent = "Segments";
+        leftHeader.style.cssText = "padding:8px 10px;font-weight:600;font-size:13px;border-bottom:1px solid #333;background:#222;color:#fff;text-align:center;";
+        var leftList = document.createElement("div");
+        leftList.style.cssText = "flex:1;overflow-y:auto;padding:6px;";
+        leftPanel.appendChild(leftHeader);
+        leftPanel.appendChild(leftList);
+
+        function buildSegmentList() {
+            leftList.innerHTML = "";
+            for (var si = 0; si < tree.length; si++) {
+                var seg = tree[si];
+                var item = document.createElement("div");
+                item.textContent = seg.name;
+                item.title = seg.name;
+                item.style.cssText = "padding:6px 8px;margin-bottom:3px;border-radius:4px;cursor:pointer;font-size:12px;color:#ddd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;";
+                item.addEventListener("mouseenter", function() { this.style.background = "#333"; });
+                item.addEventListener("mouseleave", function() { this.style.background = "transparent"; });
+                item.addEventListener("click", (function(segName) {
+                    return function() {
+                        var segNode = null;
+                        for (var i = 0; i < tree.length; i++) {
+                            if (tree[i].name === segName) {
+                                segNode = tree[i];
+                                break;
+                            }
+                        }
+                        if (!segNode) return;
+                        segNode.expanded = true;
+                        var firstEvName = null;
+                        if (segNode.studyEventOrder.length > 0) {
+                            firstEvName = segNode.studyEventOrder[0];
+                            segNode.studyEvents[firstEvName].expanded = true;
+                        }
+                        selectedListMode = false;
+                        updateSelectedListBtn();
+                        renderTree();
+                        setTimeout(function() {
+                            var target = null;
+                            if (firstEvName) {
+                                var evRows = treeContainer.querySelectorAll("[data-event]");
+                                for (var e = 0; e < evRows.length; e++) {
+                                    if (evRows[e].dataset.segment === segName && evRows[e].dataset.event === firstEvName) {
+                                        target = evRows[e];
+                                        break;
+                                    }
+                                }
+                            }
+                            if (!target) {
+                                var segRows = treeContainer.querySelectorAll("[data-segment]");
+                                for (var s = 0; s < segRows.length; s++) {
+                                    if (segRows[s].dataset.segment === segName) {
+                                        target = segRows[s];
+                                        break;
+                                    }
+                                }
+                            }
+                            if (target) {
+                                target.scrollIntoView({ behavior: "smooth", block: "start" });
+                            }
+                        }, 0);
+                    };
+                })(seg.name));
+                leftList.appendChild(item);
+            }
+        }
+        buildSegmentList();
+
+        var mainPanel = document.createElement("div");
+        mainPanel.style.cssText = "display:flex;flex-direction:column;flex:1;min-width:0;overflow:hidden;gap:10px;";
+
+        mainPanel.appendChild(headerRow);
+        mainPanel.appendChild(treeContainer);
+
+        var contentRow = document.createElement("div");
+        contentRow.style.cssText = "display:flex;flex-direction:row;gap:8px;flex:1;overflow:hidden;min-height:0;";
+        contentRow.appendChild(leftPanel);
+        contentRow.appendChild(mainPanel);
+        container.appendChild(contentRow);
 
         var footer = document.createElement("div");
         footer.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:10px;border:1px solid #333;border-radius:6px;background:#1a1a1a;";
@@ -11538,9 +11805,31 @@
             aprShowFinalConfirm(selected);
         });
 
+        var selectedListBtn = document.createElement("button");
+        selectedListBtn.textContent = "Show Selected";
+        selectedListBtn.style.cssText = "padding:8px 16px;border-radius:5px;border:1px solid #555;background:#333;color:#fff;font-size:14px;font-weight:600;cursor:pointer;";
+        selectedListBtn.addEventListener("mouseenter", function() { this.style.background = "#444"; });
+        selectedListBtn.addEventListener("mouseleave", function() { this.style.background = selectedListMode ? "#2a3a4a" : "#333"; });
+        selectedListBtn.addEventListener("click", function() {
+            selectedListMode = !selectedListMode;
+            updateSelectedListBtn();
+            renderTree();
+        });
+
+        function updateSelectedListBtn() {
+            selectedListBtn.textContent = selectedListMode ? "Back to Tree" : "Show Selected";
+            selectedListBtn.style.background = selectedListMode ? "#2a3a4a" : "#333";
+            selectedListBtn.style.borderColor = selectedListMode ? "#4a6a8a" : "#555";
+        }
+
+        var footerRight = document.createElement("div");
+        footerRight.style.cssText = "display:flex;gap:8px;align-items:center;";
+        footerRight.appendChild(selectedListBtn);
+        footerRight.appendChild(confirmBtn);
+
         footer.appendChild(statsDiv);
-        footer.appendChild(confirmBtn);
-        container.appendChild(footer);
+        footer.appendChild(footerRight);
+        mainPanel.appendChild(footer);
 
         renderTree();
         updateStats();
@@ -11559,6 +11848,27 @@
                 APR_POPUP_REF = null;
             }
         });
+
+        if (APR_POPUP_REF && APR_POPUP_REF.element && fullscreenBtn) {
+            var popupHeader = APR_POPUP_REF.element.querySelector("div");
+            if (popupHeader) {
+                popupHeader.style.gridTemplateColumns = "1fr auto auto";
+                var closeBtnEl = popupHeader.querySelector("button");
+                if (closeBtnEl) {
+                    popupHeader.insertBefore(fullscreenBtn, closeBtnEl);
+                } else {
+                    popupHeader.appendChild(fullscreenBtn);
+                }
+                fullscreenBtn.style.cssText = "padding:4px 8px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:14px;cursor:pointer;line-height:1;width:32px;height:32px;display:flex;align-items:center;justify-content:center;";
+                aprLog("fullscreen button injected into popup header");
+            }
+        }
+
+        setTimeout(function() {
+            if (aprIsFullscreen) {
+                applyFullscreen();
+            }
+        }, 50);
     }
 
     function aprShowFinalConfirm(selected) {
@@ -38679,7 +38989,7 @@
 
         var clearMappingBtn = document.createElement("button");
         clearMappingBtn.textContent = "Clear Mapping";
-        clearMappingBtn.style.background = "#38dae6";
+        clearMappingBtn.style.background = "#c0392b";
         clearMappingBtn.style.color = "#fff";
         clearMappingBtn.style.border = "none";
         clearMappingBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
@@ -38688,8 +38998,8 @@
         clearMappingBtn.style.cursor = "pointer";
         clearMappingBtn.style.fontWeight = "500";
         clearMappingBtn.style.transition = "background 0.2s";
-        clearMappingBtn.onmouseenter = () => { clearMappingBtn.style.background = "#2bb9c4"; };
-        clearMappingBtn.onmouseleave = () => { clearMappingBtn.style.background = "#38dae6"; };
+        clearMappingBtn.onmouseenter = () => { clearMappingBtn.style.background = "#a93226"; };
+        clearMappingBtn.onmouseleave = () => { clearMappingBtn.style.background = "#c0392b"; };
 
         var parseStudyEventBtn = document.createElement("button");
         parseStudyEventBtn.textContent = "Parse Study Event";
