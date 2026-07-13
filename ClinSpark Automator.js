@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     3.2.2
+// @version     3.2.3
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -10971,6 +10971,1034 @@
 
 
     //==========================
+    // ACTIVITY PLAN REMOVAL FEATURE
+    //==========================
+    // This feature allows bulk deletion of scheduled activities from the
+    // Activity Plans page. Users select forms hierarchically by segment and
+    // study event, confirm, then watch deletion progress.
+    //==========================
+
+    function ActivityPlanRemovalFunctions() {}
+
+    var APR_POPUP_REF = null;
+    var APR_PROGRESS_POPUP_REF = null;
+    var APR_CANCELLED = false;
+    var APR_TARGET_URL = "https://cenexel.clinspark.com/secure/crfdesign/activityplans/show/";
+
+    function aprLog(msg) {
+        log("APR: " + msg);
+    }
+
+    function isOnActivityPlanPage() {
+        return location.href.indexOf(APR_TARGET_URL) !== -1;
+    }
+
+    function aprShowWrongPageWarning() {
+        showWrongPagePopup("Activity Plan Removal", APR_TARGET_URL, location.href, null);
+    }
+
+    function aprDetectTimepointColumn() {
+        var table = document.querySelector("table");
+        if (!table) {
+            return -1;
+        }
+        var thead = table.querySelector("thead");
+        if (!thead) {
+            return -1;
+        }
+        var ths = thead.querySelectorAll("th");
+        for (var i = 0; i < ths.length; i++) {
+            if (normalizeSAText(ths[i].textContent) === "Timepoint") {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    function aprParseStatusCell(cell) {
+        var result = { hidden: false, archived: false, roleRestriction: false };
+        if (!cell) {
+            return result;
+        }
+        var icons = cell.querySelectorAll("i");
+        for (var i = 0; i < icons.length; i++) {
+            var cls = icons[i].className || "";
+            if (cls.indexOf("fa-eye-slash") !== -1 || cls.indexOf("fa-eye") !== -1) {
+                result.hidden = true;
+            }
+            if (cls.indexOf("fa-archive") !== -1) {
+                result.archived = true;
+            }
+            if (cls.indexOf("fa-user-plus") !== -1) {
+                result.roleRestriction = true;
+            }
+        }
+        return result;
+    }
+
+    function aprExtractScheduledActivityId(row) {
+        var editLink = row.querySelector("a[href*='/update/scheduledactivity/']");
+        if (editLink) {
+            var href = editLink.getAttribute("href") || "";
+            var m = href.match(/\/update\/scheduledactivity\/(\d+)/);
+            if (m) {
+                return m[1];
+            }
+        }
+        var deleteLink = row.querySelector("a[onclick*='deleteScheduledActivity']");
+        if (deleteLink) {
+            var onc = deleteLink.getAttribute("onclick") || "";
+            var m2 = onc.match(/deleteScheduledActivity\((\d+)\)/);
+            if (m2) {
+                return m2[1];
+            }
+        }
+        return null;
+    }
+
+    function aprScanTable() {
+        var result = [];
+        var tbody = document.getElementById("saTableBody");
+        if (!tbody) {
+            aprLog("saTableBody not found");
+            return result;
+        }
+        var rows = tbody.rows;
+        var timepointColIndex = aprDetectTimepointColumn();
+        var hasTimepoint = timepointColIndex !== -1;
+        var statusCellIndex = hasTimepoint ? 6 : 4;
+
+        for (var i = 0; i < rows.length; i++) {
+            var cells = rows[i].cells;
+            if (cells.length < 4) {
+                continue;
+            }
+            var segment = cells[1].textContent.trim().replace(/\s+/g, " ");
+            var studyEvent = cells[2].textContent.trim().replace(/\s+/g, " ");
+            var form = cells[3].textContent.trim().replace(/\s+/g, " ");
+            if (!segment || !studyEvent || !form) {
+                continue;
+            }
+
+            var statusCell = cells[statusCellIndex];
+            var status = aprParseStatusCell(statusCell);
+
+            var timepointRaw = "";
+            if (hasTimepoint && cells.length > timepointColIndex) {
+                timepointRaw = cells[timepointColIndex].textContent.trim().replace(/\s+/g, " ");
+            }
+            var timepointCleaned = timepointRaw.replace(/\(\d+\)\s*$/, "").trim();
+            var preReference = timepointCleaned.indexOf("-") !== -1;
+            var refActivity = timepointCleaned.indexOf("*") !== -1;
+
+            var saId = aprExtractScheduledActivityId(rows[i]);
+
+            result.push({
+                id: saId,
+                segment: segment,
+                studyEvent: studyEvent,
+                form: form,
+                timepointRaw: timepointRaw,
+                timepointCleaned: timepointCleaned,
+                timepointDisplay: timepointRaw || "",
+                preReference: preReference,
+                refActivity: refActivity,
+                hidden: status.hidden,
+                archived: status.archived,
+                roleRestriction: status.roleRestriction,
+                saRowIndex: i
+            });
+        }
+        aprLog("scanned " + result.length + " rows");
+        return result;
+    }
+
+    function aprBuildTree(items) {
+        var tree = [];
+        var segmentMap = {};
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            var segName = item.segment;
+            if (!segmentMap[segName]) {
+                var seg = { type: "segment", name: segName, expanded: true, checked: false, studyEvents: {}, studyEventOrder: [] };
+                segmentMap[segName] = seg;
+                tree.push(seg);
+            }
+            var segNode = segmentMap[segName];
+            var evName = item.studyEvent;
+            if (!segNode.studyEvents[evName]) {
+                var ev = { type: "studyEvent", name: evName, expanded: true, checked: false, forms: [] };
+                segNode.studyEvents[evName] = ev;
+                segNode.studyEventOrder.push(evName);
+            }
+            segNode.studyEvents[evName].forms.push({ type: "form", item: item, checked: false });
+        }
+        return tree;
+    }
+
+    function aprCollectSelectedForms(tree) {
+        var selected = [];
+        for (var si = 0; si < tree.length; si++) {
+            var seg = tree[si];
+            for (var ei = 0; ei < seg.studyEventOrder.length; ei++) {
+                var ev = seg.studyEvents[seg.studyEventOrder[ei]];
+                for (var fi = 0; fi < ev.forms.length; fi++) {
+                    if (ev.forms[fi].checked) {
+                        selected.push(ev.forms[fi].item);
+                    }
+                }
+            }
+        }
+        return selected;
+    }
+
+    function aprCountStats(tree) {
+        var totalForms = 0;
+        var selectedForms = 0;
+        var totalSegments = tree.length;
+        var totalEvents = 0;
+        for (var si = 0; si < tree.length; si++) {
+            var seg = tree[si];
+            totalEvents += seg.studyEventOrder.length;
+            for (var ei = 0; ei < seg.studyEventOrder.length; ei++) {
+                var ev = seg.studyEvents[seg.studyEventOrder[ei]];
+                totalForms += ev.forms.length;
+                for (var fi = 0; fi < ev.forms.length; fi++) {
+                    if (ev.forms[fi].checked) {
+                        selectedForms++;
+                    }
+                }
+            }
+        }
+        return { totalForms: totalForms, selectedForms: selectedForms, totalSegments: totalSegments, totalEvents: totalEvents };
+    }
+
+    function aprSetSegmentChecked(seg, checked) {
+        seg.checked = checked;
+        seg.indeterminate = false;
+        for (var ei = 0; ei < seg.studyEventOrder.length; ei++) {
+            var ev = seg.studyEvents[seg.studyEventOrder[ei]];
+            ev.checked = checked;
+            ev.indeterminate = false;
+            for (var fi = 0; fi < ev.forms.length; fi++) {
+                ev.forms[fi].checked = checked;
+            }
+        }
+    }
+
+    function aprSetStudyEventChecked(seg, ev, checked) {
+        ev.checked = checked;
+        ev.indeterminate = false;
+        for (var fi = 0; fi < ev.forms.length; fi++) {
+            ev.forms[fi].checked = checked;
+        }
+        aprUpdateParentStates([seg]);
+    }
+
+    function aprSetFormChecked(seg, ev, form, checked) {
+        form.checked = checked;
+        aprUpdateParentStates([seg]);
+    }
+
+    function aprUpdateParentStates(tree) {
+        for (var si = 0; si < tree.length; si++) {
+            var seg = tree[si];
+            var segAll = true;
+            var segSome = false;
+            for (var ei = 0; ei < seg.studyEventOrder.length; ei++) {
+                var ev = seg.studyEvents[seg.studyEventOrder[ei]];
+                var evAll = true;
+                var evSome = false;
+                for (var fi = 0; fi < ev.forms.length; fi++) {
+                    if (ev.forms[fi].checked) {
+                        evSome = true;
+                    } else {
+                        evAll = false;
+                    }
+                }
+                ev.checked = evAll && ev.forms.length > 0;
+                ev.indeterminate = evSome && !evAll;
+                if (ev.checked || ev.indeterminate) {
+                    segSome = true;
+                }
+                if (!evAll) {
+                    segAll = false;
+                }
+            }
+            seg.checked = segAll && seg.studyEventOrder.length > 0;
+            seg.indeterminate = segSome && !segAll;
+        }
+    }
+
+    function aprFormatStatusIcons(item) {
+        var fd = { hidden: item.hidden, mandatory: false, enforce: false, refActivity: item.refActivity };
+        return bplBuildStatusIcons(fd);
+    }
+
+    function aprFormatTimeRef(item) {
+        var tp = item.timepointDisplay || "N/A";
+        var ref = "N/A";
+        return tp + "   |   " + ref;
+    }
+
+    function aprBuildSelectionGUI(tree) {
+        var searchKeyword = "";
+        var selectedFormCountEl;
+        var totalFormCountEl;
+        var totalSegmentCountEl;
+        var totalEventCountEl;
+        var treeContainer;
+
+        function collectVisibleNodes() {
+            var visible = { segments: [] };
+            for (var si = 0; si < tree.length; si++) {
+                var seg = tree[si];
+                var segMatch = !searchKeyword || seg.name.toLowerCase().indexOf(searchKeyword) !== -1;
+                var segHasVisibleChildren = false;
+                var visibleEvents = [];
+                for (var ei = 0; ei < seg.studyEventOrder.length; ei++) {
+                    var ev = seg.studyEvents[seg.studyEventOrder[ei]];
+                    var evMatch = !searchKeyword || ev.name.toLowerCase().indexOf(searchKeyword) !== -1;
+                    var visibleForms = [];
+                    for (var fi = 0; fi < ev.forms.length; fi++) {
+                        var form = ev.forms[fi];
+                        var formMatch = !searchKeyword || form.item.form.toLowerCase().indexOf(searchKeyword) !== -1;
+                        if (formMatch || evMatch || segMatch) {
+                            visibleForms.push(form);
+                            segHasVisibleChildren = true;
+                        }
+                    }
+                    var effectiveExpanded = searchKeyword ? true : ev.expanded;
+                    if ((evMatch || segMatch || visibleForms.length > 0) && effectiveExpanded) {
+                        visibleEvents.push({ event: ev, forms: visibleForms });
+                    }
+                }
+                if (segMatch || segHasVisibleChildren) {
+                    visible.segments.push({ segment: seg, events: visibleEvents });
+                }
+            }
+            return visible;
+        }
+
+        function renderTree() {
+            treeContainer.innerHTML = "";
+            var visible = collectVisibleNodes();
+            for (var si = 0; si < visible.segments.length; si++) {
+                var segWrap = visible.segments[si];
+                var seg = segWrap.segment;
+                var effectiveExpanded = searchKeyword ? true : seg.expanded;
+
+                var segRow = document.createElement("div");
+                segRow.style.cssText = "display:flex;align-items:center;gap:8px;padding:8px 10px;background:#2a2a2a;border-radius:5px;margin-bottom:4px;font-weight:600;font-size:13px;color:#fff;cursor:pointer;user-select:none;";
+                var segExpand = document.createElement("span");
+                segExpand.textContent = effectiveExpanded ? "\u25BC" : "\u25B6";
+                segExpand.style.cssText = "font-size:11px;color:#aaa;width:12px;";
+                var segCb = document.createElement("input");
+                segCb.type = "checkbox";
+                segCb.style.cssText = "width:16px;height:16px;cursor:pointer;accent-color:#1a7abf;";
+                segCb.checked = seg.checked;
+                segCb.indeterminate = seg.indeterminate;
+                segCb.addEventListener("click", function(e) { e.stopPropagation(); });
+                segCb.addEventListener("change", (function(segmentNode) {
+                    return function(e) {
+                        aprSetSegmentChecked(segmentNode, e.target.checked);
+                        renderTree();
+                        updateStats();
+                    };
+                })(seg));
+                var segName = document.createElement("span");
+                segName.textContent = seg.name;
+                segName.style.cssText = "flex:1;";
+                var segCount = document.createElement("span");
+                segCount.textContent = "(" + seg.studyEventOrder.length + ")";
+                segCount.style.cssText = "font-size:11px;color:#888;";
+                segRow.appendChild(segExpand);
+                segRow.appendChild(segCb);
+                segRow.appendChild(segName);
+                segRow.appendChild(segCount);
+                segRow.addEventListener("click", (function(segmentNode) {
+                    return function(e) {
+                        if (e.target.tagName === "INPUT") {
+                            return;
+                        }
+                        segmentNode.expanded = !segmentNode.expanded;
+                        renderTree();
+                    };
+                })(seg));
+                treeContainer.appendChild(segRow);
+
+                if (!effectiveExpanded) {
+                    continue;
+                }
+
+                for (var ei = 0; ei < segWrap.events.length; ei++) {
+                    var evWrap = segWrap.events[ei];
+                    var ev = evWrap.event;
+                    var evEffectiveExpanded = searchKeyword ? true : ev.expanded;
+
+                    var evRow = document.createElement("div");
+                    evRow.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 10px 6px 32px;background:#333;border-radius:4px;margin-bottom:3px;font-weight:500;font-size:12px;color:#eee;cursor:pointer;user-select:none;";
+                    var evExpand = document.createElement("span");
+                    evExpand.textContent = evEffectiveExpanded ? "\u25BC" : "\u25B6";
+                    evExpand.style.cssText = "font-size:10px;color:#aaa;width:12px;";
+                    var evCb = document.createElement("input");
+                    evCb.type = "checkbox";
+                    evCb.style.cssText = "width:15px;height:15px;cursor:pointer;accent-color:#1a7abf;";
+                    evCb.checked = ev.checked;
+                    evCb.indeterminate = ev.indeterminate;
+                    evCb.addEventListener("click", function(e) { e.stopPropagation(); });
+                    evCb.addEventListener("change", (function(segmentNode, eventNode) {
+                        return function(e) {
+                            aprSetStudyEventChecked(segmentNode, eventNode, e.target.checked);
+                            renderTree();
+                            updateStats();
+                        };
+                    })(seg, ev));
+                    var evName = document.createElement("span");
+                    evName.textContent = ev.name;
+                    evName.style.cssText = "flex:1;";
+                    var evCount = document.createElement("span");
+                    evCount.textContent = "(" + ev.forms.length + ")";
+                    evCount.style.cssText = "font-size:10px;color:#888;";
+                    evRow.appendChild(evExpand);
+                    evRow.appendChild(evCb);
+                    evRow.appendChild(evName);
+                    evRow.appendChild(evCount);
+                    evRow.addEventListener("click", (function(eventNode) {
+                        return function(e) {
+                            if (e.target.tagName === "INPUT") {
+                                return;
+                            }
+                            eventNode.expanded = !eventNode.expanded;
+                            renderTree();
+                        };
+                    })(ev));
+                    treeContainer.appendChild(evRow);
+
+                    if (!evEffectiveExpanded) {
+                        continue;
+                    }
+
+                    for (var fi = 0; fi < evWrap.forms.length; fi++) {
+                        var form = evWrap.forms[fi];
+                        var formRow = document.createElement("div");
+                        formRow.style.cssText = "display:flex;align-items:center;gap:8px;padding:5px 10px 5px 60px;background:#1f1f1f;border:1px solid #333;border-radius:4px;margin-bottom:2px;font-size:11px;color:#ddd;";
+                        var formCb = document.createElement("input");
+                        formCb.type = "checkbox";
+                        formCb.style.cssText = "width:14px;height:14px;cursor:pointer;accent-color:#1a7abf;flex-shrink:0;";
+                        formCb.checked = form.checked;
+                        formCb.addEventListener("change", (function(segmentNode, eventNode, formNode) {
+                            return function(e) {
+                                aprSetFormChecked(segmentNode, eventNode, formNode, e.target.checked);
+                                renderTree();
+                                updateStats();
+                            };
+                        })(seg, ev, form));
+                        var formLabel = document.createElement("span");
+                        formLabel.textContent = seg.name + " - " + ev.name + " - " + form.item.form;
+                        formLabel.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+                        formLabel.title = formLabel.textContent;
+                        var formIcons = document.createElement("span");
+                        formIcons.textContent = aprFormatStatusIcons(form.item);
+                        formIcons.style.cssText = "font-size:11px;flex-shrink:0;white-space:nowrap;margin-right:6px;";
+                        var formTime = document.createElement("span");
+                        formTime.textContent = aprFormatTimeRef(form.item);
+                        formTime.style.cssText = "font-size:11px;color:#fff;white-space:pre;flex-shrink:0;min-width:0;overflow:hidden;text-overflow:ellipsis;max-width:180px;";
+                        formRow.appendChild(formCb);
+                        formRow.appendChild(formLabel);
+                        formRow.appendChild(formIcons);
+                        formRow.appendChild(formTime);
+                        treeContainer.appendChild(formRow);
+                    }
+                }
+            }
+        }
+
+        function updateStats() {
+            var stats = aprCountStats(tree);
+            selectedFormCountEl.textContent = String(stats.selectedForms);
+            totalFormCountEl.textContent = String(stats.totalForms);
+            totalSegmentCountEl.textContent = String(stats.totalSegments);
+            totalEventCountEl.textContent = String(stats.totalEvents);
+            if (stats.totalForms === 0) {
+                selectAllBtn.textContent = "Select All";
+            } else if (stats.selectedForms === stats.totalForms) {
+                selectAllBtn.textContent = "Unselect All";
+            } else {
+                selectAllBtn.textContent = "Select All";
+            }
+        }
+
+        var container = document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;gap:10px;max-height:80vh;";
+
+        var headerRow = document.createElement("div");
+        headerRow.style.cssText = "display:flex;gap:8px;align-items:center;";
+
+        var searchInput = document.createElement("input");
+        searchInput.type = "text";
+        searchInput.placeholder = "Search segment, study event, or form...";
+        searchInput.style.cssText = "flex:1;padding:8px 12px;border-radius:5px;border:1px solid #555;background:#1a1a1a;color:#fff;font-size:13px;";
+        searchInput.addEventListener("input", function() {
+            searchKeyword = this.value.trim().toLowerCase();
+            renderTree();
+        });
+
+        var selectAllBtn = document.createElement("button");
+        selectAllBtn.textContent = "Select All";
+        selectAllBtn.style.cssText = "padding:6px 10px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:11px;cursor:pointer;min-width:82px;";
+        selectAllBtn.addEventListener("click", function() {
+            var stats = aprCountStats(tree);
+            var select = stats.selectedForms < stats.totalForms;
+            for (var si = 0; si < tree.length; si++) {
+                aprSetSegmentChecked(tree[si], select);
+            }
+            renderTree();
+            updateStats();
+        });
+
+        var expandAllBtn = document.createElement("button");
+        expandAllBtn.textContent = "Expand All";
+        expandAllBtn.style.cssText = "padding:6px 10px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:11px;cursor:pointer;";
+        expandAllBtn.addEventListener("click", function() {
+            for (var si = 0; si < tree.length; si++) {
+                tree[si].expanded = true;
+                for (var ei = 0; ei < tree[si].studyEventOrder.length; ei++) {
+                    tree[si].studyEvents[tree[si].studyEventOrder[ei]].expanded = true;
+                }
+            }
+            renderTree();
+        });
+
+        var collapseAllBtn = document.createElement("button");
+        collapseAllBtn.textContent = "Collapse All";
+        collapseAllBtn.style.cssText = "padding:6px 10px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:11px;cursor:pointer;";
+        collapseAllBtn.addEventListener("click", function() {
+            for (var si = 0; si < tree.length; si++) {
+                tree[si].expanded = false;
+                for (var ei = 0; ei < tree[si].studyEventOrder.length; ei++) {
+                    tree[si].studyEvents[tree[si].studyEventOrder[ei]].expanded = false;
+                }
+            }
+            renderTree();
+        });
+
+        headerRow.appendChild(searchInput);
+        headerRow.appendChild(selectAllBtn);
+        headerRow.appendChild(expandAllBtn);
+        headerRow.appendChild(collapseAllBtn);
+        container.appendChild(headerRow);
+
+        treeContainer = document.createElement("div");
+        treeContainer.style.cssText = "flex:1;overflow-y:auto;border:1px solid #333;border-radius:6px;padding:8px;background:#151515;min-height:300px;";
+        container.appendChild(treeContainer);
+
+        var footer = document.createElement("div");
+        footer.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:10px;border:1px solid #333;border-radius:6px;background:#1a1a1a;";
+
+        var statsDiv = document.createElement("div");
+        statsDiv.style.cssText = "display:flex;gap:12px;font-size:12px;color:#ccc;";
+
+        function makeStat(label, ref) {
+            var span = document.createElement("span");
+            span.innerHTML = label + ': <strong style="color:#fff;" data-ref="' + ref + '">0</strong>';
+            return span;
+        }
+
+        var selectedStat = makeStat("Selected", "selected");
+        selectedFormCountEl = selectedStat.querySelector('strong[data-ref="selected"]');
+        var totalStat = makeStat("Total Forms", "total");
+        totalFormCountEl = totalStat.querySelector('strong[data-ref="total"]');
+        var segStat = makeStat("Segments", "segments");
+        totalSegmentCountEl = segStat.querySelector('strong[data-ref="segments"]');
+        var evStat = makeStat("Study Events", "events");
+        totalEventCountEl = evStat.querySelector('strong[data-ref="events"]');
+
+        statsDiv.appendChild(selectedStat);
+        statsDiv.appendChild(totalStat);
+        statsDiv.appendChild(segStat);
+        statsDiv.appendChild(evStat);
+
+        var confirmBtn = document.createElement("button");
+        confirmBtn.textContent = "Confirm";
+        confirmBtn.style.cssText = "padding:8px 24px;border-radius:5px;border:none;background:#d93025;color:#fff;font-size:14px;font-weight:600;cursor:pointer;";
+        confirmBtn.onmouseenter = function() { this.style.background = "#b52a1f"; };
+        confirmBtn.onmouseleave = function() { this.style.background = "#d93025"; };
+        confirmBtn.addEventListener("click", function() {
+            var selected = aprCollectSelectedForms(tree);
+            if (selected.length === 0) {
+                createPopup({
+                    title: "Activity Plan Removal",
+                    content: '<div style="text-align:center;padding:16px;">Please select at least one form to delete.</div>',
+                    width: "320px",
+                    height: "auto"
+                });
+                return;
+            }
+            aprShowFinalConfirm(selected);
+        });
+
+        footer.appendChild(statsDiv);
+        footer.appendChild(confirmBtn);
+        container.appendChild(footer);
+
+        renderTree();
+        updateStats();
+
+        if (APR_POPUP_REF) {
+            try { APR_POPUP_REF.close(); } catch (e) {}
+        }
+        APR_POPUP_REF = createPopup({
+            title: "Activity Plan Removal",
+            content: container,
+            width: "700px",
+            height: "auto",
+            maxHeight: "85%",
+            onClose: function() {
+                aprLog("selection popup closed");
+                APR_POPUP_REF = null;
+            }
+        });
+    }
+
+    function aprShowFinalConfirm(selected) {
+        var content = document.createElement("div");
+        content.style.padding = "20px";
+        content.style.textAlign = "center";
+
+        var icon = document.createElement("div");
+        icon.innerHTML = "\u26a0\ufe0f";
+        icon.style.fontSize = "48px";
+        icon.style.marginBottom = "15px";
+
+        var title = document.createElement("div");
+        title.textContent = "Confirm Deletion";
+        title.style.cssText = "font-size:18px;font-weight:bold;margin-bottom:10px;color:#ff6b6b;";
+
+        var msg = document.createElement("div");
+        msg.textContent = "You are about to delete " + selected.length + " form(s) from the Activity Plan. This action cannot be undone.";
+        msg.style.cssText = "margin-bottom:8px;line-height:1.4;";
+
+        var msg2 = document.createElement("div");
+        msg2.textContent = "Are you sure you want to proceed?";
+        msg2.style.cssText = "font-weight:bold;margin-bottom:20px;";
+
+        var cancelBtn = document.createElement("button");
+        cancelBtn.textContent = "Cancel";
+        cancelBtn.style.cssText = "background:#444;color:#fff;border:none;border-radius:4px;padding:8px 24px;cursor:pointer;font-size:14px;margin-right:10px;";
+        cancelBtn.onmouseenter = function() { this.style.background = "#555"; };
+        cancelBtn.onmouseleave = function() { this.style.background = "#444"; };
+
+        var confirmBtn = document.createElement("button");
+        confirmBtn.textContent = "Delete " + selected.length + " Form(s)";
+        confirmBtn.style.cssText = "background:#d93025;color:#fff;border:none;border-radius:4px;padding:8px 24px;cursor:pointer;font-size:14px;";
+        confirmBtn.onmouseenter = function() { this.style.background = "#b52a1f"; };
+        confirmBtn.onmouseleave = function() { this.style.background = "#d93025"; };
+
+        content.appendChild(icon);
+        content.appendChild(title);
+        content.appendChild(msg);
+        content.appendChild(msg2);
+        content.appendChild(cancelBtn);
+        content.appendChild(confirmBtn);
+
+        var popup = createPopup({
+            title: "Activity Plan Removal - Confirmation",
+            content: content,
+            width: "400px",
+            height: "auto",
+            onClose: function() {}
+        });
+
+        cancelBtn.addEventListener("click", function() {
+            popup.close();
+        });
+
+        confirmBtn.addEventListener("click", async function() {
+            popup.close();
+            if (APR_POPUP_REF) {
+                try { APR_POPUP_REF.close(); } catch (e) {}
+                APR_POPUP_REF = null;
+            }
+            await aprExecuteDeletion(selected);
+        });
+    }
+
+    function aprCreateProgressPopup(items) {
+        var container = document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;gap:12px;max-height:600px;";
+
+        var summaryDiv = document.createElement("div");
+        summaryDiv.style.cssText = "display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:8px;border:1px solid #333;border-radius:6px;background:#1a1a1a;font-size:12px;text-align:center;";
+
+        function updateSummary() {
+            summaryDiv.innerHTML = "";
+            var total = items.length;
+            var pending = 0;
+            var processing = 0;
+            var deleted = 0;
+            var failed = 0;
+            var skipped = 0;
+            for (var i = 0; i < items.length; i++) {
+                var s = items[i].status;
+                if (s === "Pending") {
+                    pending++;
+                } else if (s === "Processing") {
+                    processing++;
+                } else if (s === "Deleted") {
+                    deleted++;
+                } else if (s === "Failed") {
+                    failed++;
+                } else if (s === "Skipped") {
+                    skipped++;
+                }
+            }
+            var stats = [
+                { label: "Total", value: total, color: "#fff" },
+                { label: "Pending", value: pending, color: "#aaa" },
+                { label: "In Progress", value: processing, color: "#9df" },
+                { label: "Deleted", value: deleted, color: "#4f4" },
+                { label: "Failed", value: failed, color: "#f44" },
+                { label: "Skipped", value: skipped, color: "#f90" }
+            ];
+            for (var j = 0; j < stats.length; j++) {
+                var cell = document.createElement("div");
+                cell.style.cssText = "display:flex;flex-direction:column;gap:2px;";
+                var valSpan = document.createElement("div");
+                valSpan.textContent = String(stats[j].value);
+                valSpan.style.cssText = "font-size:18px;font-weight:700;color:" + stats[j].color + ";";
+                var lblSpan = document.createElement("div");
+                lblSpan.textContent = stats[j].label;
+                lblSpan.style.cssText = "font-size:10px;color:#888;";
+                cell.appendChild(valSpan);
+                cell.appendChild(lblSpan);
+                summaryDiv.appendChild(cell);
+            }
+        }
+
+        var statusDiv = document.createElement("div");
+        statusDiv.style.cssText = "text-align:center;font-size:15px;font-weight:600;padding:6px;";
+        statusDiv.textContent = "Deleting...";
+
+        var durationDiv = document.createElement("div");
+        durationDiv.style.cssText = "text-align:center;font-size:11px;color:#888;";
+        durationDiv.textContent = "Duration: 0s";
+
+        var listContainer = document.createElement("div");
+        listContainer.style.cssText = "flex:1;overflow-y:auto;border:1px solid #333;border-radius:4px;padding:6px;background:#1a1a1a;max-height:350px;";
+
+        function renderItems() {
+            listContainer.innerHTML = "";
+            for (var i = 0; i < items.length; i++) {
+                var item = items[i];
+                var row = document.createElement("div");
+                row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:5px 8px;margin-bottom:3px;border-radius:4px;font-size:11px;";
+                if (item.status === "Deleted") {
+                    row.style.background = "#1a3a1a";
+                } else if (item.status === "Failed") {
+                    row.style.background = "#3a1a1a";
+                } else if (item.status === "Processing") {
+                    row.style.background = "#1a2a3a";
+                } else if (item.status === "Skipped") {
+                    row.style.background = "#3a2a1a";
+                } else {
+                    row.style.background = "#222";
+                }
+
+                var keySpan = document.createElement("span");
+                keySpan.textContent = item.label;
+                keySpan.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:8px;";
+
+                var statusSpan = document.createElement("span");
+                statusSpan.textContent = item.status;
+                statusSpan.style.cssText = "font-weight:500;flex-shrink:0;";
+                if (item.status === "Deleted") {
+                    statusSpan.style.color = "#4f4";
+                } else if (item.status === "Failed") {
+                    statusSpan.style.color = "#f44";
+                } else if (item.status === "Processing") {
+                    statusSpan.style.color = "#9df";
+                } else if (item.status === "Skipped") {
+                    statusSpan.style.color = "#f90";
+                } else {
+                    statusSpan.style.color = "#aaa";
+                }
+
+                row.appendChild(keySpan);
+                row.appendChild(statusSpan);
+                listContainer.appendChild(row);
+            }
+            updateSummary();
+        }
+
+        renderItems();
+
+        var buttonRow = document.createElement("div");
+        buttonRow.style.cssText = "display:flex;justify-content:center;padding-top:8px;";
+
+        var stopBtn = document.createElement("button");
+        stopBtn.textContent = "Stop";
+        stopBtn.style.cssText = "padding:10px 24px;border-radius:6px;border:none;background:#dc3545;color:#fff;font-weight:600;cursor:pointer;";
+        stopBtn.addEventListener("click", function() {
+            APR_CANCELLED = true;
+            aprLog("stopped by user");
+            if (APR_PROGRESS_POPUP_REF && APR_PROGRESS_POPUP_REF.close) {
+                try { APR_PROGRESS_POPUP_REF.close(); } catch (e) {}
+                APR_PROGRESS_POPUP_REF = null;
+            }
+        });
+        buttonRow.appendChild(stopBtn);
+
+        container.appendChild(summaryDiv);
+        container.appendChild(statusDiv);
+        container.appendChild(durationDiv);
+        container.appendChild(listContainer);
+        container.appendChild(buttonRow);
+
+        var startTime = Date.now();
+        var dots = 1;
+        var loadingInterval = setInterval(function() {
+            if (!APR_PROGRESS_POPUP_REF || APR_CANCELLED) {
+                clearInterval(loadingInterval);
+                return;
+            }
+            dots = (dots % 3) + 1;
+            var text = "Deleting";
+            for (var k = 0; k < dots; k++) {
+                text += ".";
+            }
+            statusDiv.textContent = text;
+            durationDiv.textContent = "Duration: " + Math.floor((Date.now() - startTime) / 1000) + "s";
+        }, 500);
+
+        return {
+            element: container,
+            updateStatus: function(text) {
+                statusDiv.textContent = text;
+            },
+            updateItem: function(index, status) {
+                if (items[index]) {
+                    items[index].status = status;
+                    renderItems();
+                }
+            },
+            setComplete: function() {
+                clearInterval(loadingInterval);
+                var elapsed = Math.floor((Date.now() - startTime) / 1000);
+                durationDiv.textContent = "Total Duration: " + elapsed + "s";
+                statusDiv.textContent = "Done!";
+                statusDiv.style.color = "#4f4";
+                stopBtn.textContent = "Close";
+                stopBtn.style.background = "#28a745";
+                updateSummary();
+            }
+        };
+    }
+
+    function aprFindRowByScheduledActivityId(id) {
+        if (!id) {
+            return null;
+        }
+        var tbody = document.getElementById("saTableBody");
+        if (!tbody) {
+            return null;
+        }
+        var editSelector = "a[href*='/update/scheduledactivity/" + id + "']";
+        var editLink = tbody.querySelector(editSelector);
+        if (!editLink) {
+            var deleteSelector = "a[onclick*='deleteScheduledActivity(" + id + ")']";
+            var deleteLink = tbody.querySelector(deleteSelector);
+            if (deleteLink) {
+                var row = deleteLink.parentNode;
+                while (row && row.tagName !== "TR") {
+                    row = row.parentNode;
+                }
+                return row;
+            }
+            return null;
+        }
+        var row = editLink.parentNode;
+        while (row && row.tagName !== "TR") {
+            row = row.parentNode;
+        }
+        return row;
+    }
+
+    async function aprClickDeleteForRow(row, id) {
+        try {
+            if (typeof deleteScheduledActivity === "function") {
+                deleteScheduledActivity(id);
+                aprLog("called deleteScheduledActivity(" + id + ")");
+                return true;
+            }
+        } catch (e) {
+            aprLog("direct deleteScheduledActivity failed: " + String(e));
+        }
+
+        var toggleBtn = row.querySelector("button.dropdown-toggle");
+        if (toggleBtn) {
+            toggleBtn.click();
+            await sleep(200);
+        }
+        var deleteLink = row.querySelector("a[onclick*='deleteScheduledActivity(" + id + ")']");
+        if (deleteLink) {
+            deleteLink.click();
+            aprLog("clicked delete UI for id " + id);
+            return true;
+        }
+        return false;
+    }
+
+    async function aprExecuteDeletion(selectedItems) {
+        APR_CANCELLED = false;
+        var progressItems = [];
+        for (var i = 0; i < selectedItems.length; i++) {
+            var item = selectedItems[i];
+            progressItems.push({
+                label: item.segment + " - " + item.studyEvent + " - " + item.form,
+                item: item,
+                status: "Pending"
+            });
+        }
+
+        var progressContent = aprCreateProgressPopup(progressItems);
+        if (APR_PROGRESS_POPUP_REF) {
+            try { APR_PROGRESS_POPUP_REF.close(); } catch (e) {}
+        }
+        APR_PROGRESS_POPUP_REF = createPopup({
+            title: "Activity Plan Removal - Progress",
+            content: progressContent.element,
+            width: "700px",
+            height: "auto",
+            onClose: function() {
+                APR_CANCELLED = true;
+                APR_PROGRESS_POPUP_REF = null;
+                aprLog("progress popup closed by user");
+            }
+        });
+
+        var deletedCount = 0;
+        var failedCount = 0;
+
+        for (var idx = 0; idx < progressItems.length; idx++) {
+            if (APR_CANCELLED) {
+                aprLog("cancelled before processing item " + idx);
+                break;
+            }
+            var pItem = progressItems[idx];
+            var item = pItem.item;
+            progressContent.updateItem(idx, "Processing");
+            progressContent.updateStatus("Deleting item " + (idx + 1) + " of " + progressItems.length);
+
+            try {
+                if (!item.id) {
+                    aprLog("item has no scheduled activity id: " + pItem.label);
+                    pItem.status = "Failed";
+                    progressContent.updateItem(idx, "Failed");
+                    failedCount++;
+                    continue;
+                }
+
+                var row = aprFindRowByScheduledActivityId(item.id);
+                if (!row) {
+                    aprLog("row not found for id " + item.id + " - may already be deleted");
+                    pItem.status = "Skipped";
+                    progressContent.updateItem(idx, "Skipped");
+                    continue;
+                }
+
+                var clicked = await aprClickDeleteForRow(row, item.id);
+                if (!clicked) {
+                    aprLog("failed to click delete for id " + item.id);
+                    pItem.status = "Failed";
+                    progressContent.updateItem(idx, "Failed");
+                    failedCount++;
+                    continue;
+                }
+
+                var modal = await waitForSelector("div.bootbox.modal.in, div.bootbox.modal.show", 5000);
+                if (!modal) {
+                    aprLog("confirm modal did not appear for id " + item.id);
+                    pItem.status = "Failed";
+                    progressContent.updateItem(idx, "Failed");
+                    failedCount++;
+                    continue;
+                }
+
+                var okBtn = modal.querySelector("button[data-bb-handler='confirm'].btn.btn-primary");
+                if (!okBtn) {
+                    okBtn = modal.querySelector(".modal-footer .btn.btn-primary");
+                }
+                if (!okBtn) {
+                    aprLog("OK button not found in confirm modal for id " + item.id);
+                    pItem.status = "Failed";
+                    progressContent.updateItem(idx, "Failed");
+                    failedCount++;
+                    continue;
+                }
+
+                okBtn.click();
+                aprLog("confirmed deletion for id " + item.id);
+
+                var closed = await waitUntilHidden("div.bootbox.modal.in, div.bootbox.modal.show", 10000);
+                if (!closed) {
+                    aprLog("modal did not close for id " + item.id);
+                }
+                await sleep(800);
+
+                var stillThere = aprFindRowByScheduledActivityId(item.id);
+                if (stillThere && closed) {
+                    aprLog("row still present after deletion for id " + item.id + ", waiting extra");
+                    await sleep(1000);
+                    stillThere = aprFindRowByScheduledActivityId(item.id);
+                }
+
+                if (stillThere) {
+                    pItem.status = "Failed";
+                    progressContent.updateItem(idx, "Failed");
+                    failedCount++;
+                } else {
+                    pItem.status = "Deleted";
+                    progressContent.updateItem(idx, "Deleted");
+                    deletedCount++;
+                }
+            } catch (e) {
+                aprLog("exception deleting id " + item.id + ": " + String(e));
+                pItem.status = "Failed";
+                progressContent.updateItem(idx, "Failed");
+                failedCount++;
+            }
+        }
+
+        if (!APR_CANCELLED) {
+            progressContent.updateStatus("Deleted " + deletedCount + ", Failed " + failedCount + " of " + progressItems.length);
+            progressContent.setComplete();
+            aprLog("deletion complete - deleted:" + deletedCount + " failed:" + failedCount);
+        }
+    }
+
+    async function runActivityPlanRemoval() {
+        APR_CANCELLED = false;
+        aprLog("started");
+        if (!isOnActivityPlanPage()) {
+            aprShowWrongPageWarning();
+            return;
+        }
+        var items = aprScanTable();
+        if (items.length === 0) {
+            createPopup({
+                title: "Activity Plan Removal",
+                content: '<div style="text-align:center;padding:20px;"><p>No forms found in the Activity Plan table.</p></div>',
+                width: "350px",
+                height: "auto"
+            });
+            return;
+        }
+        var tree = aprBuildTree(items);
+        aprBuildSelectionGUI(tree);
+    }
+
+    //==========================
     // COPY FORMS TO STUDY EVENTS FEATURE
     //==========================
     // This feature allows copying forms from one study event to multiple other study events.
@@ -16337,6 +17365,7 @@
         { id: "Pull Barcode", label: "Pull Barcode" },
         { id: "Pull Lab Barcode", label: "Pull Lab Barcode" },
         { id: "PLAP Builder", label: "PLAP Builder" },
+        { id: "Activity Plan Removal", label: "Activity Plan Removal" },
         { id: "Import From Library", label: "Import From Library"},
         { id: "Archive/Update Forms", label: "Archive/Update Forms" },
         { id: "Copy Activity Forms", label: "Copy Activity Forms" },
@@ -37817,6 +38846,25 @@
             await runBuildProcedureLog();
         });
 
+        var aprBtn = document.createElement("button");
+        aprBtn.textContent = "Activity Plan Removal";
+        aprBtn.style.background = "#c0392b";
+        aprBtn.style.color = "#fff";
+        aprBtn.style.border = "none";
+        aprBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        aprBtn.style.padding = scale(BUTTON_PADDING_PX);
+        aprBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
+        aprBtn.style.cursor = "pointer";
+        aprBtn.style.fontWeight = "500";
+        aprBtn.style.transition = "background 0.2s";
+        aprBtn.onmouseenter = function() { this.style.background = "#a93226"; };
+        aprBtn.onmouseleave = function() { this.style.background = "#c0392b"; };
+        aprBtn.addEventListener("click", async function() {
+            APR_CANCELLED = false;
+            aprLog("button clicked");
+            await runActivityPlanRemoval();
+        });
+
         var svcBtn = document.createElement("button");
         svcBtn.textContent = "Set Visibility Condition";
         svcBtn.style.background = "#9b59b6";
@@ -37892,7 +38940,7 @@
 
         // Apply glassmorphism theme to all panel buttons if glass theme is active
         if (glass) {
-            var allPanelBtns = [svcBtn, runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, importFromLibBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, bplBtn, importEligBtn, clearMappingBtn, findAeBtn, findFormAndEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, parseFormsBtn, editStudyEventsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn, downloadDtsBtn, printBarcodesBtn, autoResaverBtn];
+            var allPanelBtns = [svcBtn, runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, importFromLibBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, bplBtn, aprBtn, importEligBtn, clearMappingBtn, findAeBtn, findFormAndEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, parseFormsBtn, editStudyEventsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn, downloadDtsBtn, printBarcodesBtn, autoResaverBtn];
             for (var gi = 0; gi < allPanelBtns.length; gi++) {
                 var gb = allPanelBtns[gi];
                 gb.className = "ie-btn-primary";
@@ -37914,6 +38962,7 @@
             { el: pullLabBarcodeBtn, label: "Pull Lab Barcode" },
             // { el: saBuilderBtn, label: "Scheduled Activities Builder" },
             { el: bplBtn, label: "PLAP Builder" },
+            { el: aprBtn, label: "Activity Plan Removal" },
             { el: importFromLibBtn, label: "Import From Library" },
             { el: archiveUpdateFormsBtn, label: "Archive/Update Forms" },
             { el: copyFormsBtn, label: "Copy Activity Forms"},
