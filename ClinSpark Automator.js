@@ -12254,16 +12254,26 @@
                 if (!closed) {
                     aprLog("modal did not close for id " + item.id);
                 }
-                await sleep(800);
 
-                var stillThere = aprFindRowByScheduledActivityId(item.id);
-                if (stillThere && closed) {
-                    aprLog("row still present after deletion for id " + item.id + ", waiting extra");
-                    await sleep(1000);
-                    stillThere = aprFindRowByScheduledActivityId(item.id);
+                // The Activity Plan table refreshes asynchronously after a
+                // successful deletion. Poll for the row to disappear rather
+                // than relying on a short fixed delay.
+                var stillThere = false;
+                if (closed) {
+                    var pollStart = Date.now();
+                    while (Date.now() - pollStart < 6000) {
+                        stillThere = !!aprFindRowByScheduledActivityId(item.id);
+                        if (!stillThere) {
+                            break;
+                        }
+                        await sleep(300);
+                    }
+                } else {
+                    stillThere = !!aprFindRowByScheduledActivityId(item.id);
                 }
 
                 if (stillThere) {
+                    aprLog("row still present after polling for id " + item.id);
                     pItem.status = "Failed";
                     progressContent.updateItem(idx, "Failed");
                     failedCount++;
