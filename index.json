@@ -855,5 +855,14 @@
                  ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Check%20if%20item%20date%20value%20has%20at%20least%20the%20year.js",
         "updated":  "2026-07-13"
+    },
+    {
+        "id":  "M-085",
+        "title":  "Average PR, QRS, QT, QTCF, HR v2.js",
+        "tags":  [
+                     "AVerage"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20PR%2C%20QRS%2C%20QT%2C%20QTCF%2C%20HR%20v2.js",
+        "updated":  "2026-07-14"
     }
 ]

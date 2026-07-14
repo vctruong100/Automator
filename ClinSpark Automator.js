@@ -2170,6 +2170,7 @@
             if (selectedDropboxIdx !== null && dropboxMappings[String(selectedDropboxIdx)]) {
                 dropboxMappings[String(selectedDropboxIdx)].prefillItemValue = selectedText || null;
                 log("SVC: item value persisted: " + selectedText);
+                saveCurrentReference();
                 renderPrimaryPanel();
                 renderSegNavPanel();
             }
@@ -2197,7 +2198,7 @@
         saveRefBtn.style.cssText = "padding:6px 14px;border-radius:4px;border:none;background:#28a745;color:#fff;font-size:11px;font-weight:600;cursor:pointer;align-self:flex-end;";
         saveRefBtn.addEventListener("mouseenter", function() { this.style.background = "#218838"; });
         saveRefBtn.addEventListener("mouseleave", function() { this.style.background = "#28a745"; });
-        saveRefBtn.addEventListener("click", function() {
+        function saveCurrentReference() {
             if (selectedDropboxIdx === null) return;
             var mapping = dropboxMappings[String(selectedDropboxIdx)];
             if (!mapping) return;
@@ -2205,10 +2206,13 @@
             var selItem = itemSelect.options[itemSelect.selectedIndex] ? itemSelect.options[itemSelect.selectedIndex].text : "";
             var selItemVal = itemValSelect.options[itemValSelect.selectedIndex] ? itemValSelect.options[itemValSelect.selectedIndex].text : "";
             var reason = reasonInput.value.trim() || "Add visibility condition";
-            svcReferences[sourceFormName] = { item: selItem, itemValue: selItemVal, reason: reason };
+            svcReferences[sourceFormName] = { item: selItem, itemValue: selItemVal, itemValues: currentItemValues.slice(), reason: reason };
             svcSaveReferences(svcReferences);
-            log("SVC: saved reference for source form '" + sourceFormName + "'");
+            log("SVC: saved reference for source form '" + sourceFormName + "' (" + currentItemValues.length + " item values)");
             renderReferencesPanel();
+        }
+        saveRefBtn.addEventListener("click", function() {
+            saveCurrentReference();
         });
 
         function renderItemDropdown(items, prefillItem) {
@@ -2290,10 +2294,15 @@
                 currentItemValues = hasCachedItemValues ? mapping._cachedItemValues : [];
                 log("SVC: restored cached items for idx=" + gIdx + " (" + currentItems.length + " items, " + currentItemValues.length + " values)");
             } else if (useRefFastPath) {
-                // Reference fast path: create synthetic entries from saved ref values
+                // Reference fast path: restore saved item values if available,
+                // otherwise create a synthetic entry from the saved item value.
                 currentItems = prefill ? [{ text: prefill, value: prefill }] : [];
-                currentItemValues = prefillVal ? [{ text: prefillVal, value: prefillVal }] : [];
-                log("SVC: ref fast path for idx=" + gIdx + " (form=" + mapping.form + ")");
+                if (refForForm.itemValues && refForForm.itemValues.length > 0) {
+                    currentItemValues = refForForm.itemValues.slice();
+                } else {
+                    currentItemValues = prefillVal ? [{ text: prefillVal, value: prefillVal }] : [];
+                }
+                log("SVC: ref fast path for idx=" + gIdx + " (form=" + mapping.form + ", " + currentItemValues.length + " values)");
             } else {
                 // Full load via bg iframe
                 attrSection.innerHTML = "";
@@ -2426,8 +2435,9 @@
                 var refRow = document.createElement("div");
                 refRow.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:4px 6px;margin-bottom:2px;border-radius:3px;background:#2a2a2a;font-size:10px;";
                 var refText = document.createElement("span");
-                refText.textContent = formName + ": " + ref.item + " = " + ref.itemValue;
-                refText.title = "Form: " + formName + "\nItem: " + ref.item + "\nItem Value: " + ref.itemValue + "\nReason: " + ref.reason;
+                var valuesCount = (ref.itemValues && ref.itemValues.length) || 1;
+                refText.textContent = formName + ": " + ref.item + " = " + ref.itemValue + " (" + valuesCount + " values saved)";
+                refText.title = "Form: " + formName + "\nItem: " + ref.item + "\nItem Value: " + ref.itemValue + "\nValues Saved: " + valuesCount + "\nReason: " + ref.reason;
                 refText.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#ccc;cursor:default;";
                 var refDelBtn = document.createElement("span");
                 refDelBtn.textContent = "\u2715";
