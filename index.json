@@ -857,12 +857,21 @@
         "updated":  "2026-07-13"
     },
     {
-        "id":  "M-085",
+        "id":  "M-107",
         "title":  "Average PR, QRS, QT, QTCF, HR v2.js",
         "tags":  [
                      "AVerage"
                  ],
         "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20PR%2C%20QRS%2C%20QT%2C%20QTCF%2C%20HR%20v2.js",
+        "updated":  "2026-07-14"
+    },
+    {
+        "id":  "M-108",
+        "title":  "Edit Check Supine time must be the same as original.js",
+        "tags":  [
+                     "Edit Check"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Supine%20time%20must%20be%20the%20same%20as%20original.js",
         "updated":  "2026-07-14"
     }
 ]
