@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     3.4.1
+// @version     3.5.0
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -302,17 +302,107 @@
     var DTS_PROGRESS_POPUP_REF = null;
     var DTS_SUMMARY_POPUP_REF = null;
     var DTS_REPORT_PATH = "/secure/study/report/list";
-    var DTS_REPORT_TYPE_VALUE = "clinicalCSV";
-    var DTS_REPORT_TYPE_LABEL = "Clinical Data Text (Delimited)";
-    var DTS_REPORT_DIV_ID = "reportDiv_16";
-    var DTS_SELECT_ID = "transferReportType_16";
-    var DTS_GENERATE_BTN_ID = "reportGenerateButton_16";
     var DTS_RESULT_TAB_ID = "resultTab";
     var DTS_RESULT_TBODY_ID = "reportRequestsTbody";
     var DTS_STUDY_CHANGER_ID = "studyIdChanger";
 
     var STORAGE_DTS_STATE = "activityPlanState.dts.state";
+    var STORAGE_DTS_REPORT_CONFIG = "activityPlanState.dts.reportConfig";
     var RUNMODE_DTS = "dtsDownload";
+
+    // Report definitions for the Download DTS Report feature.
+    // The old hard-coded Transfer Data report is now report id 16.
+    // Annotated CRF selectors are not yet known; id/selectors are TODO placeholders.
+    var DTS_REPORT_DEFINITIONS = [
+        {
+            id: 16,
+            name: "Transfer Data",
+            reportDivId: "reportDiv_16",
+            reportFormId: "reportForm_16",
+            generateButtonId: "reportGenerateButton_16",
+            rowMatchKeywords: ["transfer", "clinical", "csv", "delimited", "excel", "odm", "xpt", "code list", "mapping"],
+            defaultConfig: { reportType: "clinicalCSV", includeNonCRF: false, onlyRandomizedSubjects: false },
+            fields: [
+                { key: "reportType", type: "select", label: "Report Type", selectId: "transferReportType_16",
+                  options: [
+                      { value: "clinicalExcel", label: "Clinical Data Excel" },
+                      { value: "odmXml", label: "Clinical Data ODM XML" },
+                      { value: "clinicalCSV", label: "Clinical Data Text (Delimited)" },
+                      { value: "clinicalXpt", label: "Clinical Data XPT" },
+                      { value: "codeList", label: "Code List" },
+                      { value: "sdtmMappingSpecs", label: "Data Transfer Mapping Specification" }
+                  ]
+                },
+                { key: "includeNonCRF", type: "boolean", label: "Include Non-CRF" },
+                { key: "onlyRandomizedSubjects", type: "boolean", label: "Only Randomized Subjects" }
+            ]
+        },
+        {
+            id: 25,
+            name: "Data Audits and Annotations",
+            reportDivId: "reportDiv_25",
+            reportFormId: "reportForm_25",
+            generateButtonId: "reportGenerateButton_25",
+            rowMatchKeywords: ["data audit", "annotation"],
+            defaultConfig: {},
+            fields: []
+        },
+        {
+            id: 23,
+            name: "Data Collection Schedule",
+            reportDivId: "reportDiv_23",
+            reportFormId: "reportForm_23",
+            generateButtonId: "reportGenerateButton_23",
+            rowMatchKeywords: ["data collection", "schedule"],
+            defaultConfig: {},
+            fields: []
+        },
+        {
+            id: 27,
+            name: "Subject Audits",
+            reportDivId: "reportDiv_27",
+            reportFormId: "reportForm_27",
+            generateButtonId: "reportGenerateButton_27",
+            rowMatchKeywords: ["subject audit"],
+            defaultConfig: {},
+            fields: []
+        },
+        {
+            // TODO: Annotated CRF report id and page selectors are not confirmed.
+            // The config model is implemented; update id, reportDivId, reportFormId,
+            // generateButtonId and boolean selectors once the real ClinSpark values are known.
+            id: "TODO",
+            name: "Annotated CRF",
+            reportDivId: null,
+            reportFormId: null,
+            generateButtonId: null,
+            rowMatchKeywords: ["annotated crf"],
+            defaultConfig: { includeNonCRF: false },
+            fields: [
+                { key: "includeNonCRF", type: "boolean", label: "Include Non-CRF" }
+            ]
+        },
+        {
+            id: 26,
+            name: "Study Library Audits",
+            reportDivId: "reportDiv_26",
+            reportFormId: "reportForm_26",
+            generateButtonId: "reportGenerateButton_26",
+            rowMatchKeywords: ["study library", "library audit"],
+            defaultConfig: {},
+            fields: []
+        },
+        {
+            id: 8,
+            name: "Master Check",
+            reportDivId: "reportDiv_8",
+            reportFormId: "reportForm_8",
+            generateButtonId: "reportGenerateButton_8",
+            rowMatchKeywords: ["master check"],
+            defaultConfig: {},
+            fields: []
+        }
+    ];
 
     function dtsGetReportUrl() {
         var host = location.hostname;
@@ -365,6 +455,115 @@
         box.appendChild(okBtn);
         overlay.appendChild(box);
         document.body.appendChild(overlay);
+    }
+
+    function dtsLoadReportConfig() {
+        try {
+            var raw = localStorage.getItem(STORAGE_DTS_REPORT_CONFIG);
+            if (raw) return JSON.parse(raw);
+        } catch (e) {}
+        return { reportId: null, config: null };
+    }
+
+    function dtsSaveReportConfig(reportId, config) {
+        try {
+            localStorage.setItem(STORAGE_DTS_REPORT_CONFIG, JSON.stringify({ reportId: reportId, config: config }));
+        } catch (e) { log("DTS: failed to save report config: " + String(e)); }
+    }
+
+    function dtsGetReportDefinition(reportId) {
+        for (var i = 0; i < DTS_REPORT_DEFINITIONS.length; i++) {
+            if (DTS_REPORT_DEFINITIONS[i].id == reportId) return DTS_REPORT_DEFINITIONS[i];
+        }
+        return null;
+    }
+
+    function dtsApplySelectField(reportDiv, field, value) {
+        var sel = reportDiv.querySelector("#" + field.selectId);
+        if (!sel) sel = reportDiv.querySelector("select[name='" + field.key + "']");
+        if (!sel) {
+            log("DTS: select field '" + field.key + "' not found in report form");
+            return false;
+        }
+        var matched = false;
+        for (var i = 0; i < sel.options.length; i++) {
+            if (sel.options[i].value === value) { matched = true; break; }
+        }
+        if (!matched) {
+            log("DTS: option '" + value + "' not available for field '" + field.key + "'");
+            return false;
+        }
+        sel.value = value;
+        sel.dispatchEvent(new Event("change", { bubbles: true }));
+        try { if (window.jQuery) window.jQuery("#" + field.selectId).trigger("change"); } catch(e) {}
+        return true;
+    }
+
+    function dtsApplyBooleanField(reportDiv, reportDef, field, value) {
+        var idSuffix = reportDef.id !== "TODO" ? "_" + reportDef.id : "";
+        var key = field.key;
+        var boolValue = !!value;
+        // Try Yes/No radio buttons with name variations.
+        var radioNames = [key + idSuffix, key];
+        for (var ni = 0; ni < radioNames.length; ni++) {
+            var radios = reportDiv.querySelectorAll("input[type='radio'][name='" + radioNames[ni] + "']");
+            if (radios.length >= 2) {
+                var targetVal = boolValue ? "true" : "false";
+                for (var ri = 0; ri < radios.length; ri++) {
+                    if (radios[ri].value === targetVal) {
+                        radios[ri].checked = true;
+                        radios[ri].dispatchEvent(new Event("change", { bubbles: true }));
+                        return true;
+                    }
+                }
+            }
+        }
+        // Fall back to checkbox with id/name variations.
+        var cb = reportDiv.querySelector("input[type='checkbox']#" + key + idSuffix) ||
+                 reportDiv.querySelector("input[type='checkbox'][name='" + key + idSuffix + "']") ||
+                 reportDiv.querySelector("input[type='checkbox']#" + key) ||
+                 reportDiv.querySelector("input[type='checkbox'][name='" + key + "']");
+        if (cb) {
+            cb.checked = boolValue;
+            cb.dispatchEvent(new Event("change", { bubbles: true }));
+            return true;
+        }
+        log("DTS: boolean field '" + key + "' not found in report form (report " + reportDef.id + ")");
+        return false;
+    }
+
+    function dtsApplyReportConfig(reportDef, config) {
+        if (!reportDef || !reportDef.reportDivId) return false;
+        var reportDiv = document.getElementById(reportDef.reportDivId);
+        if (!reportDiv) {
+            log("DTS: reportDiv not found: " + reportDef.reportDivId);
+            return false;
+        }
+        var cfg = config || reportDef.defaultConfig || {};
+        for (var i = 0; i < reportDef.fields.length; i++) {
+            var field = reportDef.fields[i];
+            var value = cfg[field.key];
+            if (value === undefined) value = reportDef.defaultConfig[field.key];
+            if (field.type === "select") {
+                dtsApplySelectField(reportDiv, field, value);
+            } else if (field.type === "boolean") {
+                dtsApplyBooleanField(reportDiv, reportDef, field, value);
+            }
+        }
+        return true;
+    }
+
+    function dtsFindReportRow(tbody, reportDef) {
+        var rows = tbody.querySelectorAll("tr");
+        var keywords = (reportDef && reportDef.rowMatchKeywords) ? reportDef.rowMatchKeywords : [];
+        if (keywords.length === 0) return rows.length > 0 ? rows[0] : null;
+        for (var ri = 0; ri < rows.length; ri++) {
+            var rowText = (rows[ri].textContent || "").toLowerCase();
+            for (var ki = 0; ki < keywords.length; ki++) {
+                if (rowText.indexOf(keywords[ki].toLowerCase()) !== -1) return rows[ri];
+            }
+        }
+        return rows.length > 0 ? rows[0] : null;
     }
 
     function dtsCollectStudyOptions() {
@@ -446,13 +645,27 @@
         return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
     }
 
-    function dtsCreateStudySelectionPanel(studies, onConfirm) {
+    function dtsCreateReportConfigPanel(studies, savedConfig, onConfirm) {
         var glass = isGlassTheme();
         var container = document.createElement("div");
-        container.style.cssText = "display:flex;flex-direction:column;gap:12px;padding:4px;";
+        container.style.cssText = "display:flex;flex-direction:column;gap:12px;padding:4px;min-height:420px;";
 
-        var topBar = document.createElement("div");
-        topBar.style.cssText = "display:flex;gap:8px;margin-bottom:2px;";
+        var selectedReportId = savedConfig ? savedConfig.reportId : null;
+        var currentConfig = {};
+        var currentReportDef = dtsGetReportDefinition(selectedReportId);
+        if (currentReportDef) {
+            currentConfig = Object.assign({}, currentReportDef.defaultConfig, savedConfig && savedConfig.config ? savedConfig.config : {});
+        } else {
+            selectedReportId = null;
+        }
+
+        var studyCheckboxes = [];
+        var reportRadios = [];
+        var validationMsg = document.createElement("div");
+        validationMsg.style.cssText = "font-size:12px;color:#f59e0b;flex:1;";
+        var configArea = document.createElement("div");
+        configArea.style.cssText = "display:flex;flex-direction:column;gap:12px;margin-top:4px;";
+        var confirmBtn;
 
         function makeTopBtn(label, bg, hoverBg) {
             var b = document.createElement("button");
@@ -463,82 +676,259 @@
             return b;
         }
 
-        var selectAllBtn = makeTopBtn("Select All", "#1a7abf", "#155e96");
-        var unselectAllBtn = makeTopBtn("Unselect All", "#555", "#333");
-        topBar.appendChild(selectAllBtn);
-        topBar.appendChild(unselectAllBtn);
-        container.appendChild(topBar);
-
-        var listWrap = document.createElement("div");
-        listWrap.style.cssText = "max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;border:1px solid " + (glass ? "rgba(255,255,255,0.15)" : "#333") + ";border-radius:8px;padding:8px;background:" + (glass ? "rgba(15,10,40,0.4)" : "#111") + ";";
-
-        var checkboxes = [];
-
-        function updateConfirmBtn() {
-            var anyChecked = checkboxes.some(function(cb) { return cb.checked; });
-            confirmBtn.disabled = !anyChecked;
-            confirmBtn.style.opacity = anyChecked ? "1" : "0.45";
-            confirmBtn.style.cursor = anyChecked ? "pointer" : "not-allowed";
+        function saveCurrentConfig() {
+            if (selectedReportId && currentReportDef) {
+                dtsSaveReportConfig(selectedReportId, Object.assign({}, currentReportDef.defaultConfig, currentConfig));
+            }
         }
 
-        for (var si = 0; si < studies.length; si++) {
-            (function(study) {
-                var row = document.createElement("label");
-                row.style.cssText = "display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:6px;cursor:pointer;transition:background 0.12s;color:" + (glass ? "#fff" : "#ddd") + ";font-size:13px;";
-                row.addEventListener("mouseenter", function() { row.style.background = glass ? "rgba(255,255,255,0.07)" : "#222"; });
-                row.addEventListener("mouseleave", function() { row.style.background = ""; });
-                var cb = document.createElement("input");
-                cb.type = "checkbox";
-                cb.value = study.value;
-                cb.style.cssText = "width:16px;height:16px;cursor:pointer;accent-color:#1a7abf;flex-shrink:0;";
-                cb.addEventListener("change", updateConfirmBtn);
-                checkboxes.push(cb);
-                var lbl = document.createElement("span");
-                lbl.textContent = study.text;
-                lbl.style.cssText = "flex:1;word-break:break-word;";
-                row.appendChild(cb);
-                row.appendChild(lbl);
-                listWrap.appendChild(row);
-            })(studies[si]);
+        function updateValidation() {
+            var anyStudy = studyCheckboxes.some(function(cb) { return cb.checked; });
+            var hasReport = !!selectedReportId && !!dtsGetReportDefinition(selectedReportId);
+            var enabled = anyStudy && hasReport;
+            confirmBtn.disabled = !enabled;
+            confirmBtn.style.opacity = enabled ? "1" : "0.45";
+            confirmBtn.style.cursor = enabled ? "pointer" : "not-allowed";
+            if (!anyStudy && !hasReport) validationMsg.textContent = "Select at least one study and one report";
+            else if (!anyStudy) validationMsg.textContent = "Select at least one study";
+            else if (!hasReport) validationMsg.textContent = "Select one report";
+            else validationMsg.textContent = "";
         }
 
-        container.appendChild(listWrap);
+        function createSectionHeader(text) {
+            var h = document.createElement("div");
+            h.textContent = text;
+            h.style.cssText = "font-size:13px;font-weight:700;color:" + (glass ? "rgba(255,255,255,0.85)" : "#ddd") + ";margin-bottom:4px;letter-spacing:0.02em;";
+            return h;
+        }
 
-        selectAllBtn.addEventListener("click", function() {
-            checkboxes.forEach(function(cb) { cb.checked = true; });
-            updateConfirmBtn();
-        });
-        unselectAllBtn.addEventListener("click", function() {
-            checkboxes.forEach(function(cb) { cb.checked = false; });
-            updateConfirmBtn();
-        });
+        function createStudyPanel() {
+            var panel = document.createElement("div");
+            panel.style.cssText = "flex:1;min-width:220px;max-width:320px;display:flex;flex-direction:column;gap:8px;";
+            panel.appendChild(createSectionHeader("Studies"));
+
+            var topBar = document.createElement("div");
+            topBar.style.cssText = "display:flex;gap:8px;";
+            var selectAllBtn = makeTopBtn("Select All", "#1a7abf", "#155e96");
+            var unselectAllBtn = makeTopBtn("Unselect All", "#555", "#333");
+            topBar.appendChild(selectAllBtn);
+            topBar.appendChild(unselectAllBtn);
+            panel.appendChild(topBar);
+
+            var listWrap = document.createElement("div");
+            listWrap.style.cssText = "flex:1;overflow-y:auto;max-height:360px;display:flex;flex-direction:column;gap:4px;border:1px solid " + (glass ? "rgba(255,255,255,0.15)" : "#333") + ";border-radius:8px;padding:8px;background:" + (glass ? "rgba(15,10,40,0.4)" : "#111") + ";";
+
+            for (var si = 0; si < studies.length; si++) {
+                (function(study) {
+                    var row = document.createElement("label");
+                    row.style.cssText = "display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:6px;cursor:pointer;transition:background 0.12s;color:" + (glass ? "#fff" : "#ddd") + ";font-size:13px;";
+                    row.addEventListener("mouseenter", function() { row.style.background = glass ? "rgba(255,255,255,0.07)" : "#222"; });
+                    row.addEventListener("mouseleave", function() { row.style.background = ""; });
+                    var cb = document.createElement("input");
+                    cb.type = "checkbox";
+                    cb.value = study.value;
+                    cb.style.cssText = "width:16px;height:16px;cursor:pointer;accent-color:#1a7abf;flex-shrink:0;";
+                    cb.addEventListener("change", updateValidation);
+                    if (savedConfig && savedConfig.selectedStudies) {
+                        cb.checked = savedConfig.selectedStudies.indexOf(study.value) !== -1;
+                    }
+                    studyCheckboxes.push(cb);
+                    var lbl = document.createElement("span");
+                    lbl.textContent = study.text;
+                    lbl.style.cssText = "flex:1;word-break:break-word;";
+                    row.appendChild(cb);
+                    row.appendChild(lbl);
+                    listWrap.appendChild(row);
+                })(studies[si]);
+            }
+
+            panel.appendChild(listWrap);
+
+            selectAllBtn.addEventListener("click", function() {
+                studyCheckboxes.forEach(function(cb) { cb.checked = true; });
+                updateValidation();
+            });
+            unselectAllBtn.addEventListener("click", function() {
+                studyCheckboxes.forEach(function(cb) { cb.checked = false; });
+                updateValidation();
+            });
+
+            return panel;
+        }
+
+        function renderConfigFields(reportDef) {
+            configArea.innerHTML = "";
+            if (!reportDef) {
+                var emptyState = document.createElement("div");
+                emptyState.textContent = "Select a report to configure options.";
+                emptyState.style.cssText = "padding:14px;color:" + (glass ? "rgba(255,255,255,0.5)" : "#888") + ";font-size:13px;font-style:italic;text-align:center;";
+                configArea.appendChild(emptyState);
+                return;
+            }
+            if (reportDef.fields.length === 0) {
+                var noFields = document.createElement("div");
+                noFields.textContent = "No additional options for this report.";
+                noFields.style.cssText = "padding:14px;color:" + (glass ? "rgba(255,255,255,0.5)" : "#888") + ";font-size:13px;font-style:italic;text-align:center;";
+                configArea.appendChild(noFields);
+                return;
+            }
+
+            for (var fi = 0; fi < reportDef.fields.length; fi++) {
+                (function(field) {
+                    var value = currentConfig[field.key];
+                    if (value === undefined) value = reportDef.defaultConfig[field.key];
+
+                    var wrap = document.createElement("div");
+                    wrap.style.cssText = "display:flex;flex-direction:column;gap:6px;";
+
+                    var lbl = document.createElement("label");
+                    lbl.textContent = field.label;
+                    lbl.style.cssText = "font-size:12px;color:" + (glass ? "rgba(255,255,255,0.7)" : "#aaa") + ";font-weight:600;";
+                    wrap.appendChild(lbl);
+
+                    if (field.type === "select") {
+                        var sel = document.createElement("select");
+                        sel.style.cssText = "padding:6px;border-radius:5px;border:1px solid " + (glass ? "rgba(255,255,255,0.2)" : "#444") + ";background:" + (glass ? "rgba(15,10,40,0.5)" : "#222") + ";color:#fff;font-size:13px;";
+                        for (var oi = 0; oi < field.options.length; oi++) {
+                            var opt = document.createElement("option");
+                            opt.value = field.options[oi].value;
+                            opt.textContent = field.options[oi].label;
+                            if (field.options[oi].value === value) opt.selected = true;
+                            sel.appendChild(opt);
+                        }
+                        sel.addEventListener("change", function() {
+                            currentConfig[field.key] = this.value;
+                            saveCurrentConfig();
+                        });
+                        wrap.appendChild(sel);
+                    } else if (field.type === "boolean") {
+                        var boolWrap = document.createElement("div");
+                        boolWrap.style.cssText = "display:flex;gap:16px;";
+                        function makeBoolRadio(label, isYes) {
+                            var lblEl = document.createElement("label");
+                            lblEl.style.cssText = "display:flex;align-items:center;gap:6px;cursor:pointer;color:" + (glass ? "#fff" : "#ddd") + ";font-size:13px;";
+                            var radio = document.createElement("input");
+                            radio.type = "radio";
+                            radio.name = "dts_bool_" + field.key + "_" + reportDef.id;
+                            radio.value = isYes ? "true" : "false";
+                            radio.checked = isYes === !!value;
+                            radio.style.cssText = "width:16px;height:16px;cursor:pointer;accent-color:#1a7abf;";
+                            radio.addEventListener("change", function() {
+                                if (this.checked) {
+                                    currentConfig[field.key] = isYes;
+                                    saveCurrentConfig();
+                                }
+                            });
+                            var span = document.createElement("span");
+                            span.textContent = label;
+                            lblEl.appendChild(radio);
+                            lblEl.appendChild(span);
+                            return lblEl;
+                        }
+                        boolWrap.appendChild(makeBoolRadio("Yes", true));
+                        boolWrap.appendChild(makeBoolRadio("No", false));
+                        wrap.appendChild(boolWrap);
+                    }
+
+                    configArea.appendChild(wrap);
+                })(reportDef.fields[fi]);
+            }
+        }
+
+        function createReportPanel() {
+            var panel = document.createElement("div");
+            panel.style.cssText = "flex:1.5;min-width:280px;display:flex;flex-direction:column;gap:8px;";
+            panel.appendChild(createSectionHeader("Report"));
+
+            var listWrap = document.createElement("div");
+            listWrap.style.cssText = "display:flex;flex-direction:column;gap:4px;border:1px solid " + (glass ? "rgba(255,255,255,0.15)" : "#333") + ";border-radius:8px;padding:8px;background:" + (glass ? "rgba(15,10,40,0.4)" : "#111") + ";";
+
+            for (var ri = 0; ri < DTS_REPORT_DEFINITIONS.length; ri++) {
+                (function(reportDef) {
+                    var row = document.createElement("label");
+                    var isTodo = reportDef.id === "TODO";
+                    row.style.cssText = "display:flex;align-items:center;gap:10px;padding:8px;border-radius:6px;cursor:pointer;transition:background 0.12s;color:" + (glass ? "#fff" : "#ddd") + ";font-size:13px;" + (isTodo ? "opacity:0.6;" : "");
+                    row.addEventListener("mouseenter", function() { if (!isTodo) row.style.background = glass ? "rgba(255,255,255,0.07)" : "#222"; });
+                    row.addEventListener("mouseleave", function() { row.style.background = ""; });
+                    var radio = document.createElement("input");
+                    radio.type = "radio";
+                    radio.name = "dtsReportSelection";
+                    radio.value = String(reportDef.id);
+                    radio.checked = reportDef.id == selectedReportId;
+                    radio.disabled = isTodo;
+                    radio.style.cssText = "width:16px;height:16px;cursor:pointer;accent-color:#1a7abf;flex-shrink:0;";
+                    radio.addEventListener("change", function() {
+                        if (this.checked) {
+                            selectedReportId = reportDef.id;
+                            currentReportDef = reportDef;
+                            currentConfig = Object.assign({}, reportDef.defaultConfig);
+                            renderConfigFields(reportDef);
+                            saveCurrentConfig();
+                            updateValidation();
+                        }
+                    });
+                    reportRadios.push(radio);
+                    var lbl = document.createElement("span");
+                    lbl.textContent = reportDef.name + (isTodo ? " (selectors TBD)" : "");
+                    lbl.style.cssText = "flex:1;word-break:break-word;";
+                    row.appendChild(radio);
+                    row.appendChild(lbl);
+                    listWrap.appendChild(row);
+                })(DTS_REPORT_DEFINITIONS[ri]);
+            }
+
+            panel.appendChild(listWrap);
+
+            var configHeader = createSectionHeader("Configuration");
+            configHeader.style.marginTop = "4px";
+            panel.appendChild(configHeader);
+            panel.appendChild(configArea);
+
+            return panel;
+        }
+
+        var mainRow = document.createElement("div");
+        mainRow.style.cssText = "display:flex;flex-direction:row;gap:16px;flex:1;min-height:340px;overflow:hidden;";
+        mainRow.appendChild(createStudyPanel());
+        mainRow.appendChild(createReportPanel());
+        container.appendChild(mainRow);
 
         var footer = document.createElement("div");
-        footer.style.cssText = "display:flex;justify-content:flex-end;padding-top:4px;";
+        footer.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding-top:4px;gap:12px;";
 
-        var confirmBtn = document.createElement("button");
+        confirmBtn = document.createElement("button");
         confirmBtn.textContent = "Confirm";
         confirmBtn.disabled = true;
-        confirmBtn.style.cssText = "background:#10b981;color:#fff;border:none;border-radius:7px;padding:9px 28px;font-size:14px;font-weight:700;cursor:not-allowed;opacity:0.45;transition:background 0.15s,opacity 0.15s;";
+        confirmBtn.style.cssText = "background:#10b981;color:#fff;border:none;border-radius:7px;padding:9px 28px;font-size:14px;font-weight:700;cursor:not-allowed;opacity:0.45;transition:background 0.15s,opacity 0.15s;flex-shrink:0;";
         confirmBtn.addEventListener("mouseenter", function() { if (!confirmBtn.disabled) confirmBtn.style.background = "#059669"; });
         confirmBtn.addEventListener("mouseleave", function() { if (!confirmBtn.disabled) confirmBtn.style.background = "#10b981"; });
         confirmBtn.addEventListener("click", function() {
             if (confirmBtn.disabled) return;
-            var selected = [];
-            for (var ci = 0; ci < checkboxes.length; ci++) {
-                if (checkboxes[ci].checked) {
-                    var val = checkboxes[ci].value;
+            var selectedStudies = [];
+            var selectedStudyValues = [];
+            for (var ci = 0; ci < studyCheckboxes.length; ci++) {
+                if (studyCheckboxes[ci].checked) {
+                    var val = studyCheckboxes[ci].value;
+                    selectedStudyValues.push(val);
                     var study = studies.find(function(s) { return s.value === val; });
-                    if (study) selected.push(study);
+                    if (study) selectedStudies.push(study);
                 }
             }
-            if (selected.length === 0) return;
+            var reportDef = dtsGetReportDefinition(selectedReportId);
+            if (selectedStudies.length === 0 || !reportDef) return;
+            saveCurrentConfig();
+            // Persist selected study values for next session as well.
+            try { dtsSaveReportConfig(selectedReportId, Object.assign({}, reportDef.defaultConfig, currentConfig, { _selectedStudies: selectedStudyValues })); } catch(e) {}
             if (DTS_REPORT_POPUP_REF) { try { DTS_REPORT_POPUP_REF.close(); } catch(e) {} DTS_REPORT_POPUP_REF = null; }
-            onConfirm(selected);
+            onConfirm(selectedStudies, reportDef, Object.assign({}, currentConfig));
         });
 
+        footer.appendChild(validationMsg);
         footer.appendChild(confirmBtn);
         container.appendChild(footer);
+
+        renderConfigFields(currentReportDef);
+        updateValidation();
 
         return container;
     }
@@ -684,14 +1074,26 @@
 
         log("DTS: found " + studies.length + " studies");
 
-        var selectionContent = dtsCreateStudySelectionPanel(studies, function(selected) {
-            log("DTS: user confirmed " + selected.length + " studies");
+        var savedConfig = dtsLoadReportConfig();
+        // Default to Transfer Data when no prior config exists.
+        if (!savedConfig || (!savedConfig.reportId && !savedConfig.config)) {
+            savedConfig = { reportId: 16, config: Object.assign({}, DTS_REPORT_DEFINITIONS[0].defaultConfig) };
+        }
+        // Pull any previously saved study selection into the panel.
+        if (savedConfig.config && savedConfig.config._selectedStudies) {
+            savedConfig.selectedStudies = savedConfig.config._selectedStudies;
+        }
+
+        var selectionContent = dtsCreateReportConfigPanel(studies, savedConfig, function(selectedStudies, reportDef, reportConfig) {
+            log("DTS: user confirmed " + selectedStudies.length + " studies for report " + reportDef.id);
             var initialState = {
                 phase: "generate",
                 studyIndex: 0,
                 step: "select_study",
-                selectedStudies: selected,
-                results: selected.map(function(s) { return { value: s.value, text: s.text, status: "Pending", error: null, genTime: null }; }),
+                selectedStudies: selectedStudies,
+                reportId: reportDef.id,
+                reportConfig: reportConfig,
+                results: selectedStudies.map(function(s) { return { value: s.value, text: s.text, status: "Pending", error: null, genTime: null }; }),
                 startTime: Date.now()
             };
             dtsSaveState(initialState);
@@ -701,11 +1103,11 @@
 
         DTS_REPORT_POPUP_REF = createPopup({
             title: "Download DTS Report",
-            description: "Select studies to download Clinical Data Text (Delimited) reports",
+            description: "Select studies and a report to generate/download",
             content: selectionContent,
-            width: "520px",
+            width: "760px",
             height: "auto",
-            maxHeight: "85vh",
+            maxHeight: "90vh",
             onClose: function() {
                 log("DTS: selection panel closed without confirming");
                 DTS_REPORT_POPUP_REF = null;
@@ -739,6 +1141,15 @@
 
     async function dtsRunStateMachine(state) {
         var reportUrl = dtsGetReportUrl();
+
+        // Resolve report definition from state; default to Transfer Data for legacy state.
+        var reportDef = dtsGetReportDefinition(state.reportId);
+        if (!reportDef) {
+            state.reportId = 16;
+            state.reportConfig = Object.assign({}, DTS_REPORT_DEFINITIONS[0].defaultConfig);
+            reportDef = DTS_REPORT_DEFINITIONS[0];
+            dtsSaveState(state);
+        }
 
         var progressUI = dtsCreateProgressPanel(state.selectedStudies);
         dtsCreateProgressPopup(state, progressUI);
@@ -875,61 +1286,54 @@
                         }
                         await sleep(400);
 
-                        var reportDiv = document.getElementById(DTS_REPORT_DIV_ID);
+                        if (!reportDef) {
+                            result.status = "Failed";
+                            result.error = "Report definition not available";
+                            progressUI.updateStatus(study.value, "Failed", result.error);
+                            state.studyIndex++;
+                            state.step = "select_study";
+                            dtsSaveState(state);
+                            continue;
+                        }
+                        if (reportDef.id === "TODO") {
+                            result.status = "Failed";
+                            result.error = "Report selectors are not configured (id=TODO)";
+                            progressUI.updateStatus(study.value, "Failed", result.error);
+                            log("DTS: [generate] " + study.text + " — report definition incomplete");
+                            state.studyIndex++;
+                            state.step = "select_study";
+                            dtsSaveState(state);
+                            continue;
+                        }
+
+                        var reportDiv = document.getElementById(reportDef.reportDivId);
                         if (!reportDiv) {
                             result.status = "Failed";
-                            result.error = "reportDiv_16 not found on Reports page";
+                            result.error = "Report form (" + reportDef.reportDivId + ") not found on Reports page";
                             progressUI.updateStatus(study.value, "Failed", result.error);
-                            log("DTS: [generate] " + study.text + " — reportDiv_16 not found");
+                            log("DTS: [generate] " + study.text + " — reportDiv not found: " + reportDef.reportDivId);
                             state.studyIndex++;
                             state.step = "select_study";
                             dtsSaveState(state);
                             continue;
                         }
 
-                        var formBody = reportDiv.querySelector(".form-body");
-                        var typeSelect = reportDiv.querySelector("#" + DTS_SELECT_ID);
-                        if (!typeSelect) typeSelect = reportDiv.querySelector("select[id='" + DTS_SELECT_ID + "']");
-                        if (!typeSelect) {
-                            result.status = "Failed";
-                            result.error = "transferReportType_16 select not found in reportDiv_16";
-                            progressUI.updateStatus(study.value, "Failed", result.error);
-                            log("DTS: [generate] " + study.text + " — transferReportType_16 not found");
-                            state.studyIndex++;
-                            state.step = "select_study";
-                            dtsSaveState(state);
-                            continue;
+                        // Apply user report configuration to the form fields.
+                        var appliedConfig = dtsApplyReportConfig(reportDef, state.reportConfig);
+                        if (!appliedConfig) {
+                            log("DTS: [generate] " + study.text + " — could not fully apply report config");
                         }
-
-                        var hasClinicalsCSV = false;
-                        var opts = typeSelect.querySelectorAll("option");
-                        for (var oi = 0; oi < opts.length; oi++) {
-                            if (opts[oi].value === DTS_REPORT_TYPE_VALUE) { hasClinicalsCSV = true; break; }
-                        }
-                        if (!hasClinicalsCSV) {
-                            result.status = "Failed";
-                            result.error = "Option 'clinicalCSV' not found in transferReportType_16";
-                            progressUI.updateStatus(study.value, "Failed", result.error);
-                            log("DTS: [generate] " + study.text + " — clinicalCSV option not found");
-                            state.studyIndex++;
-                            state.step = "select_study";
-                            dtsSaveState(state);
-                            continue;
-                        }
-
-                        typeSelect.value = DTS_REPORT_TYPE_VALUE;
-                        typeSelect.dispatchEvent(new Event("change", { bubbles: true }));
-                        try { if (window.jQuery) window.jQuery("#" + DTS_SELECT_ID).trigger("change"); } catch(e) {}
                         await sleep(300);
 
                         progressUI.updateStatus(study.value, "Generating Report");
                         result.genTime = Date.now();
 
-                        var generateBtn = reportDiv.querySelector("#" + DTS_GENERATE_BTN_ID);
-                        if (!generateBtn) generateBtn = document.getElementById(DTS_GENERATE_BTN_ID);
+                        var generateBtnSelector = reportDef.generateButtonId ? "#" + reportDef.generateButtonId : "";
+                        var generateBtn = generateBtnSelector ? reportDiv.querySelector(generateBtnSelector) : null;
+                        if (!generateBtn) generateBtn = reportDiv.querySelector("input[type='submit'], button[type='submit'], button[id*='generate'], input[id*='generate']");
                         if (!generateBtn) {
                             result.status = "Failed";
-                            result.error = "Generate button (reportGenerateButton_16) not found";
+                            result.error = "Generate button not found for report " + reportDef.id;
                             progressUI.updateStatus(study.value, "Failed", result.error);
                             log("DTS: [generate] " + study.text + " — generate button not found");
                             state.studyIndex++;
@@ -938,7 +1342,7 @@
                             continue;
                         }
 
-                        log("DTS: [generate] clicking Generate for: " + study.text);
+                        log("DTS: [generate] clicking Generate for report " + reportDef.id + ": " + study.text);
                         generateBtn.click();
                         await sleep(800);
 
@@ -1093,22 +1497,10 @@
                             continue;
                         }
 
-                        var rows = tbody.querySelectorAll("tr");
-                        var targetRow = null;
-                        var genTimeThreshold = dResult.genTime ? (dResult.genTime - 120000) : 0;
-
-                        for (var ri = 0; ri < rows.length; ri++) {
-                            var rowText = (rows[ri].textContent || "").toLowerCase();
-                            var hasTransfer = rowText.indexOf("transfer") !== -1;
-                            var hasClinical = rowText.indexOf("clinical") !== -1 || rowText.indexOf("csv") !== -1 || rowText.indexOf("delimited") !== -1;
-                            if (hasTransfer || hasClinical) {
-                                targetRow = rows[ri];
-                                break;
-                            }
-                        }
-                        if (!targetRow && rows.length > 0) {
-                            targetRow = rows[0];
-                            log("DTS: [download] " + dStudy.text + " — using first row as fallback");
+                        var targetRow = dtsFindReportRow(tbody, reportDef);
+                        if (!targetRow) {
+                            targetRow = tbody.querySelector("tr");
+                            if (targetRow) log("DTS: [download] " + dStudy.text + " — using first row as fallback");
                         }
 
                         if (!targetRow) {

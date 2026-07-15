@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
-// Version: v1
-// Purpose: Calculates average PR, QRS, QT, QTcF, and heart rate. Does not require any item names.
+// Version: v2
+// Purpose: Pulls and averages height and weight measurements. Does not require any item names.
 
 var form = formJson.form;
 var attachedItem = itemJson.item;
@@ -42,11 +42,8 @@ function containsStandaloneKeyword(input, keyword) {
 function matchesMetric(itemName, metric) {
     var name = normalizeName(itemName);
 
-    if (metric === "PR") return containsStandaloneKeyword(name, "PR");
-    if (metric === "QRS") return containsStandaloneKeyword(name, "QRS");
-    if (metric === "QT") return name.indexOf("QTC") === -1 && containsStandaloneKeyword(name, "QT");
-    if (metric === "QTCF") return name.indexOf("QTCF") !== -1 || containsStandaloneKeyword(name, "QTC");
-    if (metric === "HR") return containsStandaloneKeyword(name, "HR") || containsStandaloneKeyword(name, "RATE") || containsValue(name, "HEART RATE");
+    if (metric === "HEIGHT") return containsStandaloneKeyword(name, "HEIGHT");
+    if (metric === "WEIGHT") return containsStandaloneKeyword(name, "WEIGHT");
 
     return false;
 }
@@ -54,12 +51,8 @@ function matchesMetric(itemName, metric) {
 function getMetricFromAverageItem(itemName) {
     var name = normalizeName(itemName);
 
-    if (containsValue(name, "QTCF")) return "QTCF";
-    if (containsValue(name, "QTC") && !containsValue(name, "QTCF")) return "QTCF";
-    if (containsValue(name, "QT") && !containsValue(name, "QTC")) return "QT";
-    if (containsValue(name, "QRS")) return "QRS";
-    if (containsValue(name, "PR")) return "PR";
-    if (containsValue(name, "HR") || containsValue(name, "HEART RATE") || containsValue(name, "PULSE")) return "HR";
+    if (containsValue(name, "WEIGHT")) return "WEIGHT";
+    if (containsValue(name, "HEIGHT")) return "HEIGHT";
 
     return null;
 }
@@ -72,19 +65,6 @@ function isAverageItem(itemName) {
     return false;
 }
 
-function isAttachedItem(itemName, attachedItem) {
-    return containsValue(attachedItem, itemName);
-}
-
-function calculateAverage(values) {
-    if (values.length === 0) return null;
-    var sum = 0;
-    for (var i = 0; i < values.length; i++) {
-        sum += values[i];
-    }
-    return Math.round(sum / values.length).toString().split('.')[0];
-}
-
 function addNumericValue(list, value) {
     if (value === null || value === undefined || value === "") return;
 
@@ -92,7 +72,7 @@ function addNumericValue(list, value) {
     if (!isNaN(numericValue)) list.push(numericValue);
 }
 
-function populateList(formJsonValue, metric, attachedItem, isRepeat) {
+function populateList(formJsonValue, metric, attachedItemName, isRepeat) {
     var itemGroups = formJsonValue.form.itemGroups;
     var list = [];
     var group, items, groupItem, i, j;
@@ -109,8 +89,7 @@ function populateList(formJsonValue, metric, attachedItem, isRepeat) {
             for (j = 0; j < items.length; j++) {
                 groupItem = items[j];
                 if (!groupItem) continue;
-                if (groupItem.name == attachedItem) return list;
-
+                if (groupItem.name == attachedItemName) return list;
                 if (matchesMetric(groupItem.name, metric) && !containsValue(groupItem.name, "average")) {
                     logger(metric + " matched item: " + groupItem.name + " | Value: " + groupItem.value);
                     addNumericValue(list, groupItem.value);
@@ -127,7 +106,7 @@ function populateList(formJsonValue, metric, attachedItem, isRepeat) {
             for (j = items.length - 1; j >= 0; j--) {
                 groupItem = items[j];
                 if (!groupItem) continue;
-                if (groupItem.name == attachedItem && list.length > 1) return list;
+                if (groupItem.name == attachedItemName && list.length > 1) return list;
 
                 if (matchesMetric(groupItem.name, metric) && !containsValue(groupItem.name, "average")) {
                     logger(metric + " matched item: " + groupItem.name + " | Value: " + groupItem.value);
@@ -138,6 +117,17 @@ function populateList(formJsonValue, metric, attachedItem, isRepeat) {
     }
 
     return list;
+}
+
+function calculateAverage(values, sigfig) {
+    if (values.length === 0) return null;
+    var sum = 0;
+    for (var i = 0; i < values.length; i++) {
+        sum += values[i];
+    }
+    var avg = sum / values.length;
+    var factor = Math.pow(10, sigfig);
+    return (Math.round(avg * factor) / factor).toFixed(sigfig);
 }
 
 try {
@@ -152,35 +142,23 @@ try {
     logger("Attached Item name: " + attachedItem.name);
     logger("Metric: " + metric);
 
-    var PRlist = populateList(formJson, "PR", attachedItem.name, isRepeat);
-    var QRSlist = populateList(formJson, "QRS", attachedItem.name, isRepeat);
-    var QTlist = populateList(formJson, "QT", attachedItem.name, isRepeat);
-    var QTcFlist = populateList(formJson, "QTCF", attachedItem.name, isRepeat);
-    var HRlist = populateList(formJson, "HR", attachedItem.name, isRepeat);
+    var heightList = populateList(formJson, "HEIGHT", attachedItem.name, isRepeat);
+    var weightList = populateList(formJson, "WEIGHT", attachedItem.name, isRepeat);
 
-    logger("PR list: " + PRlist);
-    logger("QRS list: " + QRSlist);
-    logger("QT list: " + QTlist);
-    logger("QTcF list: " + QTcFlist);
-    logger("HR list: " + HRlist);
+    logger("Height List: " + heightList);
+    logger("Weight List: " + weightList);
 
-    var avgPR = calculateAverage(PRlist);
-    var avgQRS = calculateAverage(QRSlist);
-    var avgQT = calculateAverage(QTlist);
-    var avgQTcF = calculateAverage(QTcFlist);
-    var avgHR = calculateAverage(HRlist);
+    logger("Height List length: " + heightList.length);
+    logger("Weight List length: " + weightList.length);
 
-    logger("Average PR: " + avgPR);
-    logger("Average QRS: " + avgQRS);
-    logger("Average QT: " + avgQT);
-    logger("Average QTcF: " + avgQTcF);
-    logger("Average HR: " + avgHR);
+    var heightAvg = calculateAverage(heightList, attachedItem.significantDigits);
+    var weightAvg = calculateAverage(weightList, attachedItem.significantDigits);
 
-    if (metric === "PR") return avgPR;
-    if (metric === "QRS") return avgQRS;
-    if (metric === "QT") return avgQT;
-    if (metric === "QTCF") return avgQTcF;
-    if (metric === "HR") return avgHR;
+    logger("Height Average: " + heightAvg);
+    logger("Weight Average: " + weightAvg);
+
+    if (metric === "HEIGHT") return heightAvg;
+    if (metric === "WEIGHT") return weightAvg;
 
     return null;
 } catch (e) {

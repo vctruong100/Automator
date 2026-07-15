@@ -873,5 +873,162 @@
                  ],
         "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Supine%20time%20must%20be%20the%20same%20as%20original.js",
         "updated":  "2026-07-14"
+    },
+    {
+        "id":  "M-111",
+        "title":  "Average Circumference (Hip) v2",
+        "tags":  [
+                     "Average",
+                     "Circumference",
+                     "Hip"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20Circumference%20%28Hip%29%20v2.js",
+        "updated":  "2026-07-15"
+    },
+    {
+        "id":  "M-112",
+        "title":  "Average Circumference (Waist) v2",
+        "tags":  [
+                     "Average",
+                     "Circumference",
+                     "Waist"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20Circumference%20%28Waist%29%20v2.js",
+        "updated":  "2026-07-15"
+    },
+    {
+        "id":  "M-113",
+        "title":  "Average Circumference (Hip + Waist) v2",
+        "tags":  [
+                     "Average",
+                     "Circumference",
+                     "Hip",
+                     "Waist"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20Circumference%20%28Hip%20%2B%20Waist%29%20v2.js",
+        "updated":  "2026-07-15"
+    },
+    {
+        "id":  "M-114",
+        "title":  "Average Height v2",
+        "tags":  [
+                     "Average",
+                     "Height",
+                     "BMI"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20Height%20v2.js",
+        "updated":  "2026-07-15"
+    },
+    {
+        "id":  "M-115",
+        "title":  "Average Weight v2",
+        "tags":  [
+                     "Average",
+                     "Weight",
+                     "BMI"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20Weight%20v2.js",
+        "updated":  "2026-07-15"
+    },
+    {
+        "id":  "M-116",
+        "title":  "Average Height & Weight v2",
+        "tags":  [
+                     "Average",
+                     "Height",
+                     "Weight",
+                     "BMI"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20Height%20%26%20Weight%20v2.js",
+        "updated":  "2026-07-15"
+    },
+    {
+        "id":  "M-117",
+        "title":  "Median HR, RR, PR, QRS, QT, QTC, QTcF v2",
+        "tags":  [
+                     "Median",
+                     "HR",
+                     "RR",
+                     "PR",
+                     "QRS",
+                     "QT",
+                     "QTC",
+                     "QTcF",
+                     "ECG"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Median%20HR%2C%20RR%2C%20PR%2C%20QRS%2C%20QT%2C%20QTC%2C%20QTcF%20v2.js",
+        "updated":  "2026-07-15"
+    },
+    {
+        "id":  "M-118",
+        "title":  "Protocol Check Average Vital Signs Range SYS, DIA v2",
+        "tags":  [
+                     "Protocol Check",
+                     "Vitals",
+                     "SYS",
+                     "DIA"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Average%20Vital%20Signs%20Range%20SYS%2C%20DIA%20v2.js",
+        "updated":  "2026-07-15"
+    },
+    {
+        "id":  "M-119",
+        "title":  "Protocol Check Is (AVERAGE) QTcFQRS Out of Range v2",
+        "tags":  [
+                     "Protocol Check",
+                     "QTcF",
+                     "QRS",
+                     "ECG"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Is%20%28AVERAGE%29%20QTcFQRS%20Out%20of%20Range%20v2.js",
+        "updated":  "2026-07-15"
+    },
+    {
+        "id":  "M-120",
+        "title":  "Protocol Check Median ECG Eligibility v2",
+        "tags":  [
+                     "Protocol Check",
+                     "Median",
+                     "ECG",
+                     "Eligibility"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Median%20ECG%20Eligibility%20v2.js",
+        "updated":  "2026-07-15"
+    },
+    {
+        "id":  "M-121",
+        "title":  "Protocol Check Median Vital Sign Eligibility v2",
+        "tags":  [
+                     "Protocol Check",
+                     "Median",
+                     "Vital Signs",
+                     "Eligibility"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Median%20Vital%20Sign%20Eligibility%20v2.js",
+        "updated":  "2026-07-15"
+    },
+    {
+        "id":  "M-122",
+        "title":  "Protocol Check Vital Signs Range v2",
+        "tags":  [
+                     "Protocol Check",
+                     "Vitals",
+                     "Range"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Vital%20Signs%20Range%20v2.js",
+        "updated":  "2026-07-15"
+    },
+    {
+        "id":  "M-123",
+        "title":  "Average DIA, SYS, Heart Rate v2",
+        "tags":  [
+                     "Average",
+                     "Vitals",
+                     "DIA",
+                     "SYS",
+                     "Heart Rate"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20DIA%2C%20SYS%2C%20Heart%20Rate%20v2.js",
+        "updated":  "2026-07-15"
     }
 ]

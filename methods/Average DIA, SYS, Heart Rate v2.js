@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Calculates average PR, QRS, QT, QTcF, and heart rate. Does not require any item names.
+// Purpose: Calculates average diastolic, systolic BP, and heart rate. Does not require any item names.
 
 var form = formJson.form;
 var attachedItem = itemJson.item;
@@ -38,28 +38,20 @@ function containsStandaloneKeyword(input, keyword) {
 
     return false;
 }
-
 function matchesMetric(itemName, metric) {
     var name = normalizeName(itemName);
-
-    if (metric === "PR") return containsStandaloneKeyword(name, "PR");
-    if (metric === "QRS") return containsStandaloneKeyword(name, "QRS");
-    if (metric === "QT") return name.indexOf("QTC") === -1 && containsStandaloneKeyword(name, "QT");
-    if (metric === "QTCF") return name.indexOf("QTCF") !== -1 || containsStandaloneKeyword(name, "QTC");
-    if (metric === "HR") return containsStandaloneKeyword(name, "HR") || containsStandaloneKeyword(name, "RATE") || containsValue(name, "HEART RATE");
+    if (metric === "SYS") return containsStandaloneKeyword(name, "SYS") || containsStandaloneKeyword(name, "SBP") || containsValue(name, "SYSTOLIC");
+    if (metric === "DIA") return containsStandaloneKeyword(name, "DIA") || containsStandaloneKeyword(name, "DBP") || containsValue(name, "DIASTOLIC");
+    if (metric === "HR") return containsStandaloneKeyword(name, "HR") || containsStandaloneKeyword(name, "PR") || containsValue(name, "HEART RATE") || containsValue(name, "PULSE");
 
     return false;
 }
-
 function getMetricFromAverageItem(itemName) {
     var name = normalizeName(itemName);
 
-    if (containsValue(name, "QTCF")) return "QTCF";
-    if (containsValue(name, "QTC") && !containsValue(name, "QTCF")) return "QTCF";
-    if (containsValue(name, "QT") && !containsValue(name, "QTC")) return "QT";
-    if (containsValue(name, "QRS")) return "QRS";
-    if (containsValue(name, "PR")) return "PR";
-    if (containsValue(name, "HR") || containsValue(name, "HEART RATE") || containsValue(name, "PULSE")) return "HR";
+    if (containsValue(name, "SYS") || containsValue(name, "SBP") || containsValue(name, "SYSTOLIC")) return "SYS";
+    if (containsValue(name, "DIA") || containsValue(name, "DBP") || containsValue(name, "DIASTOLIC")) return "DIA";
+    if (containsValue(name, "HR") || containsValue(name, "PR") || containsValue(name, "HEART RATE") || containsValue(name, "PULSE")) return "HR";
 
     return null;
 }
@@ -110,7 +102,6 @@ function populateList(formJsonValue, metric, attachedItem, isRepeat) {
                 groupItem = items[j];
                 if (!groupItem) continue;
                 if (groupItem.name == attachedItem) return list;
-
                 if (matchesMetric(groupItem.name, metric) && !containsValue(groupItem.name, "average")) {
                     logger(metric + " matched item: " + groupItem.name + " | Value: " + groupItem.value);
                     addNumericValue(list, groupItem.value);
@@ -149,37 +140,27 @@ try {
     logger("Is repeat: " + isRepeat);
 
     var metric = getMetricFromAverageItem(attachedItem.name);
-    logger("Attached Item name: " + attachedItem.name);
-    logger("Metric: " + metric);
+    logger("Attached Item name: " + attachedItem.name)
+    logger("Metric:" + metric)
+    var sysList = populateList(formJson, "SYS", attachedItem.name, isRepeat);
+    var diaList = populateList(formJson, "DIA", attachedItem.name, isRepeat);
+    var hrList = populateList(formJson, "HR", attachedItem.name, isRepeat);
 
-    var PRlist = populateList(formJson, "PR", attachedItem.name, isRepeat);
-    var QRSlist = populateList(formJson, "QRS", attachedItem.name, isRepeat);
-    var QTlist = populateList(formJson, "QT", attachedItem.name, isRepeat);
-    var QTcFlist = populateList(formJson, "QTCF", attachedItem.name, isRepeat);
-    var HRlist = populateList(formJson, "HR", attachedItem.name, isRepeat);
+    logger("Is it a repeat? " + isRepeat);
+    logger("sysList: " + sysList);
+    logger("diaList: " + diaList);
+    logger("hrList: " + hrList);
 
-    logger("PR list: " + PRlist);
-    logger("QRS list: " + QRSlist);
-    logger("QT list: " + QTlist);
-    logger("QTcF list: " + QTcFlist);
-    logger("HR list: " + HRlist);
+    var avgSys = calculateAverage(sysList);
+    var avgDia = calculateAverage(diaList);
+    var avgHR = calculateAverage(hrList);
 
-    var avgPR = calculateAverage(PRlist);
-    var avgQRS = calculateAverage(QRSlist);
-    var avgQT = calculateAverage(QTlist);
-    var avgQTcF = calculateAverage(QTcFlist);
-    var avgHR = calculateAverage(HRlist);
+    logger("Average PR: " + avgSys);
+    logger("AVerage QRS: " + avgDia);
+    logger("Average QT: " + avgHR);
 
-    logger("Average PR: " + avgPR);
-    logger("Average QRS: " + avgQRS);
-    logger("Average QT: " + avgQT);
-    logger("Average QTcF: " + avgQTcF);
-    logger("Average HR: " + avgHR);
-
-    if (metric === "PR") return avgPR;
-    if (metric === "QRS") return avgQRS;
-    if (metric === "QT") return avgQT;
-    if (metric === "QTCF") return avgQTcF;
+    if (metric === "SYS") return avgSys;
+    if (metric === "DIA") return avgDia;
     if (metric === "HR") return avgHR;
 
     return null;

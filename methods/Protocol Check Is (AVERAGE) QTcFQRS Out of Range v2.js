@@ -1,7 +1,11 @@
 /* jshint strict: false */
 
-// Version: v1
-// Purpose: Calculates average PR, QRS, QT, QTcF, and heart rate. Does not require any item names.
+// Version: v2
+// Purpose: Protocol check for averaged QTcF/QRS out-of-range. Does not require any item names.
+
+// Inclusive (Edit)
+var QTcF_max_range = 450;
+var QRS_max_range = 120;
 
 var form = formJson.form;
 var attachedItem = itemJson.item;
@@ -42,26 +46,10 @@ function containsStandaloneKeyword(input, keyword) {
 function matchesMetric(itemName, metric) {
     var name = normalizeName(itemName);
 
-    if (metric === "PR") return containsStandaloneKeyword(name, "PR");
     if (metric === "QRS") return containsStandaloneKeyword(name, "QRS");
-    if (metric === "QT") return name.indexOf("QTC") === -1 && containsStandaloneKeyword(name, "QT");
     if (metric === "QTCF") return name.indexOf("QTCF") !== -1 || containsStandaloneKeyword(name, "QTC");
-    if (metric === "HR") return containsStandaloneKeyword(name, "HR") || containsStandaloneKeyword(name, "RATE") || containsValue(name, "HEART RATE");
 
     return false;
-}
-
-function getMetricFromAverageItem(itemName) {
-    var name = normalizeName(itemName);
-
-    if (containsValue(name, "QTCF")) return "QTCF";
-    if (containsValue(name, "QTC") && !containsValue(name, "QTCF")) return "QTCF";
-    if (containsValue(name, "QT") && !containsValue(name, "QTC")) return "QT";
-    if (containsValue(name, "QRS")) return "QRS";
-    if (containsValue(name, "PR")) return "PR";
-    if (containsValue(name, "HR") || containsValue(name, "HEART RATE") || containsValue(name, "PULSE")) return "HR";
-
-    return null;
 }
 
 function isAverageItem(itemName) {
@@ -72,19 +60,6 @@ function isAverageItem(itemName) {
     return false;
 }
 
-function isAttachedItem(itemName, attachedItem) {
-    return containsValue(attachedItem, itemName);
-}
-
-function calculateAverage(values) {
-    if (values.length === 0) return null;
-    var sum = 0;
-    for (var i = 0; i < values.length; i++) {
-        sum += values[i];
-    }
-    return Math.round(sum / values.length).toString().split('.')[0];
-}
-
 function addNumericValue(list, value) {
     if (value === null || value === undefined || value === "") return;
 
@@ -92,7 +67,7 @@ function addNumericValue(list, value) {
     if (!isNaN(numericValue)) list.push(numericValue);
 }
 
-function populateList(formJsonValue, metric, attachedItem, isRepeat) {
+function populateList(formJsonValue, metric, attachedItemName, isRepeat) {
     var itemGroups = formJsonValue.form.itemGroups;
     var list = [];
     var group, items, groupItem, i, j;
@@ -109,15 +84,15 @@ function populateList(formJsonValue, metric, attachedItem, isRepeat) {
             for (j = 0; j < items.length; j++) {
                 groupItem = items[j];
                 if (!groupItem) continue;
-                if (groupItem.name == attachedItem) return list;
-
-                if (matchesMetric(groupItem.name, metric) && !containsValue(groupItem.name, "average")) {
-                    logger(metric + " matched item: " + groupItem.name + " | Value: " + groupItem.value);
+                if (groupItem.name == attachedItemName) return list;
+                if (matchesMetric(groupItem.name, metric) && !isAverageItem(groupItem.name)) {
                     addNumericValue(list, groupItem.value);
+                    if (list.length >= 3) return list;
                 }
             }
         }
-    } else {
+    }
+    else {
         for (i = itemGroups.length - 1; i >= 0; i--) {
             group = itemGroups[i];
             if (!group || group.canceled || !group.items) continue;
@@ -127,11 +102,10 @@ function populateList(formJsonValue, metric, attachedItem, isRepeat) {
             for (j = items.length - 1; j >= 0; j--) {
                 groupItem = items[j];
                 if (!groupItem) continue;
-                if (groupItem.name == attachedItem && list.length > 1) return list;
-
-                if (matchesMetric(groupItem.name, metric) && !containsValue(groupItem.name, "average")) {
-                    logger(metric + " matched item: " + groupItem.name + " | Value: " + groupItem.value);
+                if (groupItem.name == attachedItemName && list.length > 1) return list;
+                if (matchesMetric(groupItem.name, metric) && !isAverageItem(groupItem.name)) {
                     addNumericValue(list, groupItem.value);
+                    if (list.length >= 3) return list;
                 }
             }
         }
@@ -140,49 +114,44 @@ function populateList(formJsonValue, metric, attachedItem, isRepeat) {
     return list;
 }
 
+function calculateAverage(values) {
+    if (values.length === 0) return null;
+    var sum = 0;
+    var count = 0;
+
+    for (var i = 0; i < values.length; i++) {
+        if (isNaN(values[i])) continue;
+        else sum += values[i];
+        count++;
+    }
+    if (count === 0) return null;
+
+    var avg = sum / count;
+    return avg;
+}
+
 try {
     var rawGroupName = getItemDataContextByItemDataId(attachedItem.id);
     var parsedGroupName = JSON.parse(rawGroupName).foundItemGroupName;
     var isRepeat = parsedGroupName ? containsValue(parsedGroupName, "repeat") : false;
 
-    logger("Group name: " + parsedGroupName);
-    logger("Is repeat: " + isRepeat);
-
-    var metric = getMetricFromAverageItem(attachedItem.name);
-    logger("Attached Item name: " + attachedItem.name);
-    logger("Metric: " + metric);
-
-    var PRlist = populateList(formJson, "PR", attachedItem.name, isRepeat);
-    var QRSlist = populateList(formJson, "QRS", attachedItem.name, isRepeat);
-    var QTlist = populateList(formJson, "QT", attachedItem.name, isRepeat);
     var QTcFlist = populateList(formJson, "QTCF", attachedItem.name, isRepeat);
-    var HRlist = populateList(formJson, "HR", attachedItem.name, isRepeat);
+    var QRSlist = populateList(formJson, "QRS", attachedItem.name, isRepeat);
 
-    logger("PR list: " + PRlist);
-    logger("QRS list: " + QRSlist);
-    logger("QT list: " + QTlist);
+    var QTcFavg = calculateAverage(QTcFlist);
+    var QRSavg = calculateAverage(QRSlist);
+
     logger("QTcF list: " + QTcFlist);
-    logger("HR list: " + HRlist);
+    logger("QRS list: " + QRSlist);
+    logger("QTcF average: " + QTcFavg);
+    logger("QRS average: " + QRSavg);
 
-    var avgPR = calculateAverage(PRlist);
-    var avgQRS = calculateAverage(QRSlist);
-    var avgQT = calculateAverage(QTlist);
-    var avgQTcF = calculateAverage(QTcFlist);
-    var avgHR = calculateAverage(HRlist);
+    if (QTcFlist.length < 3 || QRSlist.length < 3) return attachedItem.codeListItems[0].codedValue; // return pending result
 
-    logger("Average PR: " + avgPR);
-    logger("Average QRS: " + avgQRS);
-    logger("Average QT: " + avgQT);
-    logger("Average QTcF: " + avgQTcF);
-    logger("Average HR: " + avgHR);
+    if (QTcFavg > QTcF_max_range || QRSavg > QRS_max_range) return attachedItem.codeListItems[2].codedValue; // return Out of protocol range
+    else if (QTcFavg <= QTcF_max_range || QRSavg > QRS_max_range) return attachedItem.codeListItems[1].codedValue; // return within protocol range
 
-    if (metric === "PR") return avgPR;
-    if (metric === "QRS") return avgQRS;
-    if (metric === "QT") return avgQT;
-    if (metric === "QTCF") return avgQTcF;
-    if (metric === "HR") return avgHR;
-
-    return null;
+    return attachedItem.codeListItems[0].codedValue;
 } catch (e) {
     logger("Error in main execution logic: " + e);
     return null;
