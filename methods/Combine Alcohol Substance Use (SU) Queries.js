@@ -21,6 +21,87 @@ function pullItemFromForm(form, targetItem, itemid) {
     return list;
 }
 
+function getAmountFrequencyPairs(form, itemid) {
+    var itemGroups = form.form.itemGroups;
+    var pairs = [];
+    var group;
+    var item;
+    var i;
+    var j;
+
+    if (!itemGroups || itemGroups.length < 1) {
+        return pairs;
+    }
+
+    for (i = 0; i < itemGroups.length; i++) {
+        group = itemGroups[i];
+
+        if (!group || group.canceled || !containsValue(group.name, "alcohol")) {
+            continue;
+        }
+
+        var amount = null;
+        var frequency = null;
+
+        for (j = 0; j < group.items.length; j++) {
+            item = group.items[j];
+
+            if (item.canceled || item.id == itemid) {
+                continue;
+            }
+
+            if (item.name == "SU_Amount" && item.value != null && item.value != "-") {
+                amount = Number(item.value);
+            }
+
+            if (item.name == "SU_Frequency" && item.value != null && item.value != "-") {
+                frequency = item.value;
+            }
+        }
+
+        if (amount != null && frequency != null) {
+            pairs.push({
+                amount: amount,
+                frequency: frequency
+            });
+        }
+    }
+
+    return pairs;
+}
+
+function getFrequencyMultiplier(fromRank, toRank) {
+    if (fromRank == toRank) {
+        return 1;
+    }
+
+    if (fromRank == 1 && toRank == 2) {
+        return 7;
+    }
+
+    if (fromRank == 2 && toRank == 1) {
+        return 1 / 7;
+    }
+
+    if (fromRank == 1 && toRank == 3) {
+        return 30;
+    }
+
+    if (fromRank == 3 && toRank == 1) {
+        return 1 / 30;
+    }
+
+    if (fromRank == 2 && toRank == 3) {
+        return 4;
+    }
+
+    if (fromRank == 3 && toRank == 2) {
+        return 1 / 4;
+    }
+
+    return 1;
+}
+
 function normalizeItemName(name) {
     if (!name) return "";
     return name.toString().replace(/\s+/g, "").toLowerCase();
@@ -132,32 +213,47 @@ function getSortableDate(dateString) {
 try {
     var amount = null;
     var values = [];
+
     if (item.name == "SU_Amount") {
-        values = pullItemFromForm(formJson, ["SU_Amount"], item.id);
-        amount = 0;
+
+        var pairs = getAmountFrequencyPairs(formJson, item.id);
+        if (pairs.length == 0) {
+            return "-";
+        }
         
-        for (var i = 0; i < values.length; i++) {
-            if (values[i] != "-" && values[i] != null) {
-                amount += Number(values[i]);
+        var targetRank = 0;
+        
+        for (var i = 0; i < pairs.length; i++) {
+            var rank = getFrequencyRank(pairs[i].frequency);
+        
+            if (rank > targetRank) {
+                targetRank = rank;
             }
         }
-        if (amount == null || amount == 0) return "-";
-        return amount.toFixed(0);
+
+        var totalAmount = 0;
+        for (var i = 0; i < pairs.length; i++) {
+            var sourceRank = getFrequencyRank(pairs[i].frequency);
+            totalAmount += pairs[i].amount * getFrequencyMultiplier(sourceRank, targetRank);
+            logger("Total amount: " + totalAmount)
+        }
+
+        return totalAmount.toFixed(0);
     }
     if (item.name == "SU_Frequency") {
         values = pullItemFromForm(formJson, ["SU_Frequency"], item.id);
-    
-        var bestRank = 999;
-    
+        var bestRank = 0;
+        
         for (var i = 0; i < values.length; i++) {
             var rank = getFrequencyRank(values[i]);
-            if (rank < bestRank) {
+        
+            if (rank > bestRank) {
                 bestRank = rank;
             }
         }
-    
+        logger(bestRank)
         var frequency = getFrequencyName(bestRank);
-    
+        logger(frequency)
         if (frequency == null) return "-";
         return frequency;
     }

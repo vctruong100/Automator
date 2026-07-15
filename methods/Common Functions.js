@@ -263,8 +263,42 @@ function collectCompletedByTimepoint(formDataArray, INCLUDE_NONCONFORMANT_DATA) 
 // The block below demonstrates how to retrieve related item data contexts.
 // Uncomment and adjust the item name as needed for your specific automation.
 //
-var relatedItemDataContext = JSON.parse(getRelatedItemDataContext('BE_Date of sample 2'));
+var item = itemJson.item;
+
+var relatedItemDataContext = JSON.parse(getRelatedItemDataContext('💧GenX Screening Urinalysis + UDS'));
 var itemDataContext = JSON.parse(getRelatedItemDataContext());
 var transferBarcodes = relatedItemDataContext.transferBarcodes;
 logger(JSON.stringify(relatedItemDataContext, null, 2));
-return transferBarcodes;
+
+var rawgroupName = getItemDataContextByItemDataId(item.id);
+logger(JSON.stringify(JSON.parse(rawgroupName), null, 2))
+var parsedGroupName = JSON.parse(rawgroupName).foundItemGroupName;
+
+var itemDataContext = JSON.parse(getItemDataContext());
+logger(JSON.stringify(itemDataContext, null, 2));
+/*
+getRelatedItemDataContext()
+{
+"collectedBarcodes": "F6516739-C7",
+"transferBarcodes": "F6516739-C7",
+"foundItemDataId": 6516739,
+"foundItemName": "💧GenX Screening Urinalysis + UDS",
+"foundItemGroupName": "GenX Screening UA/UDS"
+}
+getItemDataContextByItemDataId()
+{
+"collectedBarcodes": "F006516738",
+"transferBarcodes": "",
+"foundItemDataId": 6516738,
+"foundItemName": "LAB_Fasting Check for lab orders",
+"foundItemGroupName": "GenX Screening UA/UDS"
+}
+getItemDataContext()
+{
+"itemDataId": 6516738,
+"itemGroupDataId": 1408074,
+"formDataId": 524212,
+"siteName": "CenExel ACT",
+"investigatorName": "Dr. Peter Winkle (Labs can repeat ONCE only for SCRN & Day-1 for eligibility)",
+"investigatorId": ""
+} */
