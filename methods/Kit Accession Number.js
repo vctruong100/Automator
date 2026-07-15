@@ -107,8 +107,7 @@ try {
     else if (containsValue(currentStudyEvent, "day 5")) form = pullForm(D5events, formNames);
     else if (containsValue(currentStudyEvent, "d15")) form = pullForm(D15events, formNames);
     else if (containsValue(currentStudyEvent, "d14")) form = pullForm(D14events, formNames);
-    else if (containsValue(currentStudyEvent, "day 1")) form = pullForm(D1events, formNames);
-    else if (containsValue(currentStudyEvent, "d1")) form = pullForm(D1events, d1FormNames);
+    else if (containsValue(currentStudyEvent, "day 1") || containsValue(currentStudyEvent, "d1")) form = pullForm(D1events, formNames);
 
     if (!form) return null;
     return pullItemFromForm(form, itemName);

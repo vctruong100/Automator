@@ -1,48 +1,39 @@
-const formNames = [
+var formNames = [
     "REV_Review Questions (w/ Glucose monitoring) v3.0",
     "REV_Review Questions (w/ Glucose monitoring) (D36, D43, D50, D57, D64, D71, D78, D80, D81, D98, Early discontinuation) v3.0"
-]
+];
 
-const itemName = [
+var itemName = [
     "Visit Date",
-]
+];
 
-const studyeventMap = {
+var studyevent = formJson.form.studyEventName;
+var screeningNumber = formJson.form.subject.screeningNumber;
+logger("Subject ID: " + screeningNumber);
+
+if (studyevent === "Unscheduled") {
+    if (screeningNumber === "000500008") return 2;
+    else if (screeningNumber === "000500007") return 5;
+} 
+
+var item = itemJson.item;/*
+if (item && item.value !== null) {
+    logger('Current item is already set: ' + item.value + '. Skipping.');
+    return item.value;
+} else {
+    logger('No value set for the current item. Proceeding with calculation.');
+}
+*/
+
+var studyeventMap = {
     "Wk7 Day 43": "Wk6 Day 38",
     "Wk8 Day 50": "Wk7 Day 43",
     "Wk9 Day 57": "Wk8 Day 50",
     "Wk10 Day 64": "Wk9 Day 57",
     "Wk11 Day 71": "Wk10 Day 64",
     "Wk12 Day 78": "Wk11 Day 71",
-    "Wk12 Day 84": "Wk12 Day 79",
+    "Wk12 Day 84": "Wk12 Day 78",
 };
-
-const dispensedItem = [
-    "Number of tablets dispensed:",    
-]
-
-const prescribedItem = [
-    "Number of tablets prescribed per day:",    
-]
-
-const studyevent = formJson.form.studyEventName;
-
-const screeningNumber = formJson.form.subject.screeningNumber;
-logger("Subject ID: " + screeningNumber);
-
-var item = itemJson.item;
-/*if (item && item.value !== null) {//Overwrite protection
-    if (item.value <= 0) return (0).toFixed(0);
-    logger('Current item is already set: ' + item.value + '. Skipping.');
-    return item.value;
-} else {
-    logger('No value set for the current item. Proceeding with calculation.');
-}*/
-
-if (studyevent === "Unscheduled") {
-    if (screeningNumber === "000500008") return 14;
-    else if (screeningNumber === "000500007") return 2;
-} 
 
 function pullItemFromForm(form, targetItem) {
     var itemGroups = form.form.itemGroups;
@@ -94,14 +85,16 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
 
 try {
     var expecteddays = 0;
-    var day = parseInt(studyevent.split(" ")[2]); //Wk7 Day 43 -> 43
+    logger(studyevent);
+    const day = parseInt(studyevent.split(" ")[2]);
     
-    if (day == 84) expecteddays = 5;
+    if (day == 84) return 5;
     
-    var prevDay = studyeventMap[studyevent];
-    logger("studyevent: " + studyevent + ", previous visit: " + prevDay)
+    const prevDay = studyeventMap[studyevent];
+    logger("studyevent: " + studyevent + ", previous visit: " + prevDay);
     var pastVisitform = pullForm([prevDay], formNames);
     var currentVisitform = pullForm([studyevent], formNames);
+    
     if (!pastVisitform && expecteddays == 0) {
         if (day > 43 && day <= 84) expecteddays = 7;
         else if (day <= 43) expecteddays = 4;
@@ -136,22 +129,8 @@ try {
         logger("Date Difference: " + diffDays);
         logger("Expected Days: " + expecteddays);
     }
-    var dispensed = parseFloat(pullItemFromForm(formJson, dispensedItem));
-    var prescribed = parseFloat(pullItemFromForm(formJson, prescribedItem));
-    if (!dispensed || dispensed == null || !prescribed || prescribed == null) return null;
-    
-    logger("Current Day: " + day);
-    logger("expectedDays: " + expecteddays);
-    
-    var totalPrescribed = expecteddays * prescribed;
-    logger("Tablets Dispensed: " + dispensed)
-    logger("Tablet Prescribed: " + totalPrescribed)
-    var expectedReturn = dispensed - totalPrescribed;
-    if (expectedReturn <= 0) expectedReturn = 0;
-    return String(expectedReturn.toFixed(0));
-
+    return expecteddays.toFixed(0);
 } catch (e) {
     logger("Error in main execution logic: " + e.message);
     return null;
 }
-

@@ -186,7 +186,7 @@
                      "Accession Number"
                  ],
         "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Kit%20Accession%20Number.js",
-        "updated":  "2026-02-12"
+        "updated":  "2026-07-15"
     },
     {
         "id":  "M-022",
@@ -663,7 +663,7 @@
                      "Tablets"
                  ],
         "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Expected%20Number%20of%20Tablets%20Returned.js",
-        "updated":  "2026-06-11"
+        "updated":  "2026-07-15"
     },
     {
         "id":  "M-092",
@@ -1029,6 +1029,17 @@
                      "Heart Rate"
                  ],
         "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20DIA%2C%20SYS%2C%20Heart%20Rate%20v2.js",
+        "updated":  "2026-07-15"
+    },
+    {
+        "id":  "M-124",
+        "title":  "Expected Days",
+        "tags":  [
+                     "Expected",
+                     "Days",
+                     "Visit"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Expected%20Days.js",
         "updated":  "2026-07-15"
     }
 ]
