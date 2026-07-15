@@ -17,29 +17,18 @@ var d1FormNames = [
     "(*)🩸D1, D2, D3, D4, D7, D10, D14_Predose_Safety Labs + PD/PK - 6 TUBES",
     "(*)🩸D1, D2, D3, D4, D7, D10, D14_Predose_Safety Labs + PD/PK - 6 TUBES V2",
 ]
+
 var itemName = ["Process No.", "Kit Accession Number"];
 var currentStudyEvent = formJson.form.studyEventName;
 
 var form = null;
 logger("Study event: " + currentStudyEvent);
 
-var D1events = [
-    "Day 1 P2 (0.5hr)",
-    "D1 (PRE)",
-];
-var D5events = [
-    "D5 (PRE) -1h",
-]
-var D14events = [
-    "D14 (PRE) -1h",
-];
-
-var D15events = [
-    "D15 (24hr)"
-];
-var D18events = [
-    "Day 18 (PRE)"
-]
+var D1events = ["Day 1 P2 (0.5hr)", "D1 (PRE)"];
+var D5events = ["D5 (PRE) -1h"];
+var D14events = ["D14 (PRE) -1h"];
+var D15events = ["D15 (24hr)"];
+var D18events = ["Day 18 (PRE)"];
 
 function normalizeItemName(name) {
     if (!name) return "";
@@ -57,6 +46,7 @@ function containsItemName(itemList, itemName) {
     return false;
 }
 function pullForm(studyeventList, formNameList) {
+    logger("Study events: " + studyeventList)
     for (var i = 0; i < studyeventList.length; i++) {
         for (var j = formNameList.length - 1; j >= 0; j--) {
             var temp = checkForm(studyeventList[i], formNameList[j]);
@@ -113,31 +103,16 @@ function containsValue(input, keyword) {
 }
 
 try {
-    if (containsValue(currentStudyEvent, "day 18")) {
-        logger('P5 D18');
-        form = pullForm(D18events, formNames);
-    }
-    else if (containsValue(currentStudyEvent, "day 5")) {
-        logger("P2 D5");
-        form = pullForm(D5events, formNames);
-    }
-    else if (containsValue(currentStudyEvent, "d15")) {
-        form = pullForm(D15events, formNames);
-    }
-    else if (containsValue(currentStudyEvent, "d14")) {
-        form = pullForm(D14events, formNames);
-    }
-    else if (containsValue(currentStudyEvent, "day 1")) {
-        form = pullForm(D1events, formNames);
-    }
-    else if (containsValue(currentStudyEvent, "d1")) {
-        form = pullForm(D1events, d1FormNames);
-    }
+    if (containsValue(currentStudyEvent, "day 18")) form = pullForm(D18events, formNames);
+    else if (containsValue(currentStudyEvent, "day 5")) form = pullForm(D5events, formNames);
+    else if (containsValue(currentStudyEvent, "d15")) form = pullForm(D15events, formNames);
+    else if (containsValue(currentStudyEvent, "d14")) form = pullForm(D14events, formNames);
+    else if (containsValue(currentStudyEvent, "day 1")) form = pullForm(D1events, formNames);
+    else if (containsValue(currentStudyEvent, "d1")) form = pullForm(D1events, d1FormNames);
 
     if (!form) return null;
-    var result = pullItemFromForm(form, itemName);
+    return pullItemFromForm(form, itemName);
 
-    return result;
 } catch (e) {
     logger("Error in main execution logic: " + e);
     return null;

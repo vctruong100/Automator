@@ -1,6 +1,6 @@
 var item = itemJson.item;
 
-function pullItemFromForm(form, targetItem) {
+function pullItemFromForm(form, targetItem, itemid) {
     var itemGroups = form.form.itemGroups;
     var group, item, i, j;
     var list = [];
@@ -12,7 +12,7 @@ function pullItemFromForm(form, targetItem) {
 
         for (j = 0; j < group.items.length; j++) {
             item = group.items[j];
-            if (containsItemName(targetItem, item.name) && item.value !== null && !item.canceled && item.value !== "") {
+            if (containsItemName(targetItem, item.name) && item.value !== null && !item.canceled && item.value !== "" && item.id !== itemid) {
                 logger("Item value:" + item.value)
                 list.push(item.value);
             }
@@ -133,7 +133,7 @@ try {
     var amount = null;
     var values = [];
     if (item.name == "SU_Amount") {
-        values = pullItemFromForm(formJson, ["SU_Amount"]);
+        values = pullItemFromForm(formJson, ["SU_Amount"], item.id);
         amount = 0;
         
         for (var i = 0; i < values.length; i++) {
@@ -145,7 +145,7 @@ try {
         return amount.toFixed(0);
     }
     if (item.name == "SU_Frequency") {
-        values = pullItemFromForm(formJson, ["SU_Frequency"]);
+        values = pullItemFromForm(formJson, ["SU_Frequency"], item.id);
     
         var bestRank = 999;
     
@@ -162,26 +162,30 @@ try {
         return frequency;
     }
     if (["SU_Unit TEST", "SU_Unit"].indexOf(item.name) !== -1) {
-        values = pullItemFromForm(formJson, ["SU_Unit TEST", "SU_Unit"])
-        var hasDrink = false;
+        values = pullItemFromForm(formJson, ["SU_Occurrence"], item.id);
+        var occurred = false;
+        if (containsValue(values, "true")) return "DRINK";
+        return "-";
+        // values = pullItemFromForm(formJson, ["SU_Unit TEST", "SU_Unit"])
+        // var hasDrink = false;
 
-        for (var i = 0; i < values.length; i++) {
-            if (values[i] != "-") {
-                hasDrink = true;
-                break;
-            }
-        }
+        // for (var i = 0; i < values.length; i++) {
+        //     if (values[i] != "-") {
+        //         hasDrink = true;
+        //         break;
+        //     }
+        // }
         
-        return hasDrink ? "DRINK" : "-";
+        // return hasDrink ? "DRINK" : "-";
     }
     if (item.name == "SU_Occurrence") {
-        values = pullItemFromForm(formJson, ["SU_Occurrence"]);
+        values = pullItemFromForm(formJson, ["SU_Occurrence"], item.id);
         var occurred = false;
         if (containsValue(values, "true")) return "True";
         return "False";
     }
     if (item.name == "SU_Start Date") {
-        values = pullItemFromForm(formJson, ["SU_Start Date"]);
+        values = pullItemFromForm(formJson, ["SU_Start Date"], item.id);
     
         var earliestValue = null;
         var earliestSortable = null;
@@ -202,7 +206,7 @@ try {
         return earliestValue;
     }
     if (item.name == "SU_End Date") {
-        values = pullItemFromForm(formJson, ["SU_End Date"]);
+        values = pullItemFromForm(formJson, ["SU_End Date"], item.id);
     
         var latestValue = null;
         var latestSortable = null;
