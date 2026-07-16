@@ -1041,5 +1041,14 @@
                  ],
         "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Expected%20Days.js",
         "updated":  "2026-07-15"
+    },
+    {
+        "id":  "M-125",
+        "title":  "ECG Interpretation Cleaner (For Data Transfer)",
+        "tags":  [
+                     "ECG"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/ECG%20Interpretation%20Cleaner%20%28For%20Data%20Transfer%29.js",
+        "updated":  "2026-07-16"
     }
 ]

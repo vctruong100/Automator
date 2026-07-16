@@ -33592,6 +33592,52 @@
         return popup;
     }
 
+    function arShowConfirmPanel(tasks, onConfirm) {
+        var container = document.createElement("div");
+        container.style.cssText = "padding:20px;text-align:center;";
+
+        var icon = document.createElement("div");
+        icon.innerHTML = "⚠️";
+        icon.style.fontSize = "48px";
+        icon.style.marginBottom = "15px";
+
+        var title = document.createElement("div");
+        title.textContent = "Confirm Auto-Resaver";
+        title.style.cssText = "font-size:18px;font-weight:bold;color:#ff6b6b;margin-bottom:10px;";
+
+        var message = document.createElement("div");
+        message.style.cssText = "font-size:14px;color:#ccc;margin-bottom:20px;";
+        message.innerHTML = "You are about to automatically resave <strong>" + tasks.length + "</strong> unique form(s) on page " + arGetCurrentPage() + " of " + arGetTotalPages() + ".<br><br>This action will open each form, trigger collection, and save changes. Please confirm before proceeding.";
+
+        var btnContainer = document.createElement("div");
+        btnContainer.style.cssText = "display:flex;justify-content:center;gap:12px;";
+
+        var cancelBtn = document.createElement("button");
+        cancelBtn.textContent = "Cancel";
+        cancelBtn.style.cssText = "background:#555;color:#fff;border:none;border-radius:4px;padding:8px 24px;cursor:pointer;font-size:14px;";
+
+        var confirmBtn = document.createElement("button");
+        confirmBtn.textContent = "Confirm";
+        confirmBtn.style.cssText = "background:#d93025;color:#fff;border:none;border-radius:4px;padding:8px 24px;cursor:pointer;font-size:14px;font-weight:600;";
+
+        btnContainer.appendChild(cancelBtn);
+        btnContainer.appendChild(confirmBtn);
+        container.appendChild(icon);
+        container.appendChild(title);
+        container.appendChild(message);
+        container.appendChild(btnContainer);
+
+        var popup = createPopup({ title: "Auto-Resaver - Confirm", content: container, width: "420px", height: "auto" });
+
+        cancelBtn.addEventListener("click", function() { popup.close(); });
+        confirmBtn.addEventListener("click", function() {
+            popup.close();
+            onConfirm();
+        });
+
+        return popup;
+    }
+
     function arParseTable() {
         var tbody = document.querySelector("tbody#studyDataTableBody");
         if (!tbody) return [];
@@ -34347,14 +34393,16 @@
             arShowWarning("No Data Found", 'The study data table does not contain any rows with a "Collect" action.');
             return;
         }
-        arClearState();
-        arSetStop(false);
-        try { localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_AUTO_RESAVER); } catch (e) {}
-        arSaveState({ processedKeys: [], currentPage: arGetCurrentPage(), totalPages: arGetTotalPages() });
-        arShowProgress();
-        arSetStatus("Starting Auto-Resaver — " + tasks.length + " unique form(s) on page " + arGetCurrentPage());
-        await sleep(500);
-        await arProcessCurrentPage();
+        arShowConfirmPanel(tasks, async function() {
+            arClearState();
+            arSetStop(false);
+            try { localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_AUTO_RESAVER); } catch (e) {}
+            arSaveState({ processedKeys: [], currentPage: arGetCurrentPage(), totalPages: arGetTotalPages() });
+            arShowProgress();
+            arSetStatus("Starting Auto-Resaver — " + tasks.length + " unique form(s) on page " + arGetCurrentPage());
+            await sleep(500);
+            await arProcessCurrentPage();
+        });
     }
 
     function isPaused() {
