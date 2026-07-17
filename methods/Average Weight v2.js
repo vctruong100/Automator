@@ -42,7 +42,7 @@ function containsStandaloneKeyword(input, keyword) {
 function matchesMetric(itemName, metric) {
     var name = normalizeName(itemName);
 
-    if (metric === "WEIGHT") return containsStandaloneKeyword(name, "WEIGHT");
+    if (metric === "WEIGHT") return containsStandaloneKeyword(name, "WEIGHT") || containsStandaloneKeyword(name, "WT");
 
     return false;
 }

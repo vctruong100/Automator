@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     3.5.1
+// @version     3.5.2
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -35453,6 +35453,8 @@
         progressLog.style.wordBreak = "break-word";
         progressRoot.appendChild(progressLog);
 
+        var processingFinished = false;
+
         var progressPopup = createPopup({
             title: EDIT_SE_FEATURE_NAME + " — Processing",
             content: progressRoot,
@@ -35460,6 +35462,8 @@
             height: "auto",
             maxHeight: "80%",
             onClose: function() {
+                if (processingFinished) return;
+                if (EDIT_SE_CANCELED) return;
                 EDIT_SE_CANCELED = true;
                 log("[EditSE] Processing canceled by user");
             }
@@ -35723,6 +35727,7 @@
 
         // Close progress popup and show summary
         // (Only reached if Add Batch didn't reload the page, or if there were no adds)
+        processingFinished = true;
         try { progressPopup.close(); } catch (e5) {}
 
         var hadErrors = aborted || EDIT_SE_CANCELED || updateErrors > 0;
