@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     3.5.0
+// @version     3.5.1
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -22793,15 +22793,60 @@
                         reject(error);
                     }
                 });
-            } else {
-                reject(new Error("GM.xmlHttpRequest not available"));
+                return;
             }
+            var req = new XMLHttpRequest();
+            req.open("GET", url, true);
+            req.withCredentials = true;
+            req.onreadystatechange = function() {
+                if (req.readyState === 4) {
+                    if (req.status >= 200 && req.status < 300) {
+                        resolve(req.responseText);
+                    } else {
+                        reject(new Error("HTTP " + req.status + " fetching " + url));
+                    }
+                }
+            };
+            req.onerror = function() { reject(new Error("XMLHttpRequest error fetching " + url)); };
+            req.send();
         });
     }
 
     function parseHtml(htmlString) {
         var parser = new DOMParser();
         return parser.parseFromString(htmlString, "text/html");
+    }
+
+    function submitForm(url, body) {
+        return new Promise(function(resolve, reject) {
+            if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") {
+                GM.xmlHttpRequest({
+                    method: "POST",
+                    url: url,
+                    data: body,
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    onload: function(response) { resolve(response.responseText); },
+                    onerror: function(error) { reject(error); }
+                });
+                return;
+            }
+            var req = new XMLHttpRequest();
+            req.open("POST", url, true);
+            req.withCredentials = true;
+            req.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+            req.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+            req.onreadystatechange = function() {
+                if (req.readyState === 4) {
+                    if (req.status >= 200 && req.status < 300) {
+                        resolve(req.responseText);
+                    } else {
+                        reject(new Error("HTTP " + req.status + " posting to " + url));
+                    }
+                }
+            };
+            req.onerror = function() { reject(new Error("XMLHttpRequest error posting to " + url)); };
+            req.send(body);
+        });
     }
 
     function containsNumber(str) {
@@ -35078,6 +35123,7 @@
                 if (filter && rows[ri].name.toLowerCase().indexOf(filter) === -1) continue;
                 (function(idx) {
                     var tr = document.createElement("tr");
+                    tr.setAttribute("data-editse-idx", idx);
                     tr.setAttribute("draggable", "true");
                     tr.style.cursor = "grab";
                     tr.style.background = idx === selectedIdx ? (glass ? "rgba(167,139,250,0.22)" : "rgba(91,67,199,0.25)") : getRowColor(rows[idx].status);
@@ -35159,32 +35205,43 @@
             return d.innerHTML;
         }
 
+        function getVisibleIndices() {
+            var filter = searchInput.value.trim().toLowerCase();
+            var list = [];
+            for (var vi = 0; vi < rows.length; vi++) {
+                if (!filter || rows[vi].name.toLowerCase().indexOf(filter) !== -1) list.push(vi);
+            }
+            return list;
+        }
+
+        function moveSelection(delta) {
+            var visible = getVisibleIndices();
+            if (visible.length === 0) return;
+            var currentPos = -1;
+            for (var vi = 0; vi < visible.length; vi++) {
+                if (visible[vi] === selectedIdx) { currentPos = vi; break; }
+            }
+            var nextPos = currentPos + delta;
+            if (nextPos < 0) nextPos = visible.length - 1;
+            if (nextPos >= visible.length) nextPos = 0;
+            selectedIdx = visible[nextPos];
+            showEditPanel(selectedIdx);
+            renderTable();
+            var targetTr = tableBody.querySelector('tr[data-editse-idx="' + selectedIdx + '"]');
+            if (targetTr) targetTr.scrollIntoView({ block: "nearest" });
+        }
+
         function showEditPanel(idx) {
             editBox.style.display = "flex";
             var r = rows[idx];
             editNameInput.value = r.name;
             editReasonInput.value = r.reason || "Update";
             editReasonInput.disabled = (r.status === "added");
+            editNameInput.focus();
+            editNameInput.select();
         }
 
         function validate() {
-            var errors = [];
-            var nameMap = {};
-            for (var vi = 0; vi < rows.length; vi++) {
-                var key = rows[vi].name.trim().toLowerCase();
-                if (!nameMap[key]) nameMap[key] = 0;
-                nameMap[key]++;
-            }
-            var dupCount = 0;
-            for (var dk in nameMap) {
-                if (nameMap.hasOwnProperty(dk) && nameMap[dk] > 1) {
-                    dupCount += nameMap[dk];
-                }
-            }
-            if (dupCount > 0) {
-                errors.push("Duplicate study events found " + dupCount + " times");
-            }
-
             var hasChanges = false;
             for (var hi = 0; hi < rows.length; hi++) {
                 if (rows[hi].status === "added" || rows[hi].status === "updated") {
@@ -35193,13 +35250,13 @@
                 }
             }
 
-            errorMsg.textContent = errors.join("; ");
+            errorMsg.textContent = "";
 
-            var canConfirm = errors.length === 0 && hasChanges && !locked;
+            var canConfirm = hasChanges && !locked;
             confirmBtn.disabled = !canConfirm;
             confirmBtn.style.opacity = canConfirm ? "1" : "0.5";
             confirmBtn.style.cursor = canConfirm ? "pointer" : "default";
-            return errors.length === 0;
+            return true;
         }
 
         // Sort button
@@ -35244,13 +35301,6 @@
             if (locked) return;
             var val = addInput.value.trim();
             if (!val) { addError.textContent = "Name cannot be empty"; return; }
-            // check duplicate
-            for (var ai = 0; ai < rows.length; ai++) {
-                if (rows[ai].name.trim().toLowerCase() === val.toLowerCase()) {
-                    addError.textContent = "Duplicate: \"" + val + "\" already exists";
-                    return;
-                }
-            }
             addError.textContent = "";
             var newRow = { name: val, href: null, originalName: null, status: "added", reason: "" };
             rows.push(newRow);
@@ -35289,6 +35339,14 @@
             }
             renderTable();
             validate();
+        });
+
+        // Tab navigation in name field moves to next/previous visible row
+        editNameInput.addEventListener("keydown", function(e) {
+            if (e.key === "Tab") {
+                e.preventDefault();
+                moveSelection(e.shiftKey ? -1 : 1);
+            }
         });
 
         // Edit reason live
