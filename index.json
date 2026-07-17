@@ -38,7 +38,7 @@
                      "BMI"
                  ],
         "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/BM_BMI.js",
-        "updated":  "2026-02-12"
+        "updated":  "2026-07-17"
     },
     {
         "id":  "M-006",
@@ -233,7 +233,7 @@
                      "BMI"
                  ],
         "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Is%20BMI%20within%20range.js",
-        "updated":  "2026-02-12"
+        "updated":  "2026-07-17"
     },
     {
         "id":  "M-034",

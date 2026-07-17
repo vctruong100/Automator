@@ -1,72 +1,154 @@
 /* jshint strict: false */
 
-// Version: v1
+// Version: v2
 // Purpose: Protocol BMI range validation.
-
-// Add item names
-var heightitemList = [
-    "VS_HEIGHT"
-];
-var weightitemList = [
-    "VS_WEIGHT"
-];
-var screeningStudyEvent = ["Screening",];
-
-var screeningBMI_Form = [
-    "📏 BM_SCRN | HEIGHT | WEIGHT | BMI"
-];
+// Item-name independent: matches HEIGHT / WEIGHT via standalone keyword checks.
 
 // inclusive
 var BMI_lower_range = 18;
 var BMI_upper_range = 30;
 
-function normalizeItemName(name) {
-    if (!name) return "";
-    return name.toString().replace(/\s+/g, "").toLowerCase();
-}
+var currentStudyEvent = formJson.form.studyEventName;
+var item = itemJson.item;
+var sigfig = 1;
 
-function containsItemName(itemList, itemName) {
-    var normalizedName = normalizeItemName(itemName);
+var screeningStudyEvent = ["Screening", "SCREENING"];
+var screeningBMI_Form = [
+    "📏 BM_SCRN | HEIGHT | WEIGHT | BMI",
+    "BM_Height / Weight / BMI",
+    "BM_Height/Weight/BMI",
+    "📏 SCREEN BODY MEASUREMENTS (HEIGHT / WEIGHT / BMI)",
+    "📏 BM_BODY MEASUREMENTS (HEIGHT / WEIGHT / BMI)"
+];
 
-    for (var i = 0; i < itemList.length; i++) {
-        if (normalizeItemName(itemList[i]) === normalizedName) {
-            return true;
-        }
-    }
-    return false;
-}
-
-function populateList(form, targetItem) {
-    var itemGroups = form.form.itemGroups;
-    var group, items, item, i, j, value;
-    var count = 0;
-    var list = [];
-	if (!itemGroups || itemGroups.length < 1) return null;
-
-    for (i = 0; i < itemGroups.length; i++) {
-        group = itemGroups[i];
-        if (!group || group.canceled) continue;
-        for (j = 0; j < group.items.length; j++) {
-            item = group.items[j];
-            if (containsItemName(["Average Weight"], item.name)) return list;
-            if (item && containsItemName(targetItem, item.name)) {
-                maxCount++;
-                if (item.value !== null && !isNaN(item.value) && item.value !== "") {
-                    list.push(parseFloat(item.value));
-                }
-            }
-        }
-    }
-    return list;
+function normalizeName(value) {
+    if (value == null) return "";
+    return value.toString().toUpperCase().replace(/\s+/g, " ");
 }
 
 function containsValue(input, keyword) {
-    if (input == null) {
-        return false;
+    if (input == null) return false;
+    return input.toString().toLowerCase().indexOf(keyword.toLowerCase()) !== -1;
+}
+
+function containsStandaloneKeyword(input, keyword) {
+    var value = normalizeName(input);
+    var target = normalizeName(keyword);
+    var startIndex = 0;
+    var index;
+    var before;
+    var after;
+
+    while (startIndex < value.length) {
+        index = value.indexOf(target, startIndex);
+        if (index === -1) return false;
+
+        before = index === 0 ? "" : value.charAt(index - 1);
+        after = index + target.length >= value.length ? "" : value.charAt(index + target.length);
+
+        if ((before === "" || !/[A-Z0-9]/.test(before)) && (after === "" || !/[A-Z0-9]/.test(after))) return true;
+
+        startIndex = index + target.length;
     }
 
-    var normalizedInput = input.toString().toLowerCase();
-    return normalizedInput.indexOf(keyword) !== -1;
+    return false;
+}
+
+function matchesMetric(itemName, metric) {
+    var name = normalizeName(itemName);
+
+    if (metric === "HEIGHT") return containsStandaloneKeyword(name, "HEIGHT") || containsStandaloneKeyword(name, "HT");
+    if (metric === "WEIGHT") return containsStandaloneKeyword(name, "WEIGHT") || containsStandaloneKeyword(name, "WT");
+
+    return false;
+}
+
+function isAverageItem(itemName) {
+    if (containsValue(itemName, "AVERAGE")) return true;
+    if (containsValue(itemName, "AVG")) return true;
+    if (containsValue(itemName, "MEAN")) return true;
+
+    return false;
+}
+
+function addNumericValue(list, value) {
+    if (value === null || value === undefined || value === "") return;
+
+    var numericValue = parseFloat(value);
+    if (!isNaN(numericValue)) list.push(numericValue);
+}
+
+function getFirstMetricValue(formData, metric) {
+    var itemGroups = formData.form.itemGroups;
+    var group, items, groupItem, i, j;
+
+    if (!itemGroups || itemGroups.length < 1) return null;
+
+    for (i = 0; i < itemGroups.length; i++) {
+        group = itemGroups[i];
+        if (!group || group.canceled || !group.items) continue;
+
+        items = group.items;
+        for (j = 0; j < items.length; j++) {
+            groupItem = items[j];
+            if (!groupItem || groupItem.value == null || groupItem.value === "") continue;
+
+            if (matchesMetric(groupItem.name, metric) && !isAverageItem(groupItem.name)) {
+                logger(metric + " first value matched item: " + groupItem.name + " | Value: " + groupItem.value);
+                return parseFloat(groupItem.value);
+            }
+        }
+    }
+
+    return null;
+}
+
+function getMetricMeasurements(formData, metric) {
+    var itemGroups = formData.form.itemGroups;
+    var result = { values: [], count: 0 };
+    var group, items, groupItem, i, j;
+
+    if (!itemGroups || itemGroups.length < 1) return result;
+
+    for (i = 0; i < itemGroups.length; i++) {
+        group = itemGroups[i];
+        if (!group || group.canceled || !group.items) continue;
+
+        items = group.items;
+        for (j = 0; j < items.length; j++) {
+            groupItem = items[j];
+            if (!groupItem) continue;
+
+            // Stop collecting raw measurements once we hit an average/mean item for this metric
+            if (isAverageItem(groupItem.name) && matchesMetric(groupItem.name, metric)) {
+                return result;
+            }
+
+            if (matchesMetric(groupItem.name, metric) && !isAverageItem(groupItem.name)) {
+                result.count++;
+                logger(metric + " matched item: " + groupItem.name + " | Value: " + groupItem.value);
+                addNumericValue(result.values, groupItem.value);
+            }
+        }
+    }
+
+    return result;
+}
+
+function calculateAverage(values) {
+    if (!values || values.length === 0) return null;
+
+    var sum = 0;
+    var count = 0;
+    for (var i = 0; i < values.length; i++) {
+        if (isNaN(values[i])) continue;
+        sum += values[i];
+        count++;
+    }
+
+    if (count === 0) return null;
+
+    return sum / count;
 }
 
 function pullForm(studyeventList, formNameList) {
@@ -74,22 +156,6 @@ function pullForm(studyeventList, formNameList) {
         for (var j = 0; j < formNameList.length; j++) {
             var temp = checkForm(studyeventList[i], formNameList[j]);
             if (temp) return temp;
-        }
-    }
-}
-
-function pullItemFromForm(form, targetItem) {
-    var itemGroups = form.form.itemGroups;
-    var group, items, item, i, j, value;
-
-	if (!itemGroups || itemGroups.length < 1) return null;
-
-    for (i = 0; i < itemGroups.length; i++) {
-        group = itemGroups[i];
-        if (!group || group.canceled) continue;
-        for (j = 0; j < group.items.length; j++) {
-            item = group.items[j];
-            if (containsItemName(targetItem, item.name) && item.value !== null) return item.value;
         }
     }
     return null;
@@ -110,63 +176,45 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
         if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' ||
                 (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
             keepers.push(formData);
-        } else {
-
         }
     }
     return keepers;
 }
 
-function calculateAverage(values, sigfig) {
-    if (values.length === 0) return null;
-    var sum = 0;
-    var count = 0;
-
-    for (var i = 0; i < values.length; i++) {
-        if (isNaN(values[i])) continue;
-        else sum += values[i];
-        count++;
-    }
-    if (count === 0) return null;
-
-    var avg = sum / count;
-    // var factor = Math.pow(10, sigfig);
-    return avg;
-}
-
-var currentStudyEvent = formJson.form.studyEventName;
-var item = itemJson.item;
-var sigfig = 1;
-
-var height = null;
-
 try {
+    var height = null;
+
     if (containsValue(currentStudyEvent, "screening")) {
-        height = pullItemFromForm(formJson, heightitemList);
+        height = getFirstMetricValue(formJson, "HEIGHT");
     } else {
-        var form = pullForm(screeningStudyEvent, screeningBMI_Form);
-        if (!form) {
-            height = pullItemFromForm(formJson, heightitemList);
+        var screeningForm = pullForm(screeningStudyEvent, screeningBMI_Form);
+        if (screeningForm) {
+            height = getFirstMetricValue(screeningForm, "HEIGHT");
         }
     }
-    
-    var maxCount = 0;
 
-    var list = populateList(formJson, weightitemList, list);
-
-    var avg = calculateAverage(list, sigfig);
-
-    if (list.length === maxCount) {
-        weight = avg;
+    if (!height) {
+        height = getFirstMetricValue(formJson, "HEIGHT");
     }
 
+    var weightMeasurements = getMetricMeasurements(formJson, "WEIGHT");
+    var weight = null;
+
+    if (weightMeasurements.count > 0 && weightMeasurements.values.length === weightMeasurements.count) {
+        weight = calculateAverage(weightMeasurements.values);
+    }
+
+    logger("BMI Height: " + height);
+    logger("BMI Weight: " + weight);
+
     if (!weight || weight == 0 || !height || height == 0) return null;
+
     var heightMtr = height / 100;
-
+    var bmi = weight / (heightMtr * heightMtr);
     var factor = Math.pow(10, sigfig);
+    bmi = Math.round(bmi * factor) / factor;
+    logger("BMI: " + bmi);
 
-    var bmi = Math.round((weight / (heightMtr * heightMtr)) * factor) / factor;
-    logger("BMI: " + bmi)
     if (BMI_lower_range <= bmi && bmi <= BMI_upper_range) return item.codeListItems[0].codedValue; // return Yes
     else if (bmi < BMI_lower_range || bmi > BMI_upper_range) return item.codeListItems[1].codedValue; // return No, SF
 
