@@ -42,8 +42,8 @@ function containsStandaloneKeyword(input, keyword) {
 function matchesMetric(itemName, metric) {
     var name = normalizeName(itemName);
 
-    if (metric === "HEIGHT") return containsStandaloneKeyword(name, "HEIGHT");
-    if (metric === "WEIGHT") return containsStandaloneKeyword(name, "WEIGHT");
+    if (metric === "HEIGHT") return containsStandaloneKeyword(name, "HEIGHT") || containsStandaloneKeyword(name, "HT");
+    if (metric === "WEIGHT") return containsStandaloneKeyword(name, "WEIGHT") || containsStandaloneKeyword(name, "WT");
 
     return false;
 }

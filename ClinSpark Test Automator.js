@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 4.2.8
+// @version 4.2.9
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; Activity Plan Removal; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -18829,6 +18829,231 @@
             return "N/A";
         }
 
+        function getMajorityStudyEvent(segVal, excludeFormKey) {
+            var forms = segmentFormMap[segVal] || [];
+            if (forms.length === 0) return null;
+            var counts = {};
+            var denominator = forms.length;
+            for (var i = 0; i < forms.length; i++) {
+                var fKey = getFormDataKey(segVal, forms[i].value, forms[i].index);
+                if (excludeFormKey && fKey === excludeFormKey) {
+                    denominator--;
+                    continue;
+                }
+                var fd = formDataStore[fKey] || getDefaultFormData();
+                var evts = fd.studyEvents || [];
+                if (evts.length > 0 && evts[0].text) {
+                    var evText = evts[0].text;
+                    var evValue = evts[0].value || "";
+                    if (!counts[evText]) {
+                        counts[evText] = { text: evText, value: evValue, count: 0 };
+                    }
+                    counts[evText].count++;
+                }
+            }
+            if (denominator <= 0) return null;
+            var best = null;
+            for (var evText in counts) {
+                if (counts.hasOwnProperty(evText)) {
+                    if (!best || counts[evText].count > best.count) {
+                        best = counts[evText];
+                    }
+                }
+            }
+            if (best && best.count > denominator / 2) {
+                return { value: best.value, text: best.text };
+            }
+            return null;
+        }
+
+        function applyMajorityStudyEvent(formKey, segVal) {
+            var majority = getMajorityStudyEvent(segVal, formKey);
+            if (!majority) return;
+            var data = formDataStore[formKey];
+            if (!data) return;
+            data.studyEvents = [{ value: majority.value, text: majority.text }];
+            formDataStore[formKey] = data;
+            log("BPL: auto-filled study event " + majority.text + " for form " + formKey);
+        }
+
+        function getNewlyAddedFormsForAutoPaste(sourceSegVal) {
+            var result = [];
+            var forms = segmentFormMap[sourceSegVal] || [];
+            for (var i = 0; i < forms.length; i++) {
+                var f = forms[i];
+                var fKey = getFormDataKey(sourceSegVal, f.value, f.index);
+                var fd = formDataStore[fKey] || getDefaultFormData();
+                var isAuto = f.autoPopulated || fd.autoPopulated;
+                if (isAuto) continue;
+                result.push({
+                    formValue: f.value,
+                    formText: f.text,
+                    days: fd.days || 0,
+                    hours: fd.hours || 0,
+                    minutes: fd.minutes || 0,
+                    seconds: fd.seconds || 0,
+                    hidden: fd.hidden || false,
+                    mandatory: fd.mandatory !== false,
+                    enforce: fd.enforce || false,
+                    preWindow: fd.preWindow || "",
+                    postWindow: fd.postWindow || "",
+                    refActivity: fd.refActivity || false,
+                    preReference: fd.preReference || false
+                });
+            }
+            return result;
+        }
+
+        function runAutoPasteAll(sourceSegVal) {
+            var sourceForms = getNewlyAddedFormsForAutoPaste(sourceSegVal);
+            if (sourceForms.length === 0) {
+                log("BPL: auto paste all - no newly added forms in source segment " + sourceSegVal);
+                alert("No newly added forms found in the selected segment.");
+                return;
+            }
+            var pastedTotal = 0;
+            var skippedTotal = 0;
+            for (var si = 0; si < segments.length; si++) {
+                var targetSegVal = segments[si].value;
+                if (targetSegVal === sourceSegVal) continue;
+                var existingForms = segmentFormMap[targetSegVal] || [];
+                var targetMajority = getMajorityStudyEvent(targetSegVal);
+                var pastedCount = 0;
+                var skippedCount = 0;
+                for (var pi = 0; pi < sourceForms.length; pi++) {
+                    var cf = sourceForms[pi];
+                    var isDuplicate = false;
+                    for (var ei = 0; ei < existingForms.length; ei++) {
+                        if (existingForms[ei].text === cf.formText) {
+                            var eKey = getFormDataKey(targetSegVal, existingForms[ei].value, existingForms[ei].index);
+                            var eData = formDataStore[eKey] || getDefaultFormData();
+                            if ((eData.days || 0) === cf.days && (eData.hours || 0) === cf.hours && (eData.minutes || 0) === cf.minutes && (eData.seconds || 0) === cf.seconds && (eData.preReference || false) === cf.preReference) {
+                                isDuplicate = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (isDuplicate) {
+                        skippedCount++;
+                        log("BPL: auto paste all skipping duplicate form " + cf.formText + " in segment " + targetSegVal);
+                        continue;
+                    }
+                    formInstanceCounter++;
+                    var newIndex = formInstanceCounter;
+                    existingForms.push({
+                        value: cf.formValue,
+                        text: cf.formText,
+                        index: newIndex
+                    });
+                    var newKey = getFormDataKey(targetSegVal, cf.formValue, newIndex);
+                    var pastedData = getDefaultFormData();
+                    pastedData.days = cf.days;
+                    pastedData.hours = cf.hours;
+                    pastedData.minutes = cf.minutes;
+                    pastedData.seconds = cf.seconds;
+                    pastedData.hidden = cf.hidden;
+                    pastedData.mandatory = cf.mandatory;
+                    pastedData.enforce = cf.enforce;
+                    pastedData.preWindow = cf.preWindow;
+                    pastedData.postWindow = cf.postWindow;
+                    pastedData.refActivity = cf.refActivity;
+                    pastedData.preReference = cf.preReference;
+                    pastedData.studyEvents = targetMajority ? [{ value: targetMajority.value, text: targetMajority.text }] : [];
+                    var segRef = getSegmentRefDateTime(targetSegVal);
+                    pastedData.segmentRefDateTime = segRef;
+                    var tpStr = bplFormatTimePoint(pastedData.days || 0, pastedData.hours || 0, pastedData.minutes || 0, pastedData.seconds || 0, false);
+                    pastedData.exampleTime = bplComputeExampleTime(segRef, tpStr, pastedData.preReference || false);
+                    formDataStore[newKey] = pastedData;
+                    if (!pasteHistory[targetSegVal]) { pasteHistory[targetSegVal] = []; }
+                    pasteHistory[targetSegVal].push({ formKey: newKey, originalDays: cf.days, originalHours: cf.hours, originalMinutes: cf.minutes, originalSeconds: cf.seconds, originalStudyEvents: pastedData.studyEvents.map(function(ev) { return { value: ev.value, text: ev.text }; }) });
+                    pastedCount++;
+                }
+                segmentFormMap[targetSegVal] = existingForms;
+                pastedTotal += pastedCount;
+                skippedTotal += skippedCount;
+                log("BPL: auto paste all - pasted " + pastedCount + " forms, skipped " + skippedCount + " duplicates into segment " + targetSegVal);
+            }
+            renderCenterPanel(centerSearch.value);
+            runAutoValidation();
+            log("BPL: auto paste all complete - source " + sourceSegVal + " -> " + pastedTotal + " forms pasted to other segments, " + skippedTotal + " skipped");
+            showCopyToast("Auto-pasted " + pastedTotal + " form" + (pastedTotal !== 1 ? "s" : "") + " to other segments", null);
+        }
+
+        function showBPLAutoPasteAllPanel() {
+            var container = document.createElement("div");
+            container.style.cssText = "padding:16px;min-width:280px;";
+
+            var title = document.createElement("div");
+            title.textContent = "Select a source segment. All newly added forms from that segment will be pasted into every other segment.";
+            title.style.cssText = "margin-bottom:12px;font-size:13px;color:#ccc;";
+
+            var list = document.createElement("div");
+            list.style.cssText = "display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto;margin-bottom:16px;";
+            var selectedSeg = null;
+            var segOptions = [];
+            for (var i = 0; i < segments.length; i++) {
+                var seg = segments[i];
+                var row = document.createElement("div");
+                row.style.cssText = "padding:8px 10px;border:1px solid #444;border-radius:4px;background:#222;color:#fff;cursor:pointer;font-size:13px;";
+                row.textContent = seg.text;
+                row.dataset.segVal = seg.value;
+                row.addEventListener("mouseenter", (function(r) {
+                    return function() {
+                        if (r.dataset.selected !== "true") r.style.background = "#333";
+                    };
+                })(row));
+                row.addEventListener("mouseleave", (function(r) {
+                    return function() {
+                        if (r.dataset.selected !== "true") r.style.background = "#222";
+                    };
+                })(row));
+                row.addEventListener("click", (function(r) {
+                    return function() {
+                        selectedSeg = r.dataset.segVal;
+                        for (var j = 0; j < segOptions.length; j++) {
+                            segOptions[j].dataset.selected = "false";
+                            segOptions[j].style.background = "#222";
+                            segOptions[j].style.borderColor = "#444";
+                        }
+                        r.dataset.selected = "true";
+                        r.style.background = "#2a3a4a";
+                        r.style.borderColor = "#5dade2";
+                        confirmBtn.disabled = false;
+                        confirmBtn.style.opacity = "1";
+                        confirmBtn.style.cursor = "pointer";
+                    };
+                })(row));
+                segOptions.push(row);
+                list.appendChild(row);
+            }
+
+            var btnRow = document.createElement("div");
+            btnRow.style.cssText = "display:flex;justify-content:flex-end;gap:8px;";
+
+            var cancelBtn = document.createElement("button");
+            cancelBtn.textContent = "Cancel";
+            cancelBtn.style.cssText = "padding:6px 14px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;cursor:pointer;font-size:12px;";
+
+            var confirmBtn = document.createElement("button");
+            confirmBtn.textContent = "Confirm";
+            confirmBtn.disabled = true;
+            confirmBtn.style.cssText = "padding:6px 14px;border-radius:4px;border:1px solid #5dade2;background:#1a2a3a;color:#5dade2;font-size:12px;opacity:0.5;cursor:default;";
+
+            cancelBtn.addEventListener("click", function() { popup.close(); });
+            confirmBtn.addEventListener("click", function() {
+                popup.close();
+                if (selectedSeg) runAutoPasteAll(selectedSeg);
+            });
+
+            btnRow.appendChild(cancelBtn);
+            btnRow.appendChild(confirmBtn);
+            container.appendChild(title);
+            container.appendChild(list);
+            container.appendChild(btnRow);
+
+            var popup = createPopup({ title: "Auto Paste All - Select Source Segment", content: container, width: "360px", height: "auto" });
+        }
+
         function loadFormDataToPanel(key) {
             selectedFormKey = key;
             var data = formDataStore[key] || getDefaultFormData();
@@ -19476,6 +19701,7 @@
                             return;
                         }
                         var existingForms = segmentFormMap[segVal] || [];
+                        var targetMajority = getMajorityStudyEvent(segVal);
                         var pastedCount = 0;
                         var skippedCount = 0;
                         for (var pi = 0; pi < copiedAllForms.length; pi++) {
@@ -19516,14 +19742,14 @@
                             pastedData.postWindow = cf.postWindow;
                             pastedData.refActivity = cf.refActivity;
                             pastedData.preReference = cf.preReference;
-                            pastedData.studyEvents = [];
+                            pastedData.studyEvents = targetMajority ? [{ value: targetMajority.value, text: targetMajority.text }] : [];
                             var segRef = getSegmentRefDateTime(segVal);
                             pastedData.segmentRefDateTime = segRef;
                             var tpStr = bplFormatTimePoint(pastedData.days || 0, pastedData.hours || 0, pastedData.minutes || 0, pastedData.seconds || 0, false);
                             pastedData.exampleTime = bplComputeExampleTime(segRef, tpStr, pastedData.preReference || false);
                             formDataStore[newKey] = pastedData;
                             if (!pasteHistory[segVal]) { pasteHistory[segVal] = []; }
-                            pasteHistory[segVal].push({ formKey: newKey, originalDays: cf.days, originalHours: cf.hours, originalMinutes: cf.minutes, originalSeconds: cf.seconds, originalStudyEvents: [] });
+                            pasteHistory[segVal].push({ formKey: newKey, originalDays: cf.days, originalHours: cf.hours, originalMinutes: cf.minutes, originalSeconds: cf.seconds, originalStudyEvents: pastedData.studyEvents.map(function(ev) { return { value: ev.value, text: ev.text }; }) });
                             pastedCount++;
                         }
                         segmentFormMap[segVal] = existingForms;
@@ -19593,14 +19819,15 @@
                         pastedData.postWindow = copiedForm.postWindow;
                         pastedData.refActivity = copiedForm.refActivity;
                         pastedData.preReference = copiedForm.preReference;
-                        pastedData.studyEvents = [];
+                        var targetMajority = getMajorityStudyEvent(segVal);
+                        pastedData.studyEvents = targetMajority ? [{ value: targetMajority.value, text: targetMajority.text }] : [];
                         var segRef = getSegmentRefDateTime(segVal);
                         pastedData.segmentRefDateTime = segRef;
                         var tpStr = bplFormatTimePoint(pastedData.days || 0, pastedData.hours || 0, pastedData.minutes || 0, pastedData.seconds || 0, false);
                         pastedData.exampleTime = bplComputeExampleTime(segRef, tpStr, pastedData.preReference || false);
                         formDataStore[newKey] = pastedData;
                         if (!pasteHistory[segVal]) { pasteHistory[segVal] = []; }
-                        pasteHistory[segVal].push({ formKey: newKey, originalDays: copiedForm.days, originalHours: copiedForm.hours, originalMinutes: copiedForm.minutes, originalSeconds: copiedForm.seconds, originalStudyEvents: [] });
+                        pasteHistory[segVal].push({ formKey: newKey, originalDays: copiedForm.days, originalHours: copiedForm.hours, originalMinutes: copiedForm.minutes, originalSeconds: copiedForm.seconds, originalStudyEvents: pastedData.studyEvents.map(function(ev) { return { value: ev.value, text: ev.text }; }) });
                         log("BPL: pasted form " + copiedForm.formText + " into segment " + segVal + " as instance " + newIndex);
                         renderCenterPanel(centerSearch.value);
                         runAutoValidation();
@@ -19636,7 +19863,17 @@
                                 history.splice(hi, 1);
                                 continue;
                             }
-                            var eventsChanged = d.studyEvents && d.studyEvents.length > 0;
+                            var originalEvents = entry.originalStudyEvents || [];
+                            var currentEvents = d.studyEvents || [];
+                            var eventsChanged = currentEvents.length !== originalEvents.length;
+                            if (!eventsChanged) {
+                                for (var evIdx = 0; evIdx < currentEvents.length; evIdx++) {
+                                    if (currentEvents[evIdx].value !== originalEvents[evIdx].value || currentEvents[evIdx].text !== originalEvents[evIdx].text) {
+                                        eventsChanged = true;
+                                        break;
+                                    }
+                                }
+                            }
                             var timeChanged = (d.days || 0) !== (entry.originalDays || 0) || (d.hours || 0) !== (entry.originalHours || 0) || (d.minutes || 0) !== (entry.originalMinutes || 0) || (d.seconds || 0) !== (entry.originalSeconds || 0);
                             if (eventsChanged || timeChanged) {
                                 skippedCount++;
@@ -19722,6 +19959,7 @@
                             newFormData.segmentRefDateTime = segRef;
                             newFormData.exampleTime = bplComputeExampleTime(segRef, "0:00:00", false);
                             formDataStore[newKey] = newFormData;
+                            applyMajorityStudyEvent(newKey, segVal);
                             log("BPL: form " + fData.text + " added to segment " + segVal + " as instance " + newIndex);
                             renderCenterPanel(centerSearch.value);
                             runAutoValidation();
@@ -20625,6 +20863,23 @@
             log("BPL: View Duplicates toggled " + (bplShowDuplicatesOnly ? "ON" : "OFF"));
         });
         legendRow.appendChild(viewDuplicatesBtn);
+
+        var autoPasteAllBtn = document.createElement("button");
+        autoPasteAllBtn.textContent = "\u{1F4CB} Auto Paste All";
+        autoPasteAllBtn.title = "Select a source segment and paste all newly added forms from that segment to every other segment";
+        autoPasteAllBtn.style.cssText = "padding:5px 12px;border-radius:4px;border:1px solid #5dade2;background:#1a2a3a;color:#5dade2;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;";
+        autoPasteAllBtn.addEventListener("mouseenter", function() {
+            this.style.background = "#1a3a4a";
+            this.style.borderColor = "#3498db";
+        });
+        autoPasteAllBtn.addEventListener("mouseleave", function() {
+            this.style.background = "#1a2a3a";
+            this.style.borderColor = "#5dade2";
+        });
+        autoPasteAllBtn.addEventListener("click", function() {
+            showBPLAutoPasteAllPanel();
+        });
+        legendRow.appendChild(autoPasteAllBtn);
 
         var bottomRow = document.createElement("div");
         bottomRow.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:12px;";
