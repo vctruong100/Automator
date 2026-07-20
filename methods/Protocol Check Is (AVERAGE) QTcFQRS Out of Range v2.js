@@ -66,7 +66,6 @@ function addNumericValue(list, value) {
     var numericValue = parseFloat(value);
     if (!isNaN(numericValue)) list.push(numericValue);
 }
-
 function populateList(formJsonValue, metric, attachedItemName, isRepeat) {
     var itemGroups = formJsonValue.form.itemGroups;
     var list = [];
@@ -74,25 +73,7 @@ function populateList(formJsonValue, metric, attachedItemName, isRepeat) {
 
     if (!itemGroups || itemGroups.length < 1) return list;
 
-    if (!isRepeat) {
-        for (i = 0; i < itemGroups.length; i++) {
-            group = itemGroups[i];
-            if (!group || group.canceled || !group.items) continue;
-
-            items = group.items;
-
-            for (j = 0; j < items.length; j++) {
-                groupItem = items[j];
-                if (!groupItem) continue;
-                if (groupItem.name == attachedItemName) return list;
-                if (matchesMetric(groupItem.name, metric) && !isAverageItem(groupItem.name)) {
-                    addNumericValue(list, groupItem.value);
-                    if (list.length >= 3) return list;
-                }
-            }
-        }
-    }
-    else {
+    if (isRepeat) {
         for (i = itemGroups.length - 1; i >= 0; i--) {
             group = itemGroups[i];
             if (!group || group.canceled || !group.items) continue;
@@ -102,10 +83,27 @@ function populateList(formJsonValue, metric, attachedItemName, isRepeat) {
             for (j = items.length - 1; j >= 0; j--) {
                 groupItem = items[j];
                 if (!groupItem) continue;
-                if (groupItem.name == attachedItemName && list.length > 1) return list;
+                if ((groupItem.name == attachedItemName || isAverageItem(groupItem.name)) && list.length > 1) return list;
                 if (matchesMetric(groupItem.name, metric) && !isAverageItem(groupItem.name)) {
                     addNumericValue(list, groupItem.value);
-                    if (list.length >= 3) return list;
+                    logger(metric + " matched item: " + groupItem.name + " | Value: " + groupItem.value);
+                }
+            }
+        }
+    } else {
+        for (i = 0; i < itemGroups.length; i++) {
+            group = itemGroups[i];
+            if (!group || group.canceled || !group.items) continue;
+
+            items = group.items;
+
+            for (j = 0; j < items.length; j++) {
+                groupItem = items[j];
+                if (!groupItem) continue;
+                if (groupItem.name == attachedItemName || isAverageItem(groupItem.name)) return list;
+                if (matchesMetric(groupItem.name, metric) && !isAverageItem(groupItem.name)) {
+                    addNumericValue(list, groupItem.value);
+                    logger(metric + " matched item: " + groupItem.name + " | Value: " + groupItem.value);
                 }
             }
         }
@@ -133,7 +131,9 @@ function calculateAverage(values) {
 try {
     var rawGroupName = getItemDataContextByItemDataId(attachedItem.id);
     var parsedGroupName = JSON.parse(rawGroupName).foundItemGroupName;
-    var isRepeat = parsedGroupName ? containsValue(parsedGroupName, "repeat") : false;
+    var isRepeat = false;
+    if (containsValue(parsedGroupName, "inclusion") || containsValue(parsedGroupName, "exclusion")) isRepeat = true;
+    else isRepeat = parsedGroupName ? containsValue(parsedGroupName, "repeat") : false;
 
     var QTcFlist = populateList(formJson, "QTCF", attachedItem.name, isRepeat);
     var QRSlist = populateList(formJson, "QRS", attachedItem.name, isRepeat);

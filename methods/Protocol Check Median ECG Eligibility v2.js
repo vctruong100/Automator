@@ -84,7 +84,7 @@ function populateList(formJsonValue, metric, attachedItemName, isRepeat) {
             for (j = items.length - 1; j >= 0; j--) {
                 groupItem = items[j];
                 if (!groupItem) continue;
-                if (groupItem.name == attachedItemName && list.length > 1) return list;
+                if ((groupItem.name == attachedItemName || isAverageItem(groupItem.name)) && list.length > 1) return list;
                 if (matchesMetric(groupItem.name, metric) && !isAverageItem(groupItem.name)) {
                     addNumericValue(list, groupItem.value);
                     logger(metric + " matched item: " + groupItem.name + " | Value: " + groupItem.value);
@@ -101,7 +101,7 @@ function populateList(formJsonValue, metric, attachedItemName, isRepeat) {
             for (j = 0; j < items.length; j++) {
                 groupItem = items[j];
                 if (!groupItem) continue;
-                if (groupItem.name == attachedItemName) return list;
+                if (groupItem.name == attachedItemName || isAverageItem(groupItem.name)) return list;
                 if (matchesMetric(groupItem.name, metric) && !isAverageItem(groupItem.name)) {
                     addNumericValue(list, groupItem.value);
                     logger(metric + " matched item: " + groupItem.name + " | Value: " + groupItem.value);
@@ -144,7 +144,9 @@ try {
 
     var rawGroupName = getItemDataContextByItemDataId(attachedItem.id);
     var parsedGroupName = JSON.parse(rawGroupName).foundItemGroupName;
-    var isRepeat = parsedGroupName ? containsValue(parsedGroupName, "repeat") : false;
+    var isRepeat = false;
+    if (containsValue(parsedGroupName, "inclusion") || containsValue(parsedGroupName, "exclusion")) isRepeat = true;
+    else isRepeat = parsedGroupName ? containsValue(parsedGroupName, "repeat") : false;
 
     var hrList = populateList(formJson, "HR", attachedItem.name, isRepeat);
     var prList = populateList(formJson, "PR", attachedItem.name, isRepeat);
@@ -152,21 +154,21 @@ try {
 
     var hrMedian = calculateMedian(hrList, sigfig);
     var prMedian = calculateMedian(prList, sigfig);
-    var qtcfAverage = calculateAverage(qtcfList);
+    var qtcfMedian = calculateMedian(qtcfList, sigfig);
 
     logger("HR list: " + hrList);
     logger("PR list: " + prList);
     logger("QTcF list: " + qtcfList);
     logger("HR median: " + hrMedian);
     logger("PR median: " + prMedian);
-    logger("QTcF average: " + qtcfAverage);
+    logger("QTcF median: " + qtcfMedian);
 
     if (containsValue(attachedItem.name, "inc001")) {
         if (prMedian < 220 && hrMedian > 60) return "YES";
         return "NO, SF";
     }
     else if (containsValue(attachedItem.name, "exc022")) {
-        if ((isMale && qtcfAverage > 470) || (!isMale && qtcfAverage > 480)) return "YES, SF";
+        if ((isMale && qtcfMedian > 470) || (!isMale && qtcfMedian > 480)) return "YES, SF";
         else return "NO";
     }
     return null;

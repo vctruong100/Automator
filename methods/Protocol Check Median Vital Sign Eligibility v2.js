@@ -86,7 +86,7 @@ function populateList(formJsonValue, metric, attachedItemName, isRepeat) {
             for (j = items.length - 1; j >= 0; j--) {
                 groupItem = items[j];
                 if (!groupItem) continue;
-                if (groupItem.name == attachedItemName && list.length > 1) return list;
+                if ((groupItem.name == attachedItemName || isAverageItem(groupItem.name)) && list.length > 1) return list;
                 if (matchesMetric(groupItem.name, metric) && !isAverageItem(groupItem.name)) {
                     addNumericValue(list, groupItem.value);
                     logger(metric + " matched item: " + groupItem.name + " | Value: " + groupItem.value);
@@ -103,7 +103,7 @@ function populateList(formJsonValue, metric, attachedItemName, isRepeat) {
             for (j = 0; j < items.length; j++) {
                 groupItem = items[j];
                 if (!groupItem) continue;
-                if (groupItem.name == attachedItemName) return list;
+                if (groupItem.name == attachedItemName || isAverageItem(groupItem.name)) return list;
                 if (matchesMetric(groupItem.name, metric) && !isAverageItem(groupItem.name)) {
                     addNumericValue(list, groupItem.value);
                     logger(metric + " matched item: " + groupItem.name + " | Value: " + groupItem.value);
@@ -114,6 +114,7 @@ function populateList(formJsonValue, metric, attachedItemName, isRepeat) {
 
     return list;
 }
+
 
 function calculateMedian(values) {
     if (values.length === 0) return null;
@@ -151,13 +152,11 @@ function pullItemFromForm(formJsonValue, targetItem) {
 }
 
 try {
-    var isRepeat = false;
-    var list = [];
-
-    var repeatItem = pullItemFromForm(formJson, "repeat required");
-    if (!repeatItem || repeatItem.value == null) return null;
-
-    if (repeatItem.value == repeatItem.codeListItems[1].codedValue) isRepeat = true;
+    var rawGroupName = getItemDataContextByItemDataId(attachedItem.id);
+    var parsedGroupName = JSON.parse(rawGroupName).foundItemGroupName;
+    logger("Group name: " + parsedGroupName);
+    if (containsValue(parsedGroupName, "inclusion") || containsValue(parsedGroupName, "exclusion")) isRepeat = true;
+    else isRepeat = parsedGroupName ? containsValue(parsedGroupName, "repeat") : false;
 
     logger("Attached item: " + attachedItem.name);
     var sysList = populateList(formJson, "SYS", attachedItem.name, isRepeat);
