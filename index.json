@@ -788,7 +788,7 @@
                      "Orthostasis"
                  ],
         "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Difference%20between%202%20SBP%2C%20DBP%2C%20and%20HR%20-%20Supine%20vs%20Standing%20(Orthostasis)%20v2.js",
-        "updated":  "2026-06-24"
+        "updated":  "2026-07-20"
     },
     {
         "id":  "M-103",
@@ -957,7 +957,7 @@
                      "ECG"
                  ],
         "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Median%20HR%2C%20RR%2C%20PR%2C%20QRS%2C%20QT%2C%20QTC%2C%20QTcF%20v2.js",
-        "updated":  "2026-07-15"
+        "updated":  "2026-07-20"
     },
     {
         "id":  "M-118",
@@ -1118,6 +1118,20 @@
                      "HR"
                  ],
         "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Vital%20Signs%20Range%20v4.js",
+        "updated":  "2026-07-20"
+    },
+    {
+        "id":  "M-131",
+        "title":  "Difference between 2 SBP, DBP, and HR - Supine vs Standing (Orthostasis) - Different Forms v4",
+        "tags":  [
+                     "Difference",
+                     "SBP",
+                     "DBP",
+                     "HR",
+                     "Orthostasis",
+                     "Different Forms"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Difference%20between%202%20SBP%2C%20DBP%2C%20and%20HR%20-%20Supine%20vs%20Standing%20(Orthostasis)%20-%20Different%20Forms%20v4.js",
         "updated":  "2026-07-20"
     }
 ]
