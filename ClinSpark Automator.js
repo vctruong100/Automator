@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     3.5.3
+// @version     3.5.4
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -18040,29 +18040,30 @@
         var colB = "ACT";
         var colC = "";
         var colD = "";
-        var colE = parseDeviationSanitizeValue(parseDeviationFormatSubjectNumber(item.subjectNumber));
-        var colF = parseDeviationSanitizeValue(parseDeviationFormatVisitDay(item.studyVisitDay));
-        var colG = "";
-        var colH = parseDeviationSanitizeValue(parseDeviationFormatDate(item.dateOfDeviation));
-        var colI = parseDeviationSanitizeValue(parseDeviationFormatDate(item.dateDiscovered));
-        var colJ = parseDeviationSanitizeValue(item.initials);
-        var colK = parseDeviationSanitizeValue(item.deviationExplanation);
-        var colL = parseDeviationSanitizeValue(parseDeviationFormatActionTaken(item.actionTakenCombined));
-        var colM = "";
-        var colN = parseDeviationSanitizeValue(item.category);
-        var colO = "";
+        var colE = "";
+        var colF = parseDeviationSanitizeValue(parseDeviationFormatSubjectNumber(item.subjectNumber));
+        var colG = parseDeviationSanitizeValue(parseDeviationFormatVisitDay(item.studyVisitDay));
+        var colH = "";
+        var colI = parseDeviationSanitizeValue(parseDeviationFormatDate(item.dateOfDeviation));
+        var colJ = parseDeviationSanitizeValue(parseDeviationFormatDate(item.dateDiscovered));
+        var colK = parseDeviationSanitizeValue(item.initials);
+        var colL = parseDeviationSanitizeValue(item.deviationExplanation);
+        var colM = parseDeviationSanitizeValue(parseDeviationFormatActionTaken(item.actionTakenCombined));
+        var colN = "";
+        var colO = parseDeviationSanitizeValue(item.category);
         var colP = "";
         var colQ = "";
-        var colR = "";
         var colS = "";
-        var colT = parseDeviationSanitizeValue(parseDeviationFormatSeverity(item.severity));
-        var colU = parseDeviationSanitizeValue(parseDeviationFormatReportable(item.reportable));
+        var colT = "";
+        var colU = "";
+        var colV = parseDeviationSanitizeValue(parseDeviationFormatSeverity(item.severity));
+        var colW = parseDeviationSanitizeValue(parseDeviationFormatReportable(item.reportable));
 
         var row = colA + TAB + colB + TAB + colC + TAB + colD + TAB +
             colE + TAB + colF + TAB + colG + TAB + colH + TAB +
             colI + TAB + colJ + TAB + colK + TAB + colL + TAB +
             colM + TAB + colN + TAB + colO + TAB + colP + TAB +
-            colQ + TAB + colR + TAB + colS + TAB + colT + TAB + colU;
+            colQ + TAB + colR + TAB + colS + TAB + colT + TAB + colU + TAB + colV + TAB + colW;
 
         return row;
     }

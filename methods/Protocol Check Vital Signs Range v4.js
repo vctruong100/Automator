@@ -1,8 +1,7 @@
 /* jshint strict: false */
 
 // Version: v4
-// Purpose: Calculates the median SYS, DIA, and HR, then checks protocol ranges.
-//          Combines Protocol Check Vital Signs Range v2 and Median SYS, DIA, and HR.
+// Purpose: Calculates the median/average/orthostatic of SYS, DIA, and HR, then checks protocol ranges.
 
 // Inclusive
 var sys_min_range = 91;
@@ -17,6 +16,11 @@ var hr_max_range = 100;
 var sys_change_min = 20;
 var dia_change_min = 10;
 var hr_change_min = 30;
+
+var formNames = [
+    "❤️ VS_TRIPLICATE (HR, BP, RR, ORAL TEMP.) SCRN"    
+]
+var studyevent = formJson.form.studyEventName;
 
 var form = formJson.form;
 var attachedItem = itemJson.item;
@@ -142,7 +146,7 @@ function populateList(formJsonValue, metric, groupName, attachedItemName, isRepe
     return list;
 }
 
-function pullItemFromForm(formJsonValue, metric, groupName, isRepeat) {
+function pullItemFromSameGroup(formJsonValue, metric, groupName, isRepeat) {
     logger("Target metric: " + metric);
     var itemGroups = formJsonValue.form.itemGroups;
 
@@ -160,6 +164,40 @@ function pullItemFromForm(formJsonValue, metric, groupName, isRepeat) {
         }
     }
 
+    return null;
+}
+
+function pullItemFromForm(formJsonValue, metric, isRepeat) {
+    logger("Target metric: " + metric);
+    var itemGroups = formJsonValue.form.itemGroups;
+    var group, item, i, j;
+    if (!itemGroups || itemGroups.length < 1) return null;
+
+    if (!isRepeat) {
+        for (i = 0; i < itemGroups.length; i++) {
+            group = itemGroups[i];
+            if (!group || group.canceled) continue;
+    
+            for (j = group.items.length - 1; j >= 0; j--) {
+                item = group.items[j];
+                if (!item) continue;
+    
+                if (matchesMetric(item.name, metric) && item.value !== null && item.value !== "" && !isAverageItem(item.name)) return item.value;
+            }
+        }
+    } else {
+        for (i = itemGroups.length - 1; i >= 0; i--) {
+            group = itemGroups[i];
+            if (!group || group.canceled) continue;
+    
+            for (j = group.items.length - 1; j >= 0; j--) {
+                item = group.items[j];
+                if (!item) continue;
+    
+                if (matchesMetric(item.name, metric) && item.value !== null && item.value !== "") return item.value;
+            }
+        }
+    }
     return null;
 }
 
@@ -197,7 +235,7 @@ function isStanding(name, groupName) {
 function calculateDifference(semi, standing) {
     if (semi == null || standing == null || isNaN(semi) || isNaN(standing)) return null;
 
-    var diff = parseFloat(standing) - parseFloat(semi);
+    var diff = parseFloat(semi) - parseFloat(standing);
     return diff.toFixed(0);
 }
 
@@ -285,6 +323,37 @@ function checkIfItemGroupHasOrthostasis(formJsonValue, groupName) {
     return false;
 }
 
+function pullForm(studyeventList, formNameList) {
+    for (var i = 0; i < studyeventList.length; i++) {
+        for (var j = 0; j < formNameList.length; j++) {
+            var matchedForm = checkForm(studyeventList[i], formNameList[j]);
+            if (matchedForm) return matchedForm;
+        }
+    }
+}
+
+function checkForm(studyevent, form) {
+    var arrayForms = findFormData(studyevent, form);
+    var completedForm = collectCompleted(arrayForms, true);
+    if (!completedForm || completedForm.length === 0) return null;
+    return completedForm[0];
+}
+
+function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
+    if (formDataArray == null) { return []; }
+    var completedForms = [];
+    for (var i = formDataArray.length - 1; i >= 0; i--) {
+        var formData = formDataArray[i];
+        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false &&
+            (formData.form.dataCollectionStatus == 'Complete' ||
+                (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') ||
+                formData.form.dataCollectionStatus == "Incomplete")) {
+            completedForms.push(formData);
+        }
+    }
+    return completedForms;
+}
+
 function calculateMedian(values, sigfig) {
     if (values.length === 0) return null;
     values.sort(function(a, b) { return a - b; });
@@ -317,20 +386,42 @@ logger("Dose Item Group Contains Median Or Average: " + doesItemGroupContainMedi
 logger("Dose Item Group Contains Orthostasis: " + doesItemGroupContainOrthostasis)
 
 if (doesItemGroupContainOrthostasis) {
-    var sysValues = getOrthostasisValues("SYS", isRepeat);
-    var diaValues = getOrthostasisValues("DIA", isRepeat);
-    var hrValues = getOrthostasisValues("HR", isRepeat);
-
-    logger("Semi: " + sysValues.semi);
-    logger("Standing: " + sysValues.standing);
-    logger("Semi: " + diaValues.semi);
-    logger("Standing: " + diaValues.standing);
-    logger("Semi: " + hrValues.semi);
-    logger("Standing: " + hrValues.standing);
+    var sysStanding, sysSemi, diaStanding, diaSemi, hrStanding, hrSemi;
+    if (containsValue(formJson.form.name, "standing")) {
+        logger("Pull from screening vital form")
+        sysStanding = pullItemFromForm(formJson, "SYS", isRepeat);
+        diaStanding = pullItemFromForm(formJson, "DIA", isRepeat);
+        hrStanding = pullItemFromForm(formJson, "HR", isRepeat);
     
-    sys = calculateDifference(sysValues.semi, sysValues.standing);
-    dia = calculateDifference(diaValues.semi, diaValues.standing);
-    hr = calculateDifference(hrValues.semi, hrValues.standing);
+        var form = pullForm([studyevent], formNames);
+        if (!form) return null;
+        sysSemi = pullItemFromForm(form, "SYS", true);
+        diaSemi = pullItemFromForm(form, "DIA", true);
+        hrSemi = pullItemFromForm(form, "HR", true);
+        
+    } else {
+        var sysValues = getOrthostasisValues("SYS", isRepeat);
+        var diaValues = getOrthostasisValues("DIA", isRepeat);
+        var hrValues = getOrthostasisValues("HR", isRepeat);
+        
+        sysStanding = sysValues.standing;
+        sysSemi = sysValues.semi;
+        diaStanding = diaValues.standing;
+        diaSemi = diaValues.semi;
+        hrStanding = hrValues.standing;
+        hrSemi = hrValues.semi;
+    }
+
+    logger("Semi: " + sysSemi);
+    logger("Standing: " + sysStanding);
+    logger("Semi: " + diaSemi);
+    logger("Standing: " + diaStanding);
+    logger("Semi: " + hrSemi);
+    logger("Standing: " + hrStanding);
+    
+    sys = calculateDifference(sysSemi, sysStanding);
+    dia = calculateDifference(diaSemi, diaStanding);
+    hr = calculateDifference(hrSemi, hrStanding);
     
     logger("Difference in SYS: " + sys);
     logger("Difference in DIA: " + dia);
@@ -353,9 +444,9 @@ else if (doesItemGroupContainMedianAverage) {
     logger("Diastolic median: " + dia);
     logger("Heart rate median: " + hr);
 } else {
-    sys = pullItemFromForm(formJson, "SYS", parsedGroupName, isRepeat);
-    dia = pullItemFromForm(formJson, "DIA", parsedGroupName, isRepeat);
-    hr = pullItemFromForm(formJson, "HR", parsedGroupName, isRepeat);
+    sys = pullItemFromSameGroup(formJson, "SYS", parsedGroupName, isRepeat);
+    dia = pullItemFromSameGroup(formJson, "DIA", parsedGroupName, isRepeat);
+    hr = pullItemFromSameGroup(formJson, "HR", parsedGroupName, isRepeat);
     
     logger("Systolic: " + sys);
     logger("Diastolic: " + dia);
