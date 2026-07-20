@@ -82,7 +82,7 @@ function getOrthostasis(form, targetItems, isRepeat) {
             logger("Final Semi: " + semi);
             logger("Final Standing: " + standing);
 
-            return semi - standing;
+            return standing - semi;
         }
     }
 

@@ -1050,5 +1050,74 @@
                  ],
         "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/ECG%20Interpretation%20Cleaner%20%28For%20Data%20Transfer%29.js",
         "updated":  "2026-07-16"
+    },
+    {
+        "id":  "M-126",
+        "title":  "Difference between 2 SBP, DBP, and HR - Supine vs Standing (Orthostasis) v3",
+        "tags":  [
+                     "Difference",
+                     "SBP",
+                     "DBP",
+                     "HR",
+                     "Orthostasis"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Difference%20between%202%20SBP%2C%20DBP%2C%20and%20HR%20-%20Supine%20vs%20Standing%20%28Orthostasis%29%20v3.js",
+        "updated":  "2026-07-20"
+    },
+    {
+        "id":  "M-127",
+        "title":  "Difference between 2 SBP, DBP, and HR - Supine vs Standing (Orthostasis) v4",
+        "tags":  [
+                     "Difference",
+                     "SBP",
+                     "DBP",
+                     "HR",
+                     "Orthostasis"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Difference%20between%202%20SBP%2C%20DBP%2C%20and%20HR%20-%20Supine%20vs%20Standing%20%28Orthostasis%29%20v4.js",
+        "updated":  "2026-07-20"
+    },
+    {
+        "id":  "M-128",
+        "title":  "Median SYS, DIA, and HR",
+        "tags":  [
+                     "Median",
+                     "SYS",
+                     "DIA",
+                     "HR",
+                     "Vitals"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Median%20SYS%2C%20DIA%2C%20and%20HR.js",
+        "updated":  "2026-07-20"
+    },
+    {
+        "id":  "M-129",
+        "title":  "Protocol Check Vital Signs Range v3",
+        "tags":  [
+                     "Protocol Check",
+                     "Vitals",
+                     "Range",
+                     "Average",
+                     "SYS",
+                     "DIA",
+                     "HR"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Vital%20Signs%20Range%20v3.js",
+        "updated":  "2026-07-20"
+    },
+    {
+        "id":  "M-130",
+        "title":  "Protocol Check Vital Signs Range v4",
+        "tags":  [
+                     "Protocol Check",
+                     "Vitals",
+                     "Range",
+                     "Median",
+                     "SYS",
+                     "DIA",
+                     "HR"
+                 ],
+        "url":  "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Vital%20Signs%20Range%20v4.js",
+        "updated":  "2026-07-20"
     }
 ]
