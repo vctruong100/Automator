@@ -91,7 +91,7 @@ function populateList(formJsonValue, metric, attachedItemName, isRepeat) {
             for (j = items.length - 1; j >= 0; j--) {
                 groupItem = items[j];
                 if (!groupItem) continue;
-                if (groupItem.name == attachedItemName && list.length > 1) return list;
+                if ((groupItem.name == attachedItemName || isAverageItem(groupItem.name)) && list.length > 1) return list;
                 if (matchesMetric(groupItem.name, metric) && !isAverageItem(groupItem.name)) {
                     addNumericValue(list, groupItem.value);
                     logger(metric + " matched item: " + groupItem.name + " | Value: " + groupItem.value);
@@ -108,7 +108,7 @@ function populateList(formJsonValue, metric, attachedItemName, isRepeat) {
             for (j = 0; j < items.length; j++) {
                 groupItem = items[j];
                 if (!groupItem) continue;
-                if (groupItem.name == attachedItemName) return list;
+                if (groupItem.name == attachedItemName || isAverageItem(groupItem.name)) return list;
                 if (matchesMetric(groupItem.name, metric) && !isAverageItem(groupItem.name)) {
                     addNumericValue(list, groupItem.value);
                     logger(metric + " matched item: " + groupItem.name + " | Value: " + groupItem.value);

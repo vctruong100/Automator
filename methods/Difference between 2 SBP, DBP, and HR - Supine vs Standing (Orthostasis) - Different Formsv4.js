@@ -4,11 +4,6 @@
 // Purpose: Computes the numeric orthostatic difference between supine/semi and standing vitals.
 //          Uses keyword matching on item and group names instead of hardcoded item-name lists.
 
-var formNames = [
-    "❤️ VS_TRIPLICATE (HR, BP, RR, ORAL TEMP.) SCRN"    
-]
-var studyevent = formJson.form.studyEventName;
-
 var attachedItem = itemJson.item;
 
 function normalizeName(value) {
@@ -80,71 +75,6 @@ function calculateDifference(semi, standing) {
     var diff = parseFloat(standing) - parseFloat(semi);
     return diff.toFixed(0);
 }
-function pullForm(studyeventList, formNameList) {
-    for (var i = 0; i < studyeventList.length; i++) {
-        for (var j = 0; j < formNameList.length; j++) {
-            var matchedForm = checkForm(studyeventList[i], formNameList[j]);
-            if (matchedForm) return matchedForm;
-        }
-    }
-}
-
-function checkForm(studyevent, form) {
-    var arrayForms = findFormData(studyevent, form);
-    var completedForm = collectCompleted(arrayForms, true);
-    if (!completedForm || completedForm.length === 0) return null;
-    return completedForm[0];
-}
-
-function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
-    if (formDataArray == null) { return []; }
-    var completedForms = [];
-    for (var i = formDataArray.length - 1; i >= 0; i--) {
-        var formData = formDataArray[i];
-        if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false &&
-            (formData.form.dataCollectionStatus == 'Complete' ||
-                (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') ||
-                formData.form.dataCollectionStatus == "Incomplete")) {
-            completedForms.push(formData);
-        }
-    }
-    return completedForms;
-}
-
-function pullItemFromForm(formJsonValue, metric, isRepeat) {
-    logger("Target metric: " + metric);
-    var itemGroups = formJsonValue.form.itemGroups;
-    var group, item, i, j;
-    if (!itemGroups || itemGroups.length < 1) return null;
-
-    if (!isRepeat) {
-        for (i = 0; i < itemGroups.length; i++) {
-            group = itemGroups[i];
-            if (!group || group.canceled) continue;
-    
-            for (j = group.items.length - 1; j >= 0; j--) {
-                item = group.items[j];
-                if (!item) continue;
-    
-                if (matchesMetric(item.name, metric) && item.value !== null && item.value !== "") return item.value;
-            }
-        }
-    } else {
-        for (i = itemGroups.length - 1; i >= 0; i--) {
-            group = itemGroups[i];
-            if (!group || group.canceled) continue;
-    
-            for (j = group.items.length - 1; j >= 0; j--) {
-                item = group.items[j];
-                if (!item) continue;
-    
-                if (matchesMetric(item.name, metric) && item.value !== null && item.value !== "") return item.value;
-            }
-        }
-    }
-    return null;
-}
-
 
 function getOrthostasisValues(metric, isRepeat) {
     var itemGroups = formJson.form.itemGroups;
@@ -210,36 +140,26 @@ function getOrthostasisValues(metric, isRepeat) {
     return {semi: semi, standing: standing};
 }
 
-var rawGroupName = getItemDataContextByItemDataId(attachedItem.id);
-var parsedGroupName = JSON.parse(rawGroupName).foundItemGroupName;
-var isRepeat = parsedGroupName ? containsValue(parsedGroupName, "repeat") : false;
+try {
+    var rawGroupName = getItemDataContextByItemDataId(attachedItem.id);
+    var parsedGroupName = JSON.parse(rawGroupName).foundItemGroupName;
+    var isRepeat = parsedGroupName ? containsValue(parsedGroupName, "repeat") : false;
 
-logger("Group name: " + parsedGroupName);
-logger("Attached item: " + attachedItem.name);
-logger("Is repeat: " + isRepeat);
+    logger("Group name: " + parsedGroupName);
+    logger("Attached item: " + attachedItem.name);
+    logger("Is repeat: " + isRepeat);
 
-var metric = getMetricFromAttachedItem(attachedItem.name);
-logger("Metric: " + metric);
+    var metric = getMetricFromAttachedItem(attachedItem.name);
+    logger("Metric: " + metric);
 
-if (!metric) return null;
+    if (!metric) return null;
 
-var standing, semi;
-
-if (containsValue(formJson.form.name, "standing")) {
-    logger("Pull from screening vital form")
-    standing = pullItemFromForm(formJson, metric, isRepeat);
-
-    var form = pullForm([studyevent], formNames);
-    if (!form) return null;
-    semi = pullItemFromForm(form, metric, true);
-
-} else {
     var values = getOrthostasisValues(metric, isRepeat);
-    semi = values.semi;
-    standing = values.standing;
+    logger("Semi: " + values.semi);
+    logger("Standing: " + values.standing);
+
+    return calculateDifference(values.semi, values.standing);
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
 }
-
-logger("Semi: " + semi);
-logger("Standing: " + standing);
-
-return calculateDifference(semi, standing);
