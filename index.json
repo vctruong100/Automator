@@ -842,10 +842,13 @@
         "id":  "M-084",
         "title":  "Combine Alcohol Substance Use (SU) Queries.js",
         "tags":  [
-                     "Edit Check"
+                     "Alcohol",
+                     "Substance Use",
+                     "Data Transfer",
+                     "Combine"
                  ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Combine%20Alcohol%20Substance%20Use%20(SU)%20Queries.js",
-        "updated":  "2026-07-09"
+        "updated":  "2026-07-21"
     },
     {
         "id":  "M-110",

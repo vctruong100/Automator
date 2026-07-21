@@ -1,123 +1,5 @@
 var item = itemJson.item;
 
-function pullItemFromForm(form, targetItem, itemid) {
-    var itemGroups = form.form.itemGroups;
-    var group, item, i, j;
-    var list = [];
-    if (!itemGroups || itemGroups.length < 1) return null;
-    logger(targetItem)
-    for (i = 0; i < itemGroups.length; i++) {
-        group = itemGroups[i];
-        if (!group || group.canceled || !containsValue(group.name, "alcohol")) continue;
-
-        for (j = 0; j < group.items.length; j++) {
-            item = group.items[j];
-            if (containsItemName(targetItem, item.name) && item.value !== null && !item.canceled && item.value !== "" && item.id !== itemid) {
-                logger("Item value:" + item.value)
-                list.push(item.value);
-            }
-        }
-    }
-    return list;
-}
-
-function getAmountFrequencyPairs(form, itemid) {
-    var itemGroups = form.form.itemGroups;
-    var pairs = [];
-    var group;
-    var item;
-    var i;
-    var j;
-
-    if (!itemGroups || itemGroups.length < 1) {
-        return pairs;
-    }
-
-    for (i = 0; i < itemGroups.length; i++) {
-        group = itemGroups[i];
-
-        if (!group || group.canceled || !containsValue(group.name, "alcohol")) {
-            continue;
-        }
-
-        var amount = null;
-        var frequency = null;
-
-        for (j = 0; j < group.items.length; j++) {
-            item = group.items[j];
-
-            if (item.canceled || item.id == itemid) {
-                continue;
-            }
-
-            if (item.name == "SU_Amount" && item.value != null && item.value != "-") {
-                amount = Number(item.value);
-            }
-
-            if (item.name == "SU_Frequency" && item.value != null && item.value != "-") {
-                frequency = item.value;
-            }
-        }
-
-        if (amount != null && frequency != null) {
-            pairs.push({
-                amount: amount,
-                frequency: frequency
-            });
-        }
-    }
-
-    return pairs;
-}
-
-function getFrequencyMultiplier(fromRank, toRank) {
-    if (fromRank == toRank) {
-        return 1;
-    }
-
-    if (fromRank == 1 && toRank == 2) {
-        return 7;
-    }
-
-    if (fromRank == 2 && toRank == 1) {
-        return 1 / 7;
-    }
-
-    if (fromRank == 1 && toRank == 3) {
-        return 30;
-    }
-
-    if (fromRank == 3 && toRank == 1) {
-        return 1 / 30;
-    }
-
-    if (fromRank == 2 && toRank == 3) {
-        return 4;
-    }
-
-    if (fromRank == 3 && toRank == 2) {
-        return 1 / 4;
-    }
-
-    return 1;
-}
-
-function normalizeItemName(name) {
-    if (!name) return "";
-    return name.toString().replace(/\s+/g, "").toLowerCase();
-}
-
-function containsItemName(itemList, itemName) {
-    var normalizedName = normalizeItemName(itemName);
-
-    for (var i = 0; i < itemList.length; i++) {
-        if (normalizeItemName(itemList[i]) === normalizedName) {
-            return true;
-        }
-    }
-    return false;
-}
-
 function containsValue(input, keyword) {
     if (input == null) {
         return false;
@@ -127,30 +9,31 @@ function containsValue(input, keyword) {
     return normalizedInput.indexOf(keyword) !== -1;
 }
 
+function getFrequencyTokens(value) {
+    if (value == null) return [];
+    return value.toString().toLowerCase().split(/[^a-z0-9]+/).filter(function(t) { return t.length > 0; });
+}
+
+function tokenMatches(tokens, keyword, exact) {
+    for (var i = 0; i < tokens.length; i++) {
+        if (exact) {
+            if (tokens[i] === keyword) return true;
+        } else {
+            if (tokens[i].indexOf(keyword) === 0) return true;
+        }
+    }
+    return false;
+}
+
 function getFrequencyRank(value) {
     if (value == null) return 999;
 
-    value = value.toString().toLowerCase();
+    var tokens = getFrequencyTokens(value);
 
-    // Day
-    if (value.indexOf("day") !== -1 ||
-        value === "d") {
-        return 1;
-    }
-
-    // Week
-    if (value.indexOf("week") !== -1 ||
-        value.indexOf("wk") !== -1 ||
-        value === "w") {
-        return 2;
-    }
-
-    // Month
-    if (value.indexOf("month") !== -1 ||
-        value.indexOf("mon") !== -1 ||
-        value === "m") {
-        return 3;
-    }
+    if (tokenMatches(tokens, "day") || tokenMatches(tokens, "daily") || tokenMatches(tokens, "d", true)) return 1;
+    if (tokenMatches(tokens, "week") || tokenMatches(tokens, "weekly") || tokenMatches(tokens, "wk") || tokenMatches(tokens, "w", true)) return 2;
+    if (tokenMatches(tokens, "month") || tokenMatches(tokens, "monthly") || tokenMatches(tokens, "mon", true) || tokenMatches(tokens, "m", true)) return 3;
+    if (tokenMatches(tokens, "year") || tokenMatches(tokens, "yearly") || tokenMatches(tokens, "yr") || tokenMatches(tokens, "annu") || tokenMatches(tokens, "y", true)) return 4;
 
     return 999;
 }
@@ -159,14 +42,8 @@ function getFrequencyName(rank) {
     if (rank == 1) return "Day";
     if (rank == 2) return "Week";
     if (rank == 3) return "Month";
-    return null;
-}
-
-function getFrequencyName(rank) {
-    if (rank == 1) return "Day";
-    if (rank == 2) return "Week";
-    if (rank == 3) return "Month";
-    return null;
+    if (rank == 4) return "Year";
+    return "-";
 }
 
 function getMonthNumber(month) {
@@ -188,140 +65,267 @@ function getMonthNumber(month) {
     return null;
 }
 
+function padTwo(n) {
+    var s = n.toString();
+    return s.length < 2 ? "0" + s : s;
+}
+
 function getSortableDate(dateString) {
     if (!dateString) return null;
 
-    var value = dateString.toString().replace(/-/g, "");
+    var s = dateString.toString().replace(/[\s\-\/]/g, "").toLowerCase();
 
     // Year only
-    if (value.length == 4) {
-        return Number(value + "0101");
+    if (s.length === 4 && /^\d{4}$/.test(s)) {
+        return Number(s + "0101");
     }
 
-    // DDMonYYYY
-    if (value.length != 9) return null;
+    // DDMonYYYY, e.g. 18jan1976 or 18-Jan-1976
+    var m1 = s.match(/^(\d{1,2})([a-z]{3})(\d{4})$/);
+    if (m1) {
+        var month = getMonthNumber(m1[2]);
+        if (month) {
+            return Number(m1[3] + month + padTwo(parseInt(m1[1], 10)));
+        }
+    }
 
-    var day = value.substring(0, 2);
-    var month = getMonthNumber(value.substring(2, 5));
-    var year = value.substring(5, 9);
+    // YYYYMMDD or YYYY-MM-DD or YYYY/MM/DD
+    var m2 = s.match(/^(\d{4})(\d{2})(\d{2})$/);
+    if (m2) {
+        return Number(m2[1] + m2[2] + m2[3]);
+    }
 
-    if (month == null) return null;
+    return null;
+}
 
-    return Number(year + month + day);
+function getAlcoholEntries(formJsonValue, attachedItemId, groupName) {
+    var itemGroups = formJsonValue.form.itemGroups;
+    var entries = [];
+    if (!itemGroups || itemGroups.length < 1) return entries;
+
+    for (var i = 0; i < itemGroups.length; i++) {
+        var group = itemGroups[i];
+        if (!group || group.canceled || !containsValue(group.name, "alcohol") || group.name == groupName) continue;
+
+        var entry = {
+            amount: null,
+            frequency: null,
+            frequencyRank: 999,
+            startDate: null,
+            endDate: null,
+            occurrence: false
+        };
+        var hasData = false;
+
+        for (var j = 0; j < group.items.length; j++) {
+            var it = group.items[j];
+            if (!it || it.canceled || it.id == attachedItemId) continue;
+
+            var val = it.value;
+            if (val == null || val === "" || val === "-") continue;
+            logger("Item name: " + it.name + ", item value: " + it.value)
+            if (it.name === "SU_Amount") {
+                var n = Number(val);
+                if (!isNaN(n)) {
+                    entry.amount = n;
+                    hasData = true;
+                }
+            } else if (it.name === "SU_Frequency") {
+                entry.frequency = val;
+                entry.frequencyRank = getFrequencyRank(val);
+                hasData = true;
+            } else if (it.name === "SU_Start Date") {
+                entry.startDate = val;
+                hasData = true;
+            } else if (it.name === "SU_End Date") {
+                entry.endDate = val;
+                hasData = true;
+            } else if (it.name === "SU_Occurrence") {
+                if (val.toString().toLowerCase() === "true") {
+                    entry.occurrence = true;
+                }
+                hasData = true;
+            }
+        }
+
+        if (hasData) {
+            entries.push(entry);
+        }
+    }
+
+    return entries;
+}
+
+function selectEntries(entries) {
+    if (!entries || entries.length === 0) {
+        return { selected: [], rank: 999, source: null };
+    }
+
+    var ongoing = [];
+    var ended = [];
+    var i;
+
+    for (i = 0; i < entries.length; i++) {
+        if (entries[i].endDate == null || entries[i].endDate === "") {
+            ongoing.push(entries[i]);
+        } else {
+            ended.push(entries[i]);
+        }
+    }
+
+    logger(ongoing.length)
+    var pool = (ongoing.length > 0) ? ongoing : ended;
+    var source = (ongoing.length > 0) ? "ongoing" : "ended";
+
+    // If all entries have ended, narrow to the most recent end date
+    logger(source)
+    if (source === "ended") {
+        var maxEndSortable = null;
+        var hasValidEnd = false;
+
+        for (i = 0; i < ended.length; i++) {
+            var endSortable = getSortableDate(ended[i].endDate);
+            if (endSortable != null && (maxEndSortable == null || endSortable > maxEndSortable)) {
+                maxEndSortable = endSortable;
+                hasValidEnd = true;
+            }
+        }
+        logger("Has Valid End: " + hasValidEnd)
+        if (hasValidEnd) {
+            var recentEnded = [];
+            for (i = 0; i < ended.length; i++) {
+                var endSortable2 = getSortableDate(ended[i].endDate);
+                if (endSortable2 != null && endSortable2 === maxEndSortable) {
+                    recentEnded.push(ended[i]);
+                }
+            }
+            if (recentEnded.length > 0) {
+                pool = recentEnded;
+            }
+        }
+    }
+
+    // Choose most common frequency: Day > Week > Month > Year
+    var bestRank = 999;
+    for (i = 0; i < pool.length; i++) {
+        if (pool[i].frequencyRank < bestRank) {
+            bestRank = pool[i].frequencyRank;
+        }
+    }
+
+    var selected = [];
+    for (i = 0; i < pool.length; i++) {
+        if (pool[i].frequencyRank === bestRank) {
+            selected.push(pool[i]);
+        }
+    }
+
+    return { selected: selected, rank: bestRank, source: source };
+}
+
+function combineAmount(entries) {
+    var total = 0;
+    var hasAmount = false;
+
+    for (var i = 0; i < entries.length; i++) {
+        if (entries[i].amount != null && !isNaN(entries[i].amount)) {
+            total += entries[i].amount;
+            hasAmount = true;
+        }
+    }
+
+    if (!hasAmount) return "-";
+    return total.toFixed(0);
+}
+
+function getEarliestStart(entries) {
+    var earliestValue = null;
+    var earliestSortable = null;
+
+    for (var i = 0; i < entries.length; i++) {
+        var sortable = getSortableDate(entries[i].startDate);
+        if (sortable == null) continue;
+
+        if (earliestSortable == null || sortable < earliestSortable) {
+            earliestSortable = sortable;
+            earliestValue = entries[i].startDate;
+        }
+    }
+
+    if (earliestValue == null) return "-";
+    return earliestValue;
+}
+
+function getLatestEnd(entries) {
+    var latestValue = null;
+    var latestSortable = null;
+
+    for (var i = 0; i < entries.length; i++) {
+        var sortable = getSortableDate(entries[i].endDate);
+        if (sortable == null) continue;
+
+        if (latestSortable == null || sortable > latestSortable) {
+            latestSortable = sortable;
+            latestValue = entries[i].endDate;
+        }
+    }
+
+    if (latestValue == null) return "-";
+    return latestValue;
+}
+
+function anyOccurrence(entries) {
+    for (var i = 0; i < entries.length; i++) {
+        if (entries[i].occurrence) return true;
+    }
+    return false;
+}
+
+function getFrequencyOutput(entries, rank) {
+    if (rank <= 4) return getFrequencyName(rank);
+
+    if (entries.length === 1 && entries[0].frequency != null) {
+        return entries[0].frequency;
+    }
+
+    return "-";
 }
 
 try {
-    var amount = null;
-    var values = [];
+    var rawgroupName = getItemDataContextByItemDataId(item.id);
+    var parsedGroupName = JSON.parse(rawgroupName).foundItemGroupName;
+    logger("Group name: " + parsedGroupName);
 
-    if (item.name == "SU_Amount") {
+    var entries = getAlcoholEntries(formJson, item.id, parsedGroupName);
+    var selection = selectEntries(entries);
+    var selected = selection.selected;
+    var rank = selection.rank;
 
-        var pairs = getAmountFrequencyPairs(formJson, item.id);
-        if (pairs.length == 0) {
-            return "-";
-        }
-        
-        var targetRank = 0;
-        
-        for (var i = 0; i < pairs.length; i++) {
-            var rank = getFrequencyRank(pairs[i].frequency);
-        
-            if (rank > targetRank) {
-                targetRank = rank;
-            }
-        }
+    if (item.name === "SU_Amount") {
+        return combineAmount(selected);
+    }
 
-        var totalAmount = 0;
-        for (var i = 0; i < pairs.length; i++) {
-            var sourceRank = getFrequencyRank(pairs[i].frequency);
-            totalAmount += pairs[i].amount * getFrequencyMultiplier(sourceRank, targetRank);
-            logger("Total amount: " + totalAmount)
-        }
+    if (item.name === "SU_Frequency") {
+        return getFrequencyOutput(selected, rank);
+    }
 
-        return totalAmount.toFixed(0);
+    if (item.name === "SU_Start Date") {
+        return getEarliestStart(selected);
     }
-    if (item.name == "SU_Frequency") {
-        values = pullItemFromForm(formJson, ["SU_Frequency"], item.id);
-        var bestRank = 0;
-        
-        for (var i = 0; i < values.length; i++) {
-            var rank = getFrequencyRank(values[i]);
-        
-            if (rank > bestRank) {
-                bestRank = rank;
-            }
-        }
-        logger(bestRank)
-        var frequency = getFrequencyName(bestRank);
-        logger(frequency)
-        if (frequency == null) return "-";
-        return frequency;
-    }
-    if (["SU_Unit TEST", "SU_Unit"].indexOf(item.name) !== -1) {
-        values = pullItemFromForm(formJson, ["SU_Occurrence"], item.id);
-        var occurred = false;
-        if (containsValue(values, "true")) return "DRINK";
-        return "-";
-        // values = pullItemFromForm(formJson, ["SU_Unit TEST", "SU_Unit"])
-        // var hasDrink = false;
 
-        // for (var i = 0; i < values.length; i++) {
-        //     if (values[i] != "-") {
-        //         hasDrink = true;
-        //         break;
-        //     }
-        // }
-        
-        // return hasDrink ? "DRINK" : "-";
+    if (item.name === "SU_End Date") {
+        if (selection.source === "ongoing") return "-";
+        return getLatestEnd(selected);
     }
-    if (item.name == "SU_Occurrence") {
-        values = pullItemFromForm(formJson, ["SU_Occurrence"], item.id);
-        var occurred = false;
-        if (containsValue(values, "true")) return "True";
-        return "False";
+
+    if (item.name === "SU_Unit TEST" || item.name === "SU_Unit") {
+        return anyOccurrence(selected) ? "DRINK" : "-";
     }
-    if (item.name == "SU_Start Date") {
-        values = pullItemFromForm(formJson, ["SU_Start Date"], item.id);
-    
-        var earliestValue = null;
-        var earliestSortable = null;
-    
-        for (var i = 0; i < values.length; i++) {
-    
-            var sortable = getSortableDate(values[i]);
-    
-            if (sortable == null) continue;
-    
-            if (earliestSortable == null || sortable < earliestSortable) {
-                earliestSortable = sortable;
-                earliestValue = values[i];
-            }
-        }
-    
-        if (earliestValue == null) return "-";
-        return earliestValue;
+
+    if (item.name === "SU_Occurrence") {
+        return anyOccurrence(selected) ? "True" : "False";
     }
-    if (item.name == "SU_End Date") {
-        values = pullItemFromForm(formJson, ["SU_End Date"], item.id);
-    
-        var latestValue = null;
-        var latestSortable = null;
-    
-        for (var i = 0; i < values.length; i++) {
-    
-            var sortable = getSortableDate(values[i]);
-    
-            if (sortable == null) continue;
-    
-            if (latestSortable == null || sortable > latestSortable) {
-                latestSortable = sortable;
-                latestValue = values[i];
-            }
-        }
-    
-        if (latestValue == null) return "-";
-        return latestValue;
-    }
+
     return null;
 } catch (e) {
     logger("Error: " + e);
