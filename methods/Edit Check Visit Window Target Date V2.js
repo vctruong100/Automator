@@ -7,10 +7,10 @@ var studyevents = [
     "Day 1"
 ]
 var formName = [
-    "🟡IP_EVOLOCUMAB ADMINISTRATION",
+    "🟡IP_DRUG ADMINISTRATION - INJECTION","🟡IP_DRUG ADMINISTRATION - INJECTION_V2",
 ]
 var itemName = [
-    "IP_StartDate"
+    "IP_StartDate", "Datetime of Administration"
 ]
 
 var currentStudyName = formJson.form.studyEventName;
@@ -36,11 +36,11 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
     var keepers = [];
     for (var i = formDataArray.length - 1; i >= 0; i--) {
         var formData = formDataArray[i];
+        if (!formData || !formData.form || !formData.form.itemGroups || formData.form.itemGroups.length < 1) continue;
+
         if (formData.form.canceled == false && formData.form.itemGroups[0].canceled == false && (formData.form.dataCollectionStatus == 'Complete' ||
                 (INCLUDE_NONCONFORMANT_DATA == true && formData.form.dataCollectionStatus == 'Nonconformant') || formData.form.dataCollectionStatus == "Incomplete")) {
             keepers.push(formData);
-        } else {
-
         }
     }
     return keepers;
@@ -64,14 +64,26 @@ function pullForm(studyeventList, formNameList) {
 }
 function parseDate(dateStr) {
     if (!dateStr) return null;
-    var clean = dateStr.split('T')[0];
+    var clean = dateStr.toString().split('T')[0];
     var parts = clean.split('-');
     if (parts.length !== 3) return null;
     var year = Number(parts[0]);
     var month = Number(parts[1]);
     var day = Number(parts[2]);
     if (!year || !month || !day) return null;
-    return new Date(year, month - 1, day);
+    var parsed = new Date(year, month - 1, day);
+    if (parsed.getFullYear() !== year || parsed.getMonth() !== month - 1 || parsed.getDate() !== day) return null;
+    return parsed;
+}
+
+function addCalendarDays(dateObj, days) {
+    var copy = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+    copy.setDate(copy.getDate() + days);
+    return copy;
+}
+
+function calendarDayNumber(dateObj) {
+    return Math.floor(Date.UTC(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate()) / 86400000);
 }
 
 function formatDateText(dateObj) {
@@ -84,6 +96,7 @@ function formatDateText(dateObj) {
 }
 
 function pullItemFromForm(form, targetItem) {
+    if (!form || !form.form) return null;
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
 
@@ -92,46 +105,61 @@ function pullItemFromForm(form, targetItem) {
     for (i = 0; i < itemGroups.length; i++) {
         group = itemGroups[i];
         if (!group || group.canceled) continue;
+        if (!group.items || group.items.length < 1) continue;
         for (j = 0; j < group.items.length; j++) {
             item = group.items[j];
-            if (containsItemName(targetItem, item.name) && item.value !== null && !item.canceled && item.value !== "") return item;
+            if (item && containsItemName(targetItem, item.name) && item.value !== null && !item.canceled && item.value !== "") return item;
         }
     }
     return null;
 }
 
-try {
-    logger("Study event: " + currentStudyName);
-    if (currentStudyName == "Screening") return true;
-    var day = parseInt(currentStudyName.split(" ")[1]);
-    logger("Day: " + day);
+logger("Study event: " + currentStudyName);
+if (currentStudyName == "Screening") return true;
+var dayMatch = currentStudyName ? currentStudyName.toString().match(/^Day\s+(\d+)\b/i) : null;
+if (!dayMatch) return true;
 
-    if (day < 9) return true;
+var day = parseInt(dayMatch[1], 10);
+logger("Day: " + day);
 
-    var form = pullForm(studyevents, formName);
+if (day < 9) return true;
 
-    if (!form) return null;
-    var val = pullItemFromForm(form, itemName);
+var form = pullForm(studyevents, formName);
 
-    if (!val || !item || !item.dateValueMs) return false;
-    logger("Start Date: " + val.value);
-    logger("Collected Date: " + item.value);
-    var baseDate = parseDate(val.value);
-    if (!baseDate) return false;
+if (!form) return null;
+var val = pullItemFromForm(form, itemName);
 
-    var addDays = day - 1;
-    logger("Add days: " + addDays)
-    var allowedRange = day <= 15 ? 1 : 2;
+if (!val || !item || !item.value) return true;
+logger("Start Date: " + val.value);
+logger("Collected Date: " + item.value);
+var baseDate = parseDate(val.value);
+var collectedDate = parseDate(item.value);
+if (!baseDate || !collectedDate) return true;
 
-    logger("Allowed range: " + allowedRange)
+var addDays = day - 1;
+logger("Add days: " + addDays)
+var allowedRange = day <= 141 ? 2 : 7;
 
-    var targetMs = baseDate.getTime() + addDays * 86400000;
-    var diffDays = Math.floor(Math.abs(item.dateValueMs - targetMs) / 86400000);
-    logger("Differences: " + diffDays);
-    return diffDays <= allowedRange;
+logger("Allowed range: " + allowedRange)
 
-}
-catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
-}
+var targetDate = addCalendarDays(baseDate, addDays);
+
+var targetMs = baseDate.getTime() + addDays * 86400000;
+
+var collectedFromMs = new Date(Number(item.dateValueMs));
+var targetFromMs = new Date(Number(targetMs));
+
+logger("Collected raw value: " + item.value);
+logger("Collected dateValueMs: " + item.dateValueMs);
+logger("Collected from dateValueMs local: " + collectedFromMs.toString());
+logger("Collected from dateValueMs ISO: " + collectedFromMs.toISOString());
+
+logger("Target date local: " + targetFromMs.toString());
+logger("Target date ISO: " + targetFromMs.toISOString());
+
+logger("Raw ms difference: " + Math.abs(item.dateValueMs - targetMs));
+logger("Raw day difference: " + (Math.abs(item.dateValueMs - targetMs) / 86400000));
+
+var diffDays = Math.abs(calendarDayNumber(collectedDate) - calendarDayNumber(targetDate));
+logger("Differences: " + diffDays);
+return diffDays <= allowedRange;

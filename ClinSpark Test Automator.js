@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 4.2.9
+// @version 4.3.0
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; Activity Plan Removal; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -18833,13 +18833,10 @@
             var forms = segmentFormMap[segVal] || [];
             if (forms.length === 0) return null;
             var counts = {};
-            var denominator = forms.length;
+            var denominator = 0;
             for (var i = 0; i < forms.length; i++) {
                 var fKey = getFormDataKey(segVal, forms[i].value, forms[i].index);
-                if (excludeFormKey && fKey === excludeFormKey) {
-                    denominator--;
-                    continue;
-                }
+                if (excludeFormKey && fKey === excludeFormKey) continue;
                 var fd = formDataStore[fKey] || getDefaultFormData();
                 var evts = fd.studyEvents || [];
                 if (evts.length > 0 && evts[0].text) {
@@ -18849,6 +18846,7 @@
                         counts[evText] = { text: evText, value: evValue, count: 0 };
                     }
                     counts[evText].count++;
+                    denominator++;
                 }
             }
             if (denominator <= 0) return null;
@@ -20084,6 +20082,24 @@
                                     }
                                 };
                             })(fKey, isAutoPopulated));
+                            var evCopyIcon = document.createElement("span");
+                            evCopyIcon.textContent = "\u{1F4C4}";
+                            evCopyIcon.title = "Copy this study event";
+                            evCopyIcon.style.cssText = "cursor:pointer;font-size:9px;flex-shrink:0;opacity:0.5;padding:1px 2px;border-radius:2px;color:#aaffaa;";
+                            evCopyIcon.addEventListener("mouseenter", function() { this.style.opacity = "1"; this.style.background = "rgba(122,255,122,0.2)"; });
+                            evCopyIcon.addEventListener("mouseleave", function() { this.style.opacity = "0.5"; this.style.background = ""; });
+                            evCopyIcon.addEventListener("click", (function(fk) {
+                                return function(e) {
+                                    e.stopPropagation();
+                                    var d = formDataStore[fk];
+                                    if (d && d.studyEvents && d.studyEvents.length > 0) {
+                                        copiedStudyEvent = { value: d.studyEvents[0].value, text: d.studyEvents[0].text };
+                                        log("BPL: copied study event " + copiedStudyEvent.text + " from form " + fk);
+                                        showCopyToast("Copied: " + copiedStudyEvent.text, e);
+                                    }
+                                };
+                            })(fKey));
+
                             var evRemoveBtn = document.createElement("span");
                             evRemoveBtn.textContent = "\u00D7";
                             evRemoveBtn.style.cssText = "cursor:pointer;color:#ff6b6b;font-weight:bold;font-size:11px;margin-left:1px;flex-shrink:0;";
@@ -20102,8 +20118,10 @@
                                     runAutoValidation();
                                 };
                             })(fKey, isAutoPopulated));
+                            evTag.appendChild(evCopyIcon);
                             evTag.appendChild(evRemoveBtn);
                             eventDropBox.appendChild(evTag);
+
                         }
                         var evPasteIcon = document.createElement("span");
                         evPasteIcon.textContent = "\u{1F4CB}";
