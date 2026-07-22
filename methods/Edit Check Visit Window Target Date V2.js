@@ -122,7 +122,7 @@ if (!dayMatch) return true;
 var day = parseInt(dayMatch[1], 10);
 logger("Day: " + day);
 
-if (day < 9) return true;
+if (day < 8) return true;
 
 var form = pullForm(studyevents, formName);
 
@@ -160,6 +160,8 @@ logger("Target date ISO: " + targetFromMs.toISOString());
 logger("Raw ms difference: " + Math.abs(item.dateValueMs - targetMs));
 logger("Raw day difference: " + (Math.abs(item.dateValueMs - targetMs) / 86400000));
 
+logger("Floored Collected Date: " + calendarDayNumber(collectedDate))
+logger("Floored Target Date: " + calendarDayNumber(targetDate))
 var diffDays = Math.abs(calendarDayNumber(collectedDate) - calendarDayNumber(targetDate));
 logger("Differences: " + diffDays);
 return diffDays <= allowedRange;
