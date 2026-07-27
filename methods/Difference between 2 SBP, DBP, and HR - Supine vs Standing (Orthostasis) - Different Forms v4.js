@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v4
-// Purpose: Computes the numeric orthostatic difference between supine/semi and standing vitals.
+// Description: Calculates orthostatic SBP, DBP, or HR differences when supine or semi-recumbent values and standing values are collected on different forms, using configured form lookup and v4 metric matching.
 //          Uses keyword matching on item and group names instead of hardcoded item-name lists.
 
 var formNames = [
@@ -74,10 +74,24 @@ function isAttachedItem(groupItem) {
     return groupItem.name === attachedItem.name;
 }
 
+function isCalculatedVitalItem(itemName) {
+    if (containsValue(itemName, "AVERAGE")) return true;
+    if (containsValue(itemName, "AVG")) return true;
+    if (containsValue(itemName, "MEAN")) return true;
+    if (containsValue(itemName, "MEDIAN")) return true;
+    if (containsValue(itemName, "CHANGE")) return true;
+    if (containsValue(itemName, "DIFFERENCE")) return true;
+    if (containsStandaloneKeyword(itemName, "DIFF")) return true;
+    if (containsValue(itemName, "ORTHOSTATIC")) return true;
+    if (containsValue(itemName, "ORTHOSTASIS")) return true;
+
+    return false;
+}
+
 function calculateDifference(semi, standing) {
     if (semi == null || standing == null || isNaN(semi) || isNaN(standing)) return null;
 
-    var diff = parseFloat(standing) - parseFloat(semi);
+    var diff = parseFloat(semi) - parseFloat(standing);
     return diff.toFixed(0);
 }
 function pullForm(studyeventList, formNameList) {
@@ -126,7 +140,7 @@ function pullItemFromForm(formJsonValue, metric, isRepeat) {
                 item = group.items[j];
                 if (!item) continue;
     
-                if (matchesMetric(item.name, metric) && item.value !== null && item.value !== "") return item.value;
+                if (matchesMetric(item.name, metric) && item.value !== null && item.value !== "" && !isCalculatedVitalItem(item.name)) return item.value;
             }
         }
     } else {
@@ -138,7 +152,7 @@ function pullItemFromForm(formJsonValue, metric, isRepeat) {
                 item = group.items[j];
                 if (!item) continue;
     
-                if (matchesMetric(item.name, metric) && item.value !== null && item.value !== "") return item.value;
+                if (matchesMetric(item.name, metric) && item.value !== null && item.value !== "" && !isCalculatedVitalItem(item.name)) return item.value;
             }
         }
     }
@@ -168,6 +182,7 @@ function getOrthostasisValues(metric, isRepeat) {
 
                 if (groupItem.value === null || groupItem.value === "" || groupItem.canceled) continue;
                 if (!matchesMetric(groupItem.name, metric)) continue;
+                if (isCalculatedVitalItem(groupItem.name)) continue;
 
                 if (isStanding(groupItem.name, group.name)) {
                     if (standing === null) standing = parseFloat(groupItem.value);
@@ -194,6 +209,7 @@ function getOrthostasisValues(metric, isRepeat) {
 
                 if (groupItem.value === null || groupItem.value === "" || groupItem.canceled) continue;
                 if (!matchesMetric(groupItem.name, metric)) continue;
+                if (isCalculatedVitalItem(groupItem.name)) continue;
 
                 if (isStanding(groupItem.name, group.name)) {
                     if (standing === null) standing = parseFloat(groupItem.value);

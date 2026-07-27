@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Validates kit accession number format.
+// Description: Validates kit accession number formatting against the expected study pattern so malformed kit identifiers can be queried before downstream use.
 
 var value = itemJson.item.value;
 

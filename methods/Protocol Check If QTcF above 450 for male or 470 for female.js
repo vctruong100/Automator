@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Sex-specific QTcF protocol threshold check.
+// Description: Applies sex-specific QTcF protocol thresholds and returns the protocol-check result when male QTcF exceeds 450 msec or female QTcF exceeds 470 msec.
 
 var item = itemJson.item;
 

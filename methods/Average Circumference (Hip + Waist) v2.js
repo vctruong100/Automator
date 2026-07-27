@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v2
-// Purpose: Computes sum of average hip and waist circumference values. Does not require any item names.
+// Description: Calculates the combined hip-plus-waist value by auto-detecting hip and waist measurement items, averaging each metric independently, and returning the sum without configured item-name lists.
 
 var form = formJson.form;
 var attachedItem = itemJson.item;

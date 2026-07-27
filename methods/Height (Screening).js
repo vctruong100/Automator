@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Pulls height from Screening body measurements.
+// Description: Pulls the subject height value from the configured Screening body-measurements form for reuse in BMI or later-visit calculations.
 
 var formName = [
     "BM_Height/Weight/BMI",

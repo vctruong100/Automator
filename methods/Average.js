@@ -1,6 +1,6 @@
 /* jshint strict: false */
 // Version: v1
-// Purpose: Calculates average PR, QRS, QT, QTcF, and HR from form items (repeat and non-repeat support).
+// Description: Calculates average PR, QRS, QT, QTcF, or HR values from the current form with repeat and non-repeat support, using the attached item to determine which ECG metric should be averaged.
 
 // Add item names
 // items to pull for calculation

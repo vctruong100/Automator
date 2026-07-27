@@ -1,4 +1,5 @@
 /* jshint strict: false */
+// Description: Provides reusable ClinSpark helper snippets for normalization, item lookup, form lookup, numeric conversion, logging, and common calculation patterns used across automation methods.
 // ---------------------------------------------------------------------------
 // CONVERSION & LOGGING HELPERS
 // ---------------------------------------------------------------------------

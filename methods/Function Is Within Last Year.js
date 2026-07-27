@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Returns true if a date falls within the last 365 days.
+// Description: Returns true when the supplied date falls within the last 365 days relative to the current date, and false when it is older or invalid.
 
 function isWithinLastYear(inputDate) {
     if (!inputDate) return false;

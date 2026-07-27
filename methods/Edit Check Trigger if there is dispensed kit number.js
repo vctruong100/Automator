@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Triggers validation when dispensed kit number is present.
+// Description: Triggers an edit-check response when a dispensed kit number is present, supporting kit reconciliation or conditional downstream validation.
 
 var itemName = "Dispensed kit number #4";
 var item = itemJson.item;

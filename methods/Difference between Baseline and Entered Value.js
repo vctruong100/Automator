@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Calculates delta between baseline and currently entered value.
+// Description: Calculates the numeric change between a configured baseline value and the currently entered value, returning the delta for change-from-baseline fields or edit checks.
 
 // Add Item Names
 var baselineStudyEvent = ["Period 1 Day 1","Visit 2 Week 1 Day 0",];

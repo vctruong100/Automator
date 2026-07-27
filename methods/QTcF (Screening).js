@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Computes QTcF from screening ECG forms.
+// Description: Pulls or computes the QTcF value from configured Screening ECG forms so later methods can reuse the screening QTcF baseline.
 
 var studyevent = [
     "SCREENING",

@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Calculates average diastolic, systolic BP, and heart rate.
+// Description: Calculates average systolic blood pressure, diastolic blood pressure, or heart rate from configured vital-sign items, based on which average item the method is attached to.
 
 // Add item names
 // items to pull for calculation

@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Computes average weight from repeated measurements.
+// Description: Calculates average weight from explicitly configured weight measurement items on the current form, excluding blank or canceled entries and summary fields.
 
 // Add item names
 var itemList = [

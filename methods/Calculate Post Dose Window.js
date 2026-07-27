@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Calculates and returns the valid assessment window (30–45 minutes post-dose) based on the DateTime of IP administration within the same item group.
+// Description: Returns the valid 30- to 45-minute post-dose assessment time window by reading the administration datetime from the same item group and formatting the lower and upper time bounds.
 
 const itemName = [
     "DateTime of bronchodilator administration"    

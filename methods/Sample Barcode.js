@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Transfer barcode validation and formatting.
+// Description: Validates and formats sample barcode values by matching the current sample context to the configured sample barcode item list.
 var item = itemJson.item;
 
 var itemNames = [

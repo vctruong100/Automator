@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v2
-// Purpose: Protocol range check for averaged SBP and DBP.
+// Description: Checks averaged systolic and diastolic blood pressure values against protocol-defined vital-sign ranges using configured source items.
 
 // Add item names
 var dbpItems = [

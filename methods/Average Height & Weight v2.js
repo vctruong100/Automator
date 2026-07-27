@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v2
-// Purpose: Pulls and averages height and weight measurements. Does not require any item names.
+// Description: Calculates average height or average weight by detecting matching measurement items from their names, supporting repeat and non-repeat item groups without configured item-name lists.
 
 var form = formJson.form;
 var attachedItem = itemJson.item;

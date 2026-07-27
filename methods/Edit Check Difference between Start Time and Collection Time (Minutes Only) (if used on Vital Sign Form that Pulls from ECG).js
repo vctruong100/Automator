@@ -1,3 +1,6 @@
+/* jshint strict: false */
+// Description: Validates vital-sign collection timing against ECG-derived start times, accounting for same-as-ECG selections and using minute-level comparison for the configured interval.
+
 // Add Item Names
 var studyEventName = formJson.form.studyEventName;
 var sameAsECG = ["vs_same_as ecg", "VS_Repeat Start SEMI RECUMBENT time"]

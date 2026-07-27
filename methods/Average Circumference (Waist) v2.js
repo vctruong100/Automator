@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v2
-// Purpose: Computes average waist circumference from repeated measurements. Does not require any item names.
+// Description: Calculates the average waist circumference by detecting waist measurement items from their names instead of relying on configured item lists, with support for repeat and non-repeat item groups.
 
 var form = formJson.form;
 var attachedItem = itemJson.item;

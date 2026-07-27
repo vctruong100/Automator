@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Protocol Check Any QTcF increase ≥60 msec from Baseline OR average QTcF 500 msec (REPEAT).
+// Description: Runs a repeat-form QTcF protocol check that flags subjects with any QTcF increase of at least 60 msec from baseline or an average QTcF of at least 500 msec.
 
 // Add item names
 var baselineForms = [

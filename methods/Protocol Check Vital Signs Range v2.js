@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v2
-// Purpose: General vital signs range protocol check. Does not require any item names.
+// Description: Checks vital-sign values against protocol ranges while auto-detecting source items from their names instead of requiring configured item-name lists.
 
 // Inclusive
 var sys_min_range = 91;

@@ -1,5 +1,5 @@
 // Version: v1
-// Purpose: Determines current dosing level from kit label and tablet count.
+// Description: Determines the current dosing level by reading the most recent kit label and tablet-count data from configured dose forms, then mapping that data to the appropriate dosing level output.
 /* jshint strict: false */
 
 var formNames = [

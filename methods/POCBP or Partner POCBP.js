@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Handles point-of-care blood pressure data capture.
+// Description: Determines the appropriate POCBP or partner POCBP response from configured subject or partner reproductive-potential fields.
 
 var studyEvent = [
     "SCREENING",

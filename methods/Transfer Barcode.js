@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Transfer barcode validation and formatting.
+// Description: Validates and formats transfer barcode values by matching transfer sample context and returning the appropriate barcode output.
 
 var itemNames = [
     "BE_Date of sample 0 (PK)",

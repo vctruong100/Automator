@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Pulls BMI value from the Screening event's body measurements form.
+// Description: Pulls the subject BMI value from the configured Screening body-measurements form and returns it for use on later forms or visits.
 
 var studyEventNames = [
     "Screening",

@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Computes differences between supine and standing vitals (same item names for both repeat and non-repeat item groups).
+// Description: Calculates the orthostatic difference between supine and standing SBP, DBP, or HR values from same-named configured items, supporting both repeat and non-repeat item groups.
 
 // Add item names
 var sysItem = ["SYS (P: 91 - 150)",]

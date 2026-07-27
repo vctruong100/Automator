@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: QTcF safety edit check with sex-specific thresholds.
+// Description: Runs QTcF safety logic that can trigger when QTcF is at least 500 msec, exceeds sex-specific thresholds, or increases by at least 60 msec from baseline.
 
 // Add item names
 var baselineForm = [

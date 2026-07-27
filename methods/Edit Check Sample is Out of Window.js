@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Flags samples collected outside defined time windows.
+// Description: Checks sample collection timing against configured nominal windows and returns false when the sample is collected outside the allowed lower or upper bounds.
 
 var studyevents = [
     "Day 1"

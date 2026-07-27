@@ -2,116 +2,127 @@
     {
         "id": "M-001",
         "title": "Average Circumference (Hip)",
+        "description": "Calculates the average hip circumference from explicitly configured hip circumference items on the current form, stopping before the attached average item so previously calculated summary fields are not included.",
         "tags": [
             "Average",
             "Circumference",
             "Hip"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20Circumference%20(Hip).js",
-        "updated": "2026-06-02"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-002",
         "title": "Average Circumference (Waist)",
+        "description": "Calculates the average waist circumference from explicitly configured waist circumference items on the current form, excluding blank, canceled, and summary values.",
         "tags": [
             "Average",
             "Circumference",
             "Waist"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20Circumference%20(Waist).js",
-        "updated": "2026-06-02"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-003",
         "title": "Average DIA, SYS, Heart Rate",
+        "description": "Calculates average systolic blood pressure, diastolic blood pressure, or heart rate from configured vital-sign items, based on which average item the method is attached to.",
         "tags": [
             "Average",
             "Vitals"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20DIA%2C%20SYS%2C%20Heart%20Rate.js",
-        "updated": "2026-05-20"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-004",
         "title": "BM_BMI",
+        "description": "Calculates body mass index from height and weight values outside Screening, converting the source measurements as needed and returning the BMI rounded according to the attached item settings.",
         "tags": [
             "BMI"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/BM_BMI.js",
-        "updated": "2026-07-17"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-006",
         "title": "Baseline QtcF",
+        "description": "Retrieves baseline QTcF from configured screening or predose ECG forms, selecting the relevant completed source form and returning the matching QTcF item value.",
         "tags": [
             "Baseline",
             "QtcF",
             "ECG"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Baseline%20QtcF.js",
-        "updated": "2026-02-12"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-007",
         "title": "Common Functions",
+        "description": "Provides reusable ClinSpark helper snippets for normalization, item lookup, form lookup, numeric conversion, logging, and common calculation patterns used across automation methods.",
         "tags": [
             "Functions",
             "Utilities"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Common%20Functions.js",
-        "updated": "2026-02-12"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-010",
         "title": "Difference between Baseline and Entered Value",
+        "description": "Calculates the numeric change between a configured baseline value and the currently entered value, returning the delta for change-from-baseline fields or edit checks.",
         "tags": [
             "Difference",
             "Baseline"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Difference%20between%20Baseline%20and%20Entered%20Value.js",
-        "updated": "2026-02-12"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-011",
         "title": "Dominant Arm (Pull from Screening)",
+        "description": "Pulls the subject dominant-arm value from the configured Screening vital-sign or body-measurement form for reuse on later visit forms.",
         "tags": [
             "Dominant Arm",
             "Screening"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Dominant%20Arm%20(Pull%20from%20Screening).js",
-        "updated": "2026-02-12"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-012",
         "title": "Edit Check QtcF (Trigger if  500 OR male  450 OR female  470 OR difference from baseline  60",
+        "description": "Runs QTcF safety logic that can trigger when QTcF is at least 500 msec, exceeds sex-specific thresholds, or increases by at least 60 msec from baseline.",
         "tags": [
             "Edit Check",
             "QtcF",
             "ECG"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20QtcF%20(Trigger%20if%20%20500%20OR%20male%20%20450%20OR%20female%20%20470%20OR%20difference%20from%20baseline%20%2060.js",
-        "updated": "2026-02-12"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-013",
         "title": "Edit Check Trigger if there is dispensed kit number",
+        "description": "Triggers an edit-check response when a dispensed kit number is present, supporting kit reconciliation or conditional downstream validation.",
         "tags": [
             "Edit Check",
             "Kit"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Trigger%20if%20there%20is%20dispensed%20kit%20number.js",
-        "updated": "2026-02-12"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-014",
         "title": "Edit Check Visit Window Target Date",
+        "description": "Validates that the current visit date falls within the protocol-defined visit window calculated from the configured randomization or Day 1 reference date.",
         "tags": [
             "Edit Check",
             "Visit Window",
             "Target Date"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Visit%20Window%20Target%20Date.js",
-        "updated": "2026-02-12"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-015",
@@ -127,12 +138,13 @@
     {
         "id": "M-016",
         "title": "Height (Screening)",
+        "description": "Pulls the subject height value from the configured Screening body-measurements form for reuse in BMI or later-visit calculations.",
         "tags": [
             "Height",
             "Screening"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Height%20(Screening).js",
-        "updated": "2026-02-12"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-017",
@@ -148,6 +160,7 @@
     {
         "id": "M-018",
         "title": "HipWaist Circumference from Previous Visit",
+        "description": "Pulls hip and waist circumference values from the mapped previous visit so current-visit derived fields can reuse prior measurements.",
         "tags": [
             "Circumference",
             "Hip",
@@ -155,357 +168,392 @@
             "Previous Visit"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/HipWaist%20Circumference%20from%20Previous%20Visit.js",
-        "updated": "2026-02-12"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-019",
         "title": "FSH and Pregnancy Test",
+        "description": "Evaluates FSH and pregnancy-test logic together to determine the appropriate result or eligibility output for reproductive-status workflows.",
         "tags": [
             "FSH",
             "Pregnancy",
             "Safety Labs"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/FSH%20and%20Pregnancy%20Test.js",
-        "updated": "2026-03-26"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-020",
         "title": "Pregnancy Test",
+        "description": "Evaluates pregnancy-test result values and returns the appropriate flag or response for pregnancy-related eligibility or safety logic.",
         "tags": [
             "Pregnancy",
             "Test"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Pregnancy%20Test.js",
-        "updated": "2026-03-26"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-021",
         "title": "Kit Accession Number",
+        "description": "Generates or validates kit accession numbers using the Day 1 prefix logic and configured kit fields for study-specific kit tracking.",
         "tags": [
             "Kit",
             "Accession Number"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Kit%20Accession%20Number.js",
-        "updated": "2026-07-15"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-022",
         "title": "Last Meal Time",
+        "description": "Captures the subject last-meal time from configured source items and formats it for the target output field.",
         "tags": [
             "Meal Time"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Last%20Meal%20Time.js",
-        "updated": "2026-02-12"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-027",
         "title": "POCBP or Partner POCBP",
+        "description": "Determines the appropriate POCBP or partner POCBP response from configured subject or partner reproductive-potential fields.",
         "tags": [
             "POCBP"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/POCBP%20or%20Partner%20POCBP.js",
-        "updated": "2026-02-12"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-028",
         "title": "Process No.",
+        "description": "Generates, retrieves, or tracks process numbers for lab sample workflows so related samples can share the correct process identifier.",
         "tags": [
             "Process Number"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Process%20No..js",
-        "updated": "2026-02-12"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-030",
         "title": "Protocol Check Any QTcF increase ≥60 msec from Baseline OR average QTcF 500 msec",
+        "description": "Runs a repeat-form QTcF protocol check that flags subjects with any QTcF increase of at least 60 msec from baseline or an average QTcF of at least 500 msec.",
         "tags": [
             "Protocol Check",
             "QtcF"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Any%20QTcF%20increase%20%E2%89%A560%20msec%20from%20Baseline%20OR%20average%20QTcF%20500%20msec.js",
-        "updated": "2026-02-12"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-033",
         "title": "Protocol Check Is BMI within range",
+        "description": "Validates BMI against protocol-defined lower and upper limits and returns the configured protocol-check output for in-range or out-of-range values.",
         "tags": [
             "Protocol Check",
             "BMI"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Is%20BMI%20within%20range.js",
-        "updated": "2026-07-17"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-034",
         "title": "Protocol Check Vital Signs Range",
+        "description": "Checks vital-sign values against general protocol ranges using configured item lists and returns the appropriate in-range or out-of-range result.",
         "tags": [
             "Protocol Check",
             "Vitals"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Vital%20Signs%20Range.js",
-        "updated": "2026-03-30"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-036",
         "title": "QTcF (Screening)",
+        "description": "Pulls or computes the QTcF value from configured Screening ECG forms so later methods can reuse the screening QTcF baseline.",
         "tags": [
             "QtcF",
             "Screening",
             "ECG"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/QTcF%20(Screening).js",
-        "updated": "2026-02-12"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-037",
         "title": "Sample Barcode",
+        "description": "Validates and formats sample barcode values by matching the current sample context to the configured sample barcode item list.",
         "tags": [
             "Barcode",
             "Sample"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Sample%20Barcode.js",
-        "updated": "2026-02-12"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-040",
         "title": "Subject's Initials",
+        "description": "Returns the subject initials from available subject-identifying fields for use in target initials fields.",
         "tags": [
             "Initials",
             "Subject"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Subject's%20Initials.js",
-        "updated": "2026-02-12"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-041",
         "title": "Target Date",
+        "description": "Calculates target visit-date ranges from the configured randomization or Day 1 reference date and the protocol visit-window map.",
         "tags": [
             "Target Date",
             "Visit Window"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Target%20Date.js",
-        "updated": "2026-02-12"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-042",
         "title": "Total Urine Volume",
+        "description": "Calculates total urine volume across configured collection intervals by summing valid interval volume values from the current form.",
         "tags": [
             "Urine",
             "Volume"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Total%20Urine%20Volume.js",
-        "updated": "2026-02-12"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-043",
         "title": "Total Urine Weight",
+        "description": "Calculates net urine weight by subtracting the empty jug weight from the jug-plus-urine weight on the current form.",
         "tags": [
             "Urine",
             "Weight"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Total%20Urine%20Weight.js",
-        "updated": "2026-02-12"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-044",
         "title": "Transfer Barcode",
+        "description": "Validates and formats transfer barcode values by matching transfer sample context and returning the appropriate barcode output.",
         "tags": [
             "Barcode",
             "Transfer"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Transfer%20Barcode.js",
-        "updated": "2026-02-12"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-045",
         "title": "Tween-20 DateTime is more than 1 hour after PCVOID",
+        "description": "Validates that Tween-20 datetime occurs more than one hour after the PCVOID datetime for the urine collection interval.",
         "tags": [
             "Tween",
             "DateTime",
             "PCVOID"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Tween-20%20DateTime%20is%20more%20than%201%20hour%20after%20PCVOID.js",
-        "updated": "2026-02-12"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-046",
         "title": "Tween-20 Volume = (Urine Volume)10",
+        "description": "Calculates Tween-20 additive volume as one tenth of the urine volume and returns the result for the Tween-20 volume field.",
         "tags": [
             "Tween",
             "Volume",
             "Urine"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Tween-20%20Volume%20%3D%20(Urine%20Volume)10.js",
-        "updated": "2026-02-12"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-047",
         "title": "Waist to Height Ratio",
+        "description": "Calculates waist-to-height ratio from configured waist and height measurements, using current or pulled source values as available.",
         "tags": [
             "Waist",
             "Height",
             "Ratio"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Waist%20to%20Height%20Ratio.js",
-        "updated": "2026-02-12"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-048",
         "title": "Waist to Hip Ratio",
+        "description": "Calculates waist-to-hip ratio from configured waist and hip circumference measurements, using current or pulled source values as available.",
         "tags": [
             "Waist",
             "Hip",
             "Ratio"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Waist%20to%20Hip%20Ratio.js",
-        "updated": "2026-02-12"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-049",
         "title": "Average Height",
+        "description": "Calculates average height from explicitly configured height measurement items on the current form, excluding blank or canceled entries and summary fields.",
         "tags": [
             "BMI",
             "Height",
             "Average"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20Height.js",
-        "updated": "2026-02-16"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-050",
         "title": "Average Weight",
+        "description": "Calculates average weight from explicitly configured weight measurement items on the current form, excluding blank or canceled entries and summary fields.",
         "tags": [
             "BMI",
             "Weight",
             "Average"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20Weight.js",
-        "updated": "2026-02-16"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-057",
         "title": "Year of Birth",
+        "description": "Extracts the subject year of birth from the volunteer date-of-birth value and returns only the four-digit year.",
         "tags": [
             "Year",
             "Birth"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Year%20of%20Birth.js",
-        "updated": "2026-02-26"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-058",
         "title": "After-Dose",
+        "description": "Calculates an end-of-interval datetime by reading a dose administration datetime from the configured Day 1 dose form, deriving the hour interval from the current study event name, and returning the resulting ClinSpark datetime value for downstream form population.",
         "tags": [
             "Dose"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/After-Dose.js",
-        "updated": "2026-03-02"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-059",
         "title": "Edit Check Void Interval Check",
+        "description": "Validates urine void interval sequencing by comparing start and end void times and returning false when intervals are missing, overlapping, or out of order.",
         "tags": [
             "Void",
             "Interval",
             "Check"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Void%20Interval%20Check.js",
-        "updated": "2026-03-02"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-060",
         "title": "Edit Check Tween-20 datetime is 1 hour after PCVOID",
+        "description": "Validates that the Tween-20 datetime is exactly one hour after the PCVOID reference datetime for the same collection workflow.",
         "tags": [
             "Void",
             "Check"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Tween-20%20datetime%20is%201%20hour%20after%20PCVOID.js",
-        "updated": "2026-03-02"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-061",
         "title": "Total Urine Weight v2",
+        "description": "Calculates net urine weight from jug-plus-urine and empty-jug items with updated item matching for v2 urine collection forms.",
         "tags": [
             "Void",
             "Weight"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Total%20Urine%20Weight%20v2.js",
-        "updated": "2026-03-02"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-062",
         "title": "Protocol Check Average Vital Signs Range SYS, DIA",
+        "description": "Checks averaged systolic and diastolic blood pressure values against protocol-defined vital-sign ranges using configured source items.",
         "tags": [
             "Protocol Check",
             "Vitals"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Average%20Vital%20Signs%20Range%20SYS%2C%20DIA.js",
-        "updated": "2026-03-04"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-064",
         "title": "Function Is Within Last Year",
+        "description": "Returns true when the supplied date falls within the last 365 days relative to the current date, and false when it is older or invalid.",
         "tags": [
             "Function",
             "Year"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Function%20Is%20Within%20Last%20Year.js",
-        "updated": "2026-03-10"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-068",
         "title": "Dipstick Result for ALL",
+        "description": "Evaluates urine dipstick result items across the current form and returns a consolidated flag or result based on configured abnormal-result logic.",
         "tags": [
             "Edit",
             "Check"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Dipstick%20Result%20for%20ALL.js",
-        "updated": "2026-03-13"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-069",
         "title": "Edit Check Transfer Barcode Contains T",
+        "description": "Validates that transfer barcode entries include the required T prefix or marker before allowing the barcode to pass the edit check.",
         "tags": [
             "Edit",
             "Check"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Transfer%20Barcode%20Contains%20T.js",
-        "updated": "2026-03-26"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-070",
         "title": "Edit Check Range check for any (HR, SYS, DIA, VS, ECG, QtcF, QTC, QT)",
+        "description": "Applies a lightweight item-name-driven range check for common vital-sign or ECG parameters when a narrower reusable edit check is sufficient.",
         "tags": [
             "Edit",
             "Check"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Range%20check%20for%20any%20(HR%2C%20SYS%2C%20DIA%2C%20VS%2C%20ECG%2C%20QtcF%2C%20QTC%2C%20QT).js",
-        "updated": "2026-03-26"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-071",
         "title": "Average Height & Weight",
+        "description": "Calculates average height or average weight from configured measurement items, selecting the metric from the attached average item and ignoring summary values.",
         "tags": [
             "Average",
             "Height",
             "Weight"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20Height%20%26%20Weight.js",
-        "updated": "2026-03-26"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-072",
         "title": "Average Circumference (Hip + Waist)",
+        "description": "Calculates the combined hip-plus-waist value by averaging the configured hip and waist circumference measurements separately and returning the sum of those averages.",
         "tags": [
             "Average",
             "Circumference"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20Circumference%20(Hip%20%2B%20Waist).js",
-        "updated": "2026-03-26"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-073",
         "title": "Average PR, QRS, QT, QTCF, HR",
+        "description": "Calculates average ECG interval or heart-rate values from configured ECG measurement items, with broader item-name matching for PR, QRS, QT, QTcF, and HR fields.",
         "tags": [
             "Average",
             "PR",
@@ -515,195 +563,216 @@
             "HR"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20PR%2C%20QRS%2C%20QT%2C%20QTCF%2C%20HR.js",
-        "updated": "2026-03-27"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-074",
         "title": "Edit Check Range check for ALL (HR, SYS, DIA, PR, RR, QtcF, QTC, QRS, QT)",
+        "description": "Applies comprehensive range checks for standard vital-sign and ECG parameters, including HR, SYS, DIA, PR, RR, QTcF, QTC, QRS, and QT.",
         "tags": [
             "Edit",
             "Check"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Range%20check%20for%20ALL%20(HR%2C%20SYS%2C%20DIA%2C%20PR%2C%20RR%2C%20QtcF%2C%20QTC%2C%20QRS%2C%20QT).js",
-        "updated": "2026-04-01"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-075",
         "title": "Edit Check Kit Accession Number Format",
+        "description": "Validates kit accession number formatting against the expected study pattern so malformed kit identifiers can be queried before downstream use.",
         "tags": [
             "Edit",
             "Check"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Kit%20Accession%20Number%20Format.js",
-        "updated": "2026-04-03"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-076",
         "title": "Protocol Check If QTcF above 450 for male or 470 for female",
+        "description": "Applies sex-specific QTcF protocol thresholds and returns the protocol-check result when male QTcF exceeds 450 msec or female QTcF exceeds 470 msec.",
         "tags": [
             "Protocol",
             "Check"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20If%20QTcF%20above%20450%20for%20male%20or%20470%20for%20female.js",
-        "updated": "2026-04-07"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-078",
         "title": "BMI Pull From Screening",
+        "description": "Pulls the subject BMI value from the configured Screening body-measurements form and returns it for use on later forms or visits.",
         "tags": [
             "Screening",
             "BMI"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/BMI%20Pull%20From%20Screening.js",
-        "updated": "2026-04-08"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-079",
         "title": "LDL Reduction Calculation",
+        "description": "Calculates percent LDL reduction by comparing baseline LDL with the current LDL value and returning the rounded percentage change.",
         "tags": [
             "Calculation"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/LDL%20Reduction%20Calculation.js",
-        "updated": "2026-04-08"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-080",
         "title": "LDL Titration Decision",
+        "description": "Determines the LDL titration decision from LDL reduction percentage and protocol thresholds, returning the appropriate dosing or decision output.",
         "tags": [
             "Calculation"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/LDL%20Titration%20Decision.js",
-        "updated": "2026-04-08"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-081",
         "title": "Glycemia Next Step",
+        "description": "Determines the next glucose-monitoring action based on prior glycemia readings and configured study decision thresholds.",
         "tags": [
             "Calculation"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Glycemia%20Next%20Step.js",
-        "updated": "2026-04-08"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-082",
         "title": "Edit Check Item Name Range",
+        "description": "Performs a configurable numeric range check based on the current item name, returning false when the value falls outside the allowed item-specific range.",
         "tags": [
             "Edit Check"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Item%20Name%20Range.js",
-        "updated": "2026-04-10"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-083",
         "title": "Edit Check Difference between Start Time and Collection Time (Minutes Only)",
+        "description": "Validates that collection time occurs at least the configured number of whole minutes after a start time, using minute-level comparison to avoid second-level rounding issues.",
         "tags": [
             "Edit Check"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Difference%20between%20Start%20Time%20and%20Collection%20Time%20(Minutes%20Only).js",
-        "updated": "2026-04-10"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-085",
         "title": "Edit Check Visit Window Target Date V2",
+        "description": "Validates visit-window dates from the current study event by using Day 1 IP start date as the anchor, comparing date-only values, and applying the protocol window for later Day visits.",
         "tags": [
             "Edit Check"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Visit%20Window%20Target%20Date%20V2.js",
-        "updated": "2026-07-22"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-086",
         "title": "Edit Check Check if collected date is future date",
+        "description": "Returns false when the current collected date is later than today, allowing ClinSpark to query future-dated collection entries.",
         "tags": [
             "Edit Check"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Check%20if%20collected%20date%20is%20future%20date.js",
-        "updated": "2026-05-15"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-087",
         "title": "Edit Check Sample is Out of Window",
+        "description": "Checks sample collection timing against configured nominal windows and returns false when the sample is collected outside the allowed lower or upper bounds.",
         "tags": [
             "Edit Check"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Sample%20is%20Out%20of%20Window.js",
-        "updated": "2026-05-15"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-088",
         "title": "Unique Incremental ID Number",
+        "description": "Generates the next unique incremental ID by scanning existing IDs across study events and returning the next available number.",
         "tags": [
             "IQVIA"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Unique%20Incremental%20ID%20Number.js",
-        "updated": "2026-05-20"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-089",
         "title": "Outpatient Visit Window",
+        "description": "Calculates outpatient visit-window guidance or validation output from the current study event and configured protocol visit-window rules.",
         "tags": [
             "Visit Window"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Outpatient%20Visit%20Window.js",
-        "updated": "2026-05-29"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-090",
         "title": "Collect All Transfer Barcode",
+        "description": "Collects transfer barcode values from related item data and combines them into a single output for downstream transfer or reconciliation fields.",
         "tags": [
             "Barcode"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Collect%20All%20Transfer%20Barcode.js",
-        "updated": "2026-06-02"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-091",
         "title": "Expected Number of Tablets Returned",
+        "description": "Calculates the expected number of tablets returned from prior visit date, dispensed quantity, prescribed daily dose, and current visit timing.",
         "tags": [
             "Tablets"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Expected%20Number%20of%20Tablets%20Returned.js",
-        "updated": "2026-07-15"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-092",
         "title": "Calculate Current Dosing Level",
+        "description": "Determines the current dosing level by reading the most recent kit label and tablet-count data from configured dose forms, then mapping that data to the appropriate dosing level output.",
         "tags": [
             "Dosing"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Calculate%20Current%20Dosing%20Level.js",
-        "updated": "2026-06-11"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-093",
         "title": "Unique Incremental ID Number (repeated item groups and repeated forms)",
+        "description": "Generates unique incremental IDs within repeated item groups and repeated forms by finding the highest existing value and returning the next number.",
         "tags": [
             "Unique Incremental ID Number"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Unique%20Incremental%20ID%20Number%20(repeated%20item%20groups%20and%20repeated%20forms).js",
-        "updated": "2026-06-12"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-094",
         "title": "Datetime functions",
+        "description": "Provides reusable ClinSpark datetime helper snippets for adding time offsets, parsing date/time strings, formatting outputs, and handling time-window calculations.",
         "tags": [
             "Datetime"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Datetime%20functions.js",
-        "updated": "2026-06-15"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-095",
         "title": "Calculate Post Dose Window",
+        "description": "Returns the valid 30- to 45-minute post-dose assessment time window by reading the administration datetime from the same item group and formatting the lower and upper time bounds.",
         "tags": [
             "Window"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Calculate%20Post%20Dose%20Window.js",
-        "updated": "2026-06-17"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-096",
         "title": "Average",
+        "description": "Calculates average PR, QRS, QT, QTcF, or HR values from the current form with repeat and non-repeat support, using the attached item to determine which ECG metric should be averaged.",
         "tags": [
             "Average",
             "PR",
@@ -713,11 +782,12 @@
             "HR"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average.js",
-        "updated": "2026-06-18"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-097",
         "title": "Difference between 2 SBP, DBP, and HR - Supine vs Standing (Orthostasis)",
+        "description": "Calculates the orthostatic difference between supine and standing SBP, DBP, or HR values from same-named configured items, supporting both repeat and non-repeat item groups.",
         "tags": [
             "Difference",
             "SBP",
@@ -726,11 +796,12 @@
             "Orthostasis"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Difference%20between%202%20SBP%2C%20DBP%2C%20and%20HR%20-%20Supine%20vs%20Standing%20(Orthostasis).js",
-        "updated": "2026-06-24"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-098",
         "title": "Median HR, RR, PR, QRS, QT, QTC, QTcF",
+        "description": "Calculates median ECG or rate values for non-repeat forms by collecting matching HR, RR, PR, QRS, QT, QTC, or QTcF items before the attached median field.",
         "tags": [
             "Median",
             "HR",
@@ -739,11 +810,12 @@
             "QRS"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Median%20HR%2C%20RR%2C%20PR%2C%20QRS%2C%20QT%2C%20QTC%2C%20QTcF.js",
-        "updated": "2026-06-18"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-099",
         "title": "Protocol Check Is (AVERAGE) QTcFQRS Out of Range",
+        "description": "Checks non-repeat averaged QTcF and QRS values against protocol out-of-range thresholds and returns the corresponding protocol-check response.",
         "tags": [
             "Protocol",
             "Check",
@@ -752,11 +824,12 @@
             "QTcFQRS"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Is%20(AVERAGE)%20QTcFQRS%20Out%20of%20Range.js",
-        "updated": "2026-06-18"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-100",
         "title": "Pull ECG Collection Time for Vitals",
+        "description": "Pulls and formats the ECG collection or supine start time from a completed ECG form in the same study event for use on vital-sign forms.",
         "tags": [
             "Pull",
             "ECG",
@@ -765,21 +838,23 @@
             "for"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Pull%20ECG%20Collection%20Time%20for%20Vitals.js",
-        "updated": "2026-06-18"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-101",
         "title": "Pull Weight",
+        "description": "Pulls the subject weight value from the configured Screening body-measurements form for reuse in later calculations or visit forms.",
         "tags": [
             "Pull",
             "Weight"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Pull%20Weight.js",
-        "updated": "2026-06-18"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-102",
         "title": "Difference between 2 SBP, DBP, and HR - Supine vs Standing (Orthostasis) v2",
+        "description": "Calculates the numeric orthostatic difference between supine or semi-recumbent and standing vitals using improved metric detection for SBP, DBP, and HR.",
         "tags": [
             "Difference",
             "SBP",
@@ -788,11 +863,12 @@
             "Orthostasis"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Difference%20between%202%20SBP%2C%20DBP%2C%20and%20HR%20-%20Supine%20vs%20Standing%20(Orthostasis)%20v2.js",
-        "updated": "2026-07-20"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-103",
         "title": "Protocol Check Median Vital Sign Eligibility",
+        "description": "Calculates non-repeat median vital-sign values and applies protocol eligibility logic for vital-sign inclusion or exclusion criteria.",
         "tags": [
             "Protocol Check",
             "Median",
@@ -800,47 +876,52 @@
             "Eligibility"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Median%20Vital%20Sign%20Eligibility.js",
-        "updated": "2026-06-24"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-104",
         "title": "Conmeds Pull Adverse Event",
+        "description": "Populates a concomitant-medication adverse-event field by locating and returning the related adverse event value from the current or associated item group.",
         "tags": [
             "Protocol Check"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Conmeds%20Pull%20Adverse%20Event.js",
-        "updated": "2026-06-24"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-105",
         "title": "Protocol Check Median ECG Eligibility",
+        "description": "Calculates non-repeat median ECG values and applies protocol eligibility logic for ECG-related inclusion or exclusion criteria.",
         "tags": [
             "Protocol Check"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Median%20ECG%20Eligibility.js",
-        "updated": "2026-06-29"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-106",
         "title": "Pull ECG Start Time for Vitals (VS)",
+        "description": "Pulls the ECG start time for vital-sign forms from the most recent completed ECG form, preferring same-event ECG data when available.",
         "tags": [
             "Protocol Check"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Pull%20ECG%20Start%20Time%20for%20Vitals%20(VS).js",
-        "updated": "2026-06-29"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-109",
         "title": "Edit Check Difference between Start Time and Collection Time (Minutes Only) (if used on Vital Sign Form that Pulls from ECG).js",
+        "description": "Validates vital-sign collection timing against ECG-derived start times, accounting for same-as-ECG selections and using minute-level comparison for the configured interval.",
         "tags": [
             "Edit Check"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Difference%20between%20Start%20Time%20and%20Collection%20Time%20(Minutes%20Only)%20(if%20used%20on%20Vital%20Sign%20Form%20that%20Pulls%20from%20ECG).js",
-        "updated": "2026-07-07"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-084",
         "title": "Combine Alcohol Substance Use (SU) Queries.js",
+        "description": "Combines alcohol and substance-use query text by normalizing frequency and use-response values, producing consolidated query wording for data-transfer or review workflows.",
         "tags": [
             "Alcohol",
             "Substance Use",
@@ -848,60 +929,66 @@
             "Combine"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Combine%20Alcohol%20Substance%20Use%20(SU)%20Queries.js",
-        "updated": "2026-07-21"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-110",
         "title": "Edit Check Check if item date value has at least the year.js",
+        "description": "Validates partial or complete date entries by requiring at least a year component, and raises a custom message when the date is blank or missing the year.",
         "tags": [
             "Edit Check"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Check%20if%20item%20date%20value%20has%20at%20least%20the%20year.js",
-        "updated": "2026-07-13"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-107",
         "title": "Average PR, QRS, QT, QTCF, HR v2.js",
+        "description": "Calculates average ECG interval or heart-rate values by detecting PR, QRS, QT, QTcF, and HR source items automatically, including repeat-aware collection logic and summary-field exclusion.",
         "tags": [
             "AVerage"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20PR%2C%20QRS%2C%20QT%2C%20QTCF%2C%20HR%20v2.js",
-        "updated": "2026-07-14"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-108",
         "title": "Edit Check Supine time must be the same as original.js",
+        "description": "Validates that repeat-form supine or semi-recumbent start time matches the original source time when the repeat assessment is marked as same as original.",
         "tags": [
             "Edit Check"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Supine%20time%20must%20be%20the%20same%20as%20original.js",
-        "updated": "2026-07-14"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-111",
         "title": "Average Circumference (Hip) v2",
+        "description": "Calculates the average hip circumference by detecting hip measurement items from their names instead of relying on configured item lists, with support for repeat and non-repeat item groups.",
         "tags": [
             "Average",
             "Circumference",
             "Hip"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20Circumference%20%28Hip%29%20v2.js",
-        "updated": "2026-07-15"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-112",
         "title": "Average Circumference (Waist) v2",
+        "description": "Calculates the average waist circumference by detecting waist measurement items from their names instead of relying on configured item lists, with support for repeat and non-repeat item groups.",
         "tags": [
             "Average",
             "Circumference",
             "Waist"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20Circumference%20%28Waist%29%20v2.js",
-        "updated": "2026-07-15"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-113",
         "title": "Average Circumference (Hip + Waist) v2",
+        "description": "Calculates the combined hip-plus-waist value by auto-detecting hip and waist measurement items, averaging each metric independently, and returning the sum without configured item-name lists.",
         "tags": [
             "Average",
             "Circumference",
@@ -909,33 +996,36 @@
             "Waist"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20Circumference%20%28Hip%20%2B%20Waist%29%20v2.js",
-        "updated": "2026-07-15"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-114",
         "title": "Average Height v2",
+        "description": "Calculates average height by detecting height measurement items from their names, supporting repeat and non-repeat item groups without configured item-name lists.",
         "tags": [
             "Average",
             "Height",
             "BMI"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20Height%20v2.js",
-        "updated": "2026-07-15"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-115",
         "title": "Average Weight v2",
+        "description": "Calculates average weight by detecting weight measurement items from their names, supporting repeat and non-repeat item groups without configured item-name lists.",
         "tags": [
             "Average",
             "Weight",
             "BMI"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20Weight%20v2.js",
-        "updated": "2026-07-15"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-116",
         "title": "Average Height & Weight v2",
+        "description": "Calculates average height or average weight by detecting matching measurement items from their names, supporting repeat and non-repeat item groups without configured item-name lists.",
         "tags": [
             "Average",
             "Height",
@@ -943,11 +1033,12 @@
             "BMI"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20Height%20%26%20Weight%20v2.js",
-        "updated": "2026-07-15"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-117",
         "title": "Median HR, RR, PR, QRS, QT, QTC, QTcF v2",
+        "description": "Calculates median ECG or vital values from the attached median item, auto-detecting HR, RR, PR, QRS, QT, QTC, QTcF, SYS, or DIA source values across repeat and non-repeat item groups and logging collected values.",
         "tags": [
             "Median",
             "HR",
@@ -960,11 +1051,12 @@
             "ECG"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Median%20HR%2C%20RR%2C%20PR%2C%20QRS%2C%20QT%2C%20QTC%2C%20QTcF%20v2.js",
-        "updated": "2026-07-20"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-118",
         "title": "Protocol Check Average Vital Signs Range SYS, DIA v2",
+        "description": "Checks averaged systolic and diastolic blood pressure values against protocol ranges while auto-detecting source items instead of relying on configured item-name lists.",
         "tags": [
             "Protocol Check",
             "Vitals",
@@ -972,11 +1064,12 @@
             "DIA"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Average%20Vital%20Signs%20Range%20SYS%2C%20DIA%20v2.js",
-        "updated": "2026-07-15"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-119",
         "title": "Protocol Check Is (AVERAGE) QTcFQRS Out of Range v2",
+        "description": "Checks averaged QTcF and QRS values against protocol thresholds using auto-detected ECG source items, reducing configured item-name dependencies.",
         "tags": [
             "Protocol Check",
             "QTcF",
@@ -984,11 +1077,12 @@
             "ECG"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Is%20%28AVERAGE%29%20QTcFQRS%20Out%20of%20Range%20v2.js",
-        "updated": "2026-07-15"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-120",
         "title": "Protocol Check Median ECG Eligibility v2",
+        "description": "Applies ECG eligibility rules using median HR and PR plus QTcF summary logic, with auto-detected source items and repeat-aware collection.",
         "tags": [
             "Protocol Check",
             "Median",
@@ -996,11 +1090,12 @@
             "Eligibility"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Median%20ECG%20Eligibility%20v2.js",
-        "updated": "2026-07-15"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-121",
         "title": "Protocol Check Median Vital Sign Eligibility v2",
+        "description": "Applies vital-sign eligibility rules using median SYS, DIA, and HR values with auto-detected source items and repeat-aware collection.",
         "tags": [
             "Protocol Check",
             "Median",
@@ -1008,22 +1103,24 @@
             "Eligibility"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Median%20Vital%20Sign%20Eligibility%20v2.js",
-        "updated": "2026-07-15"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-122",
         "title": "Protocol Check Vital Signs Range v2",
+        "description": "Checks vital-sign values against protocol ranges while auto-detecting source items from their names instead of requiring configured item-name lists.",
         "tags": [
             "Protocol Check",
             "Vitals",
             "Range"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Vital%20Signs%20Range%20v2.js",
-        "updated": "2026-07-15"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-123",
         "title": "Average DIA, SYS, Heart Rate v2",
+        "description": "Calculates average systolic blood pressure, diastolic blood pressure, or heart rate by detecting matching vital-sign item names automatically, reducing the need for study-specific item configuration.",
         "tags": [
             "Average",
             "Vitals",
@@ -1032,31 +1129,34 @@
             "Heart Rate"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20DIA%2C%20SYS%2C%20Heart%20Rate%20v2.js",
-        "updated": "2026-07-15"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-124",
         "title": "Expected Days",
+        "description": "Calculates the expected number of days between the current visit and its prior mapped visit by pulling the prior visit date from configured review forms.",
         "tags": [
             "Expected",
             "Days",
             "Visit"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Expected%20Days.js",
-        "updated": "2026-07-15"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-125",
         "title": "ECG Interpretation Cleaner (For Data Transfer)",
+        "description": "Cleans ECG interpretation text for data transfer by finding the target ECG text item in the same item group and normalizing the output format.",
         "tags": [
             "ECG"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/ECG%20Interpretation%20Cleaner%20%28For%20Data%20Transfer%29.js",
-        "updated": "2026-07-16"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-126",
         "title": "Difference between 2 SBP, DBP, and HR - Supine vs Standing (Orthostasis) v3",
+        "description": "Calculates orthostatic differences by auto-detecting supine or semi-recumbent and standing SBP, DBP, or HR values, with broader support for naming variations.",
         "tags": [
             "Difference",
             "SBP",
@@ -1065,11 +1165,12 @@
             "Orthostasis"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Difference%20between%202%20SBP%2C%20DBP%2C%20and%20HR%20-%20Supine%20vs%20Standing%20%28Orthostasis%29%20v3.js",
-        "updated": "2026-07-20"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-127",
         "title": "Difference between 2 SBP, DBP, and HR - Supine vs Standing (Orthostasis) v4",
+        "description": "Calculates orthostatic SBP, DBP, or HR differences with expanded repeat-aware item matching and summary-field handling for vital-sign forms.",
         "tags": [
             "Difference",
             "SBP",
@@ -1078,11 +1179,12 @@
             "Orthostasis"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Difference%20between%202%20SBP%2C%20DBP%2C%20and%20HR%20-%20Supine%20vs%20Standing%20%28Orthostasis%29%20v4.js",
-        "updated": "2026-07-20"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-128",
         "title": "Median SYS, DIA, and HR",
+        "description": "Calculates median systolic BP, diastolic BP, or heart-rate values by detecting matching vital-sign items from the attached median item without configured source item names.",
         "tags": [
             "Median",
             "SYS",
@@ -1091,11 +1193,12 @@
             "Vitals"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Median%20SYS%2C%20DIA%2C%20and%20HR.js",
-        "updated": "2026-07-20"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-129",
         "title": "Protocol Check Vital Signs Range v3",
+        "description": "Calculates average SYS, DIA, and HR values from detected source items and checks the averaged results against protocol ranges.",
         "tags": [
             "Protocol Check",
             "Vitals",
@@ -1106,11 +1209,12 @@
             "HR"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Vital%20Signs%20Range%20v3.js",
-        "updated": "2026-07-20"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-130",
         "title": "Protocol Check Vital Signs Range v4",
+        "description": "Checks protocol vital-sign ranges using median, average, or orthostatic SYS, DIA, and HR logic depending on the attached item and available source values.",
         "tags": [
             "Protocol Check",
             "Vitals",
@@ -1121,11 +1225,12 @@
             "HR"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Vital%20Signs%20Range%20v4.js",
-        "updated": "2026-07-20"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-131",
         "title": "Difference between 2 SBP, DBP, and HR - Supine vs Standing (Orthostasis) - Different Forms v4",
+        "description": "Calculates orthostatic SBP, DBP, or HR differences when supine or semi-recumbent values and standing values are collected on different forms, using configured form lookup and v4 metric matching.",
         "tags": [
             "Difference",
             "SBP",
@@ -1135,11 +1240,12 @@
             "Different Forms"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Difference%20between%202%20SBP%2C%20DBP%2C%20and%20HR%20-%20Supine%20vs%20Standing%20(Orthostasis)%20-%20Different%20Forms%20v4.js",
-        "updated": "2026-07-20"
+        "updated": "2026-07-27"
     },
     {
         "id": "M-132",
         "title": "Check if AE occur within 24 hours of dosing",
+        "description": "Determines whether the current AE onset datetime occurred within 24 hours after the nearest valid acetaminophen administration dose from configured D-1 or Day 84 source events.",
         "tags": [
             "AE",
             "Dosing",
@@ -1147,6 +1253,16 @@
             "Adverse Event"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Check%20if%20AE%20occur%20within%2024%20hours%20of%20dosing.js",
-        "updated": "2026-07-22"
+        "updated": "2026-07-27"
+    },
+    {
+        "id": "M-133",
+        "title": "Orthostasis + Triplicate Median Calculation",
+        "description": "Calculates the difference between a standing vital-sign value and the median of three matching supine or semi-recumbent triplicate values for orthostasis workflows.",
+        "tags": [
+            "Orthostasis"
+        ],
+        "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Orthostasis%20+%20Triplicate%20Median%20Calculation.js",
+        "updated": "2026-07-27"
     }
 ]

@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Evaluates and flags dipstick results across all relevant items.
+// Description: Evaluates urine dipstick result items across the current form and returns a consolidated flag or result based on configured abnormal-result logic.
 
 var itemid = itemJson.item.id;
 

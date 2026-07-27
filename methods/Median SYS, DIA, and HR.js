@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Computes median SYS, DIA, and HR values. Does not require any item names.
+// Description: Calculates median systolic BP, diastolic BP, or heart-rate values by detecting matching vital-sign items from the attached median item without configured source item names.
 
 var form = formJson.form;
 var attachedItem = itemJson.item;

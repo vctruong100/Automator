@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
-// Version: v2
-// Purpose: Computes median values for full ECG/vitals panel (non-repeat or repeat). Does not require any item names.
+// Version: v3
+// Description: Calculates median ECG or vital values from the attached median item, auto-detecting HR, RR, PR, QRS, QT, QTC, QTcF, SYS, or DIA source values across repeat and non-repeat item groups and logging collected values.
 
 var form = formJson.form;
 var attachedItem = itemJson.item;
@@ -43,6 +43,8 @@ function containsStandaloneKeyword(input, keyword) {
 function matchesMetric(itemName, metric) {
     var name = normalizeName(itemName);
 
+    if (metric === "SYS") return containsStandaloneKeyword(name, "SYS") || containsStandaloneKeyword(name, "SBP") || containsValue(name, "SYSTOLIC");
+    if (metric === "DIA") return containsStandaloneKeyword(name, "DIA") || containsStandaloneKeyword(name, "DBP") || containsValue(name, "DIASTOLIC");
     if (metric === "HR") return containsStandaloneKeyword(name, "HR") || containsStandaloneKeyword(name, "RATE") || containsValue(name, "HEART RATE");
     if (metric === "RR") return containsStandaloneKeyword(name, "RR") || containsValue(name, "RESPIRATORY RATE");
     if (metric === "PR") return containsStandaloneKeyword(name, "PR");
@@ -57,13 +59,15 @@ function matchesMetric(itemName, metric) {
 function getMetricFromAverageItem(itemName) {
     var name = normalizeName(itemName);
 
-    if (containsValue(name, "QTCF")) return "QTCF";
-    if (containsValue(name, "QTC") && !containsValue(name, "QTCF")) return "QTC";
-    if (containsValue(name, "QT") && !containsValue(name, "QTC")) return "QT";
-    if (containsValue(name, "QRS")) return "QRS";
-    if (containsValue(name, "PR")) return "PR";
-    if (containsValue(name, "RR")) return "RR";
-    if (containsValue(name, "HR") || containsValue(name, "HEART RATE") || containsValue(name, "PULSE")) return "HR";
+    if (matchesMetric(name, "QTCF")) return "QTCF";
+    if (matchesMetric(name, "QTC")) return "QTC";
+    if (matchesMetric(name, "QT")) return "QT";
+    if (matchesMetric(name, "QRS")) return "QRS";
+    if (matchesMetric(name, "PR")) return "PR";
+    if (matchesMetric(name, "RR")) return "RR";
+    if (matchesMetric(name, "SYS")) return "SYS";
+    if (matchesMetric(name, "DIA")) return "DIA";
+    if (matchesMetric(name, "HR") || containsValue(name, "PULSE")) return "HR";
 
     return null;
 }
@@ -77,19 +81,28 @@ function isAverageItem(itemName) {
     return false;
 }
 
-function addNumericValue(list, value) {
+function isSummaryItemForMetric(itemName, metric) {
+    return isAverageItem(itemName) && matchesMetric(itemName, metric);
+}
+
+function addNumericValue(list, details, groupItem) {
+    var value = groupItem ? groupItem.value : null;
     if (value === null || value === undefined || value === "") return;
 
     var numericValue = parseFloat(value);
-    if (!isNaN(numericValue)) list.push(numericValue);
+    if (!isNaN(numericValue)) {
+        list.push(numericValue);
+        details.push(groupItem.name + "=" + numericValue);
+    }
 }
 
 function populateList(formJsonValue, metric, attachedItemName, isRepeat) {
     var itemGroups = formJsonValue.form.itemGroups;
     var list = [];
+    var details = [];
     var group, items, groupItem, i, j;
 
-    if (!itemGroups || itemGroups.length < 1) return list;
+    if (!metric || !itemGroups || itemGroups.length < 1) return { values: list, details: details };
 
     if (isRepeat) {
         for (i = itemGroups.length - 1; i >= 0; i--) {
@@ -101,9 +114,9 @@ function populateList(formJsonValue, metric, attachedItemName, isRepeat) {
             for (j = items.length - 1; j >= 0; j--) {
                 groupItem = items[j];
                 if (!groupItem) continue;
-                if ((groupItem.name == attachedItemName || isAverageItem(groupItem.name)) && list.length > 1) return list;
+                if ((groupItem.name == attachedItemName || isSummaryItemForMetric(groupItem.name, metric)) && list.length > 1) return { values: list, details: details };
                 if (matchesMetric(groupItem.name, metric) && !isAverageItem(groupItem.name)) {
-                    addNumericValue(list, groupItem.value);
+                    addNumericValue(list, details, groupItem);
                     logger(metric + " matched item: " + groupItem.name + " | Value: " + groupItem.value);
                 }
             }
@@ -118,16 +131,16 @@ function populateList(formJsonValue, metric, attachedItemName, isRepeat) {
             for (j = 0; j < items.length; j++) {
                 groupItem = items[j];
                 if (!groupItem) continue;
-                if ((groupItem.name == attachedItemName || isAverageItem(groupItem.name))) return list;
+                if ((groupItem.name == attachedItemName || isSummaryItemForMetric(groupItem.name, metric))) return { values: list, details: details };
                 if (matchesMetric(groupItem.name, metric) && !isAverageItem(groupItem.name)) {
-                    addNumericValue(list, groupItem.value);
+                    addNumericValue(list, details, groupItem);
                     logger(metric + " matched item: " + groupItem.name + " | Value: " + groupItem.value);
                 }
             }
         }
     }
 
-    return list;
+    return { values: list, details: details };
 }
 
 function calculateMedian(values, sigfig) {
@@ -152,6 +165,8 @@ try {
     var parsedGroupName = JSON.parse(rawGroupName).foundItemGroupName;
     var isRepeat = parsedGroupName ? containsValue(parsedGroupName, "repeat") : false;
 
+    if (sigfig === null || sigfig === undefined || sigfig === "") sigfig = 0;
+
     logger("Group name: " + parsedGroupName);
     logger("Is repeat: " + isRepeat);
 
@@ -159,13 +174,18 @@ try {
     logger("Attached Item name: " + attachedItem.name);
     logger("Metric: " + metric);
 
-    var list = populateList(formJson, metric, attachedItem.name, isRepeat);
+    if (!metric) return null;
 
-    logger(metric + " list: " + list);
+    var collected = populateList(formJson, metric, attachedItem.name, isRepeat);
+    var list = collected.values;
+
+    logger(metric + " collected values: " + list.join(", "));
+    logger(metric + " collected item/value list: " + collected.details.join(" | "));
 
     var median = calculateMedian(list, sigfig);
     logger(metric + " median: " + median);
 
+    if (median === null) return null;
     return median.toFixed(sigfig);
 } catch (e) {
     logger("Error in main execution logic: " + e);

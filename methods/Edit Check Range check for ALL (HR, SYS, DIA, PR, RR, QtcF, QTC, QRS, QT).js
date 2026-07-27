@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Comprehensive range check for all standard vital/ECG parameters.
+// Description: Applies comprehensive range checks for standard vital-sign and ECG parameters, including HR, SYS, DIA, PR, RR, QTcF, QTC, QRS, and QT.
 
 
 // Add item names

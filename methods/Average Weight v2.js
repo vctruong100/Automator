@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v2
-// Purpose: Computes average weight from repeated measurements. Does not require any item names.
+// Description: Calculates average weight by detecting weight measurement items from their names, supporting repeat and non-repeat item groups without configured item-name lists.
 
 var form = formJson.form;
 var attachedItem = itemJson.item;

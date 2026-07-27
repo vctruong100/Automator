@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Determines supine start time from ECG in same event for vitals.
+// Description: Pulls and formats the ECG collection or supine start time from a completed ECG form in the same study event for use on vital-sign forms.
 
 var formName = formJson.form.name;
 var studyEventName = formJson.form.studyEventName;

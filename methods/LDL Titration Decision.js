@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Determines LDL titration decision based on reduction and thresholds.
+// Description: Determines the LDL titration decision from LDL reduction percentage and protocol thresholds, returning the appropriate dosing or decision output.
 
 var studyEventNames = [
     "Day 1",

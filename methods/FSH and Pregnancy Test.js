@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Evaluates FSH and pregnancy test result logic.
+// Description: Evaluates FSH and pregnancy-test logic together to determine the appropriate result or eligibility output for reproductive-status workflows.
 
 var formName = formJson.form.name;
 

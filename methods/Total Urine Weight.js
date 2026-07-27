@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Calculates net urine weight (jug+urine minus empty jug).
+// Description: Calculates net urine weight by subtracting the empty jug weight from the jug-plus-urine weight on the current form.
 
 var urineJugItem = [
     "Weight of Void Jug+Urine"

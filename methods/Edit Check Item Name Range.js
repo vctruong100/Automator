@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Generic range validation for any item name.
+// Description: Performs a configurable numeric range check based on the current item name, returning false when the value falls outside the allowed item-specific range.
 
 // Just copy and paste the code. No need to do anything.
 // Acceptable Item Name Format:

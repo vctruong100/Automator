@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Calculates total urine volume across collection intervals.
+// Description: Calculates total urine volume across configured collection intervals by summing valid interval volume values from the current form.
 
 var currentEvent = formJson.form.studyEventName;
 var studyevents = {

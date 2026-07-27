@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Calculates end-of-interval datetime from dose time and study event name.
+// Description: Calculates an end-of-interval datetime by reading a dose administration datetime from the configured Day 1 dose form, deriving the hour interval from the current study event name, and returning the resulting ClinSpark datetime value for downstream form population.
 
 // Add item names
 var doseForms = [

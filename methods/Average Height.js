@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Computes average height from repeated measurements.
+// Description: Calculates average height from explicitly configured height measurement items on the current form, excluding blank or canceled entries and summary fields.
 
 // Add item names
 var itemList = [

@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: General vital signs range protocol check.
+// Description: Checks vital-sign values against general protocol ranges using configured item lists and returns the appropriate in-range or out-of-range result.
 
 const sysItems = ["SYS MEAN (P: 91 - 150)", "SYS (P: 91 - 150)", "SYS (60 - 200) mmHg", "SYS  (I: 90 - 150)", "SYS (60 - 200)"];
 const diaItems = ["DIA MEAN (P: 51 - 100)", "DIA (P: 51 - 100)", "DIA (P:  51 - 100)", "DIA (40 - 110) mmHg", "DIA (I: 50 - 100)", "DIA (40 - 110)",];

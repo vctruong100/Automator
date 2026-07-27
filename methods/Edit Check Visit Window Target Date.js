@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Validates visit dates fall within protocol-defined windows.
+// Description: Validates that the current visit date falls within the protocol-defined visit window calculated from the configured randomization or Day 1 reference date.
 
 // Add item names
 var studyEventNames = [

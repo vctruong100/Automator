@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v4
-// Purpose: Calculates the median/average/orthostatic of SYS, DIA, and HR, then checks protocol ranges.
+// Description: Checks protocol vital-sign ranges using median, average, or orthostatic SYS, DIA, and HR logic depending on the attached item and available source values.
 
 // Inclusive
 var sys_min_range = 91;

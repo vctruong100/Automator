@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Aggregates all transfer barcodes from related item data.
+// Description: Collects transfer barcode values from related item data and combines them into a single output for downstream transfer or reconciliation fields.
 
 var formsList = [
     "(*)LAB_🩸Plasma Acetaminophen PREDOSE - 1 TUBE",

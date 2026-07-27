@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Computes baseline QTcF from screening or predose ECG forms.
+// Description: Retrieves baseline QTcF from configured screening or predose ECG forms, selecting the relevant completed source form and returning the matching QTcF item value.
 
 // ======== Add item names ========
 var baselineStudyEvent = [

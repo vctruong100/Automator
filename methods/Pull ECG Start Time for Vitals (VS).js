@@ -2,7 +2,7 @@
 
 
 // Version: v1
-// Purpose: Pull ECG Start Time for Vitals (VS) from the most recent completed ECG form
+// Description: Pulls the ECG start time for vital-sign forms from the most recent completed ECG form, preferring same-event ECG data when available.
 
 var formNames = [
     "❤️ (PREDOSE) 12-LEAD ECG (SINGLE) V2.0",

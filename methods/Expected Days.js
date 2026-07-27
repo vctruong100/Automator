@@ -1,3 +1,6 @@
+/* jshint strict: false */
+// Description: Calculates the expected number of days between the current visit and its prior mapped visit by pulling the prior visit date from configured review forms.
+
 var formNames = [
     "REV_Review Questions (w/ Glucose monitoring) v3.0",
     "REV_Review Questions (w/ Glucose monitoring) (D36, D43, D50, D57, D64, D71, D78, D80, D81, D98, Early discontinuation) v3.0"

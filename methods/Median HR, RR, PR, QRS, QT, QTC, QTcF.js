@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Computes median values for full ECG/vitals panel (non-repeat).
+// Description: Calculates median ECG or rate values for non-repeat forms by collecting matching HR, RR, PR, QRS, QT, QTC, or QTcF items before the attached median field.
 var HRItem = [
     "HR (P: 40-100)",
 ]

@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Validates Tween-20 datetime is exactly 1 hour after PCVOID.
+// Description: Validates that the Tween-20 datetime is exactly one hour after the PCVOID reference datetime for the same collection workflow.
 
 
 // Add item names

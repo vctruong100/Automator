@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Validates time difference between start and collection.
+// Description: Validates that collection time occurs at least the configured number of whole minutes after a start time, using minute-level comparison to avoid second-level rounding issues.
 
 // Add Item Names
 var startTimeItem = [

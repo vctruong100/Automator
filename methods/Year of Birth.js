@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Extracts or computes the subject's year of birth.
+// Description: Extracts the subject year of birth from the volunteer date-of-birth value and returns only the four-digit year.
 
 var dob = formJson.form.subject.volunteer.dateOfBirth;
 

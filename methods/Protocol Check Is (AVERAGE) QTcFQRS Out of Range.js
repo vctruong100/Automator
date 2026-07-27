@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Protocol check for averaged QTcF/QRS out-of-range (non-repeat).
+// Description: Checks non-repeat averaged QTcF and QRS values against protocol out-of-range thresholds and returns the corresponding protocol-check response.
 
 // Add Item names
 var QTcFitems = [

@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Generates next incremental unique ID across all study events.
+// Description: Generates the next unique incremental ID by scanning existing IDs across study events and returning the next available number.
 
 var currentAEID = parseInt(itemJson.item.value, 10);
 if (!isNaN(currentAEID)) {

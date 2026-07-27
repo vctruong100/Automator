@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v2
-// Purpose: Calculates BMI from height and weight outside of Screening.
+// Description: Calculates body mass index from height and weight values outside Screening, converting the source measurements as needed and returning the BMI rounded according to the attached item settings.
 // Item-name independent: matches HEIGHT / WEIGHT via standalone keyword checks.
 
 var currentStudyEvent = formJson.form.studyEventName;

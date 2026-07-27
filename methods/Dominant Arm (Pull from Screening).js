@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Pulls the subject's dominant arm from Screening vitals.
+// Description: Pulls the subject dominant-arm value from the configured Screening vital-sign or body-measurement form for reuse on later visit forms.
 
 var studyevent = [
     "SCREENING",

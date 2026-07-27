@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Computes median values for full ECG/vitals panel (non-repeat).
+// Description: Calculates non-repeat median vital-sign values and applies protocol eligibility logic for vital-sign inclusion or exclusion criteria.
 // items to pull for calculation
 var sysItem = ["SYS (60 - 200) mmHg", "SYS  (I: 90 - 150)", "SYS (60 - 200)", "SYS (P: 91 - 150)",];
 var diaItem = ["DIA (40 - 110) mmHg", "DIA (I: 50 - 100)", "DIA (40 - 110)", "DIA (P:  51 - 100)", "DIA (P: 51 - 100)"];

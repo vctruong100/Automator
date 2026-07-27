@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v2
-// Purpose: Protocol eligibility check using median HR/PR and average QTcF. Does not require any item names.
+// Description: Applies ECG eligibility rules using median HR and PR plus QTcF summary logic, with auto-detected source items and repeat-aware collection.
 
 var form = formJson.form;
 var attachedItem = itemJson.item;

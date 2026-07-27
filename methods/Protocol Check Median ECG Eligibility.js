@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Computes median values for full ECG/vitals panel (non-repeat).
+// Description: Calculates non-repeat median ECG values and applies protocol eligibility logic for ECG-related inclusion or exclusion criteria.
 var HRitem = ["HR (P: <60) 🟢", "RATE V4", "HR (P: >60) 🟢", "HR (P: <60)", "HR (P: <60)", "HR (P: >60) ms", "HR (P: <60) ms"];
 var PRitem = ["PR (P: <220) ms 🟢", "PR V4", "PR (P: <220)  ms 🟢", "PR (P: <220)  ms", "PR (P: <220)  ms 🟢"];
 var QTcFitem = ['QTc (≤ 450 msec "Males") (≤ 470 msec "Females") 🟢', "QTcF V4", 'QTc (≤ 450 msec "Males") (≤ 470 msec "Females")  🟢', 'QTc (≤ 450 msec "Males") (≤ 470 msec "Females")'];

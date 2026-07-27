@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Pulls and averages height and weight measurements.
+// Description: Calculates average height or average weight from configured measurement items, selecting the metric from the attached average item and ignoring summary values.
 
 
 // Add item names

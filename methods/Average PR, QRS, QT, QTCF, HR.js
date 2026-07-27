@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Extended average calculator with wider item name coverage.
+// Description: Calculates average ECG interval or heart-rate values from configured ECG measurement items, with broader item-name matching for PR, QRS, QT, QTcF, and HR fields.
 
 // Add item names
 // items to pull for calculation

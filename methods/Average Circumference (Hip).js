@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Computes average hip circumference from repeated measurements.
+// Description: Calculates the average hip circumference from explicitly configured hip circumference items on the current form, stopping before the attached average item so previously calculated summary fields are not included.
 
 // Add item names
 var itemList = [

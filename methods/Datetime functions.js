@@ -1,3 +1,6 @@
+/* jshint strict: false */
+// Description: Provides reusable ClinSpark datetime helper snippets for adding time offsets, parsing date/time strings, formatting outputs, and handling time-window calculations.
+
 
 // Add time to input time. Uses datetime datatype.
 function getTimeRange(datetimeStr) {

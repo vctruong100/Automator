@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Calculates average PR, QRS, QT, QTcF, and heart rate. Does not require any item names.
+// Description: Calculates average ECG interval or heart-rate values by detecting PR, QRS, QT, QTcF, and HR source items automatically, including repeat-aware collection logic and summary-field exclusion.
 
 var form = formJson.form;
 var attachedItem = itemJson.item;

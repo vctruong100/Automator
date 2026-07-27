@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Populate adverse event item in conmeds item group
+// Description: Populates a concomitant-medication adverse-event field by locating and returning the related adverse event value from the current or associated item group.
 
 var itemName = [
     "AE_Adverse event",

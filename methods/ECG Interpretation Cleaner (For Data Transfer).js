@@ -1,3 +1,6 @@
+/* jshint strict: false */
+// Description: Cleans ECG interpretation text for data transfer by finding the target ECG text item in the same item group and normalizing the output format.
+
 var itemName = ["EGTXT"]
 
 function normalizeItemName(name) {

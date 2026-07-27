@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Generates or validates kit accession numbers with D1-prefix logic.
+// Description: Generates or validates kit accession numbers using the Day 1 prefix logic and configured kit fields for study-specific kit tracking.
 
 var formNames = [
     "(*)🩸D1, D2, D3, D4, D7, D10, D14_Predose_Safety Labs + PD/PK - 6 TUBES",

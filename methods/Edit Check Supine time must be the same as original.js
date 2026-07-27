@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Check if the supine time for repeated form is the same as the original
+// Description: Validates that repeat-form supine or semi-recumbent start time matches the original source time when the repeat assessment is marked as same as original.
 // Return true if they are the same OR if the difference between the collected time and the time from original form is more than 1 hour
 
 var studyEvent = formJson.form.studyEventName;

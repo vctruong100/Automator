@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Validates Tween-20 datetime is >1 hour after PCVOID.
+// Description: Validates that Tween-20 datetime occurs more than one hour after the PCVOID datetime for the urine collection interval.
 
 var pcvoidItem = [
     "PCVOID",

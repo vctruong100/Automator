@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Lightweight range check for any vitals or ECG parameter.
+// Description: Applies a lightweight item-name-driven range check for common vital-sign or ECG parameters when a narrower reusable edit check is sufficient.
 
 var value = itemJson.item.value;
 var minimum_range = 60;

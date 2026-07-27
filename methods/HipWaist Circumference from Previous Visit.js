@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Pulls hip and waist circumference from previous visit.
+// Description: Pulls hip and waist circumference values from the mapped previous visit so current-visit derived fields can reuse prior measurements.
 
 var formName = [
     "BM_Waist/Hip Circumference"

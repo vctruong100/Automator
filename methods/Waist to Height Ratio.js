@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Computes waist-to-height ratio.
+// Description: Calculates waist-to-height ratio from configured waist and height measurements, using current or pulled source values as available.
 
 var waistItemList = [
     "Waist Circumference #1",

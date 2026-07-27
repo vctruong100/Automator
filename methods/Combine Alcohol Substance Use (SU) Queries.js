@@ -1,3 +1,6 @@
+/* jshint strict: false */
+// Description: Combines alcohol and substance-use query text by normalizing frequency and use-response values, producing consolidated query wording for data-transfer or review workflows.
+
 var item = itemJson.item;
 
 function containsValue(input, keyword) {

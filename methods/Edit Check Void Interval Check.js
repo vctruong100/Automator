@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Validates urine void intervals are sequential without gaps.
+// Description: Validates urine void interval sequencing by comparing start and end void times and returning false when intervals are missing, overlapping, or out of order.
 
 var allForms = [
     "(*) 💧 -2 to 0 hr Urine Interval v3", // 0

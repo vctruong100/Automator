@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Computes average waist circumference from repeated measurements.
+// Description: Calculates the average waist circumference from explicitly configured waist circumference items on the current form, excluding blank, canceled, and summary values.
 
 // Add item names
 var itemList = [

@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Calculates average diastolic, systolic BP, and heart rate. Does not require any item names.
+// Description: Calculates average systolic blood pressure, diastolic blood pressure, or heart rate by detecting matching vital-sign item names automatically, reducing the need for study-specific item configuration.
 
 var form = formJson.form;
 var attachedItem = itemJson.item;

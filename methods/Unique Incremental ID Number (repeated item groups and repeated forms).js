@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Generates unique incremental IDs within repeated groups/forms.
+// Description: Generates unique incremental IDs within repeated item groups and repeated forms by finding the highest existing value and returning the next number.
 
 var currentNum = parseInt(itemJson.item.value, 10);
 if (!isNaN(currentNum)) {

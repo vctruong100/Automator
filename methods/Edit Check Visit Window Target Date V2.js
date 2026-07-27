@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v2
-// Purpose: Validates visit dates fall within protocol-defined windows. Uses current study event to calculate previous and time window.
+// Description: Validates visit-window dates from the current study event by using Day 1 IP start date as the anchor, comparing date-only values, and applying the protocol window for later Day visits.
 
 var studyevents = [
     "Day 1"

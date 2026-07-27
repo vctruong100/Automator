@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v2
-// Purpose: Protocol range check for averaged SBP and DBP. Does not require any item names.
+// Description: Checks averaged systolic and diastolic blood pressure values against protocol ranges while auto-detecting source items instead of relying on configured item-name lists.
 
 // Inclusive
 var sysAvg_maxRange = 170;

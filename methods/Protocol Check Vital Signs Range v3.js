@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v3
-// Purpose: Calculates the average SYS, DIA, and HR, then checks protocol ranges.
+// Description: Calculates average SYS, DIA, and HR values from detected source items and checks the averaged results against protocol ranges.
 //          Combines Protocol Check Vital Signs Range v2 and Average DIA, SYS, Heart Rate v2.
 
 // Inclusive

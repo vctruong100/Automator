@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v2
-// Purpose: Captures and formats the subject's last meal time.
+// Description: Captures the subject last-meal time from configured source items and formats it for the target output field.
 
 var studyevents = {
     "D1": "D -1",

@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v2
-// Purpose: Protocol check for averaged QTcF/QRS out-of-range. Does not require any item names.
+// Description: Checks averaged QTcF and QRS values against protocol thresholds using auto-detected ECG source items, reducing configured item-name dependencies.
 
 // Inclusive (Edit)
 var QTcF_max_range = 450;

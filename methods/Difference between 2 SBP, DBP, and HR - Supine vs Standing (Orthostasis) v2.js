@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v4
-// Purpose: Computes the numeric orthostatic difference between supine/semi and standing vitals.
+// Description: Calculates the numeric orthostatic difference between supine or semi-recumbent and standing vitals using improved metric detection for SBP, DBP, and HR.
 //          Uses keyword matching on item and group names instead of hardcoded item-name lists.
 
 var formNames = [

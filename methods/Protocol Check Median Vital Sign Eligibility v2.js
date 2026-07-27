@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v2
-// Purpose: Protocol eligibility check using median SYS, DIA, and HR. Does not require any item names.
+// Description: Applies vital-sign eligibility rules using median SYS, DIA, and HR values with auto-detected source items and repeat-aware collection.
 
 var form = formJson.form;
 var attachedItem = itemJson.item;

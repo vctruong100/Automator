@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     3.5.5
+// @version     3.5.6
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -150,6 +150,13 @@
     var EDIT_SE_POPUP_REF = null;
     var EDIT_SE_COLLECTED = null;   // [{name, href, originalName}]  — href is null for added rows
     var EDIT_SE_FINAL_ORDER = null; // [{name, href, status, reason}]
+
+    // Edit Item Reference Feature
+    var EIR_FEATURE_NAME = 'Edit Item Reference';
+    var EIR_POPUP_REF = null;
+    var EIR_PROGRESS_POPUP_REF = null;
+    var EIR_CANCELLED = false;
+    var EIR_ORIGIN_OPTIONS = ['Protocol', 'CRF'];
 
     // Cohort Eligibility Feature
     var STORAGE_COHORT_ELIG_DATA = "activityPlanState.cohortElig.data";
@@ -18378,6 +18385,7 @@
         { id: "Parse Study Event", label: "Parse Study Event" },
         { id: "Parse Forms", label: "Parse Forms" },
         { id: "Edit Study Events List", label: "Edit Study Events List" },
+        { id: "Edit Item Reference", label: "Edit Item Reference" },
         { id: "Download DTS Report", label: "Download DTS Report" },
         { id: "Print Barcodes", label: "Print Barcodes" },
         { id: "Auto-Resaver", label: "Auto-Resaver" },
@@ -36318,6 +36326,775 @@
     }
 
     //==========================
+    // EDIT ITEM REFERENCE FEATURE
+    //==========================
+
+    function eirIsItemGroupPage() {
+        var url = location.href.split('?')[0].split('#')[0];
+        if (location.hostname !== 'cenexel.clinspark.com' && location.hostname !== 'cenexeltest.clinspark.com') return false;
+        var marker = '/secure/crfdesign/studylibrary/show/itemgroup/';
+        var idx = url.indexOf(marker);
+        if (idx === -1) return false;
+        var suffix = url.substring(idx + marker.length);
+        if (suffix.length === 0) return false;
+        for (var i = 0; i < suffix.length; i++) {
+            var code = suffix.charCodeAt(i);
+            if (code < 48 || code > 57) return false;
+        }
+        return true;
+    }
+
+    function eirShowWrongPageWarning() {
+        showWrongPagePopup(EIR_FEATURE_NAME, 'cenexel(test).clinspark.com/secure/crfdesign/studylibrary/show/itemgroup/####', location.pathname + location.search, null);
+    }
+
+    function eirCollapseWhitespace(str) {
+        var out = '';
+        var prevSpace = false;
+        for (var i = 0; i < str.length; i++) {
+            var c = str.charAt(i);
+            var code = c.charCodeAt(0);
+            var isSpace = code === 32 || code === 10 || code === 9 || code === 13;
+            if (isSpace) {
+                if (!prevSpace) {
+                    out += ' ';
+                    prevSpace = true;
+                }
+            } else {
+                out += c;
+                prevSpace = false;
+            }
+        }
+        return out;
+    }
+
+    function eirExtractLabeledValue(row, labelText) {
+        var spans = row.querySelectorAll('span.sortaBold');
+        for (var i = 0; i < spans.length; i++) {
+            var sp = spans[i];
+            if ((sp.textContent || '').trim() !== labelText) continue;
+            var parent = sp.parentNode;
+            if (!parent) return '';
+
+            // If the label is in a table cell with a value cell next to it, use that cell.
+            if (parent.tagName.toLowerCase() === 'td') {
+                var nextTd = parent.nextElementSibling;
+                if (nextTd) {
+                    var val = (nextTd.textContent || '').trim();
+                    if (val) return eirCollapseWhitespace(val);
+                }
+            }
+
+            // Otherwise collect text nodes that follow the label inside the same parent.
+            var out = '';
+            var found = false;
+            for (var n = 0; n < parent.childNodes.length; n++) {
+                var node = parent.childNodes[n];
+                if (node === sp) { found = true; continue; }
+                if (found && node.nodeType === Node.TEXT_NODE) out += node.textContent || '';
+            }
+            if (out.trim()) return eirCollapseWhitespace(out.trim());
+        }
+        return '';
+    }
+
+    function eirParseItemReferenceRow(row) {
+        var links = row.querySelectorAll('a[href]');
+        var link = null;
+        for (var li = 0; li < links.length; li++) {
+            var h = (links[li].getAttribute('href') || '').toLowerCase();
+            if (h.indexOf('/secure/crfdesign/studylibrary/show/item/') !== -1) {
+                link = links[li];
+                break;
+            }
+        }
+        if (!link) return null;
+        var href = link.getAttribute('href') || '';
+        var name = (link.textContent || '').trim();
+        if (!name) return null;
+        return {
+            rowId: row.id || '',
+            originalName: name,
+            newName: name,
+            href: href,
+            originalPrompt: eirExtractLabeledValue(row, 'Prompt:'),
+            newPrompt: eirExtractLabeledValue(row, 'Prompt:'),
+            originalSasFieldName: eirExtractLabeledValue(row, 'SAS Field Name:'),
+            newSasFieldName: eirExtractLabeledValue(row, 'SAS Field Name:'),
+            originalOrigin: eirExtractLabeledValue(row, 'Origin:'),
+            newOrigin: eirExtractLabeledValue(row, 'Origin:')
+        };
+    }
+
+    function eirCollectItemReferences() {
+        var container = document.getElementById('sortableTable');
+        if (!container) {
+            log('[EIR] sortableTable not found');
+            return [];
+        }
+        var rows = container.querySelectorAll('tr');
+        log('[EIR] table tag: ' + container.tagName + ', rows found: ' + rows.length);
+        var items = [];
+        for (var i = 0; i < rows.length; i++) {
+            var parsed = eirParseItemReferenceRow(rows[i]);
+            if (parsed) items.push(parsed);
+        }
+        log('[EIR] collected ' + items.length + ' item references');
+        return items;
+    }
+
+    function eirGetChangedFields(item) {
+        return {
+            name: item.newName !== item.originalName,
+            prompt: item.newPrompt !== item.originalPrompt,
+            sasFieldName: item.newSasFieldName !== item.originalSasFieldName,
+            origin: item.newOrigin !== item.originalOrigin
+        };
+    }
+
+    function eirIsItemChanged(item) {
+        var changes = eirGetChangedFields(item);
+        return changes.name || changes.prompt || changes.sasFieldName || changes.origin;
+    }
+
+    function eirEscapeHtml(str) {
+        var d = document.createElement('div');
+        d.textContent = str;
+        return d.innerHTML;
+    }
+
+    function eirBuildUpdateFormData(form, item) {
+        var changedById = {
+            'name': item.newName,
+            'question': item.newPrompt,
+            'sasFieldName': item.newSasFieldName,
+            'itemDataOrigin': item.newOrigin
+        };
+        var changedByName = {
+            'name': item.newName,
+            'question': item.newPrompt,
+            'sasFieldName': item.newSasFieldName,
+            'itemDataOrigin': item.newOrigin
+        };
+        var parts = [];
+        var inputs = form.querySelectorAll('input, textarea, select');
+        for (var i = 0; i < inputs.length; i++) {
+            var inp = inputs[i];
+            var name = inp.getAttribute('name');
+            if (!name) continue;
+            var id = inp.id || '';
+            var type = (inp.getAttribute('type') || '').toLowerCase();
+            var tag = inp.tagName.toLowerCase();
+            var value = '';
+            if (changedById.hasOwnProperty(id) || changedByName.hasOwnProperty(name)) {
+                value = changedById.hasOwnProperty(id) ? changedById[id] : changedByName[name];
+            } else if (tag === 'select') {
+                var selectedOpt = inp.querySelector('option[selected]');
+                value = selectedOpt ? (selectedOpt.value || selectedOpt.getAttribute('value') || '') : '';
+                if (!value) {
+                    var firstOpt = inp.querySelector('option');
+                    value = firstOpt ? (firstOpt.value || firstOpt.getAttribute('value') || '') : '';
+                }
+            } else if (type === 'checkbox' || type === 'radio') {
+                if (inp.checked || inp.hasAttribute('checked')) {
+                    value = inp.value || inp.getAttribute('value') || 'on';
+                } else {
+                    continue;
+                }
+            } else {
+                value = inp.value || inp.getAttribute('value') || '';
+            }
+            if (name === 'reasonForChange' && (!value || !value.trim())) {
+                value = 'Update';
+            }
+            parts.push(encodeURIComponent(name) + '=' + encodeURIComponent(value));
+        }
+        return parts.join('&');
+    }
+
+    async function eirUpdateItemOnServer(item) {
+        var base = getBaseUrl();
+        var showUrl = item.href.indexOf('http') === 0 ? item.href : base + item.href;
+        log('[EIR] Fetching item show page: ' + showUrl);
+        var showHtml = await fetchPage(showUrl);
+        var showDoc = parseHtml(showHtml);
+
+        var editLink = null;
+        var links = showDoc.querySelectorAll('a[href]');
+        for (var li = 0; li < links.length; li++) {
+            var h = (links[li].getAttribute('href') || '').toLowerCase();
+            if (h.indexOf('/update/item/') !== -1) {
+                var txt = (links[li].textContent || '').trim().toLowerCase();
+                if (txt.indexOf('edit') !== -1) {
+                    editLink = links[li].getAttribute('href');
+                    break;
+                }
+            }
+        }
+        if (!editLink) {
+            if (item.href.indexOf('/show/item/') !== -1) {
+                editLink = item.href.replace('/show/item/', '/update/item/');
+            }
+        }
+        if (!editLink) throw new Error('No update link found for ' + item.originalName);
+
+        var updateUrl = editLink.indexOf('http') === 0 ? editLink : base + editLink;
+        log('[EIR] Fetching update page: ' + updateUrl);
+        var editHtml = await fetchPage(updateUrl);
+        var editDoc = parseHtml(editHtml);
+        var form = editDoc.querySelector('form');
+        if (!form) throw new Error('No edit form found for ' + item.originalName);
+
+        var postUrl = form.getAttribute('action') || '';
+        if (!postUrl) postUrl = updateUrl;
+        if (postUrl.indexOf('http') !== 0) postUrl = base + postUrl;
+        var formData = eirBuildUpdateFormData(form, item);
+        log('[EIR] Posting update for ' + item.originalName);
+        var result = await submitForm(postUrl, formData);
+        var resultDoc = parseHtml(result);
+        var errorAlert = resultDoc.querySelector('div.alert.alert-danger, div.alert-error, div.text-danger, .error');
+        if (errorAlert) {
+            var errText = (errorAlert.textContent || '').trim();
+            throw new Error(errText);
+        }
+    }
+
+    async function eirProcessItemReferenceUpdates(changed) {
+        EIR_CANCELLED = false;
+        var progressRoot = document.createElement('div');
+        progressRoot.style.cssText = 'display:flex;flex-direction:column;gap:10px;padding:16px;';
+
+        var progressStatus = document.createElement('div');
+        progressStatus.textContent = 'Starting updates...';
+        progressStatus.style.fontWeight = '600';
+        progressRoot.appendChild(progressStatus);
+
+        var progressBar = document.createElement('div');
+        progressBar.style.cssText = 'height:6px;border-radius:3px;background:#333;overflow:hidden;';
+        var progressFill = document.createElement('div');
+        progressFill.style.cssText = 'height:100%;width:0%;background:linear-gradient(90deg, #667eea, #764ba2);border-radius:3px;transition:width 0.3s;';
+        progressBar.appendChild(progressFill);
+        progressRoot.appendChild(progressBar);
+
+        var progressLog = document.createElement('div');
+        progressLog.style.cssText = 'max-height:200px;overflow-y:auto;font-size:12px;color:#ccc;white-space:pre-wrap;word-break:break-word;';
+        progressRoot.appendChild(progressLog);
+
+        function plog(msg) {
+            log('[EIR] ' + msg);
+            var line = document.createElement('div');
+            line.textContent = msg;
+            progressLog.appendChild(line);
+            progressLog.scrollTop = progressLog.scrollHeight;
+        }
+
+        EIR_PROGRESS_POPUP_REF = createPopup({
+            title: EIR_FEATURE_NAME + ' - Updating',
+            content: progressRoot,
+            width: '600px',
+            height: 'auto',
+            maxHeight: '85%',
+            onClose: function() {
+                EIR_CANCELLED = true;
+            }
+        });
+
+        var failed = [];
+        var succeeded = 0;
+        for (var i = 0; i < changed.length; i++) {
+            if (EIR_CANCELLED) {
+                plog('Cancelled by user.');
+                break;
+            }
+            var item = changed[i];
+            progressStatus.textContent = 'Updating ' + (i + 1) + ' of ' + changed.length + ': ' + item.newName;
+            plog('Updating: ' + item.originalName + (item.originalName !== item.newName ? ' -> ' + item.newName : ''));
+            try {
+                await eirUpdateItemOnServer(item);
+                succeeded++;
+                plog('Updated: ' + item.newName);
+            } catch (err) {
+                var msg = String(err);
+                failed.push({ item: item, error: msg });
+                plog('Failed: ' + item.newName + ' - ' + msg);
+            }
+            var pct = changed.length ? Math.round(((i + 1) / changed.length) * 100) : 0;
+            progressFill.style.width = pct + '%';
+            await sleep(300);
+        }
+
+        try { EIR_PROGRESS_POPUP_REF.close(); } catch (e) {}
+        EIR_PROGRESS_POPUP_REF = null;
+        eirShowSummary(succeeded, failed);
+    }
+
+    function eirShowSummary(succeeded, failed) {
+        var glass = isGlassTheme();
+        var root = document.createElement('div');
+        root.style.cssText = 'padding:16px;display:flex;flex-direction:column;gap:12px;font-size:13px;';
+
+        var stats = document.createElement('div');
+        stats.style.cssText = 'display:flex;gap:16px;flex-wrap:wrap;';
+
+        function statCard(label, count, color) {
+            var card = document.createElement('div');
+            card.style.cssText = 'padding:10px 16px;border-radius:8px;background:' + (glass ? 'rgba(15,10,40,0.4)' : '#1a1a1a') + ';border:1px solid ' + (glass ? 'rgba(255,255,255,0.15)' : '#333') + ';text-align:center;min-width:80px;';
+            var num = document.createElement('div');
+            num.textContent = String(count);
+            num.style.cssText = 'font-size:22px;font-weight:700;color:' + color + ';';
+            var lbl = document.createElement('div');
+            lbl.textContent = label;
+            lbl.style.cssText = 'font-size:11px;color:' + (glass ? 'rgba(255,255,255,0.65)' : '#999') + ';';
+            card.appendChild(num);
+            card.appendChild(lbl);
+            return card;
+        }
+        stats.appendChild(statCard('Succeeded', succeeded, '#10b981'));
+        stats.appendChild(statCard('Failed', failed.length, '#ef4444'));
+        root.appendChild(stats);
+
+        if (failed.length > 0) {
+            var failDiv = document.createElement('div');
+            failDiv.style.cssText = 'color:#ef4444;font-weight:500;';
+            failDiv.textContent = 'Failed items:';
+            root.appendChild(failDiv);
+            for (var fi = 0; fi < failed.length; fi++) {
+                var fline = document.createElement('div');
+                fline.textContent = '  * ' + failed[fi].item.originalName + ' - ' + failed[fi].error;
+                fline.style.cssText = 'font-size:12px;padding-left:8px;word-break:break-word;';
+                root.appendChild(fline);
+            }
+        }
+
+        var summaryPopup = createPopup({
+            title: EIR_FEATURE_NAME + ' - Summary',
+            content: root,
+            width: '500px',
+            height: 'auto',
+            maxHeight: '85%'
+        });
+
+        var okBtn = document.createElement('button');
+        okBtn.textContent = 'OK';
+        okBtn.style.cssText = 'padding:8px 22px;border-radius:8px;border:none;background:#5b43c7;color:#fff;cursor:pointer;font-weight:700;font-size:14px;align-self:flex-end;';
+        okBtn.addEventListener('click', function() {
+            summaryPopup.close();
+        });
+        root.appendChild(okBtn);
+    }
+
+    function eirRenderEditItemReferencePanel(items) {
+        if (EIR_POPUP_REF) {
+            try { EIR_POPUP_REF.close(); } catch (e) {}
+            EIR_POPUP_REF = null;
+        }
+        EIR_CANCELLED = false;
+        var glass = isGlassTheme();
+
+        var selectedIdx = 0;
+        var locked = false;
+
+        var root = document.createElement('div');
+        root.style.cssText = 'display:flex;flex-direction:column;height:100%;gap:0;';
+
+        var topRow = document.createElement('div');
+        topRow.style.cssText = 'display:flex;flex:1;overflow:hidden;gap:10px;min-height:0;';
+
+        var EIR_OVERVIEW_WIDTH_KEY = 'eirOverviewPanelWidth';
+        var savedOverviewWidth = (function() {
+            try {
+                var v = window.localStorage.getItem(EIR_OVERVIEW_WIDTH_KEY);
+                return v ? parseInt(v, 10) : 0;
+            } catch (e) { return 0; }
+        })();
+        var overviewWidth = (savedOverviewWidth > 260 && savedOverviewWidth <= 560) ? savedOverviewWidth : 400;
+
+        var overviewPanel = document.createElement('div');
+        overviewPanel.style.cssText = 'flex:0 0 ' + overviewWidth + 'px;display:flex;flex-direction:column;gap:6px;position:relative;min-width:260px;max-width:560px;';
+
+        var overviewSizer = document.createElement('div');
+        overviewSizer.style.cssText = 'position:absolute;top:0;right:0;bottom:0;width:6px;cursor:col-resize;z-index:2;background:rgba(255,255,255,0.08);transition:background 0.15s;';
+        overviewSizer.title = 'Drag to resize';
+        overviewSizer.addEventListener('mouseenter', function() { overviewSizer.style.background = 'rgba(255,255,255,0.25)'; });
+        overviewSizer.addEventListener('mouseleave', function() { overviewSizer.style.background = 'rgba(255,255,255,0.08)'; });
+        overviewSizer.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            var startX = e.clientX;
+            var startWidth = overviewPanel.getBoundingClientRect().width;
+            function onMove(ev) {
+                var newW = startWidth + (ev.clientX - startX);
+                if (newW < 260) newW = 260;
+                if (newW > 560) newW = 560;
+                overviewPanel.style.flex = '0 0 ' + newW + 'px';
+                try { window.localStorage.setItem(EIR_OVERVIEW_WIDTH_KEY, String(newW)); } catch (err) {}
+            }
+            function onUp() {
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+            }
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        });
+        overviewPanel.appendChild(overviewSizer);
+
+        var overviewHeader = document.createElement('div');
+        overviewHeader.textContent = 'Overview';
+        overviewHeader.style.cssText = 'font-weight:600;font-size:14px;padding:0 4px;';
+        overviewPanel.appendChild(overviewHeader);
+
+        var overviewList = document.createElement('div');
+        overviewList.style.cssText = 'flex:1;overflow:auto;border:1px solid ' + (glass ? 'rgba(255,255,255,0.18)' : '#444') + ';border-radius:6px;background:' + (glass ? 'rgba(15,10,40,0.35)' : '#1a1a1a') + ';';
+        overviewPanel.appendChild(overviewList);
+
+        var rightPanel = document.createElement('div');
+        rightPanel.style.cssText = 'flex:1;display:flex;flex-direction:column;gap:10px;min-width:300px;';
+
+        var rightTitle = document.createElement('div');
+        rightTitle.textContent = 'Item Configuration';
+        rightTitle.style.cssText = 'font-weight:600;font-size:14px;margin-bottom:2px;';
+        rightPanel.appendChild(rightTitle);
+
+        function makeField(id, labelText, type, options) {
+            var wrap = document.createElement('div');
+            wrap.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
+
+            var label = document.createElement('label');
+            label.textContent = labelText;
+            label.style.cssText = 'font-size:11px;color:' + (glass ? 'rgba(255,255,255,0.65)' : '#999') + ';';
+            if (id) label.setAttribute('for', id);
+
+            var input;
+            if (type === 'select') {
+                input = document.createElement('select');
+                input.id = id;
+                input.style.cssText = 'width:100%;box-sizing:border-box;padding:6px 10px;border-radius:6px;border:1px solid ' + (glass ? 'rgba(255,255,255,0.25)' : '#555') + ';background:' + (glass ? 'rgba(15,10,40,0.55)' : '#222') + ';color:#fff;font-size:13px;outline:none;';
+                if (options) {
+                    for (var oi = 0; oi < options.length; oi++) {
+                        var opt = document.createElement('option');
+                        opt.value = options[oi];
+                        opt.textContent = options[oi];
+                        input.appendChild(opt);
+                    }
+                }
+            } else if (type === 'textarea') {
+                input = document.createElement('textarea');
+                input.id = id;
+                input.style.cssText = 'width:100%;box-sizing:border-box;padding:6px 10px;border-radius:6px;border:1px solid ' + (glass ? 'rgba(255,255,255,0.25)' : '#555') + ';background:' + (glass ? 'rgba(15,10,40,0.55)' : '#222') + ';color:#fff;font-size:13px;outline:none;resize:vertical;min-height:60px;white-space:pre-wrap;word-wrap:break-word;font-family:inherit;line-height:1.4;';
+            } else {
+                input = document.createElement('input');
+                input.type = 'text';
+                input.id = id;
+                input.style.cssText = 'width:100%;box-sizing:border-box;padding:6px 10px;border-radius:6px;border:1px solid ' + (glass ? 'rgba(255,255,255,0.25)' : '#555') + ';background:' + (glass ? 'rgba(15,10,40,0.55)' : '#222') + ';color:#fff;font-size:13px;outline:none;';
+                if (type === 'sas') input.setAttribute('maxlength', '8');
+            }
+
+            var origSpan = document.createElement('span');
+            origSpan.style.cssText = 'font-size:11px;color:#f59e0b;display:none;';
+
+            wrap.appendChild(label);
+            wrap.appendChild(input);
+            wrap.appendChild(origSpan);
+            rightPanel.appendChild(wrap);
+            return { input: input, origSpan: origSpan };
+        }
+
+        var nameField = makeField('eirItemName', 'Name', 'text');
+        var promptField = makeField('eirItemPrompt', 'Prompt', 'textarea');
+        var sasField = makeField('eirItemSas', 'SAS Field Name', 'sas');
+        var originField = makeField('eirItemOrigin', 'Origin', 'select', EIR_ORIGIN_OPTIONS);
+
+        var nameInput = nameField.input;
+        var promptInput = promptField.input;
+        var sasInput = sasField.input;
+        var originSelect = originField.input;
+
+        var bottomBar = document.createElement('div');
+        bottomBar.style.cssText = 'display:flex;justify-content:flex-end;align-items:center;gap:12px;padding-top:10px;border-top:1px solid ' + (glass ? 'rgba(255,255,255,0.15)' : '#333') + ';margin-top:8px;';
+
+        var errorMsg = document.createElement('div');
+        errorMsg.style.cssText = 'flex:1;color:#ef4444;font-size:12px;font-weight:500;';
+
+        var confirmBtn = document.createElement('button');
+        confirmBtn.textContent = 'Confirm';
+        confirmBtn.style.cssText = 'padding:8px 22px;border-radius:8px;border:none;background:#5b43c7;color:#fff;cursor:pointer;font-weight:700;font-size:14px;';
+
+        bottomBar.appendChild(errorMsg);
+        bottomBar.appendChild(confirmBtn);
+
+        topRow.appendChild(overviewPanel);
+        topRow.appendChild(rightPanel);
+        root.appendChild(topRow);
+        root.appendChild(bottomBar);
+
+        function updateOriginalIndicators() {
+            var item = items[selectedIdx];
+            if (!item) return;
+            var changes = eirGetChangedFields(item);
+            function setOrig(field, changed, origVal, label) {
+                field.origSpan.style.display = changed ? 'block' : 'none';
+                field.origSpan.textContent = changed ? 'Original ' + label + ': ' + (origVal === '' ? '(blank)' : origVal) : '';
+            }
+            setOrig(nameField, changes.name, item.originalName, 'Name');
+            setOrig(promptField, changes.prompt, item.originalPrompt, 'Prompt');
+            setOrig(sasField, changes.sasFieldName, item.originalSasFieldName, 'SAS Field Name');
+            setOrig(originField, changes.origin, item.originalOrigin, 'Origin');
+        }
+
+        function displayValue(v) {
+            return (v === '' || v === null || v === undefined) ? '(blank)' : String(v);
+        }
+
+        function renderOverview() {
+            overviewList.innerHTML = '';
+            if (items.length === 0) return;
+
+            var headerRow = document.createElement('div');
+            headerRow.style.cssText = 'display:grid;grid-template-columns:minmax(80px,1fr) minmax(130px,2.5fr) minmax(70px,0.9fr) minmax(70px,0.9fr);gap:8px;padding:6px 10px;font-size:11px;font-weight:600;color:' + (glass ? 'rgba(255,255,255,0.65)' : '#999') + ';border-bottom:1px solid ' + (glass ? 'rgba(255,255,255,0.15)' : '#333') + ';position:sticky;top:0;background:' + (glass ? 'rgba(15,10,40,0.85)' : '#1a1a1a') + ';z-index:1;';
+            var colHeaders = ['Name', 'Prompt', 'SAS', 'Origin'];
+            for (var chi = 0; chi < colHeaders.length; chi++) {
+                var hCell = document.createElement('div');
+                hCell.textContent = colHeaders[chi];
+                headerRow.appendChild(hCell);
+            }
+            overviewList.appendChild(headerRow);
+
+            for (var oi = 0; oi < items.length; oi++) {
+                (function(idx) {
+                    var item = items[idx];
+                    var changes = eirGetChangedFields(item);
+                    var changed = changes.name || changes.prompt || changes.sasFieldName || changes.origin;
+                    var row = document.createElement('div');
+                    row.setAttribute('data-eir-overview-idx', idx);
+                    row.style.cssText = 'display:grid;grid-template-columns:minmax(80px,1fr) minmax(130px,2.5fr) minmax(70px,0.9fr) minmax(70px,0.9fr);gap:8px;padding:6px 10px;font-size:12px;border-bottom:1px solid ' + (glass ? 'rgba(255,255,255,0.08)' : '#333') + ';cursor:pointer;transition:background 0.15s;align-items:start;';
+                    if (idx === selectedIdx) {
+                        row.style.background = glass ? 'rgba(167,139,250,0.22)' : 'rgba(91,67,199,0.25)';
+                    } else {
+                        row.style.background = 'transparent';
+                    }
+                    row.style.borderLeft = changed ? '3px solid #f59e0b' : '3px solid transparent';
+
+                    function addCell(origVal, newVal, isChanged) {
+                        var cell = document.createElement('div');
+                        cell.style.cssText = 'white-space:normal;word-wrap:break-word;overflow-wrap:anywhere;';
+                        if (isChanged) {
+                            var origSpan = document.createElement('span');
+                            var origText = displayValue(origVal);
+                            origSpan.textContent = origText;
+                            origSpan.style.cssText = 'color:#9ca3af;text-decoration:line-through;margin-right:4px;';
+                            origSpan.title = 'Original: ' + origText;
+
+                            var arrow = document.createElement('span');
+                            arrow.textContent = '→';
+                            arrow.style.cssText = 'color:#f59e0b;margin:0 4px;';
+
+                            var newSpan = document.createElement('span');
+                            var newText = displayValue(newVal);
+                            newSpan.textContent = newText;
+                            newSpan.style.cssText = 'font-weight:600;color:#fff;';
+                            newSpan.title = 'Updated: ' + newText;
+
+                            cell.appendChild(origSpan);
+                            cell.appendChild(arrow);
+                            cell.appendChild(newSpan);
+                        } else {
+                            var text = displayValue(newVal);
+                            cell.textContent = text;
+                            cell.title = text;
+                            cell.style.color = '#e5e7eb';
+                        }
+                        row.appendChild(cell);
+                    }
+
+                    addCell(item.originalName, item.newName, changes.name);
+                    addCell(item.originalPrompt, item.newPrompt, changes.prompt);
+                    addCell(item.originalSasFieldName, item.newSasFieldName, changes.sasFieldName);
+                    addCell(item.originalOrigin, item.newOrigin, changes.origin);
+
+                    row.addEventListener('mouseenter', function() {
+                        if (idx !== selectedIdx) row.style.background = glass ? 'rgba(255,255,255,0.08)' : '#2a2a2a';
+                    });
+                    row.addEventListener('mouseleave', function() {
+                        row.style.background = idx === selectedIdx ? (glass ? 'rgba(167,139,250,0.22)' : 'rgba(91,67,199,0.25)') : 'transparent';
+                    });
+                    row.addEventListener('click', function() {
+                        selectedIdx = idx;
+                        renderRight();
+                        renderOverview();
+                        setTimeout(function() { nameInput.focus(); nameInput.select(); }, 0);
+                    });
+                    overviewList.appendChild(row);
+                })(oi);
+            }
+        }
+
+        function renderRight() {
+            var item = items[selectedIdx];
+            if (!item) {
+                rightTitle.textContent = 'No item selected';
+                nameInput.value = '';
+                promptInput.value = '';
+                sasInput.value = '';
+                originSelect.innerHTML = '';
+                nameInput.disabled = true;
+                promptInput.disabled = true;
+                sasInput.disabled = true;
+                originSelect.disabled = true;
+                return;
+            }
+            rightTitle.textContent = item.newName;
+            nameInput.disabled = false;
+            promptInput.disabled = false;
+            sasInput.disabled = false;
+            originSelect.disabled = false;
+            nameInput.value = item.newName;
+            promptInput.value = item.newPrompt;
+            sasInput.value = item.newSasFieldName;
+
+            originSelect.innerHTML = '';
+            if (!item.newOrigin) {
+                var ph = document.createElement('option');
+                ph.value = '';
+                ph.textContent = 'Select...';
+                ph.disabled = true;
+                originSelect.appendChild(ph);
+            } else if (EIR_ORIGIN_OPTIONS.indexOf(item.newOrigin) === -1) {
+                var origOpt = document.createElement('option');
+                origOpt.value = item.newOrigin;
+                origOpt.textContent = item.newOrigin + ' (original)';
+                origOpt.disabled = true;
+                originSelect.appendChild(origOpt);
+            }
+            for (var oi = 0; oi < EIR_ORIGIN_OPTIONS.length; oi++) {
+                var opt = document.createElement('option');
+                opt.value = EIR_ORIGIN_OPTIONS[oi];
+                opt.textContent = EIR_ORIGIN_OPTIONS[oi];
+                originSelect.appendChild(opt);
+            }
+            originSelect.value = item.newOrigin;
+
+            updateOriginalIndicators();
+        }
+
+        function moveSelection(delta) {
+            if (items.length === 0) return;
+            var nextIdx = selectedIdx + delta;
+            if (nextIdx < 0) nextIdx = items.length - 1;
+            if (nextIdx >= items.length) nextIdx = 0;
+            selectedIdx = nextIdx;
+            renderRight();
+            renderOverview();
+            setTimeout(function() { nameInput.focus(); nameInput.select(); }, 0);
+            var rowDiv = null;
+            var children = overviewList.children;
+            for (var ci = 0; ci < children.length; ci++) {
+                if (parseInt(children[ci].getAttribute('data-eir-overview-idx'), 10) === selectedIdx) {
+                    rowDiv = children[ci];
+                    break;
+                }
+            }
+            if (rowDiv) rowDiv.scrollIntoView({ block: 'nearest' });
+        }
+
+        function validate() {
+            var hasChanges = false;
+            for (var hi = 0; hi < items.length; hi++) {
+                if (eirIsItemChanged(items[hi])) {
+                    hasChanges = true;
+                    break;
+                }
+            }
+            errorMsg.textContent = '';
+            confirmBtn.disabled = !hasChanges || locked;
+            confirmBtn.style.opacity = hasChanges && !locked ? '1' : '0.5';
+            confirmBtn.style.cursor = hasChanges && !locked ? 'pointer' : 'default';
+        }
+
+        function saveCurrentItem() {
+            var item = items[selectedIdx];
+            if (!item) return;
+            item.newName = nameInput.value;
+            item.newPrompt = promptInput.value;
+            item.newSasFieldName = sasInput.value;
+            item.newOrigin = originSelect.value;
+            updateOriginalIndicators();
+            renderOverview();
+            validate();
+        }
+
+        nameInput.addEventListener('input', saveCurrentItem);
+        promptInput.addEventListener('input', saveCurrentItem);
+        sasInput.addEventListener('input', saveCurrentItem);
+        originSelect.addEventListener('change', saveCurrentItem);
+
+        root.addEventListener('keydown', function(e) {
+            var key = e.key || e.code || '';
+            if ((key === 'ArrowUp' || key === 'ArrowDown') && ['INPUT', 'TEXTAREA', 'SELECT'].indexOf(e.target.tagName) === -1) {
+                e.preventDefault();
+                moveSelection(key === 'ArrowUp' ? -1 : 1);
+            }
+        });
+
+        confirmBtn.addEventListener('click', function() {
+            if (confirmBtn.disabled || locked) return;
+            var changed = [];
+            for (var ci = 0; ci < items.length; ci++) {
+                if (eirIsItemChanged(items[ci])) changed.push(items[ci]);
+            }
+            if (changed.length === 0) {
+                errorMsg.textContent = 'No changes to confirm.';
+                return;
+            }
+            locked = true;
+            if (EIR_POPUP_REF) {
+                try { EIR_POPUP_REF.close(); } catch (e) {}
+                EIR_POPUP_REF = null;
+            }
+            eirProcessItemReferenceUpdates(changed);
+        });
+
+        EIR_POPUP_REF = createPopup({
+            title: EIR_FEATURE_NAME,
+            description: 'Edit item references and click Confirm to update ClinSpark.',
+            content: root,
+            width: '900px',
+            height: '620px',
+            maxWidth: '95%',
+            maxHeight: '90%',
+            onClose: function() {
+                EIR_POPUP_REF = null;
+                EIR_CANCELLED = true;
+            }
+        });
+
+        renderRight();
+        renderOverview();
+        validate();
+        setTimeout(function() { nameInput.focus(); nameInput.select(); }, 50);
+    }
+
+    async function runEditItemReference() {
+        log('[EIR] Button clicked');
+        if (!eirIsItemGroupPage()) {
+            eirShowWrongPageWarning();
+            return;
+        }
+        var items = eirCollectItemReferences();
+        if (!items || items.length === 0) {
+            var empty = document.createElement('div');
+            empty.style.cssText = 'padding:20px;text-align:center;';
+            empty.textContent = 'No item references found on this page.';
+            createPopup({
+                title: EIR_FEATURE_NAME,
+                content: empty,
+                width: '360px',
+                height: 'auto'
+            });
+            return;
+        }
+        eirRenderEditItemReferencePanel(items);
+    }
+
+    //==========================
     // PRINT BARCODES FEATURE
     //==========================
 
@@ -40045,9 +40822,27 @@
             APS_RunAutoResaver();
         });
 
+        var editItemRefBtn = document.createElement('button');
+        editItemRefBtn.textContent = 'Edit Item Reference';
+        editItemRefBtn.style.background = '#5b43c7';
+        editItemRefBtn.style.color = '#fff';
+        editItemRefBtn.style.border = 'none';
+        editItemRefBtn.style.borderRadius = scale(BUTTON_BORDER_RADIUS_PX);
+        editItemRefBtn.style.padding = scale(BUTTON_PADDING_PX);
+        editItemRefBtn.style.fontSize = scale(PANEL_FONT_SIZE_PX);
+        editItemRefBtn.style.cursor = 'pointer';
+        editItemRefBtn.style.fontWeight = '500';
+        editItemRefBtn.style.transition = 'background 0.2s';
+        editItemRefBtn.onmouseenter = function() { this.style.background = '#4a37a0'; };
+        editItemRefBtn.onmouseleave = function() { this.style.background = '#5b43c7'; };
+        editItemRefBtn.addEventListener('click', async function() {
+            log('Edit Item Reference: button clicked');
+            await runEditItemReference();
+        });
+
         // Apply glassmorphism theme to all panel buttons if glass theme is active
         if (glass) {
-            var allPanelBtns = [svcBtn, runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, importFromLibBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, bplBtn, aprBtn, importEligBtn, clearMappingBtn, findAeBtn, findFormAndEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, parseFormsBtn, editStudyEventsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn, downloadDtsBtn, printBarcodesBtn, autoResaverBtn];
+            var allPanelBtns = [svcBtn, runBarcodeBtn, pullLabBarcodeBtn, saBuilderBtn, importFromLibBtn, archiveUpdateFormsBtn, copyFormsBtn, searchMethodsBtn, parseDeviationBtn, bplBtn, aprBtn, importEligBtn, clearMappingBtn, findAeBtn, findFormAndEventsBtn, parseMethodBtn, openEligBtn, subjectEligBtn, parseStudyEventBtn, parseFormsBtn, editStudyEventsBtn, pauseBtn, clearLogsBtn, toggleLogsBtn, downloadDtsBtn, printBarcodesBtn, autoResaverBtn, editItemRefBtn];
             for (var gi = 0; gi < allPanelBtns.length; gi++) {
                 var gb = allPanelBtns[gi];
                 gb.className = "ie-btn-primary";
@@ -40089,6 +40884,7 @@
             { el: downloadDtsBtn, label: "Download DTS Report" },
             { el: printBarcodesBtn, label: "Print Barcodes" },
             { el: autoResaverBtn, label: "Auto-Resaver" },
+            { el: editItemRefBtn, label: "Edit Item Reference" },
             { el: pauseBtn, label: "Pause" },
             { el: clearLogsBtn, label: "Clear Logs" },
             { el: toggleLogsBtn, label: "Hide Logs" }

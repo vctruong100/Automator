@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Pulls weight from Screening body measurements.
+// Description: Pulls the subject weight value from the configured Screening body-measurements form for reuse in later calculations or visit forms.
 
 var formName = [
     "BM_Height / Weight / BMI",

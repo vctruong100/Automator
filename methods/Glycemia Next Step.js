@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Determines next step in glucose monitoring from prior readings.
+// Description: Determines the next glucose-monitoring action based on prior glycemia readings and configured study decision thresholds.
 
 var itemName = [
     "Glucometer Reading"

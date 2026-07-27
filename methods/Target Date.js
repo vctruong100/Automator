@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Calculates target visit dates from randomization date and visit windows.
+// Description: Calculates target visit-date ranges from the configured randomization or Day 1 reference date and the protocol visit-window map.
 
 var studyEvent = formJson.form.studyEventName;
 var studyEventNames = [

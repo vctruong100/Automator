@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Calculates LDL reduction percentage from baseline and current values.
+// Description: Calculates percent LDL reduction by comparing baseline LDL with the current LDL value and returning the rounded percentage change.
 
 var studyEventNames = [
     "Day 1",

@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: ClinSpark automation method: Outpatient Visit Window.
+// Description: Calculates outpatient visit-window guidance or validation output from the current study event and configured protocol visit-window rules.
 
 var studyevents = [
     "Day 1"

@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Handles process number generation/tracking for lab samples.
+// Description: Generates, retrieves, or tracks process numbers for lab sample workflows so related samples can share the correct process identifier.
 
 var studyevent = [
     "Visit 2 Week 1 Day 0",

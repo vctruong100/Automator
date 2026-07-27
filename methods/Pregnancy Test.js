@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Evaluates pregnancy test results and sets flags.
+// Description: Evaluates pregnancy-test result values and returns the appropriate flag or response for pregnancy-related eligibility or safety logic.
 
 var formName = formJson.form.name;
 

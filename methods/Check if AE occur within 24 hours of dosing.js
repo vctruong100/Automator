@@ -1,3 +1,6 @@
+/* jshint strict: false */
+// Description: Determines whether the current AE onset datetime occurred within 24 hours after the nearest valid acetaminophen administration dose from configured D-1 or Day 84 source events.
+
 var studyevents = [
     "Wk12 Day 84",
     "Day -1",

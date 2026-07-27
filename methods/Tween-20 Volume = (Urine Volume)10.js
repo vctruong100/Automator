@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Calculates Tween-20 volume as urine volume divided by 10.
+// Description: Calculates Tween-20 additive volume as one tenth of the urine volume and returns the result for the Tween-20 volume field.
 
 var urineJugItem = [
     "Weight of Void Jug+Urine"

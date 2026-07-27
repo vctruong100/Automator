@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v3
-// Purpose: Computes orthostatic differences between supine/semi and standing vitals.
+// Description: Calculates orthostatic differences by auto-detecting supine or semi-recumbent and standing SBP, DBP, or HR values, with broader support for naming variations.
 //          Uses keyword matching on item and group names instead of hardcoded item-name lists.
 
 var attachedItem = itemJson.item;

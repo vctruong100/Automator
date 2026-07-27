@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Flags entries where collected date is in the future.
+// Description: Returns false when the current collected date is later than today, allowing ClinSpark to query future-dated collection entries.
 
 var val = itemJson.item.value;
 

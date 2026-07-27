@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v2
-// Purpose: Protocol BMI range validation.
+// Description: Validates BMI against protocol-defined lower and upper limits and returns the configured protocol-check output for in-range or out-of-range values.
 // Item-name independent: matches HEIGHT / WEIGHT via standalone keyword checks.
 
 // inclusive

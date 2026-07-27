@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v1
-// Purpose: Validates transfer barcodes contain required T prefix.
+// Description: Validates that transfer barcode entries include the required T prefix or marker before allowing the barcode to pass the edit check.
 
 var item = itemJson.item;
 
