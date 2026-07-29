@@ -453,7 +453,7 @@ else if (doesItemGroupContainMedianAverage) {
     logger("Heart rate: " + hr);
 }
 
-if (!sys || sys === null || !dia || dia == null || !hr || hr == null) return attachedItem.codeListItems[4].codedValue;
+if (sys === null || dia == null || hr == null) return attachedItem.codeListItems[4].codedValue;
 if (!doesItemGroupContainOrthostasis) {
     // OOR
     if (

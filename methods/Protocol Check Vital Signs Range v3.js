@@ -155,7 +155,7 @@ try {
     logger("Diastolic: " + dia);
     logger("Heart rate: " + hr);
 
-    if (!sys || sys === null || !dia || dia == null || !hr || hr == null) return attachedItem.codeListItems[4].codedValue;
+    if (sys === null || dia == null || hr == null) return attachedItem.codeListItems[4].codedValue;
 
     // OOR
     if (
