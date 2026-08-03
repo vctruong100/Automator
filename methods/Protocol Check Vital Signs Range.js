@@ -95,7 +95,7 @@ function pullItemFromForm(form, targetItem, itemAvg, groupName, isRepeat) {
             }
             
             if (average !== null) return average;
-            if (containsItemName(targetItem, item.name) && item.value !== null) return item.value;
+            if (containsItemName(targetItem, item.name) && item.value !== null && !isNaN(item.value) && item.value !== "") return item.value;
         }
     }
 

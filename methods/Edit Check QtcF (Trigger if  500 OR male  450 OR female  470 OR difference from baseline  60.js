@@ -31,18 +31,36 @@ var diff = 0;
 
 function normalizeItemName(name) {
     if (!name) return "";
-    return name.toString().replace(/\s+/g, "").toLowerCase();
+    return name.toString().replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+}
+
+function normalizeText(name) {
+    if (!name) return "";
+    return name.toString().toUpperCase().replace(/\s+/g, " ");
+}
+
+function containsValue(input, keyword) {
+    if (input == null) return false;
+    return input.toString().toLowerCase().indexOf(keyword.toLowerCase()) !== -1;
+}
+
+function isQtcfItem(itemName) {
+    var name = normalizeText(itemName);
+    return containsValue(name, "QTCF") ||
+        (containsValue(name, "FRIDERICIA") && containsValue(name, "QTC")) ||
+        containsValue(name, "QT CORRECTED BY FRIDERICIA");
 }
 
 function containsItemName(itemList, itemName) {
     var normalizedName = normalizeItemName(itemName);
 
     for (var i = 0; i < itemList.length; i++) {
-        if (normalizeItemName(itemList[i]) === normalizedName) {
+        var normalizedTarget = normalizeItemName(itemList[i]);
+        if (normalizedName === normalizedTarget || normalizedName.indexOf(normalizedTarget) !== -1) {
             return true;
         }
     }
-    return false;
+    return isQtcfItem(itemName);
 }
 function pullForm(studyeventList, formNameList) {
     for (var i = 0; i < studyeventList.length; i++) {
@@ -64,7 +82,7 @@ function pullItemFromForm(form, targetItem) {
         if (!group || group.canceled) continue;
         for (j = 0; j < group.items.length; j++) {
             item = group.items[j];
-            if (containsItemName(targetItem, item.name) && item.value !== null) return item.value;
+            if (containsItemName(targetItem, item.name) && item.value !== null && item.value !== "" && !item.canceled) return item.value;
         }
     }
     return null;

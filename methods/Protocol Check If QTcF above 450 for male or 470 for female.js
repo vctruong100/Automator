@@ -40,7 +40,7 @@ function pullItemFromForm(form, targetItem) {
         if (!group || group.canceled) continue;
         for (j = 0; j < group.items.length; j++) {
             item = group.items[j];
-            if (containsItemName(targetItem, item.name) && item.value !== null) return item.value;
+            if (containsItemName(targetItem, item.name) && item.value !== null && !isNaN(item.value) && item.value !== "") return item.value;
         }
     }
     return null;
