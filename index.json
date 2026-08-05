@@ -1264,5 +1264,31 @@
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Orthostasis%20+%20Triplicate%20Median%20Calculation.js",
         "updated": "2026-07-27"
+    },
+    {
+        "id": "M-134",
+        "title": "Orthostasis + Latest Triplicate Calculation",
+        "description": "Calculates the difference between a standing vital-sign value and the latest matching supine or semi-recumbent triplicate value instead of the triplicate median.",
+        "tags": [
+            "Orthostasis",
+            "Triplicate",
+            "Latest Value"
+        ],
+        "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Orthostasis%20+%20Latest%20Triplicate%20Calculation.js",
+        "updated": "2026-08-03"
+    },
+    {
+        "id": "M-135",
+        "title": "Protocol Check Vital Signs Range v5",
+        "description": "Checks protocol vital-sign change ranges by comparing standing SYS, DIA, and HR values against the latest matching supine or semi-recumbent triplicate value instead of the triplicate median.",
+        "tags": [
+            "Protocol Check",
+            "Vitals",
+            "Range",
+            "Latest Value",
+            "Orthostasis"
+        ],
+        "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Vital%20Signs%20Range%20v5.js",
+        "updated": "2026-08-03"
     }
 ]

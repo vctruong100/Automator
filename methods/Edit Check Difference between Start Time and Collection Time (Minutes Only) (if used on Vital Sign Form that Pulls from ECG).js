@@ -1,23 +1,22 @@
 /* jshint strict: false */
-// Description: Validates vital-sign collection timing against ECG-derived start times, accounting for same-as-ECG selections and using minute-level comparison for the configured interval.
+
+// Version: v1
+// Purpose: Validates time difference between start and collection.
 
 // Add Item Names
-var studyEventName = formJson.form.studyEventName;
-var sameAsECG = ["vs_same_as ecg", "VS_Repeat Start SEMI RECUMBENT time"]
+var startTimeItem = [
+    "VS_Resting time (NEW)", "VS_Resting time", "Same as ECG supine time", "Start Supine time", "ECG_Supine resting time","Start Semirecumbent Time", 
+]
 
-var startTimeItem = ["START Vital (SUPINE) Time:", ]
-var confirmationItems = ["Scn_remained_Semi_recumbent.",];
+var studyevent = formJson.form.studyEventName;
+logger("Study event: " + studyevent)
 
-var ECGitems = ["START SUPINE","START SEMI RECUMBENT:"];
+var formName = [
+    "⚡ECG_Single 12 - Lead ECG (SCRN/D-1)",
+]
 
-var ecgFormNames = [
-    "⚡ ECG 12-LEAD (SINGLE) POST DOSE V2",
-    "⚡ ECG 12-LEAD (SINGLE) PRE-DOSE",
-    "⚡ ECG 12-LEAD (TRIPLICATE)",
-    "⚡ ECG 12-LEAD (SINGLE) POST DOSE"
-];
-
-const difference = 10; // in minutes
+var confirmationItemName = ["Did subject remain supine from ECG collection?"]
+var difference = 5; // in minutes
 
 // Two Approaches: Method A and Method B
 // Let's say Start Time is 10:00:59 and End Time is 10:10:00
@@ -26,58 +25,22 @@ const difference = 10; // in minutes
 // Adjust ("A" or "B") below on what method to use.
 
 var methodType = "B";
-
-
-function pullForm(studyeventList, formNameList) {
-    for (var i = 0; i < studyeventList.length; i++) {
-        for (var j = 0; j < formNameList.length; j++) {
-            var temp = checkForm(studyeventList[i], formNameList[j]);
-            if (temp) return temp;
-        }
-    }
-}
-
-function checkForm(studyEvent, formName) {
-  var forms = findFormData(studyEvent, formName);
-  var completed = collectCompleted(forms, true);
-  if (!completed || completed.length === 0) return null;
-  return completed[completed.length - 1]; // most recent
-}
-
-function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
-  if (!formDataArray) return [];
-  var keepers = [];
-  for (var i = formDataArray.length - 1; i >= 0; i--) {
-    var f = formDataArray[i];
-    if (
-      f.form.canceled === false &&
-      (
-        f.form.dataCollectionStatus === "Complete" ||
-        f.form.dataCollectionStatus === "Incomplete" ||
-        (INCLUDE_NONCONFORMANT_DATA === true &&
-         f.form.dataCollectionStatus === "Nonconformant")
-      )
-    ) {
-      keepers.push(f);
-    }
-  }
-  return keepers;
-}
+var form = formJson.form;
 
 function pullItemFromForm(form, targetItem, isRepeat) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
-    
+
 	if (!itemGroups || itemGroups.length < 1) return null;
-    
+
     if (!isRepeat) {
         for (i = 0; i < itemGroups.length; i++) {
             group = itemGroups[i];
-            if (!group || group.canceled) continue;
+            if (!group || group.canceled || containsValue(group.name, "repeat")) continue;
             for (j = 0; j < group.items.length; j++) {
                 item = group.items[j];
                 if (targetItem.indexOf(item.name) !== -1) {
-                    logger("Start Time: " + item.value);
+                    logger("Start Time: " + item.name + ", value: " + item.value);
                     if (item.value !== null && !item.canceled && item.value !== "") return item;
                 }
             }
@@ -91,7 +54,7 @@ function pullItemFromForm(form, targetItem, isRepeat) {
                 item = group.items[j];
                 if (targetItem.indexOf(item.name) !== -1) {
                     logger("Start Time: " + item.value);
-                    if (item.value !== null && !item.canceled && item.value !== "") return item;
+                    if (item.value !== null && !item.canceled && item.value !== "" && item.dataType == "datetime") return item;
                 }
             }
         }
@@ -125,29 +88,65 @@ function getItemGroupName(form) {
     return null;
 }
 
+function pullForm(studyeventList, formNameList) {
+    for (var i = 0; i < studyeventList.length; i++) {
+        for (var j = 0; j < formNameList.length; j++) {
+            var temp = checkForm(studyeventList[i], formNameList[j]);
+            if (temp) return temp;
+        }
+    }
+}
+
+function checkForm(studyEvent, formName) {
+  var forms = findFormData(studyEvent, formName);
+  var completed = collectCompleted(forms, true);
+  if (!completed || completed.length === 0) return null;
+  return completed[0];
+}
+
+function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
+  if (!formDataArray) return [];
+  var keepers = [];
+  for (var i = formDataArray.length - 1; i >= 0; i--) {
+    var f = formDataArray[i];
+    if (
+      f.form.canceled === false &&
+      (
+        f.form.dataCollectionStatus === "Complete" ||
+        f.form.dataCollectionStatus === "Incomplete" ||
+        (INCLUDE_NONCONFORMANT_DATA === true &&
+         f.form.dataCollectionStatus === "Nonconformant")
+      )
+    ) {
+      keepers.push(f);
+    }
+  }
+  return keepers;
+}
+
 try {
-    var isRepeat = containsValue(getItemGroupName(formJson), "repeat");
-    var form = pullForm([studyEventName], ecgFormNames);
-    var ecgStartTime = null;
-    if (form) {
-        ecgStartTime = pullItemFromForm(form, ECGitems); // Pull ECG Time
+    var groupName = getItemGroupName(formJson);
+    var isRepeat = false;
+    if (containsValue(groupName, "repeat") || containsValue(groupName, "standing")) isRepeat = true;
+    var confirmation = pullItemFromForm(formJson, confirmationItemName);
+    var startTime = null;
+    if (confirmation == "YES") {
+        var ecgForm = pullForm([studyevent], formName);
+        if (!ecgForm) return null;
+        var startTime = pullItemFromForm(ecgForm, startTimeItem, false);
     }
-    // Try to pull form Supine Start Time. Check if it exist; if not or N/A, then pull the other item
-    var startTime = pullItemFromForm(formJson, sameAsECG, isRepeat);
-    if (!startTime || startTime.value == "N/A" || startTime.value == null) {
+    else {
         startTime = pullItemFromForm(formJson, startTimeItem, isRepeat);
-        logger("Start time from same form: " + startTime)
     }
-    // If no Start Time exist on the current form, use ECG time.
-    if (!startTime) startTime = ecgStartTime;
-    if (!startTime) return null;
     var endTime = itemJson.item;
+
     logger("Start time: " + startTime.value)
     logger("Collected Time: " + endTime.value);
-
-    if (!startTime || startTime.value == null || !endTime || endTime.value == null) return null;
     
+    if (!startTime || startTime.value == null || startTime.value == "" || !endTime || endTime.value == null || endTime.value == "") return null;
+
     var startTimeMs = startTime.dateValueMs;
+    logger("STart time ms: " + startTimeMs)
     var endTimeMs = endTime.dateValueMs;
 
     var differenceInMins;
@@ -185,6 +184,6 @@ try {
 
     return false;
 } catch (e) {
-    logger("Error in main execution logic: " + e.message);
+    logger("Error in main execution logic: " + e);
     return null;
 }
