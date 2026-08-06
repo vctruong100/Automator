@@ -43,11 +43,9 @@ function containsItemName(itemList, itemName) {
 }
 function checkRange(repeat, min, max) {
     if (repeat && (item.value < min || item.value > max)) {
-        customErrorMessage(RepeatErrorMsg);
         return false;
     }
     else if (!repeat && (item.value < min || item.value > max)) {
-        customErrorMessage(errorMsg);
         return false;
     }
     return true;
