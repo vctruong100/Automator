@@ -1,8 +1,7 @@
-
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     3.5.9
+// @version     3.5.11
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -11,9 +10,29 @@
 // @grant       GM.openInTab
 // @grant       GM_openInTab
 // @grant       GM.xmlHttpRequest
+// @grant       GM_xmlhttpRequest
+// @connect     cenexel.clinspark.com
+// @connect     cenexeltest.clinspark.com
+// @connect     raw.githubusercontent.com
+// @connect     github.com
 // ==/UserScript==
 
 (function () {
+    function apsHasXmlHttpRequest() {
+        return (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") ||
+            (typeof GM_xmlhttpRequest === "function");
+    }
+
+    function apsXmlHttpRequest(details) {
+        if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") {
+            return GM.xmlHttpRequest(details);
+        }
+        if (typeof GM_xmlhttpRequest === "function") {
+            return GM_xmlhttpRequest(details);
+        }
+        throw new Error("No Tampermonkey xmlhttpRequest API is available");
+    }
+
     var STORAGE_KEY = "activityPlanState.run";
     var STORAGE_PENDING = "activityPlanState.pendingIds";
     var STORAGE_AFTER_REFRESH = "activityPlanState.afterRefresh";
@@ -6989,9 +7008,9 @@
 
     function bplFetchSegmentsPageHtml(segmentsUrl) {
         return new Promise(function(resolve, reject) {
-            if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") {
+            if (apsHasXmlHttpRequest()) {
                 log("BPL: fetching Segments page via GM.xmlHttpRequest: " + segmentsUrl);
-                GM.xmlHttpRequest({
+                apsXmlHttpRequest({
                     method: "GET",
                     url: segmentsUrl,
                     onload: function(response) {
@@ -23174,8 +23193,8 @@
 
     function fetchPage(url) {
         return new Promise(function(resolve, reject) {
-            if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") {
-                GM.xmlHttpRequest({
+            if (apsHasXmlHttpRequest()) {
+                apsXmlHttpRequest({
                     method: "GET",
                     url: url,
                     onload: function(response) {
@@ -23211,8 +23230,8 @@
 
     function submitForm(url, body) {
         return new Promise(function(resolve, reject) {
-            if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") {
-                GM.xmlHttpRequest({
+            if (apsHasXmlHttpRequest()) {
+                apsXmlHttpRequest({
                     method: "POST",
                     url: url,
                     data: body,
@@ -24211,7 +24230,10 @@
     function togglePanelHiddenViaHotkey() {
         var panel = document.getElementById(PANEL_ID);
         if (!panel) {
-            log("Hotkey toggle: panel element not found; nothing to toggle");
+            log("Hotkey toggle: panel element not found; recreating panel");
+            setPanelHidden(false);
+            panel = makePanel();
+            applyPanelHiddenState(panel);
             return;
         }
         var isHidden = getPanelHidden();
@@ -24286,7 +24308,7 @@
     }
 
     function bindPanelHotkeyOnce() {
-        if (window.__APS_HOTKEY_BOUND === true) {
+        if (window.__CLINSPARK_AUTOMATOR_HOTKEY_BOUND === true) {
             log("Hotkey: already bound; skipping rebind");
             return;
         }
@@ -24311,7 +24333,7 @@
         }
         document.addEventListener("keydown", handler, true);
         window.addEventListener("keydown", handler, true);
-        window.__APS_HOTKEY_BOUND = true;
+        window.__CLINSPARK_AUTOMATOR_HOTKEY_BOUND = true;
         log("Hotkey: bound for " + String(getPanelHotkey()));
     }
 
@@ -24598,7 +24620,7 @@
         log("Find Form: preview request started");
         var url = FORM_LIST_URL;
         try {
-            GM.xmlHttpRequest({
+            apsXmlHttpRequest({
                 method: "GET",
                 url: url,
                 onload: function (resp) {
@@ -25179,7 +25201,7 @@
         log("Find Study Events: preview request started");
         var url = FORM_LIST_URL;
         try {
-            GM.xmlHttpRequest({
+            apsXmlHttpRequest({
                 method: "GET",
                 url: url,
                 onload: function (resp) {
@@ -26489,7 +26511,7 @@
 
     async function getMethodLibraryData() {
         return new Promise(function(resolve) {
-            GM.xmlHttpRequest({ method: "GET", url: METHOD_LIBRARY_URL, onload: function(resp) {
+            apsXmlHttpRequest({ method: "GET", url: METHOD_LIBRARY_URL, onload: function(resp) {
                 var html = resp && resp.responseText ? resp.responseText : "";
                 var methods = [];
                 var tmp = document.createElement("div"); tmp.innerHTML = html;
@@ -26502,7 +26524,7 @@
 
     async function getMethodFormalExpr(methodUrl) {
         return new Promise(function(resolve) {
-            GM.xmlHttpRequest({ method: "GET", url: methodUrl, onload: function(resp) {
+            apsXmlHttpRequest({ method: "GET", url: methodUrl, onload: function(resp) {
                 var html = resp && resp.responseText ? resp.responseText : "";
                 var tmp = document.createElement("div"); tmp.innerHTML = html;
                 var tables = tmp.querySelectorAll("table.table.table-striped.table-bordered");
@@ -26514,7 +26536,7 @@
 
     async function getMethodItemRefs(methodUrl) {
         return new Promise(function(resolve) {
-            GM.xmlHttpRequest({ method: "GET", url: methodUrl + "?references=references", onload: function(resp) {
+            apsXmlHttpRequest({ method: "GET", url: methodUrl + "?references=references", onload: function(resp) {
                 var html = resp && resp.responseText ? resp.responseText : "";
                 var refs = [];
                 var tmp = document.createElement("div"); tmp.innerHTML = html;
@@ -26527,7 +26549,7 @@
 
     async function getItemRefForms(itemRefUrl) {
         return new Promise(function(resolve) {
-            GM.xmlHttpRequest({ method: "GET", url: itemRefUrl + "?references=references", onload: function(resp) {
+            apsXmlHttpRequest({ method: "GET", url: itemRefUrl + "?references=references", onload: function(resp) {
                 var html = resp && resp.responseText ? resp.responseText : "";
                 var forms = [];
                 var tmp = document.createElement("div"); tmp.innerHTML = html;

@@ -1,17 +1,16 @@
 /* jshint strict: false */
 
 // Version: v1
-// Description: Validates kit accession number formatting against the expected study pattern so malformed kit identifiers can be queried before downstream use.
+// Description: Validates that the value consists of exactly 2 letters followed by 6 digits.
 
 var value = itemJson.item.value;
 
 function isValidFormat(value)
 {
-    var pattern = /^[A-Za-z]{2}[0-9]{5}$/;
+    var pattern = /^[A-Za-z]{2}[0-9]{6}$/;
 
-    if (typeof value !== "string") return false
-    if (pattern.test(value)) return true;
-    else return false;
+    if (typeof value !== "string") return false;
+    return pattern.test(value);
 }
 
 try {

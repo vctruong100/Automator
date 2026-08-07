@@ -1,8 +1,7 @@
-
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 4.3.3
+// @version 4.3.5
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; Activity Plan Removal; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -12,8 +11,27 @@
 // @grant GM_openInTab
 // @grant GM.xmlHttpRequest
 // @grant GM_xmlhttpRequest
+// @connect     cenexel.clinspark.com
+// @connect     cenexeltest.clinspark.com
+// @connect     raw.githubusercontent.com
+// @connect     github.com
 // ==/UserScript==
 (function () {
+    function apsHasXmlHttpRequest() {
+        return (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") ||
+            (typeof GM_xmlhttpRequest === "function");
+    }
+
+    function apsXmlHttpRequest(details) {
+        if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") {
+            return GM.xmlHttpRequest(details);
+        }
+        if (typeof GM_xmlhttpRequest === "function") {
+            return GM_xmlhttpRequest(details);
+        }
+        throw new Error("No Tampermonkey xmlhttpRequest API is available");
+    }
+
     var STORAGE_PANEL_WIDTH = "activityPlanState.panel.width";
     var STORAGE_PANEL_HEIGHT = "activityPlanState.panel.height";
     // UI Scale Constants
@@ -22400,7 +22418,7 @@
         log("Find Study Events: preview request started");
         var url = FORM_LIST_URL;
         try {
-            GM.xmlHttpRequest({
+            apsXmlHttpRequest({
                 method: "GET",
                 url: url,
                 onload: function (resp) {
@@ -23303,7 +23321,7 @@
 
     function getXHR() {
         var apis = [
-            { name: "GM.xmlHttpRequest", fn: (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") ? GM.xmlHttpRequest.bind(GM) : null },
+            { name: "apsXmlHttpRequest", fn: apsHasXmlHttpRequest() ? apsXmlHttpRequest : null },
             { name: "GM_xmlhttpRequest", fn: (typeof GM_xmlhttpRequest === "function") ? GM_xmlhttpRequest : null },
             { name: "window.GM.xmlHttpRequest", fn: (typeof window !== "undefined" && window.GM && typeof window.GM.xmlHttpRequest === "function") ? window.GM.xmlHttpRequest.bind(window.GM) : null },
             { name: "window.GM_xmlhttpRequest", fn: (typeof window !== "undefined" && typeof window.GM_xmlhttpRequest === "function") ? window.GM_xmlhttpRequest : null },
@@ -23322,7 +23340,7 @@
         var found = [];
         if (typeof GM !== "undefined") {
             found.push("GM");
-            if (typeof GM.xmlHttpRequest === "function") found.push("GM.xmlHttpRequest");
+            if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") found.push("GM.xmlHttpRequest");
             if (typeof GM_xmlhttpRequest === "function") found.push("GM_xmlhttpRequest");
         }
         if (typeof window !== "undefined") {
@@ -23429,7 +23447,10 @@
     function togglePanelHiddenViaHotkey() {
         var panel = document.getElementById(PANEL_ID);
         if (!panel) {
-            log("Hotkey toggle: panel element not found; nothing to toggle");
+            log("Hotkey toggle: panel element not found; recreating panel");
+            setPanelHidden(false);
+            panel = makePanel();
+            applyPanelHiddenState(panel);
             return;
         }
         var isHidden = getPanelHidden();
@@ -23724,7 +23745,7 @@
         log("Find Form: preview request started");
         var url = FORM_LIST_URL;
         try {
-            GM.xmlHttpRequest({
+            apsXmlHttpRequest({
                 method: "GET",
                 url: url,
                 onload: function (resp) {
@@ -24442,7 +24463,7 @@
 
     async function getMethodLibraryData() {
         return new Promise(function(resolve) {
-            GM.xmlHttpRequest({ method: "GET", url: METHOD_LIBRARY_URL, onload: function(resp) {
+            apsXmlHttpRequest({ method: "GET", url: METHOD_LIBRARY_URL, onload: function(resp) {
                 var html = resp && resp.responseText ? resp.responseText : "";
                 var methods = [];
                 var tmp = document.createElement("div"); tmp.innerHTML = html;
@@ -24455,7 +24476,7 @@
 
     async function getMethodFormalExpr(methodUrl) {
         return new Promise(function(resolve) {
-            GM.xmlHttpRequest({ method: "GET", url: methodUrl, onload: function(resp) {
+            apsXmlHttpRequest({ method: "GET", url: methodUrl, onload: function(resp) {
                 var html = resp && resp.responseText ? resp.responseText : "";
                 var tmp = document.createElement("div"); tmp.innerHTML = html;
                 var tables = tmp.querySelectorAll("table.table.table-striped.table-bordered");
@@ -24467,7 +24488,7 @@
 
     async function getMethodItemRefs(methodUrl) {
         return new Promise(function(resolve) {
-            GM.xmlHttpRequest({ method: "GET", url: methodUrl + "?references=references", onload: function(resp) {
+            apsXmlHttpRequest({ method: "GET", url: methodUrl + "?references=references", onload: function(resp) {
                 var html = resp && resp.responseText ? resp.responseText : "";
                 var refs = [];
                 var tmp = document.createElement("div"); tmp.innerHTML = html;
@@ -24480,7 +24501,7 @@
 
     async function getItemRefForms(itemRefUrl) {
         return new Promise(function(resolve) {
-            GM.xmlHttpRequest({ method: "GET", url: itemRefUrl + "?references=references", onload: function(resp) {
+            apsXmlHttpRequest({ method: "GET", url: itemRefUrl + "?references=references", onload: function(resp) {
                 var html = resp && resp.responseText ? resp.responseText : "";
                 var forms = [];
                 var tmp = document.createElement("div"); tmp.innerHTML = html;
@@ -42549,7 +42570,7 @@
     }
 
     function bindPanelHotkeyOnce() {
-        if (window.__APS_HOTKEY_BOUND === true) {
+        if (window.__CLINSPARK_TEST_AUTOMATOR_HOTKEY_BOUND === true) {
             log("Hotkey: already bound; skipping rebind");
             return;
         }
@@ -42563,7 +42584,7 @@
         }
         document.addEventListener("keydown", handler, true);
         window.addEventListener("keydown", handler, true);
-        window.__APS_HOTKEY_BOUND = true;
+        window.__CLINSPARK_TEST_AUTOMATOR_HOTKEY_BOUND = true;
         log("Hotkey: bound for " + String(getPanelHotkey()));
     }
 
