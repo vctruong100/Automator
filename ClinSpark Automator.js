@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     3.5.6
+// @version     3.5.9
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -4302,6 +4302,7 @@
     var IFL_INTER_ITEM_DELAY = 800;
     var IFL_CANCELED = false;
     var IFL_STORAGE_IMPORT_STATE = "ifl.importState";
+    var IFL_STORAGE_CANCEL_REQUESTED = "ifl.cancelRequested";
     var IFL_STORAGE_STUDIES_CACHE = "ifl.studiesCache";
     var IFL_STORAGE_FULLSCREEN = "ifl.fullscreen";
     var IFL_STORAGE_DIVIDERS = "ifl.dividerWidths";
@@ -4445,6 +4446,23 @@
     // ---- IFL Persistence helpers ----
     function ifl_saveImportState(obj) {
         try {localStorage.setItem(IFL_STORAGE_IMPORT_STATE, JSON.stringify(obj)); } catch(e) {}
+    }
+
+    function ifl_isCancelRequested() {
+        try { return localStorage.getItem(IFL_STORAGE_CANCEL_REQUESTED) === "1"; } catch (e) {}
+        return false;
+    }
+
+    function ifl_requestCancel() {
+        IFL_CANCELED = true;
+        try { localStorage.setItem(IFL_STORAGE_CANCEL_REQUESTED, "1"); } catch (e) {}
+        ifl_clearImportState();
+        ifl_closeBgTab();
+        ifl_closeImportModal();
+    }
+
+    function ifl_clearCancelRequest() {
+        try { localStorage.removeItem(IFL_STORAGE_CANCEL_REQUESTED); } catch (e) {}
     }
 
     function ifl_loadImportState() {
@@ -5881,18 +5899,18 @@
         cancelBtn.textContent = "Cancel";
         cancelBtn.style.cssText = "background:rgba(239,68,68,0.3);border:1px solid rgba(239,68,68,0.5);color:#ff8a8a;padding:3px 12px;border-radius:6px;cursor:pointer;font-size:11px;";
         cancelBtn.onclick = function() {
-            IFL_CANCELED = true;
+            ifl_requestCancel();
             cancelBtn.disabled = true;
             cancelBtn.textContent = "Canceling\u2026";
         };
 
         var closeBtn = document.createElement("button");
         closeBtn.innerHTML = "\u2715";
-        closeBtn.title = "Close panel";
+        closeBtn.title = "Cancel import and close panel";
         closeBtn.style.cssText = "background:rgba(255,255,255,0.1);border:none;color:white;width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;";
         closeBtn.onmouseover = function() { closeBtn.style.background = "rgba(255,67,54,0.8)"; };
         closeBtn.onmouseout = function() { closeBtn.style.background = "rgba(255,255,255,0.1)"; };
-        closeBtn.onclick = function() { close(); };
+        closeBtn.onclick = function() { ifl_requestCancel(); close(); };
 
         hBtnGroup.appendChild(cancelBtn);
         hBtnGroup.appendChild(closeBtn);
@@ -6048,11 +6066,13 @@
     // ---- Persist/restore helpers for import state ----
 
     function ifl_persistProgress(progress, selectedItems, startIdx) {
+        if (IFL_CANCELED || ifl_isCancelRequested()) return;
         var statuses = [];
         for (var i = 0; i < progress.state.length; i++) {
             statuses.push({ status: progress.state[i].status, error: progress.state[i].error });
         }
         ifl_saveImportState({
+            resumeVersion: 2,
             items: selectedItems,
             statuses: statuses,
             currentIndex: startIdx,
@@ -6064,6 +6084,12 @@
     // ---- Import processing loop ----
 
     async function ifl_processImports(selectedItems, resumeIndex, existingStatuses) {
+        if (ifl_isCancelRequested()) {
+            IFL_CANCELED = true;
+            ifl_clearImportState();
+            log("IFL: import start blocked because cancellation was requested");
+            return;
+        }
         IFL_CANCELED = false;
         var startIdx = resumeIndex || 0;
         log("IFL: starting import of " + selectedItems.length + " forms from index " + startIdx);
@@ -6074,7 +6100,8 @@
         ifl_persistProgress(progress, selectedItems, startIdx);
 
         for (var idx = startIdx; idx < selectedItems.length; idx++) {
-            if (IFL_CANCELED) {
+            if (IFL_CANCELED || ifl_isCancelRequested()) {
+                IFL_CANCELED = true;
                 log("IFL: import canceled by user at index " + idx);
                 for (var ci = idx; ci < selectedItems.length; ci++) {
                     progress.setStatus(ci, progress.STATUS_FAILED, "Canceled");
@@ -6089,6 +6116,7 @@
             log("IFL: processing " + (idx + 1) + "/" + selectedItems.length + ": " + item.studyName + " / " + item.originalName);
 
             try {
+                if (IFL_CANCELED || ifl_isCancelRequested()) throw new Error("Canceled");
                 // Check if modal is open; if not, reopen it
                 var modalBody = document.querySelector(".modal-body");
                 var studySel = document.getElementById(IFL_STUDY_SELECT_ID);
@@ -6101,12 +6129,14 @@
                 // Select study
                 var ss = document.getElementById(IFL_STUDY_SELECT_ID);
                 if (!ss) throw new Error("Study select not found");
+                if (IFL_CANCELED || ifl_isCancelRequested()) throw new Error("Canceled");
                 ss.value = item.studyValue;
                 ifl_triggerChange(ss);
                 await sleep(300);
 
                 // Wait for form dropdown
                 var populated = await ifl_waitForFormOptions(IFL_FORM_POPULATE_TIMEOUT);
+                if (IFL_CANCELED || ifl_isCancelRequested()) throw new Error("Canceled");
                 if (!populated) throw new Error("Form dropdown did not populate");
 
                 // Select form
@@ -6124,9 +6154,11 @@
                 if (!formFound) throw new Error("Form option not found: " + item.formValue);
                 ifl_triggerChange(fs);
                 await sleep(500);
+                if (IFL_CANCELED || ifl_isCancelRequested()) throw new Error("Canceled");
 
                 // Wait for itemGroupsDiv to populate so we can apply changes
                 var igDiv = await ifl_waitForItemGroupsDiv(IFL_ITEMGROUPS_TIMEOUT);
+                if (IFL_CANCELED || ifl_isCancelRequested()) throw new Error("Canceled");
 
                 // Handle Lock on Save checkbox
                 var lockCb = document.getElementById(IFL_LOCK_CHECKBOX_ID);
@@ -6177,6 +6209,7 @@
                 var saveFailed = false;
 
                 while (saveAttempts < maxSaveAttempts) {
+                    if (IFL_CANCELED || ifl_isCancelRequested()) throw new Error("Canceled");
                     saveAttempts++;
                     saveBtn = document.getElementById(IFL_SAVE_BUTTON_ID);
                     if (!saveBtn) throw new Error("Save button not found");
@@ -6188,6 +6221,7 @@
                     var closed = false;
                     var errorDetected = false;
                     while (Date.now() - start < IFL_MODAL_CLOSE_TIMEOUT) {
+                        if (IFL_CANCELED || ifl_isCancelRequested()) throw new Error("Canceled");
                         // Check for error alert in modal
                         var alertEl = document.querySelector(".modal-body .alert-danger, .modal .alert-danger");
                         if (alertEl) {
@@ -6257,6 +6291,7 @@
                 }
 
                 // Save succeeded — mark as completed
+                if (IFL_CANCELED || ifl_isCancelRequested()) throw new Error("Canceled");
                 progress.setStatus(idx, progress.STATUS_COMPLETED);
                 ifl_persistProgress(progress, selectedItems, idx + 1);
 
@@ -6269,11 +6304,23 @@
                 }
 
                 await sleep(IFL_INTER_ITEM_DELAY);
+                if (IFL_CANCELED || ifl_isCancelRequested()) {
+                    IFL_CANCELED = true;
+                    break;
+                }
 
                 log("IFL: completed " + item.studyName + " / " + item.originalName);
 
             } catch (err) {
                 var errMsg = err && err.message ? err.message : String(err);
+                if (IFL_CANCELED || ifl_isCancelRequested() || errMsg === "Canceled") {
+                    IFL_CANCELED = true;
+                    log("IFL: import canceled by user at index " + idx);
+                    progress.setStatus(idx, progress.STATUS_FAILED, "Canceled");
+                    ifl_clearImportState();
+                    await ifl_closeImportModal();
+                    break;
+                }
                 log("IFL: FAILED " + item.studyName + " / " + item.originalName + " \u2014 " + errMsg);
                 progress.setStatus(idx, progress.STATUS_FAILED, errMsg);
                 ifl_persistProgress(progress, selectedItems, idx + 1);
@@ -6290,8 +6337,19 @@
     // ---- Resume after page refresh ----
 
     function ifl_resumeImport() {
+        if (ifl_isCancelRequested()) {
+            IFL_CANCELED = true;
+            ifl_clearImportState();
+            log("IFL: resume blocked because cancellation was requested");
+            return;
+        }
         var saved = ifl_loadImportState();
         if (!saved || !saved.active || !saved.items || saved.items.length === 0) return;
+        if (saved.resumeVersion !== 2) {
+            ifl_clearImportState();
+            log("IFL: cleared legacy import resume state");
+            return;
+        }
 
         // If we're on a form show page (redirect after save), go back to list page
         if (!isOnImportFromLibraryPage()) {
@@ -6396,6 +6454,7 @@
     async function runImportFromLibrary() {
         log("IFL: Import from Library started");
         IFL_CANCELED = false;
+        ifl_clearCancelRequest();
 
         // Page check
         if (!isOnImportFromLibraryPage()) {
@@ -7703,14 +7762,9 @@
         } catch (e) {}
         log("BPL: hideExisting initial state = " + bplHideExisting);
 
-        var bplShowUpdatedOnly = false;
         try {
-            var savedShowUpdated = localStorage.getItem(STORAGE_BPL_SHOW_UPDATED_ONLY);
-            if (savedShowUpdated === "true") {
-                bplShowUpdatedOnly = true;
-            }
+            localStorage.removeItem(STORAGE_BPL_SHOW_UPDATED_ONLY);
         } catch (e) {}
-        log("BPL: showUpdatedOnly initial state = " + bplShowUpdatedOnly);
 
         var bplShowDuplicatesOnly = false;
 
@@ -8954,11 +9008,100 @@
             }
         }
 
+        var bplFilterStatusDiv = null;
+
+        function bplGetFilterStats(filter, duplicateKeys) {
+            var stats = {
+                total: 0,
+                visible: 0,
+                userAdded: 0,
+                updated: 0,
+                existing: 0
+            };
+            var filterLower = (filter || "").toLowerCase();
+            for (var bsi = 0; bsi < segments.length; bsi++) {
+                var bseg = segments[bsi];
+                var bsegNameMatches = !filterLower || bseg.text.toLowerCase().indexOf(filterLower) !== -1;
+                var bforms = segmentFormMap[bseg.value] || [];
+                for (var bfi = 0; bfi < bforms.length; bfi++) {
+                    var bentry = bforms[bfi];
+                    var bkey = getFormDataKey(bseg.value, bentry.value, bentry.index);
+                    var bdata = formDataStore[bkey] || getDefaultFormData();
+                    var bisAuto = bentry.autoPopulated || bdata.autoPopulated || false;
+                    var bisUpdated = bisAuto && bdata.modified;
+                    stats.total++;
+                    if (bisAuto) {
+                        stats.existing++;
+                    } else {
+                        stats.userAdded++;
+                    }
+                    if (bisUpdated) {
+                        stats.updated++;
+                    }
+                    if (bisAuto && bplHideExisting) {
+                        continue;
+                    }
+                    if (bplShowDuplicatesOnly && !(duplicateKeys && duplicateKeys[bkey])) {
+                        continue;
+                    }
+                    if (filterLower && !bsegNameMatches) {
+                        var bsearchable = (bentry.text || "").toLowerCase();
+                        var bevents = bdata.studyEvents || [];
+                        for (var bei = 0; bei < bevents.length; bei++) {
+                            bsearchable += " " + (bevents[bei].text || "").toLowerCase();
+                        }
+                        if (bdata.timepointDisplay) {
+                            bsearchable += " " + bdata.timepointDisplay.toLowerCase();
+                        }
+                        bsearchable += " " + bplFormatTimePoint(bdata.days || 0, bdata.hours || 0, bdata.minutes || 0, bdata.seconds || 0, bdata.preReference || false).toLowerCase();
+                        if (bdata.exampleTime && bdata.exampleTime !== "N/A") {
+                            bsearchable += " " + bdata.exampleTime.toLowerCase();
+                        }
+                        if (bsearchable.indexOf(filterLower) === -1) {
+                            continue;
+                        }
+                    }
+                    stats.visible++;
+                }
+            }
+            return stats;
+        }
+
+        function bplUpdateFilterControls(hideBtn) {
+            if (hideBtn) {
+                hideBtn.textContent = bplHideExisting ? "Existing: Hidden" : "Existing: Visible";
+                hideBtn.title = bplHideExisting ? "Existing auto-populated forms are hidden. Click to show them." : "Existing auto-populated forms are visible. Click to hide them.";
+                hideBtn.style.borderColor = bplHideExisting ? "#f39c12" : "#2980b9";
+                hideBtn.style.background = bplHideExisting ? "#3a2a12" : "#1a2a3a";
+                hideBtn.style.color = bplHideExisting ? "#ffd166" : "#5dade2";
+            }
+        }
+
+        function bplUpdateFilterStatus(stats, filter) {
+            if (!bplFilterStatusDiv) return;
+            var existingText = bplHideExisting ? "existing hidden" : "existing visible";
+            var dupText = bplShowDuplicatesOnly ? ", duplicates only" : "";
+            var searchText = (filter || "").trim() ? ", search: \"" + (filter || "").trim() + "\"" : "";
+            bplFilterStatusDiv.textContent = "Currently showing " + stats.visible + " of " + stats.total + " forms (" + existingText + dupText + searchText + "). User-added: " + stats.userAdded + "; updated existing: " + stats.updated + "; existing total: " + stats.existing + ".";
+            if (stats.visible === 0 && stats.total > 0) {
+                bplFilterStatusDiv.style.borderColor = "#f39c12";
+                bplFilterStatusDiv.style.background = "#2f2512";
+                bplFilterStatusDiv.style.color = "#ffd166";
+                bplFilterStatusDiv.textContent += " The list is empty because the active filters are hiding the available forms.";
+            } else {
+                bplFilterStatusDiv.style.borderColor = "#34495e";
+                bplFilterStatusDiv.style.background = "#17212b";
+                bplFilterStatusDiv.style.color = "#d6eaff";
+            }
+        }
+
         function renderCenterPanel(filter) {
             saveFormDataFromPanel(selectedFormKey);
             var scrollTop = centerBody.scrollTop;
             centerBody.innerHTML = "";
             var bplDuplicateKeys = bplFindDuplicates(segments, segmentFormMap, formDataStore, segmentCheckboxStates);
+            var bplFilterStats = bplGetFilterStats(filter, bplDuplicateKeys);
+            bplUpdateFilterStatus(bplFilterStats, filter);
             var filterLower = (filter || "").toLowerCase();
             for (var si2 = 0; si2 < segments.length; si2++) {
                 var seg = segments[si2];
@@ -8974,9 +9117,6 @@
                         var fcEvents = fcData.studyEvents || [];
                         var fcIsAuto = fcEntry.autoPopulated || fcData.autoPopulated || false;
                         if (fcIsAuto && bplHideExisting) {
-                            continue;
-                        }
-                        if (bplShowUpdatedOnly && !((!fcIsAuto) || (fcIsAuto && fcData.modified))) {
                             continue;
                         }
                         var searchableText = (fcEntry.text || "").toLowerCase();
@@ -8995,23 +9135,6 @@
                         }
                     }
                     if (matchingFormIndices.length === 0) {
-                        continue;
-                    }
-                }
-                if (bplShowUpdatedOnly) {
-                    var segFormsForFilter = segmentFormMap[seg.value] || [];
-                    var hasVisibleForm = false;
-                    for (var sufi = 0; sufi < segFormsForFilter.length; sufi++) {
-                        var sufEntry = segFormsForFilter[sufi];
-                        var sufKey = getFormDataKey(seg.value, sufEntry.value, sufEntry.index);
-                        var sufData = formDataStore[sufKey] || getDefaultFormData();
-                        var sufIsAuto = sufEntry.autoPopulated || sufData.autoPopulated || false;
-                        if (!sufIsAuto || (sufIsAuto && sufData.modified)) {
-                            hasVisibleForm = true;
-                            break;
-                        }
-                    }
-                    if (!hasVisibleForm) {
                         continue;
                     }
                 }
@@ -9386,9 +9509,6 @@
                         var fEvents = fData2.studyEvents || [];
                         var isAutoPopulated = fEntry.autoPopulated || fData2.autoPopulated || false;
                         if (isAutoPopulated && bplHideExisting) {
-                            continue;
-                        }
-                        if (bplShowUpdatedOnly && !((!isAutoPopulated) || (isAutoPopulated && fData2.modified))) {
                             continue;
                         }
                         if (matchingFormIndices !== null && matchingFormIndices.indexOf(fi) === -1) {
@@ -9824,6 +9944,12 @@
                 segBlock.appendChild(formDropArea);
                 centerBody.appendChild(segBlock);
             }
+            if (bplFilterStats.visible === 0) {
+                var bplEmptyState = document.createElement("div");
+                bplEmptyState.style.cssText = "margin:16px;padding:18px;border:1px solid " + (bplFilterStats.total > 0 ? "#f39c12" : "#444") + ";border-radius:6px;background:" + (bplFilterStats.total > 0 ? "#2f2512" : "#1f1f1f") + ";color:" + (bplFilterStats.total > 0 ? "#ffd166" : "#aaa") + ";font-size:13px;line-height:1.45;text-align:center;";
+                bplEmptyState.textContent = bplFilterStats.total > 0 ? "No forms match the current PLAP filters. Check the status bar below: Existing may be hidden, Duplicate filter may be on, or the search may be narrowing the list." : "No forms have been added to the PLAP Builder yet.";
+                centerBody.appendChild(bplEmptyState);
+            }
             centerBody.scrollTop = scrollTop;
             saveSession();
         }
@@ -9831,6 +9957,9 @@
         centerSearch.addEventListener("input", function() {
             renderCenterPanel(this.value);
         });
+
+        bplFilterStatusDiv = document.createElement("div");
+        bplFilterStatusDiv.style.cssText = "padding:8px 12px;border:1px solid #34495e;border-radius:6px;background:#17212b;color:#d6eaff;font-size:12px;font-weight:600;line-height:1.35;";
 
         var legendRow = document.createElement("div");
         legendRow.style.cssText = "display:flex;gap:16px;padding:8px 12px;border:1px solid #333;border-radius:6px;background:#1a1a1a;font-size:11px;color:#aaa;flex-wrap:wrap;";
@@ -9867,42 +9996,18 @@
         legendRow.appendChild(collapseAllBtn);
 
         var hideExistingBtn = document.createElement("button");
-        hideExistingBtn.textContent = bplHideExisting ? "\u{1F441} Show Existing" : "\u{1F6AB} Hide Existing";
-        hideExistingBtn.title = bplHideExisting ? "Show auto-populated items from SA table" : "Hide auto-populated items from SA table";
-        hideExistingBtn.style.cssText = "padding:5px 12px;border-radius:4px;border:1px solid " + (bplHideExisting ? "#2980b9" : "#555") + ";background:" + (bplHideExisting ? "#1a2a3a" : "#2a2a2a") + ";color:" + (bplHideExisting ? "#5dade2" : "#aaa") + ";font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;";
+        hideExistingBtn.style.cssText = "padding:5px 12px;border-radius:4px;border:1px solid #555;background:#2a2a2a;color:#aaa;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0;";
         hideExistingBtn.addEventListener("click", function() {
             bplHideExisting = !bplHideExisting;
             try {
                 localStorage.setItem(STORAGE_BPL_HIDE_EXISTING, bplHideExisting ? "true" : "false");
             } catch (e) {}
-            this.textContent = bplHideExisting ? "\u{1F441} Show Existing" : "\u{1F6AB} Hide Existing";
-            this.title = bplHideExisting ? "Show auto-populated items from SA table" : "Hide auto-populated items from SA table";
-            this.style.borderColor = bplHideExisting ? "#2980b9" : "#555";
-            this.style.background = bplHideExisting ? "#1a2a3a" : "#2a2a2a";
-            this.style.color = bplHideExisting ? "#5dade2" : "#aaa";
+            bplUpdateFilterControls(hideExistingBtn);
             log("BPL: hideExisting toggled to " + bplHideExisting);
             renderCenterPanel(centerSearch.value);
         });
+        bplUpdateFilterControls(hideExistingBtn);
         legendRow.appendChild(hideExistingBtn);
-
-        var showUpdatedBtn = document.createElement("button");
-        showUpdatedBtn.textContent = bplShowUpdatedOnly ? "\u{1F441} Show All" : "\u{270F}\u{FE0F} Show Updated Only";
-        showUpdatedBtn.title = bplShowUpdatedOnly ? "Show all forms including unmodified auto-populated" : "Only show user-added forms and modified auto-populated forms";
-        showUpdatedBtn.style.cssText = "padding:5px 12px;border-radius:4px;border:1px solid " + (bplShowUpdatedOnly ? "#27ae60" : "#555") + ";background:" + (bplShowUpdatedOnly ? "#1a2a1a" : "#2a2a2a") + ";color:" + (bplShowUpdatedOnly ? "#58d68d" : "#aaa") + ";font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;";
-        showUpdatedBtn.addEventListener("click", function() {
-            bplShowUpdatedOnly = !bplShowUpdatedOnly;
-            try {
-                localStorage.setItem(STORAGE_BPL_SHOW_UPDATED_ONLY, bplShowUpdatedOnly ? "true" : "false");
-            } catch (e) {}
-            this.textContent = bplShowUpdatedOnly ? "\u{1F441} Show All" : "\u{270F}\u{FE0F} Show Updated Only";
-            this.title = bplShowUpdatedOnly ? "Show all forms including unmodified auto-populated" : "Only show user-added forms and modified auto-populated forms";
-            this.style.borderColor = bplShowUpdatedOnly ? "#27ae60" : "#555";
-            this.style.background = bplShowUpdatedOnly ? "#1a2a1a" : "#2a2a2a";
-            this.style.color = bplShowUpdatedOnly ? "#58d68d" : "#aaa";
-            log("BPL: showUpdatedOnly toggled to " + bplShowUpdatedOnly);
-            renderCenterPanel(centerSearch.value);
-        });
-        legendRow.appendChild(showUpdatedBtn);
 
         var clearAllBtn = document.createElement("button");
         clearAllBtn.textContent = "\uD83D\uDDD1 Clear All";
@@ -10308,7 +10413,12 @@
         var bottomRow = document.createElement("div");
         bottomRow.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:12px;";
 
-        bottomRow.appendChild(legendRow);
+        var bottomLeftArea = document.createElement("div");
+        bottomLeftArea.style.cssText = "display:flex;flex-direction:column;gap:8px;flex:1;min-width:0;";
+        bottomLeftArea.appendChild(bplFilterStatusDiv);
+        bottomLeftArea.appendChild(legendRow);
+
+        bottomRow.appendChild(bottomLeftArea);
 
         var confirmArea = document.createElement("div");
         confirmArea.style.cssText = "display:flex;flex-direction:row;align-items:center;gap:8px;flex-shrink:0;";
