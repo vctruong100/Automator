@@ -7,19 +7,19 @@ var formName = formJson.form.name;
 var studyEventName = formJson.form.studyEventName;
 
 var confirmationItems = [
-    "Scn_remained_Semi_recumbent V2",
-    "Scn_remained_Semi_recumbent",
-    "Scn_remained_Semi_recumbent."
+    "Remained supine since ECG?"
 ];
 
 var item = [
-    "START SUPINE"
+    "START SUPINE",
+    "ECG_Supine resting time",
 ];
 
 var ecgFormNames = [
  "⚡ D-1 12-LEAD ECG (SINGLE) V1.0",
   "⚡ 12-LEAD ECG (SINGLE) V1.0",
   "⚡12-LEAD ECG (BASELINE) (SINGLE) 1.0",
+  "⚡ECG_12-LEAD ECG (TRIPLICATE)",
 ];
 
 function normalizeItemName(name) {
@@ -117,14 +117,14 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
 try {
     var confirmation = pullItemFromForm(formJson, confirmationItems)
 
-    if (!confirmation || confirmation == null) return "N/A";
-    if (confirmation == "YES") return "N/A";
-
-    form = pullForm(studyevent, ecgFormNames);
-    if (!form) return "N/A";
+    if (!confirmation || confirmation == null) return null;
+    if (confirmation == "NO") return null;
+    logger(confirmation);
+    form = pullForm([studyEventName], ecgFormNames);
+    if (!form) return null;
 
     var result = pullItemFromForm(form, item);
-    if (!result || result == null) return "N/A";
+    if (!result || result == null) return null;
 
     return formatDate(result);
 } catch (e) {
