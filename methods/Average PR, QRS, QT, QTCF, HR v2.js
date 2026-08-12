@@ -43,9 +43,11 @@ function matchesMetric(itemName, metric) {
     var name = normalizeName(itemName);
 
     if (metric === "PR") return containsStandaloneKeyword(name, "PR");
+    if (metric === "RR") return containsStandaloneKeyword(name, "RR");
     if (metric === "QRS") return containsStandaloneKeyword(name, "QRS");
     if (metric === "QT") return name.indexOf("QTC") === -1 && containsStandaloneKeyword(name, "QT");
-    if (metric === "QTCF") return name.indexOf("QTCF") !== -1 || containsStandaloneKeyword(name, "QTC");
+    if (metric === "QTC") return name.indexOf("QTCF") === -1 && containsStandaloneKeyword(name, "QTC");
+    if (metric === "QTCF") return name.indexOf("QTCF") !== -1 || containsStandaloneKeyword(name, "QTCF");
     if (metric === "HR") return containsStandaloneKeyword(name, "HR") || containsStandaloneKeyword(name, "RATE") || containsValue(name, "HEART RATE");
 
     return false;
@@ -59,6 +61,7 @@ function getMetricFromAverageItem(itemName) {
     if (containsValue(name, "QT") && !containsValue(name, "QTC")) return "QT";
     if (containsValue(name, "QRS")) return "QRS";
     if (containsValue(name, "PR")) return "PR";
+    if (containsValue(name, "RR")) return "RR";
     if (containsValue(name, "HR") || containsValue(name, "HEART RATE") || containsValue(name, "PULSE")) return "HR";
 
     return null;
@@ -128,7 +131,6 @@ function populateList(formJsonValue, metric, attachedItem, isRepeat) {
                 groupItem = items[j];
                 if (!groupItem) continue;
                 if (groupItem.name == attachedItem && list.length > 1) return list;
-
                 if (matchesMetric(groupItem.name, metric) && !isAverageItem(groupItem.name)) {
                     logger(metric + " matched item: " + groupItem.name + " | Value: " + groupItem.value);
                     addNumericValue(list, groupItem.value);
@@ -155,33 +157,43 @@ try {
     var PRlist = populateList(formJson, "PR", attachedItem.name, isRepeat);
     var QRSlist = populateList(formJson, "QRS", attachedItem.name, isRepeat);
     var QTlist = populateList(formJson, "QT", attachedItem.name, isRepeat);
+    var QTClist = populateList(formJson, "QTC", attachedItem.name, isRepeat);
     var QTcFlist = populateList(formJson, "QTCF", attachedItem.name, isRepeat);
     var HRlist = populateList(formJson, "HR", attachedItem.name, isRepeat);
-
+    var RRlist = populateList(formJson, "RR", attachedItem.name, isRepeat);
+    
     logger("PR list: " + PRlist);
     logger("QRS list: " + QRSlist);
     logger("QT list: " + QTlist);
+    logger("QTC list: " + QTClist);
     logger("QTcF list: " + QTcFlist);
     logger("HR list: " + HRlist);
-
+    logger("RR list: " + RRlist);
+    
     var avgPR = calculateAverage(PRlist);
     var avgQRS = calculateAverage(QRSlist);
     var avgQT = calculateAverage(QTlist);
+    var avgQTC = calculateAverage(QTClist);
     var avgQTcF = calculateAverage(QTcFlist);
     var avgHR = calculateAverage(HRlist);
-
+    var avgRR = calculateAverage(RRlist);
+    
     logger("Average PR: " + avgPR);
     logger("Average QRS: " + avgQRS);
     logger("Average QT: " + avgQT);
+    logger("Average QTC: " + avgQTC);
     logger("Average QTcF: " + avgQTcF);
     logger("Average HR: " + avgHR);
+    logger("Average RR: " + avgRR); 
 
     if (metric === "PR") return avgPR;
     if (metric === "QRS") return avgQRS;
     if (metric === "QT") return avgQT;
+    if (metric === "QTC") return avgQTC;
     if (metric === "QTCF") return avgQTcF;
     if (metric === "HR") return avgHR;
-
+    if (metric === "RR") return avgRR;
+    
     return null;
 } catch (e) {
     logger("Error in main execution logic: " + e);
