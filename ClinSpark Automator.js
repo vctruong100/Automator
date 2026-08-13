@@ -1,7 +1,8 @@
+
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     3.5.11
+// @version     3.6.15
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -10,29 +11,9 @@
 // @grant       GM.openInTab
 // @grant       GM_openInTab
 // @grant       GM.xmlHttpRequest
-// @grant       GM_xmlhttpRequest
-// @connect     cenexel.clinspark.com
-// @connect     cenexeltest.clinspark.com
-// @connect     raw.githubusercontent.com
-// @connect     github.com
 // ==/UserScript==
 
 (function () {
-    function apsHasXmlHttpRequest() {
-        return (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") ||
-            (typeof GM_xmlhttpRequest === "function");
-    }
-
-    function apsXmlHttpRequest(details) {
-        if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") {
-            return GM.xmlHttpRequest(details);
-        }
-        if (typeof GM_xmlhttpRequest === "function") {
-            return GM_xmlhttpRequest(details);
-        }
-        throw new Error("No Tampermonkey xmlhttpRequest API is available");
-    }
-
     var STORAGE_KEY = "activityPlanState.run";
     var STORAGE_PENDING = "activityPlanState.pendingIds";
     var STORAGE_AFTER_REFRESH = "activityPlanState.afterRefresh";
@@ -148,6 +129,7 @@
     const STORAGE_PANEL_HOTKEY = "activityPlanState.panel.hotkey";
     const PANEL_TOGGLE_KEY = "F2";
     const RUNMODE_CLEAR_MAPPING = "clearMapping";
+    const STORAGE_CLEAR_MAPPING_QUEUE = "activityPlanState.clearMapping.queue";
 
     // Run Parse Method
     var STORAGE_PARSE_METHOD_RUNNING = "activityPlanState.parseMethod.running";
@@ -1683,7 +1665,6 @@
         "https://cenexel.clinspark.com/secure/crfdesign/activityplans/show/",
         "https://cenexeltest.clinspark.com/secure/crfdesign/activityplans/show/"
     ];
-    var STORAGE_SVC_REFERENCES = "activityPlanState.svc.references";
     var STORAGE_SVC_FULLSCREEN = "activityPlanState.svc.fullscreen";
 
     function isOnSVCPage() {
@@ -1694,19 +1675,6 @@
         return false;
     }
 
-    function svcLoadReferences() {
-        try {
-            var raw = localStorage.getItem(STORAGE_SVC_REFERENCES);
-            if (raw) return JSON.parse(raw);
-        } catch (e) {}
-        return {};
-    }
-
-    function svcSaveReferences(refs) {
-        try {
-            localStorage.setItem(STORAGE_SVC_REFERENCES, JSON.stringify(refs));
-        } catch (e) {}
-    }
 
     // Open a background iframe pointing to the current Activity Plan page
     function svcOpenBgIframe() {
@@ -2011,7 +1979,6 @@
     // Build the SVC selection GUI
     function createSVCSelectionGUI(saTableData) {
         var saItems = (saTableData && saTableData.saTableItems) ? saTableData.saTableItems : [];
-        var svcReferences = svcLoadReferences();
         var dropboxMappings = {}; // keyed by saItem index -> { segment, studyEvent, form, formName }
         var selectedDropboxIdx = null;
         var currentItems = []; // [{value, text}] for the Item dropdown
@@ -2022,6 +1989,7 @@
         var svcSegCollapsed = {};
         var svcSearchKeywords = [];
         var svcShowCompleted = false;
+        var svcAttrLoadSeq = 0;
 
         var container = document.createElement("div");
         container.style.cssText = "display:flex;flex-direction:column;gap:10px;height:100%;min-height:500px;";
@@ -2499,14 +2467,6 @@
                                         prefillReason: "Add visibility condition"
                                     };
                                     log("SVC: mapped form " + srcItem.form + " to dropbox idx=" + gIdx);
-                                    // Auto-prefill from reference if exists
-                                    var ref = svcReferences[srcItem.form];
-                                    if (ref) {
-                                        dropboxMappings[String(gIdx)].prefillItem = ref.item;
-                                        dropboxMappings[String(gIdx)].prefillItemValue = ref.itemValue;
-                                        dropboxMappings[String(gIdx)].prefillReason = ref.reason || "Add visibility condition";
-                                        log("SVC: auto-prefilled from reference for " + srcItem.form);
-                                    }
                                     renderPrimaryPanel();
                                     renderSegNavPanel();
                                     updateConfirmState();
@@ -2545,7 +2505,7 @@
 
         // Top half: Attributes
         var attrSection = document.createElement("div");
-        attrSection.style.cssText = "flex:1;display:flex;flex-direction:column;gap:8px;padding-bottom:8px;border-bottom:1px solid #333;";
+        attrSection.style.cssText = "flex:1;display:flex;flex-direction:column;gap:8px;padding-bottom:8px;";
 
         var attrPlaceholder = document.createElement("div");
         attrPlaceholder.textContent = "Click a form inside a dropbox to configure its visibility condition";
@@ -2588,7 +2548,6 @@
             if (selectedDropboxIdx !== null && dropboxMappings[String(selectedDropboxIdx)]) {
                 dropboxMappings[String(selectedDropboxIdx)].prefillItemValue = selectedText || null;
                 log("SVC: item value persisted: " + selectedText);
-                saveCurrentReference();
                 renderPrimaryPanel();
                 renderSegNavPanel();
             }
@@ -2610,28 +2569,6 @@
             }
         });
 
-        // Save Reference button
-        var saveRefBtn = document.createElement("button");
-        saveRefBtn.textContent = "Save Reference";
-        saveRefBtn.style.cssText = "padding:6px 14px;border-radius:4px;border:none;background:#28a745;color:#fff;font-size:11px;font-weight:600;cursor:pointer;align-self:flex-end;";
-        saveRefBtn.addEventListener("mouseenter", function() { this.style.background = "#218838"; });
-        saveRefBtn.addEventListener("mouseleave", function() { this.style.background = "#28a745"; });
-        function saveCurrentReference() {
-            if (selectedDropboxIdx === null) return;
-            var mapping = dropboxMappings[String(selectedDropboxIdx)];
-            if (!mapping) return;
-            var sourceFormName = mapping.form;
-            var selItem = itemSelect.options[itemSelect.selectedIndex] ? itemSelect.options[itemSelect.selectedIndex].text : "";
-            var selItemVal = itemValSelect.options[itemValSelect.selectedIndex] ? itemValSelect.options[itemValSelect.selectedIndex].text : "";
-            var reason = reasonInput.value.trim() || "Add visibility condition";
-            svcReferences[sourceFormName] = { item: selItem, itemValue: selItemVal, itemValues: currentItemValues.slice(), reason: reason };
-            svcSaveReferences(svcReferences);
-            log("SVC: saved reference for source form '" + sourceFormName + "' (" + currentItemValues.length + " item values)");
-            renderReferencesPanel();
-        }
-        saveRefBtn.addEventListener("click", function() {
-            saveCurrentReference();
-        });
 
         function renderItemDropdown(items, prefillItem) {
             itemSelect.innerHTML = "";
@@ -2677,7 +2614,9 @@
             }
         }
 
-        async function loadFormAttributesForDropbox(gIdx) {
+        async function loadFormAttributesForDropbox(gIdx, forceRefresh) {
+            var loadSeq = svcAttrLoadSeq + 1;
+            svcAttrLoadSeq = loadSeq;
             var mapping = dropboxMappings[String(gIdx)];
             if (!mapping) {
                 renderConfigPanel();
@@ -2692,6 +2631,13 @@
                 return;
             }
 
+            if (forceRefresh) {
+                delete mapping._cachedItems;
+                delete mapping._cachedItemValues;
+                currentItems = [];
+                currentItemValues = [];
+            }
+
             var prefill = mapping.prefillItem || null;
             var prefillVal = mapping.prefillItemValue || null;
             var prefillReason = mapping.prefillReason || "Add visibility condition";
@@ -2702,35 +2648,67 @@
             // Determine if this mapping already has cached items from a previous load
             var hasCachedItems = !!(mapping._cachedItems && mapping._cachedItems.length > 0);
             var hasCachedItemValues = !!(mapping._cachedItemValues && mapping._cachedItemValues.length > 0);
-            // Reference fast path: saved reference provides values but no cached items yet
-            var refForForm = svcReferences[mapping.form] || null;
-            var useRefFastPath = !!(refForForm && prefill && prefillVal && !hasCachedItems);
 
             if (hasCachedItems) {
                 // Restore from per-mapping cache — no bg iframe needed
                 currentItems = mapping._cachedItems;
                 currentItemValues = hasCachedItemValues ? mapping._cachedItemValues : [];
                 log("SVC: restored cached items for idx=" + gIdx + " (" + currentItems.length + " items, " + currentItemValues.length + " values)");
-            } else if (useRefFastPath) {
-                // Reference fast path: restore saved item values if available,
-                // otherwise create a synthetic entry from the saved item value.
-                currentItems = prefill ? [{ text: prefill, value: prefill }] : [];
-                if (refForForm.itemValues && refForForm.itemValues.length > 0) {
-                    currentItemValues = refForForm.itemValues.slice();
-                } else {
-                    currentItemValues = prefillVal ? [{ text: prefillVal, value: prefillVal }] : [];
-                }
-                log("SVC: ref fast path for idx=" + gIdx + " (form=" + mapping.form + ", " + currentItemValues.length + " values)");
             } else {
                 // Full load via bg iframe
                 attrSection.innerHTML = "";
+                var loadingWrap = document.createElement("div");
+                loadingWrap.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:10px;color:#d8ecff;font-size:12px;text-align:center;padding:14px;border:1px solid #2f4f73;border-radius:6px;background:#151f2b;";
+                var spinner = document.createElement("div");
+                spinner.style.cssText = "width:24px;height:24px;border:3px solid #2f4f73;border-top-color:#7cc7ff;border-radius:50%;box-sizing:border-box;";
                 var loadingMsg = document.createElement("div");
-                loadingMsg.textContent = "Loading visibility for " + targetItem.form + " (source: " + mapping.form + ")...";
-                loadingMsg.style.cssText = "color:#9df;font-size:12px;text-align:center;padding:12px;";
-                attrSection.appendChild(loadingMsg);
+                loadingMsg.style.cssText = "font-weight:600;line-height:1.35;max-width:100%;word-break:break-word;";
+                var loadingDetail = document.createElement("div");
+                loadingDetail.style.cssText = "color:#9bbbd8;font-size:11px;line-height:1.3;";
+                var loadingStartedAt = Date.now();
+                var loadingFrame = 0;
+                var loadingBaseText = "Loading visibility for " + targetItem.form + " (source: " + mapping.form + ")";
+                function updateVisibilityLoadingAnimation() {
+                    loadingFrame = loadingFrame + 1;
+                    spinner.style.transform = "rotate(" + String(loadingFrame * 30) + "deg)";
+                    var dots = new Array((loadingFrame % 4) + 1).join(".");
+                    var elapsed = Math.max(1, Math.floor((Date.now() - loadingStartedAt) / 1000));
+                    loadingMsg.textContent = loadingBaseText + dots;
+                    loadingDetail.textContent = "Still working - " + String(elapsed) + "s elapsed. Use Refresh if this appears stuck.";
+                }
+                updateVisibilityLoadingAnimation();
+                var loadingAnimTimer = setInterval(function() {
+                    if (!loadingWrap.isConnected || loadSeq !== svcAttrLoadSeq || selectedDropboxIdx !== gIdx) {
+                        clearInterval(loadingAnimTimer);
+                        return;
+                    }
+                    updateVisibilityLoadingAnimation();
+                }, 350);
+                var refreshLoadBtn = document.createElement("button");
+                refreshLoadBtn.textContent = "Refresh";
+                refreshLoadBtn.title = "Retry loading visibility for this mapped form";
+                refreshLoadBtn.style.cssText = "padding:6px 12px;border-radius:4px;border:1px solid #4a6fa5;background:#26364d;color:#d8ecff;font-size:11px;font-weight:600;cursor:pointer;";
+                refreshLoadBtn.addEventListener("mouseenter", function() { this.style.background = "#314b70"; });
+                refreshLoadBtn.addEventListener("mouseleave", function() { this.style.background = "#26364d"; });
+                refreshLoadBtn.addEventListener("click", function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!dropboxMappings[String(gIdx)]) return;
+                    selectedDropboxIdx = gIdx;
+                    log("SVC: refresh requested for visibility load idx=" + gIdx);
+                    loadFormAttributesForDropbox(gIdx, true);
+                });
+                loadingWrap.appendChild(spinner);
+                loadingWrap.appendChild(loadingMsg);
+                loadingWrap.appendChild(loadingDetail);
+                loadingWrap.appendChild(refreshLoadBtn);
+                attrSection.appendChild(loadingWrap);
 
                 // Cache key combines target + source since items depend on which source SA is selected
                 var cacheKey = targetItem.form + "||" + mapping.form;
+                if (forceRefresh) {
+                    delete SVC_ITEM_CACHE[cacheKey];
+                }
                 var items = [];
 
                 // Check global cache
@@ -2740,11 +2718,15 @@
                 } else {
                     // Use bg iframe - open visibility modal for the TARGET row
                     await svcCloseBgModal();
+                    if (loadSeq !== svcAttrLoadSeq || selectedDropboxIdx !== gIdx) return;
                     await sleep(300);
+                    if (loadSeq !== svcAttrLoadSeq || selectedDropboxIdx !== gIdx) return;
                     var opened = await svcOpenVisibilityModalInBg(targetItem.segment, targetItem.studyEvent, targetItem.form);
+                    if (loadSeq !== svcAttrLoadSeq || selectedDropboxIdx !== gIdx) return;
                     if (opened) {
                         // Fill modal dropdowns with the SOURCE form's info
                         var saOk = await svcSelectActivityAndSA(mapping.studyEvent, mapping.form);
+                        if (loadSeq !== svcAttrLoadSeq || selectedDropboxIdx !== gIdx) return;
                         if (saOk) {
                             items = svcCollectItems();
                             SVC_ITEM_CACHE[cacheKey] = items;
@@ -2753,6 +2735,7 @@
                     }
                 }
 
+                if (loadSeq !== svcAttrLoadSeq || selectedDropboxIdx !== gIdx) return;
                 currentItems = items;
                 currentItemValues = [];
                 // Store on the mapping so switching back won't need bg iframe again
@@ -2784,92 +2767,14 @@
             attrSection.appendChild(reasonLbl);
             reasonInput.value = prefillReason;
             attrSection.appendChild(reasonInput);
-            attrSection.appendChild(saveRefBtn);
 
             // If prefill item is set but we did a full bg iframe load (no cached values yet), trigger item value loading
-            if (!hasCachedItems && !useRefFastPath && prefill && itemSelect.selectedIndex > 0) {
+            if (!hasCachedItems && prefill && itemSelect.selectedIndex > 0) {
                 currentItemValues = await svcSelectItemAndCollectValues(prefill);
+                if (loadSeq !== svcAttrLoadSeq || selectedDropboxIdx !== gIdx) return;
                 // Cache the loaded item values on the mapping
                 mapping._cachedItemValues = currentItemValues.slice();
                 renderItemValueDropdown(prefillVal);
-            }
-        }
-
-        // Bottom half: Saved References
-        var refSection = document.createElement("div");
-        refSection.style.cssText = "flex:1;display:flex;flex-direction:column;gap:6px;padding-top:8px;";
-
-        var refHeader = document.createElement("div");
-        refHeader.style.cssText = "display:flex;justify-content:space-between;align-items:center;";
-        var refTitle = document.createElement("span");
-        refTitle.textContent = "Saved References";
-        refTitle.style.cssText = "font-size:12px;font-weight:600;color:#ccc;";
-        var clearAllRefBtn = document.createElement("button");
-        clearAllRefBtn.textContent = "Clear All";
-        clearAllRefBtn.style.cssText = "padding:3px 8px;border-radius:4px;border:1px solid #c0392b;background:#2a1a1a;color:#ff6b6b;font-size:10px;cursor:pointer;";
-        clearAllRefBtn.addEventListener("click", function() {
-            createPopup({
-                title: "Clear All References",
-                content: '<div style="text-align:center;padding:16px;"><p>This will remove all saved visibility references.</p><p style="margin-top:12px;"><button id="svcClearAllConfirm" style="padding:8px 16px;border-radius:4px;border:none;background:#dc3545;color:#fff;cursor:pointer;margin-right:8px;">Confirm</button><button id="svcClearAllCancel" style="padding:8px 16px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;cursor:pointer;">Cancel</button></p></div>',
-                width: "350px",
-                height: "auto"
-            });
-            setTimeout(function() {
-                var confirmEl = document.getElementById("svcClearAllConfirm");
-                var cancelEl = document.getElementById("svcClearAllCancel");
-                if (confirmEl) confirmEl.addEventListener("click", function() {
-                    svcReferences = {};
-                    svcSaveReferences(svcReferences);
-                    renderReferencesPanel();
-                    log("SVC: all references cleared");
-                    var popup = this.closest("[id^='clinsparkPopup_']");
-                    if (popup) popup.remove();
-                });
-                if (cancelEl) cancelEl.addEventListener("click", function() {
-                    var popup = this.closest("[id^='clinsparkPopup_']");
-                    if (popup) popup.remove();
-                });
-            }, 50);
-        });
-        refHeader.appendChild(refTitle);
-        refHeader.appendChild(clearAllRefBtn);
-
-        var refList = document.createElement("div");
-        refList.style.cssText = "flex:1;overflow-y:auto;border:1px solid #333;border-radius:4px;padding:4px;background:#1e1e1e;max-height:200px;";
-
-        function renderReferencesPanel() {
-            refList.innerHTML = "";
-            var keys = Object.keys(svcReferences);
-            if (keys.length === 0) {
-                var emptyMsg = document.createElement("div");
-                emptyMsg.textContent = "No saved references";
-                emptyMsg.style.cssText = "color:#666;font-size:11px;text-align:center;padding:12px;";
-                refList.appendChild(emptyMsg);
-                return;
-            }
-            for (var i = 0; i < keys.length; i++) {
-                var formName = keys[i];
-                var ref = svcReferences[formName];
-                var refRow = document.createElement("div");
-                refRow.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:4px 6px;margin-bottom:2px;border-radius:3px;background:#2a2a2a;font-size:10px;";
-                var refText = document.createElement("span");
-                var valuesCount = (ref.itemValues && ref.itemValues.length) || 1;
-                refText.textContent = formName + ": " + ref.item + " = " + ref.itemValue + " (" + valuesCount + " values saved)";
-                refText.title = "Form: " + formName + "\nItem: " + ref.item + "\nItem Value: " + ref.itemValue + "\nValues Saved: " + valuesCount + "\nReason: " + ref.reason;
-                refText.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#ccc;cursor:default;";
-                var refDelBtn = document.createElement("span");
-                refDelBtn.textContent = "\u2715";
-                refDelBtn.style.cssText = "cursor:pointer;color:#ff6b6b;font-weight:bold;margin-left:4px;flex-shrink:0;";
-                refDelBtn.dataset.formName = formName;
-                refDelBtn.addEventListener("click", function() {
-                    delete svcReferences[this.dataset.formName];
-                    svcSaveReferences(svcReferences);
-                    log("SVC: deleted reference for " + this.dataset.formName);
-                    renderReferencesPanel();
-                });
-                refRow.appendChild(refText);
-                refRow.appendChild(refDelBtn);
-                refList.appendChild(refRow);
             }
         }
 
@@ -2884,9 +2789,6 @@
         configPanel.appendChild(configHeader);
         attrSection.appendChild(attrPlaceholder);
         configBody.appendChild(attrSection);
-        refSection.appendChild(refHeader);
-        refSection.appendChild(refList);
-        configBody.appendChild(refSection);
         configPanel.appendChild(configBody);
 
         contentRow.appendChild(segNavPanel);
@@ -3375,7 +3277,6 @@
         // Initial render
         renderPrimaryPanel();
         renderSegNavPanel();
-        renderReferencesPanel();
 
         setTimeout(function() {
             if (svcIsFullscreen) applySVCFullscreen();
@@ -4449,6 +4350,13 @@
         return false;
     }
 
+    function ifl_detectSaveSuccess() {
+        if (IFL_SHOW_FORM_URL_PATTERN.test(location.href)) return true;
+        var successEl = document.querySelector(".alert-success, .modal .alert-success, .bootbox .alert-success");
+        if (successEl) return true;
+        return false;
+    }
+
     function ifl_readFormOptions() {
         var formSel = document.getElementById(IFL_FORM_SELECT_ID);
         if (!formSel) return [];
@@ -5105,6 +5013,7 @@
         var isFullscreen = false;
         var savedContainerStyle = "";
         var iflSyncBusy = false;
+        var iflRowClickTimer = null;
 
         // Color palette
         var tc = {
@@ -5547,6 +5456,7 @@
                         var isActive = activeFormItem === fItem;
                         row.className = "ifl-row";
                         row.style.cssText = "display:flex;align-items:center;gap:6px;padding:5px 10px 5px 20px;border-radius:4px;cursor:pointer;margin:1px 0;font-size:12px;background:" + (isRenamed ? tc.renamed : (isActive ? tc.surfaceHover : "transparent")) + ";transition:background 0.1s;";
+                        row.title = "Click to view details. Double-click to select or unselect.";
                         row.onmouseover = function() { if (!isActive) row.style.background = tc.surfaceHover; };
                         row.onmouseout = function() { row.style.background = isRenamed ? tc.renamed : (isActive ? tc.surfaceHover : "transparent"); };
 
@@ -5563,6 +5473,7 @@
                         lockIcon.textContent = fItem.lockOnSave ? "\uD83D\uDD12" : "\uD83D\uDD13";
                         lockIcon.style.cssText = "font-size:11px;flex-shrink:0;width:16px;text-align:center;cursor:pointer;user-select:none;" + (fItem.lockOnSave ? "opacity:1;" : "opacity:0.4;");
                         lockIcon.title = fItem.lockOnSave ? "Locked - double-click to unlock" : "Unlocked - double-click to lock";
+                        lockIcon.onclick = function(e) { e.stopPropagation(); };
                         lockIcon.addEventListener("dblclick", (function(fi2, iconE1) {
                             return function(e) {
                                 e.stopPropagation();
@@ -5586,27 +5497,43 @@
                             updateConfirmState();
                         };
 
-                        row.onclick = function() {
-                            activeFormItem = fItem;
-                            renderMidPanel();
-                            renderRightPanel();
-                            // Auto-load item groups if not yet loaded
-                            if (fItem.itemGroups === null && !iflSyncBusy) {
-                                iflSyncBusy = true;
-                                log("IFL: auto-loading item groups for " + fItem.studyName + " / " + fItem.originalName);
-                                renderRightPanel();
-                                ifl_syncModalToFormViaBgTab(fItem).then(function(groups) {
-                                    iflSyncBusy = false;
-                                    fItem.itemGroups = (groups !== null) ? groups : [];
-                                    log("IFL: collected " + fItem.itemGroups.length + " item groups for " + fItem.originalName);
-                                    if (activeFormItem === fItem) renderRightPanel();
-                                }).catch(function(err) {
-                                    iflSyncBusy = false;
-                                    log("IFL: sync error — " + String(err));
-                                    fItem.itemGroups = [];
-                                    if (activeFormItem === fItem) renderRightPanel();
-                                });
+                        row.onclick = function(e) {
+                            if (e && e.detail > 1) {
+                                if (iflRowClickTimer) {
+                                    clearTimeout(iflRowClickTimer);
+                                    iflRowClickTimer = null;
+                                }
+                                fItem.selected = !fItem.selected;
+                                cb.checked = fItem.selected;
+                                ifl_saveSelections(formItems);
+                                updateConfirmState();
+                                log("IFL: form row double-click toggled selection to " + fItem.selected + " for " + fItem.formName);
+                                return;
                             }
+                            if (iflRowClickTimer) clearTimeout(iflRowClickTimer);
+                            iflRowClickTimer = setTimeout(function() {
+                                iflRowClickTimer = null;
+                                activeFormItem = fItem;
+                                renderMidPanel();
+                                renderRightPanel();
+                                // Auto-load item groups if not yet loaded
+                                if (fItem.itemGroups === null && !iflSyncBusy) {
+                                    iflSyncBusy = true;
+                                    log("IFL: auto-loading item groups for " + fItem.studyName + " / " + fItem.originalName);
+                                    renderRightPanel();
+                                    ifl_syncModalToFormViaBgTab(fItem).then(function(groups) {
+                                        iflSyncBusy = false;
+                                        fItem.itemGroups = (groups !== null) ? groups : [];
+                                        log("IFL: collected " + fItem.itemGroups.length + " item groups for " + fItem.originalName);
+                                        if (activeFormItem === fItem) renderRightPanel();
+                                    }).catch(function(err) {
+                                        iflSyncBusy = false;
+                                        log("IFL: sync error - " + String(err));
+                                        fItem.itemGroups = [];
+                                        if (activeFormItem === fItem) renderRightPanel();
+                                    });
+                                }
+                            }, 220);
                         };
 
                         row.appendChild(nameSpan);
@@ -5803,6 +5730,10 @@
                 if (formItems[i].selected) selected.push(formItems[i]);
             }
             if (selected.length === 0) return;
+            if (!confirm("Import from Library will import " + selected.length + " selected form" + (selected.length === 1 ? "" : "s") + ".\n\nClick OK to start importing, or Cancel to return to the selection screen.")) {
+                log("IFL: confirm warning canceled by user for " + selected.length + " selected forms");
+                return;
+            }
             ifl_closeBgTab();
             document.removeEventListener("mousemove", onDragMove);
             document.removeEventListener("mouseup", onDragEnd);
@@ -6239,8 +6170,14 @@
                     var start = Date.now();
                     var closed = false;
                     var errorDetected = false;
+                    var successDetected = false;
                     while (Date.now() - start < IFL_MODAL_CLOSE_TIMEOUT) {
                         if (IFL_CANCELED || ifl_isCancelRequested()) throw new Error("Canceled");
+                        if (ifl_detectSaveSuccess()) {
+                            successDetected = true;
+                            log("IFL: save success detected after click");
+                            break;
+                        }
                         // Check for error alert in modal
                         var alertEl = document.querySelector(".modal-body .alert-danger, .modal .alert-danger");
                         if (alertEl) {
@@ -6259,7 +6196,7 @@
                         await sleep(150);
                     }
 
-                    if (closed) break; // Save succeeded
+                    if (closed || successDetected) break; // Save succeeded
 
                     if (errorDetected && saveAttempts < maxSaveAttempts) {
                         log("IFL: retrying — re-selecting study/form before next save attempt");
@@ -6300,8 +6237,12 @@
                         continue; // Retry save
                     }
 
-                    // Error on last attempt or timeout
-                    saveFailed = true;
+                    if (errorDetected) {
+                        saveFailed = true;
+                        break;
+                    }
+                    // Timeout without an error usually means ClinSpark accepted the save but did not close the modal.
+                    log("IFL: save confirmation timed out without an error; treating as submitted");
                     break;
                 }
 
@@ -6574,7 +6515,7 @@
         return currentUrl.indexOf(BPL_TARGET_URL) !== -1;
     }
 
-    function bplDetectTimepointColumn() {
+    function bplDetectTableColumn(headerText) {
         var table = document.querySelector("table");
         if (!table) {
             log("BPL: no table found for thead inspection");
@@ -6585,18 +6526,26 @@
             log("BPL: no thead found");
             return -1;
         }
+        var wanted = normalizeSAText(headerText);
         var ths = thead.querySelectorAll("th");
         for (var i = 0; i < ths.length; i++) {
             var thText = normalizeSAText(ths[i].textContent);
-            if (thText === "Timepoint") {
-                log("BPL: Timepoint column detected at index " + i);
+            if (thText === wanted) {
+                log("BPL: " + wanted + " column detected at index " + i);
                 return i;
             }
         }
-        log("BPL: no Timepoint column found in thead");
+        log("BPL: no " + wanted + " column found in thead");
         return -1;
     }
 
+    function bplDetectTimepointColumn() {
+        return bplDetectTableColumn("Timepoint");
+    }
+
+    function bplDetectExampleTimeColumn() {
+        return bplDetectTableColumn("Example Time");
+    }
     function bplParseTimepointText(raw) {
         var result = {
             raw: raw || "",
@@ -6687,8 +6636,10 @@
             return result;
         }
         var timepointColIndex = bplDetectTimepointColumn();
+        var exampleTimeColIndex = bplDetectExampleTimeColumn();
         var hasTimepoint = timepointColIndex !== -1;
-        log("BPL: enhanced scan - hasTimepoint=" + hasTimepoint + ", timepointColIndex=" + timepointColIndex);
+        var hasExampleTime = exampleTimeColIndex !== -1;
+        log("BPL: enhanced scan - hasTimepoint=" + hasTimepoint + ", timepointColIndex=" + timepointColIndex + ", hasExampleTime=" + hasExampleTime + ", exampleTimeColIndex=" + exampleTimeColIndex);
 
         // Use native HTMLCollection (tbody.rows) instead of querySelectorAll
         var rows = tbody.rows;
@@ -6711,7 +6662,7 @@
         var skippedArchived = 0;
         var skippedDuplicate = 0;
         var seenKeys = {};
-        var statusCellIndex = hasTimepoint ? 6 : 4;
+        var statusCellIndex = hasExampleTime ? (exampleTimeColIndex + 1) : (hasTimepoint ? (timepointColIndex + 1) : 4);
 
         for (var i = 0; i < rowCount; i++) {
             var cells = rows[i].cells;
@@ -6735,10 +6686,14 @@
                 continue;
             }
 
-            // Inline timepoint extraction and parsing
+            // Inline timepoint/example-time extraction and parsing
             var timepointRaw = "";
             if (hasTimepoint && cellCount > timepointColIndex) {
                 timepointRaw = cells[timepointColIndex].textContent.trim().replace(/\s+/g, " ");
+            }
+            var exampleTimeRaw = "";
+            if (hasExampleTime && cellCount > exampleTimeColIndex) {
+                exampleTimeRaw = cells[exampleTimeColIndex].textContent.trim().replace(/\s+/g, " ");
             }
             var timepointCleaned = "";
             var preReference = false;
@@ -6781,6 +6736,7 @@
                 timepointRaw: timepointRaw,
                 timepointCleaned: timepointCleaned,
                 timepointDisplay: timepointRaw || "",
+                exampleTime: exampleTimeRaw || "",
                 preReference: preReference,
                 refActivity: refActivity,
                 hidden: isHidden,
@@ -6872,7 +6828,7 @@
         if (!str || str === "N/A") {
             return null;
         }
-        var match = str.match(/^(\d{1,2})([A-Za-z]{3})(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
+        var match = str.match(/^(\d{1,2})([A-Za-z]{3})(\d{4})\s+(\d{2}):(\d{2}):(\d{2})(?:\s+[A-Za-z]{2,5})?$/);
         if (!match) {
             log("BPL: bplParseClinSparkDateTime failed to parse '" + str + "'");
             return null;
@@ -6922,6 +6878,45 @@
         return day + mon + year + " " + hours + ":" + mins + ":" + secs;
     }
 
+    function bplExtractClinSparkTimeZoneSuffix(str) {
+        var match = String(str || "").match(/\s+([A-Za-z]{2,5})$/);
+        return match ? match[1] : "";
+    }
+
+    function bplFormatClinSparkDateTimeWithSuffix(dateObj, sourceStr) {
+        var formatted = bplFormatClinSparkDateTime(dateObj);
+        var suffix = bplExtractClinSparkTimeZoneSuffix(sourceStr);
+        return suffix && formatted !== "N/A" ? (formatted + " " + suffix) : formatted;
+    }
+
+    function bplTimepointToSignedSeconds(timepointText, preReference) {
+        var raw = String(timepointText || "").trim();
+        if (!raw) {
+            return 0;
+        }
+        var isNegative = !!preReference || raw.indexOf("-") !== -1;
+        var cleaned = raw.replace(/\(\d+\)\s*$/g, "").replace(/[*+\-()]/g, "").trim();
+        var parts = cleaned.split(":");
+        var totalSeconds = 0;
+        if (parts.length >= 1) totalSeconds += (parseInt(parts[0]) || 0) * 3600;
+        if (parts.length >= 2) totalSeconds += (parseInt(parts[1]) || 0) * 60;
+        if (parts.length >= 3) totalSeconds += parseInt(parts[2]) || 0;
+        return isNegative ? -totalSeconds : totalSeconds;
+    }
+
+    function bplComputeExampleTimeFromPrevious(previousExampleTime, previousTimepoint, newTimepoint, previousPreReference, newPreReference) {
+        var baseDate = bplParseClinSparkDateTime(previousExampleTime);
+        if (!baseDate) {
+            return "N/A";
+        }
+        var previousSeconds = bplTimepointToSignedSeconds(previousTimepoint, previousPreReference);
+        var newSeconds = bplTimepointToSignedSeconds(newTimepoint, newPreReference);
+        var resultDate = new Date(baseDate.getTime() + ((newSeconds - previousSeconds) * 1000));
+        var formatted = bplFormatClinSparkDateTimeWithSuffix(resultDate, previousExampleTime);
+        log("BPL: computed example time from previous='" + previousExampleTime + "' oldTp='" + previousTimepoint + "' newTp='" + newTimepoint + "' -> " + formatted);
+        return formatted;
+    }
+
     function bplParseOffsetText(text) {
         var result = { days: 0, hours: 0, minutes: 0, seconds: 0 };
         if (!text || text.trim().length === 0) {
@@ -6959,7 +6954,7 @@
             }
             var totalMs = ((offset.days || 0) * 86400000) + ((offset.hours || 0) * 3600000) + ((offset.minutes || 0) * 60000) + ((offset.seconds || 0) * 1000);
             var resultDate = new Date(baseDate.getTime() + totalMs);
-            return bplFormatClinSparkDateTime(resultDate);
+            return bplFormatClinSparkDateTimeWithSuffix(resultDate, baseDateTimeStr);
         } catch (e) {
             log("BPL: error applying offset to datetime - " + String(e));
             return "N/A";
@@ -6997,7 +6992,7 @@
                 return "N/A";
             }
             var resultDate = new Date(baseDate.getTime() + (totalSeconds * 1000));
-            var formatted = bplFormatClinSparkDateTime(resultDate);
+            var formatted = bplFormatClinSparkDateTimeWithSuffix(resultDate, segmentRefDateTime);
             log("BPL: computed example time from segRef='" + segmentRefDateTime + "' tp='" + timepointCleaned + "' preRef=" + preReference + " -> " + formatted);
             return formatted;
         } catch (e) {
@@ -7008,9 +7003,9 @@
 
     function bplFetchSegmentsPageHtml(segmentsUrl) {
         return new Promise(function(resolve, reject) {
-            if (apsHasXmlHttpRequest()) {
+            if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") {
                 log("BPL: fetching Segments page via GM.xmlHttpRequest: " + segmentsUrl);
-                apsXmlHttpRequest({
+                GM.xmlHttpRequest({
                     method: "GET",
                     url: segmentsUrl,
                     onload: function(response) {
@@ -7182,6 +7177,14 @@
                 if (autoData) {
                     autoData.editHref = saItem.editHref || autoData.editHref || "";
                     autoData.saRowIndex = saItem.saRowIndex;
+                    autoData.timepointRaw = saItem.timepointRaw || autoData.timepointRaw || "";
+                    autoData.timepointCleaned = saItem.timepointCleaned || autoData.timepointCleaned || "";
+                    autoData.timepointDisplay = saItem.timepointDisplay || autoData.timepointDisplay || "";
+                    if (!autoData.modified && saItem.exampleTime) {
+                        autoData.exampleTime = saItem.exampleTime;
+                    } else if ((!autoData.exampleTime || autoData.exampleTime === "N/A") && saItem.exampleTime) {
+                        autoData.exampleTime = saItem.exampleTime;
+                    }
                     mergedFormDataStore[autoKey] = autoData;
                 }
                 log("BPL: merge - SA item already exists as auto-populated at index " + existingAutoIdx + " for " + saItem.segment + "|" + saItem.studyEvent + "|" + saItem.form + ", skipping duplicate");
@@ -7299,7 +7302,7 @@
                 timepointCleaned: saItem.timepointCleaned || "",
                 timepointDisplay: saItem.timepointDisplay || "",
                 segmentRefDateTime: segRefDateTime,
-                exampleTime: bplComputeExampleTime(segRefDateTime, saItem.timepointCleaned || "", saItem.preReference || false)
+                exampleTime: saItem.exampleTime || bplComputeExampleTime(segRefDateTime, saItem.timepointCleaned || "", saItem.preReference || false)
             };
             saItemCount = saItemCount + 1;
         }
@@ -8308,6 +8311,22 @@
             return "N/A";
         }
 
+        function getReferenceActivityExampleTime(segVal, excludeFormKey) {
+            var segForms = segmentFormMap[segVal] || [];
+            for (var ri = 0; ri < segForms.length; ri++) {
+                var rfKey = getFormDataKey(segVal, segForms[ri].value, segForms[ri].index);
+                if (excludeFormKey && rfKey === excludeFormKey) {
+                    continue;
+                }
+                var rfData = formDataStore[rfKey];
+                if (rfData && rfData.refActivity && rfData.exampleTime && rfData.exampleTime !== "N/A") {
+                    log("BPL: using reference activity row example time for segment " + segVal + ": " + rfData.exampleTime);
+                    return rfData.exampleTime;
+                }
+            }
+            return "N/A";
+        }
+
         function getMajorityStudyEvent(segVal, excludeFormKey) {
             var forms = segmentFormMap[segVal] || [];
             if (forms.length === 0) return null;
@@ -8557,6 +8576,12 @@
             var postWindowEl = document.getElementById("bplPostWindow");
             var refActivityEl = document.getElementById("bplRefActivity");
             var preReferenceEl = document.getElementById("bplPreReference");
+            var prevDays = data.days || 0;
+            var prevHours = data.hours || 0;
+            var prevMinutes = data.minutes || 0;
+            var prevSeconds = data.seconds || 0;
+            var prevPreReference = data.preReference || false;
+            var previousExampleTime = data.exampleTime || "";
             if (daysEl) {
                 data.days = parseInt(daysEl.value) || 0;
             }
@@ -8594,8 +8619,38 @@
                 var keyParts = key.split("|");
                 data.segmentRefDateTime = getSegmentRefDateTime(keyParts[0]);
             }
-            var tpStr = bplFormatTimePoint(data.days || 0, data.hours || 0, data.minutes || 0, data.seconds || 0, false);
-            data.exampleTime = bplComputeExampleTime(data.segmentRefDateTime || "N/A", tpStr, data.preReference || false);
+            var timeInputsChanged = (
+                (data.days || 0) !== prevDays ||
+                (data.hours || 0) !== prevHours ||
+                (data.minutes || 0) !== prevMinutes ||
+                (data.seconds || 0) !== prevSeconds ||
+                (data.preReference || false) !== prevPreReference
+            );
+            if (timeInputsChanged || !previousExampleTime || previousExampleTime === "N/A") {
+                var oldTpStr = bplFormatTimePoint(prevDays, prevHours, prevMinutes, prevSeconds, prevPreReference);
+                var tpStr = bplFormatTimePoint(data.days || 0, data.hours || 0, data.minutes || 0, data.seconds || 0, data.preReference || false);
+                var computeRefDateTime = data.segmentRefDateTime || "N/A";
+                if (!computeRefDateTime || computeRefDateTime === "N/A") {
+                    var computeKeyParts = key.split("|");
+                    computeRefDateTime = getSegmentRefDateTime(computeKeyParts[0]);
+                    if (!computeRefDateTime || computeRefDateTime === "N/A") {
+                        computeRefDateTime = getReferenceActivityExampleTime(computeKeyParts[0], key);
+                    }
+                    if (computeRefDateTime && computeRefDateTime !== "N/A") {
+                        data.segmentRefDateTime = computeRefDateTime;
+                    }
+                }
+                var computedExampleTime = bplComputeExampleTime(computeRefDateTime || "N/A", tpStr, data.preReference || false);
+                if ((!computedExampleTime || computedExampleTime === "N/A") && previousExampleTime && previousExampleTime !== "N/A") {
+                    computedExampleTime = bplComputeExampleTimeFromPrevious(previousExampleTime, oldTpStr, tpStr, prevPreReference, data.preReference || false);
+                }
+                if (!computedExampleTime || computedExampleTime === "N/A") {
+                    computedExampleTime = previousExampleTime || "N/A";
+                }
+                data.exampleTime = computedExampleTime;
+            } else {
+                data.exampleTime = previousExampleTime;
+            }
             if (data.autoPopulated && !data.originalValues) {
                 data.originalValues = {
                     days: data.days || 0,
@@ -8853,6 +8908,10 @@
                     if (!refDateTimeStr || refDateTimeStr === "N/A") {
                         var kp = key.split("|");
                         refDateTimeStr = getSegmentRefDateTime(kp[0]);
+                    }
+                    if (!refDateTimeStr || refDateTimeStr === "N/A") {
+                        var kpRef = key.split("|");
+                        refDateTimeStr = getReferenceActivityExampleTime(kpRef[0], key);
                     }
                     if (!refDateTimeStr || refDateTimeStr === "N/A") {
                         alert("No reference activity time available for this segment.");
@@ -9879,7 +9938,7 @@
                         formRow.appendChild(eventDropBox);
                         formRow.appendChild(formLabel);
                         var tpStr2 = "";
-                        if (fData2.timepointDisplay && fData2.timepointDisplay.trim().length > 0) {
+                        if (fData2.timepointDisplay && fData2.timepointDisplay.trim().length > 0 && !fData2.modified) {
                             tpStr2 = fData2.timepointDisplay;
                         } else {
                             tpStr2 = bplFormatTimePoint(fData2.days || 0, fData2.hours || 0, fData2.minutes || 0, fData2.seconds || 0, fData2.preReference || false);
@@ -10249,6 +10308,7 @@
                 // Check if this exact item already exists in segmentFormMap (any form, not just auto)
                 var existingForms = segmentFormMap[matchedSegVal] || [];
                 var alreadyExists = false;
+                var alreadyExistsKey = null;
                 for (var ef = 0; ef < existingForms.length; ef++) {
                     var efKey = getFormDataKey(matchedSegVal, existingForms[ef].value, existingForms[ef].index);
                     var efData = formDataStore[efKey];
@@ -10260,11 +10320,26 @@
                         var efTpCleaned = efData.timepointCleaned || "";
                         if (evText === saItem.studyEvent && formTextNorm === saItem.form && efTpCleaned === saTpCleaned) {
                             alreadyExists = true;
+                            alreadyExistsKey = efKey;
                             break;
                         }
                     }
                 }
                 if (alreadyExists) {
+                    if (alreadyExistsKey && formDataStore[alreadyExistsKey]) {
+                        var existingData = formDataStore[alreadyExistsKey];
+                        existingData.editHref = saItem.editHref || existingData.editHref || "";
+                        existingData.saRowIndex = saItem.saRowIndex;
+                        existingData.timepointRaw = saItem.timepointRaw || existingData.timepointRaw || "";
+                        existingData.timepointCleaned = saItem.timepointCleaned || existingData.timepointCleaned || "";
+                        existingData.timepointDisplay = saItem.timepointDisplay || existingData.timepointDisplay || "";
+                        if (!existingData.modified && saItem.exampleTime) {
+                            existingData.exampleTime = saItem.exampleTime;
+                        } else if ((!existingData.exampleTime || existingData.exampleTime === "N/A") && saItem.exampleTime) {
+                            existingData.exampleTime = saItem.exampleTime;
+                        }
+                        formDataStore[alreadyExistsKey] = existingData;
+                    }
                     skippedCount++;
                     continue;
                 }
@@ -10366,7 +10441,7 @@
                     timepointCleaned: saItem.timepointCleaned || "",
                     timepointDisplay: saItem.timepointDisplay || "",
                     segmentRefDateTime: segRefDateTime,
-                    exampleTime: bplComputeExampleTime(segRefDateTime, saItem.timepointCleaned || "", saItem.preReference || false)
+                    exampleTime: saItem.exampleTime || bplComputeExampleTime(segRefDateTime, saItem.timepointCleaned || "", saItem.preReference || false)
                 };
                 addedCount++;
             }
@@ -11810,7 +11885,7 @@
         showWrongPagePopup("Activity Plan Removal", APR_TARGET_URL, location.href, null);
     }
 
-    function aprDetectTimepointColumn() {
+    function aprDetectTableColumn(headerText) {
         var table = document.querySelector("table");
         if (!table) {
             return -1;
@@ -11819,13 +11894,22 @@
         if (!thead) {
             return -1;
         }
+        var wanted = normalizeSAText(headerText);
         var ths = thead.querySelectorAll("th");
         for (var i = 0; i < ths.length; i++) {
-            if (normalizeSAText(ths[i].textContent) === "Timepoint") {
+            if (normalizeSAText(ths[i].textContent) === wanted) {
                 return i;
             }
         }
         return -1;
+    }
+
+    function aprDetectTimepointColumn() {
+        return aprDetectTableColumn("Timepoint");
+    }
+
+    function aprDetectExampleTimeColumn() {
+        return aprDetectTableColumn("Example Time");
     }
 
     function aprParseStatusCell(cell) {
@@ -11878,8 +11962,10 @@
         }
         var rows = tbody.rows;
         var timepointColIndex = aprDetectTimepointColumn();
+        var exampleTimeColIndex = aprDetectExampleTimeColumn();
         var hasTimepoint = timepointColIndex !== -1;
-        var statusCellIndex = hasTimepoint ? 6 : 4;
+        var hasExampleTime = exampleTimeColIndex !== -1;
+        var statusCellIndex = hasExampleTime ? (exampleTimeColIndex + 1) : (hasTimepoint ? (timepointColIndex + 1) : 4);
 
         for (var i = 0; i < rows.length; i++) {
             var cells = rows[i].cells;
@@ -11900,6 +11986,10 @@
             if (hasTimepoint && cells.length > timepointColIndex) {
                 timepointRaw = cells[timepointColIndex].textContent.trim().replace(/\s+/g, " ");
             }
+            var exampleTimeRaw = "";
+            if (hasExampleTime && cells.length > exampleTimeColIndex) {
+                exampleTimeRaw = cells[exampleTimeColIndex].textContent.trim().replace(/\s+/g, " ");
+            }
             var timepointCleaned = timepointRaw.replace(/\(\d+\)\s*$/, "").trim();
             var preReference = timepointCleaned.indexOf("-") !== -1;
             var refActivity = timepointCleaned.indexOf("*") !== -1;
@@ -11914,6 +12004,7 @@
                 timepointRaw: timepointRaw,
                 timepointCleaned: timepointCleaned,
                 timepointDisplay: timepointRaw || "",
+                exampleTime: exampleTimeRaw || "",
                 preReference: preReference,
                 refActivity: refActivity,
                 hidden: status.hidden,
@@ -11956,13 +12047,17 @@
             for (var ei = 0; ei < seg.studyEventOrder.length; ei++) {
                 var ev = seg.studyEvents[seg.studyEventOrder[ei]];
                 for (var fi = 0; fi < ev.forms.length; fi++) {
-                    if (ev.forms[fi].checked) {
+                    if (aprIsSelectableForm(ev.forms[fi]) && ev.forms[fi].checked) {
                         selected.push(ev.forms[fi].item);
                     }
                 }
             }
         }
         return selected;
+    }
+
+    function aprIsSelectableForm(formNode) {
+        return !!(formNode && formNode.item && !formNode.item.archived);
     }
 
     function aprCountStats(tree) {
@@ -11977,7 +12072,7 @@
                 var ev = seg.studyEvents[seg.studyEventOrder[ei]];
                 totalForms += ev.forms.length;
                 for (var fi = 0; fi < ev.forms.length; fi++) {
-                    if (ev.forms[fi].checked) {
+                    if (aprIsSelectableForm(ev.forms[fi]) && ev.forms[fi].checked) {
                         selectedForms++;
                     }
                 }
@@ -11994,7 +12089,9 @@
             ev.checked = checked;
             ev.indeterminate = false;
             for (var fi = 0; fi < ev.forms.length; fi++) {
-                ev.forms[fi].checked = checked;
+                if (aprIsSelectableForm(ev.forms[fi])) {
+                    ev.forms[fi].checked = checked;
+                }
             }
         }
     }
@@ -12003,12 +12100,19 @@
         ev.checked = checked;
         ev.indeterminate = false;
         for (var fi = 0; fi < ev.forms.length; fi++) {
-            ev.forms[fi].checked = checked;
+            if (aprIsSelectableForm(ev.forms[fi])) {
+                ev.forms[fi].checked = checked;
+            }
         }
         aprUpdateParentStates([seg]);
     }
 
     function aprSetFormChecked(seg, ev, form, checked) {
+        if (!aprIsSelectableForm(form)) {
+            form.checked = false;
+            aprUpdateParentStates([seg]);
+            return;
+        }
         form.checked = checked;
         aprUpdateParentStates([seg]);
     }
@@ -12018,39 +12122,51 @@
             var seg = tree[si];
             var segAll = true;
             var segSome = false;
+            var segSelectableCount = 0;
             for (var ei = 0; ei < seg.studyEventOrder.length; ei++) {
                 var ev = seg.studyEvents[seg.studyEventOrder[ei]];
                 var evAll = true;
                 var evSome = false;
+                var evSelectableCount = 0;
                 for (var fi = 0; fi < ev.forms.length; fi++) {
+                    if (!aprIsSelectableForm(ev.forms[fi])) {
+                        ev.forms[fi].checked = false;
+                        continue;
+                    }
+                    evSelectableCount++;
                     if (ev.forms[fi].checked) {
                         evSome = true;
                     } else {
                         evAll = false;
                     }
                 }
-                ev.checked = evAll && ev.forms.length > 0;
+                ev.checked = evAll && evSelectableCount > 0;
                 ev.indeterminate = evSome && !evAll;
+                segSelectableCount += evSelectableCount;
                 if (ev.checked || ev.indeterminate) {
                     segSome = true;
                 }
-                if (!evAll) {
+                if (!ev.checked) {
                     segAll = false;
                 }
             }
-            seg.checked = segAll && seg.studyEventOrder.length > 0;
+            seg.checked = segAll && segSelectableCount > 0;
             seg.indeterminate = segSome && !segAll;
         }
     }
 
     function aprFormatStatusIcons(item) {
         var fd = { hidden: item.hidden, mandatory: false, enforce: false, refActivity: item.refActivity };
-        return bplBuildStatusIcons(fd);
+        var icons = bplBuildStatusIcons(fd);
+        if (item.archived) {
+            icons += "\uD83D\uDCE6";
+        }
+        return icons;
     }
 
     function aprFormatTimeRef(item) {
         var tp = item.timepointDisplay || "N/A";
-        var ref = "N/A";
+        var ref = item.exampleTime || "N/A";
         return tp + "   |   " + ref;
     }
 
@@ -12097,6 +12213,43 @@
             return visible;
         }
 
+        function aprGetVisibleCheckState(forms) {
+            var selectableCount = 0;
+            var checkedCount = 0;
+            for (var i = 0; i < forms.length; i++) {
+                if (!aprIsSelectableForm(forms[i])) {
+                    continue;
+                }
+                selectableCount++;
+                if (forms[i].checked) {
+                    checkedCount++;
+                }
+            }
+            return {
+                checked: selectableCount > 0 && checkedCount === selectableCount,
+                indeterminate: checkedCount > 0 && checkedCount < selectableCount,
+                selectableCount: selectableCount
+            };
+        }
+
+        function aprSetVisibleFormsChecked(forms, checked) {
+            for (var i = 0; i < forms.length; i++) {
+                if (aprIsSelectableForm(forms[i])) {
+                    forms[i].checked = checked;
+                }
+            }
+        }
+
+        function aprFlattenVisibleForms(events) {
+            var forms = [];
+            for (var ei = 0; ei < events.length; ei++) {
+                for (var fi = 0; fi < events[ei].forms.length; fi++) {
+                    forms.push(events[ei].forms[fi]);
+                }
+            }
+            return forms;
+        }
+
         function renderSelectedList() {
             var selected = aprCollectSelectedForms(tree);
             if (selected.length === 0) {
@@ -12138,6 +12291,8 @@
                 var segWrap = visible.segments[si];
                 var seg = segWrap.segment;
                 var effectiveExpanded = searchKeyword ? true : seg.expanded;
+                var segVisibleForms = aprFlattenVisibleForms(segWrap.events);
+                var segVisibleState = aprGetVisibleCheckState(segVisibleForms);
 
                 var segRow = document.createElement("div");
                 segRow.dataset.segment = seg.name;
@@ -12148,16 +12303,17 @@
                 var segCb = document.createElement("input");
                 segCb.type = "checkbox";
                 segCb.style.cssText = "width:16px;height:16px;cursor:pointer;accent-color:#1a7abf;";
-                segCb.checked = seg.checked;
-                segCb.indeterminate = seg.indeterminate;
+                segCb.checked = segVisibleState.checked;
+                segCb.indeterminate = segVisibleState.indeterminate;
                 segCb.addEventListener("click", function(e) { e.stopPropagation(); });
-                segCb.addEventListener("change", (function(segmentNode) {
+                segCb.addEventListener("change", (function(visibleForms) {
                     return function(e) {
-                        aprSetSegmentChecked(segmentNode, e.target.checked);
+                        aprSetVisibleFormsChecked(visibleForms, e.target.checked);
+                        aprUpdateParentStates(tree);
                         renderTree();
                         updateStats();
                     };
-                })(seg));
+                })(segVisibleForms));
                 var segName = document.createElement("span");
                 segName.textContent = seg.name;
                 segName.style.cssText = "flex:1;";
@@ -12187,6 +12343,7 @@
                     var evWrap = segWrap.events[ei];
                     var ev = evWrap.event;
                     var evEffectiveExpanded = searchKeyword ? true : ev.expanded;
+                    var evVisibleState = aprGetVisibleCheckState(evWrap.forms);
 
                     var evRow = document.createElement("div");
                     evRow.dataset.segment = seg.name;
@@ -12198,16 +12355,17 @@
                     var evCb = document.createElement("input");
                     evCb.type = "checkbox";
                     evCb.style.cssText = "width:15px;height:15px;cursor:pointer;accent-color:#1a7abf;";
-                    evCb.checked = ev.checked;
-                    evCb.indeterminate = ev.indeterminate;
+                    evCb.checked = evVisibleState.checked;
+                    evCb.indeterminate = evVisibleState.indeterminate;
                     evCb.addEventListener("click", function(e) { e.stopPropagation(); });
-                    evCb.addEventListener("change", (function(segmentNode, eventNode) {
+                    evCb.addEventListener("change", (function(visibleForms) {
                         return function(e) {
-                            aprSetStudyEventChecked(segmentNode, eventNode, e.target.checked);
+                            aprSetVisibleFormsChecked(visibleForms, e.target.checked);
+                            aprUpdateParentStates(tree);
                             renderTree();
                             updateStats();
                         };
-                    })(seg, ev));
+                    })(evWrap.forms));
                     var evName = document.createElement("span");
                     evName.textContent = ev.name;
                     evName.style.cssText = "flex:1;";
@@ -12237,9 +12395,19 @@
                         var form = evWrap.forms[fi];
                         var formRow = document.createElement("div");
                         formRow.style.cssText = "display:flex;align-items:center;gap:8px;padding:5px 10px 5px 60px;background:#1f1f1f;border:1px solid #333;border-radius:4px;margin-bottom:2px;font-size:11px;color:#ddd;";
+                        if (form.item.archived) {
+                            formRow.style.opacity = "0.65";
+                            formRow.style.background = "#252525";
+                        }
                         var formCb = document.createElement("input");
                         formCb.type = "checkbox";
                         formCb.style.cssText = "width:14px;height:14px;cursor:pointer;accent-color:#1a7abf;flex-shrink:0;";
+                        if (form.item.archived) {
+                            form.checked = false;
+                            formCb.disabled = true;
+                            formCb.title = "Already archived";
+                            formCb.style.cursor = "not-allowed";
+                        }
                         formCb.checked = form.checked;
                         formCb.addEventListener("change", (function(segmentNode, eventNode, formNode) {
                             return function(e) {
@@ -12254,6 +12422,7 @@
                         formLabel.title = formLabel.textContent;
                         var formIcons = document.createElement("span");
                         formIcons.textContent = aprFormatStatusIcons(form.item);
+                        formIcons.title = form.item.archived ? "Scheduled Activity Archived" : "";
                         formIcons.style.cssText = "font-size:11px;flex-shrink:0;white-space:nowrap;margin-right:6px;";
                         var formTime = document.createElement("span");
                         formTime.textContent = aprFormatTimeRef(form.item);
@@ -12291,13 +12460,24 @@
             return filtered;
         }
 
+        function getSelectableFilteredForms() {
+            var filtered = getFilteredForms();
+            var selectable = [];
+            for (var i = 0; i < filtered.length; i++) {
+                if (aprIsSelectableForm(filtered[i])) {
+                    selectable.push(filtered[i]);
+                }
+            }
+            return selectable;
+        }
+
         function updateStats() {
             var stats = aprCountStats(tree);
             selectedFormCountEl.textContent = String(stats.selectedForms);
             totalFormCountEl.textContent = String(stats.totalForms);
             totalSegmentCountEl.textContent = String(stats.totalSegments);
             totalEventCountEl.textContent = String(stats.totalEvents);
-            var filteredForms = getFilteredForms();
+            var filteredForms = getSelectableFilteredForms();
             if (filteredForms.length === 0) {
                 selectAllBtn.textContent = "Select All";
             } else {
@@ -12424,7 +12604,7 @@
         selectAllBtn.textContent = "Select All";
         selectAllBtn.style.cssText = "padding:6px 10px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;font-size:11px;cursor:pointer;min-width:82px;";
         selectAllBtn.addEventListener("click", function() {
-            var filteredForms = getFilteredForms();
+            var filteredForms = getSelectableFilteredForms();
             if (filteredForms.length === 0) {
                 return;
             }
@@ -12758,6 +12938,7 @@
             var pending = 0;
             var processing = 0;
             var deleted = 0;
+            var archived = 0;
             var failed = 0;
             var skipped = 0;
             for (var i = 0; i < items.length; i++) {
@@ -12768,6 +12949,8 @@
                     processing++;
                 } else if (s === "Deleted") {
                     deleted++;
+                } else if (s === "Archived") {
+                    archived++;
                 } else if (s === "Failed") {
                     failed++;
                 } else if (s === "Skipped") {
@@ -12779,6 +12962,7 @@
                 { label: "Pending", value: pending, color: "#aaa" },
                 { label: "In Progress", value: processing, color: "#9df" },
                 { label: "Deleted", value: deleted, color: "#4f4" },
+                { label: "Archived", value: archived, color: "#5df2b6" },
                 { label: "Failed", value: failed, color: "#f44" },
                 { label: "Skipped", value: skipped, color: "#f90" }
             ];
@@ -12814,7 +12998,7 @@
                 var item = items[i];
                 var row = document.createElement("div");
                 row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:5px 8px;margin-bottom:3px;border-radius:4px;font-size:11px;";
-                if (item.status === "Deleted") {
+                if (item.status === "Deleted" || item.status === "Archived") {
                     row.style.background = "#1a3a1a";
                 } else if (item.status === "Failed") {
                     row.style.background = "#3a1a1a";
@@ -12835,6 +13019,8 @@
                 statusSpan.style.cssText = "font-weight:500;flex-shrink:0;";
                 if (item.status === "Deleted") {
                     statusSpan.style.color = "#4f4";
+                } else if (item.status === "Archived") {
+                    statusSpan.style.color = "#5df2b6";
                 } else if (item.status === "Failed") {
                     statusSpan.style.color = "#f44";
                 } else if (item.status === "Processing") {
@@ -12936,6 +13122,15 @@
                 }
                 return row;
             }
+            var archiveSelector = "a[href*='archivescheduledactivity/" + id + "']";
+            var archiveLink = tbody.querySelector(archiveSelector);
+            if (archiveLink) {
+                row = archiveLink.parentNode;
+                while (row && row.tagName !== "TR") {
+                    row = row.parentNode;
+                }
+                return row;
+            }
             return null;
         }
         var row = editLink.parentNode;
@@ -12945,29 +13140,91 @@
         return row;
     }
 
-    async function aprClickDeleteForRow(row, id) {
-        try {
-            if (typeof deleteScheduledActivity === "function") {
-                deleteScheduledActivity(id);
-                aprLog("called deleteScheduledActivity(" + id + ")");
+    function aprIsDisabledActionLink(link) {
+        if (!link) {
+            return true;
+        }
+        var node = link;
+        while (node && node !== document && node.tagName !== "TR") {
+            if (node.classList && node.classList.contains("disabled")) {
                 return true;
             }
-        } catch (e) {
-            aprLog("direct deleteScheduledActivity failed: " + String(e));
+            node = node.parentNode;
         }
+        return link.hasAttribute("disabled") || link.getAttribute("aria-disabled") === "true";
+    }
 
+    function aprIsArchiveActionLink(link) {
+        if (!link || aprIsDisabledActionLink(link)) {
+            return false;
+        }
+        var text = (link.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
+        return text.indexOf("archive") !== -1 && text.indexOf("un-archive") === -1;
+    }
+
+    async function aprClickRemovalActionForRow(row, id) {
         var toggleBtn = row.querySelector("button.dropdown-toggle");
         if (toggleBtn) {
             toggleBtn.click();
             await sleep(200);
         }
         var deleteLink = row.querySelector("a[onclick*='deleteScheduledActivity(" + id + ")']");
-        if (deleteLink) {
+        if (deleteLink && !aprIsDisabledActionLink(deleteLink)) {
             deleteLink.click();
             aprLog("clicked delete UI for id " + id);
-            return true;
+            return { action: "delete", clicked: true };
         }
-        return false;
+        var archiveLink = row.querySelector("a[href*='archivescheduledactivity/" + id + "']");
+        if (aprIsArchiveActionLink(archiveLink)) {
+            archiveLink.click();
+            aprLog("clicked archive UI for id " + id);
+            return { action: "archive", clicked: true };
+        }
+        return { action: "none", clicked: false };
+    }
+
+    async function aprCompleteArchiveModal(id) {
+        var modal = null;
+        if (typeof waitForSAModal === "function") {
+            modal = await waitForSAModal(15000);
+        }
+        if (!modal) {
+            modal = await waitForSelector("#ajaxModal.in, #ajaxModal.show, #ajaxModal", 10000);
+        }
+        var reasonEl = modal ? modal.querySelector("#reasonForChange") : null;
+        if (!reasonEl) {
+            reasonEl = await waitForSelector("#ajaxModal #reasonForChange, #reasonForChange", 5000);
+        }
+        if (!reasonEl) {
+            aprLog("archive reason field not found for id " + id);
+            return false;
+        }
+        reasonEl.value = "Archiving forms";
+        reasonEl.dispatchEvent(new Event("input", { bubbles: true }));
+        reasonEl.dispatchEvent(new Event("change", { bubbles: true }));
+
+        var modalEl = reasonEl.closest("#ajaxModal") || document;
+        var saveBtn = modalEl.querySelector("#actionButton");
+        if (!saveBtn) {
+            saveBtn = await waitForSelector("#ajaxModal #actionButton, #actionButton", 5000);
+        }
+        if (!saveBtn) {
+            aprLog("archive save button not found for id " + id);
+            return false;
+        }
+        saveBtn.click();
+        aprLog("saved archive modal for id " + id);
+        var closed = false;
+        if (typeof waitForSAModalClose === "function") {
+            closed = await waitForSAModalClose(15000);
+        } else {
+            closed = await waitUntilHidden("#ajaxModal", 10000);
+        }
+        if (!closed) {
+            aprLog("archive modal did not close for id " + id);
+        }
+        await sleep(700);
+        return true;
     }
 
     async function aprExecuteDeletion(selectedItems) {
@@ -12999,6 +13256,7 @@
         });
 
         var deletedCount = 0;
+        var archivedCount = 0;
         var failedCount = 0;
 
         for (var idx = 0; idx < progressItems.length; idx++) {
@@ -13009,7 +13267,7 @@
             var pItem = progressItems[idx];
             var item = pItem.item;
             progressContent.updateItem(idx, "Processing");
-            progressContent.updateStatus("Deleting item " + (idx + 1) + " of " + progressItems.length);
+            progressContent.updateStatus("Removing item " + (idx + 1) + " of " + progressItems.length);
 
             try {
                 if (!item.id) {
@@ -13017,6 +13275,13 @@
                     pItem.status = "Failed";
                     progressContent.updateItem(idx, "Failed");
                     failedCount++;
+                    continue;
+                }
+
+                if (item.archived) {
+                    aprLog("skipping already archived item id " + item.id);
+                    pItem.status = "Skipped";
+                    progressContent.updateItem(idx, "Skipped");
                     continue;
                 }
 
@@ -13028,12 +13293,26 @@
                     continue;
                 }
 
-                var clicked = await aprClickDeleteForRow(row, item.id);
-                if (!clicked) {
-                    aprLog("failed to click delete for id " + item.id);
+                var actionResult = await aprClickRemovalActionForRow(row, item.id);
+                if (!actionResult.clicked) {
+                    aprLog("failed to find delete or archive action for id " + item.id);
                     pItem.status = "Failed";
                     progressContent.updateItem(idx, "Failed");
                     failedCount++;
+                    continue;
+                }
+
+                if (actionResult.action === "archive") {
+                    var archived = await aprCompleteArchiveModal(item.id);
+                    if (!archived) {
+                        pItem.status = "Failed";
+                        progressContent.updateItem(idx, "Failed");
+                        failedCount++;
+                    } else {
+                        pItem.status = "Archived";
+                        progressContent.updateItem(idx, "Archived");
+                        archivedCount++;
+                    }
                     continue;
                 }
 
@@ -13094,7 +13373,7 @@
                     deletedCount++;
                 }
             } catch (e) {
-                aprLog("exception deleting id " + item.id + ": " + String(e));
+                aprLog("exception removing id " + item.id + ": " + String(e));
                 pItem.status = "Failed";
                 progressContent.updateItem(idx, "Failed");
                 failedCount++;
@@ -13102,9 +13381,9 @@
         }
 
         if (!APR_CANCELLED) {
-            progressContent.updateStatus("Deleted " + deletedCount + ", Failed " + failedCount + " of " + progressItems.length);
+            progressContent.updateStatus("Removed " + (deletedCount + archivedCount) + " (Deleted " + deletedCount + ", Archived " + archivedCount + "), Failed " + failedCount + " of " + progressItems.length);
             progressContent.setComplete();
-            aprLog("deletion complete - deleted:" + deletedCount + " failed:" + failedCount);
+            aprLog("removal complete - deleted:" + deletedCount + " archived:" + archivedCount + " failed:" + failedCount);
         }
     }
 
@@ -23193,8 +23472,8 @@
 
     function fetchPage(url) {
         return new Promise(function(resolve, reject) {
-            if (apsHasXmlHttpRequest()) {
-                apsXmlHttpRequest({
+            if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") {
+                GM.xmlHttpRequest({
                     method: "GET",
                     url: url,
                     onload: function(response) {
@@ -23230,8 +23509,8 @@
 
     function submitForm(url, body) {
         return new Promise(function(resolve, reject) {
-            if (apsHasXmlHttpRequest()) {
-                apsXmlHttpRequest({
+            if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") {
+                GM.xmlHttpRequest({
                     method: "POST",
                     url: url,
                     data: body,
@@ -24230,10 +24509,7 @@
     function togglePanelHiddenViaHotkey() {
         var panel = document.getElementById(PANEL_ID);
         if (!panel) {
-            log("Hotkey toggle: panel element not found; recreating panel");
-            setPanelHidden(false);
-            panel = makePanel();
-            applyPanelHiddenState(panel);
+            log("Hotkey toggle: panel element not found; nothing to toggle");
             return;
         }
         var isHidden = getPanelHidden();
@@ -24308,7 +24584,7 @@
     }
 
     function bindPanelHotkeyOnce() {
-        if (window.__CLINSPARK_AUTOMATOR_HOTKEY_BOUND === true) {
+        if (window.__APS_HOTKEY_BOUND === true) {
             log("Hotkey: already bound; skipping rebind");
             return;
         }
@@ -24333,7 +24609,7 @@
         }
         document.addEventListener("keydown", handler, true);
         window.addEventListener("keydown", handler, true);
-        window.__CLINSPARK_AUTOMATOR_HOTKEY_BOUND = true;
+        window.__APS_HOTKEY_BOUND = true;
         log("Hotkey: bound for " + String(getPanelHotkey()));
     }
 
@@ -24620,7 +24896,7 @@
         log("Find Form: preview request started");
         var url = FORM_LIST_URL;
         try {
-            apsXmlHttpRequest({
+            GM.xmlHttpRequest({
                 method: "GET",
                 url: url,
                 onload: function (resp) {
@@ -25201,7 +25477,7 @@
         log("Find Study Events: preview request started");
         var url = FORM_LIST_URL;
         try {
-            apsXmlHttpRequest({
+            GM.xmlHttpRequest({
                 method: "GET",
                 url: url,
                 onload: function (resp) {
@@ -26511,7 +26787,7 @@
 
     async function getMethodLibraryData() {
         return new Promise(function(resolve) {
-            apsXmlHttpRequest({ method: "GET", url: METHOD_LIBRARY_URL, onload: function(resp) {
+            GM.xmlHttpRequest({ method: "GET", url: METHOD_LIBRARY_URL, onload: function(resp) {
                 var html = resp && resp.responseText ? resp.responseText : "";
                 var methods = [];
                 var tmp = document.createElement("div"); tmp.innerHTML = html;
@@ -26524,7 +26800,7 @@
 
     async function getMethodFormalExpr(methodUrl) {
         return new Promise(function(resolve) {
-            apsXmlHttpRequest({ method: "GET", url: methodUrl, onload: function(resp) {
+            GM.xmlHttpRequest({ method: "GET", url: methodUrl, onload: function(resp) {
                 var html = resp && resp.responseText ? resp.responseText : "";
                 var tmp = document.createElement("div"); tmp.innerHTML = html;
                 var tables = tmp.querySelectorAll("table.table.table-striped.table-bordered");
@@ -26536,7 +26812,7 @@
 
     async function getMethodItemRefs(methodUrl) {
         return new Promise(function(resolve) {
-            apsXmlHttpRequest({ method: "GET", url: methodUrl + "?references=references", onload: function(resp) {
+            GM.xmlHttpRequest({ method: "GET", url: methodUrl + "?references=references", onload: function(resp) {
                 var html = resp && resp.responseText ? resp.responseText : "";
                 var refs = [];
                 var tmp = document.createElement("div"); tmp.innerHTML = html;
@@ -26549,7 +26825,7 @@
 
     async function getItemRefForms(itemRefUrl) {
         return new Promise(function(resolve) {
-            apsXmlHttpRequest({ method: "GET", url: itemRefUrl + "?references=references", onload: function(resp) {
+            GM.xmlHttpRequest({ method: "GET", url: itemRefUrl + "?references=references", onload: function(resp) {
                 var html = resp && resp.responseText ? resp.responseText : "";
                 var forms = [];
                 var tmp = document.createElement("div"); tmp.innerHTML = html;
@@ -26741,29 +27017,25 @@
     }
 
     function startClearMapping() {
+        if (CLEAR_MAPPING_CANCELED) {
+            log("ClearMapping: startClearMapping cancelled");
+            return;
+        }
         log("ClearMapping: startClearMapping invoked");
-        CLEAR_MAPPING_CANCELED = false;
 
-        if (!isEligibilityListPage()) {
-            log("ClearMapping: not on eligibility list page; showing warning");
-            showWrongPagePopup("Clear Mapping", ELIGIBILITY_LIST_PATH, location.pathname, null);
+        try {
+            localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_CLEAR_MAPPING);
+        } catch (e) {
+        }
+
+        var path = location.pathname;
+        if (path !== "/secure/crfdesign/studylibrary/eligibility/list") {
+            log("ClearMapping: not on eligibility list page; redirecting");
+            location.href = getBaseUrl() + ELIGIBILITY_LIST_PATH;
             return;
         }
 
-        showClearMappingConfirmPopup(function() {
-            log("ClearMapping: user confirmed; starting automation");
-            try {
-                localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_CLEAR_MAPPING);
-            } catch (e) {}
-
-            if (!isEligibilityListPage()) {
-                log("ClearMapping: page changed before confirm; aborting");
-                clearRunMode();
-                return;
-            }
-
-            executeClearMappingAutomation();
-        });
+        executeClearMappingAutomation();
     }
 
     async function executeClearMappingAutomation() {
@@ -26774,130 +27046,348 @@
         log("ClearMapping: executor started");
 
         var path = location.pathname;
-        if (path !== ELIGIBILITY_LIST_PATH) {
-            log("ClearMapping: wrong page; clearing run mode and stopping");
-            clearRunMode();
+        if (path !== "/secure/crfdesign/studylibrary/eligibility/list") {
+            log("ClearMapping: wrong page; redirecting");
+            try {
+                localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_CLEAR_MAPPING);
+            } catch (e) {
+            }
+            location.href = getBaseUrl() + ELIGIBILITY_LIST_PATH;
             return;
         }
 
-        // Loop until no more rows
-        while (true) {
-            if (CLEAR_MAPPING_CANCELED) {
-                log("ClearMapping: cancelled during loop");
-                clearRunMode();
-                return;
+        var queued = getClearMappingQueue();
+        if (queued.length > 0) {
+            await processClearMappingQueue(queued);
+            return;
+        }
+
+        var tableRows = collectClearMappingRowsFromTable();
+        log("ClearMapping: selectable rows found=" + String(tableRows.length));
+        if (tableRows.length === 0) {
+            clearRunMode();
+            showWarningPopup("Clear Mapping", "No eligibility mappings were found in the page table.");
+            return;
+        }
+        showClearMappingSelectionPanel(tableRows);
+    }
+
+
+
+    function getClearMappingQueue() {
+        try {
+            var raw = localStorage.getItem(STORAGE_CLEAR_MAPPING_QUEUE);
+            if (!raw) {
+                return [];
             }
-
-            var tbody = await waitForSelector("tbody#eligibilityRefTableBody", 15000);
-            if (!tbody) {
-                log("ClearMapping: table body missing; stopping");
-                clearRunMode();
-                return;
-            }
-
-            var rows = tbody.querySelectorAll("tr");
-            log("ClearMapping: rows found=" + String(rows.length));
-
-            if (rows.length === 0) {
-                log("ClearMapping: no rows remain; clearing run mode");
-                clearRunMode();
-                return;
-            }
-
-            await deleteFirstEligibilityRow();
-
-            // Wait a bit after delete/reload before checking again
-            await sleep(2000);
+            var parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+            log("ClearMapping: failed to read queue - " + String(e));
+            return [];
         }
     }
 
-    async function deleteFirstEligibilityRow() {
+    function setClearMappingQueue(queue) {
+        try {
+            localStorage.setItem(STORAGE_CLEAR_MAPPING_QUEUE, JSON.stringify(queue || []));
+        } catch (e) {
+            log("ClearMapping: failed to save queue - " + String(e));
+        }
+    }
+
+    function clearClearMappingQueue() {
+        try {
+            localStorage.removeItem(STORAGE_CLEAR_MAPPING_QUEUE);
+        } catch (e) {}
+    }
+
+    function collectClearMappingRowsFromTable() {
+        var results = [];
+        var tbody = document.querySelector("tbody#eligibilityRefTableBody");
+        if (!tbody) {
+            log("ClearMapping: collect rows no tbody");
+            return results;
+        }
+        var rows = tbody.querySelectorAll("tr");
+        var i = 0;
+        while (i < rows.length) {
+            var tr = rows[i];
+            var tds = tr.querySelectorAll("td");
+            if (tds && tds.length >= 9) {
+                var deleteLink = tr.querySelector("a[onclick*='maybeDeleteEligRef']");
+                var deleteUrl = "";
+                if (deleteLink) {
+                    var onclickText = deleteLink.getAttribute("onclick") || "";
+                    var m = onclickText.match(/maybeDeleteEligRef\(['"]([^'"]+)['"]\)/);
+                    if (m) {
+                        deleteUrl = m[1];
+                    }
+                }
+                if (deleteUrl) {
+                    var itemType = (tds[0].childNodes[0] ? tds[0].childNodes[0].textContent : tds[0].textContent || "").trim().replace(/\s+/g, " ");
+                    var itemCodeEl = tds[0].querySelector("a[href*='/show/item/']");
+                    var itemCode = itemCodeEl ? (itemCodeEl.textContent || "").trim().replace(/\s+/g, " ") : "";
+                    var checkItemEl = tds[5].querySelector("a[href*='/show/item/']");
+                    var checkItem = checkItemEl ? (checkItemEl.textContent || "").trim().replace(/\s+/g, " ") : (tds[5].textContent || "").trim().replace(/\s+/g, " ");
+                    var saText = (tds[4].textContent || "").trim().replace(/\s+/g, " ");
+                    var operatorText = (tds[6].textContent || "").trim().replace(/\s+/g, " ");
+                    var valueText = (tds[7].textContent || "").trim().replace(/\s+/g, " ");
+                    results.push({
+                        deleteUrl: deleteUrl,
+                        itemType: itemType || "",
+                        itemCode: itemCode || checkItem || "",
+                        checkItem: checkItem || itemCode || "",
+                        scheduledActivity: saText || "",
+                        operator: operatorText || "",
+                        value: valueText || "",
+                        rowIndex: i
+                    });
+                }
+            }
+            i = i + 1;
+        }
+        return results;
+    }
+
+    function showClearMappingSelectionPanel(rows) {
+        var container = document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;gap:10px;color:#fff;font-size:13px;min-width:720px;";
+        var summary = document.createElement("div");
+        summary.style.cssText = "color:#ccc;line-height:1.4;";
+        summary.textContent = "Select the eligibility mappings you want to remove. Only selected rows will be deleted.";
+        container.appendChild(summary);
+        var controls = document.createElement("div");
+        controls.style.cssText = "display:flex;gap:8px;align-items:center;";
+        var selectAllBtn = document.createElement("button");
+        selectAllBtn.textContent = "Select All";
+        selectAllBtn.style.cssText = "background:#2980b9;color:#fff;border:none;padding:5px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;";
+        var deselectAllBtn = document.createElement("button");
+        deselectAllBtn.textContent = "Deselect All";
+        deselectAllBtn.style.cssText = "background:#444;color:#fff;border:none;padding:5px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;";
+        var countLabel = document.createElement("span");
+        countLabel.style.cssText = "margin-left:auto;color:#aaa;font-size:12px;";
+        controls.appendChild(selectAllBtn);
+        controls.appendChild(deselectAllBtn);
+        controls.appendChild(countLabel);
+        container.appendChild(controls);
+        var list = document.createElement("div");
+        list.style.cssText = "max-height:460px;overflow-y:auto;border:1px solid #333;border-radius:5px;background:#141414;";
+        var checks = [];
+        function updateCount() {
+            var selected = 0;
+            var i = 0;
+            while (i < checks.length) {
+                if (checks[i].checked) selected = selected + 1;
+                i = i + 1;
+            }
+            countLabel.textContent = String(selected) + " of " + String(rows.length) + " selected";
+            confirmBtn.disabled = selected === 0;
+            confirmBtn.style.opacity = selected === 0 ? "0.5" : "1";
+            confirmBtn.style.cursor = selected === 0 ? "default" : "pointer";
+        }
+        var ri = 0;
+        while (ri < rows.length) {
+            (function(rowData) {
+                var row = document.createElement("div");
+                row.style.cssText = "display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border-bottom:1px solid #252525;cursor:pointer;";
+                var cb = document.createElement("input");
+                cb.type = "checkbox";
+                cb.checked = true;
+                cb.style.cssText = "margin-top:2px;accent-color:#d9534f;cursor:pointer;";
+                checks.push(cb);
+                var text = document.createElement("div");
+                text.style.cssText = "flex:1;min-width:0;";
+                var title = document.createElement("div");
+                title.style.cssText = "font-weight:600;color:#fff;font-size:12px;";
+                title.textContent = (rowData.itemCode || rowData.checkItem || "Eligibility item") + " - " + (rowData.itemType || "Mapping");
+                var path = document.createElement("div");
+                path.style.cssText = "color:#aaa;font-size:11px;margin-top:2px;line-height:1.35;word-break:break-word;";
+                path.textContent = rowData.scheduledActivity + " | Check: " + rowData.checkItem + " | " + rowData.operator + " " + rowData.value;
+                text.appendChild(title);
+                text.appendChild(path);
+                row.appendChild(cb);
+                row.appendChild(text);
+                row.addEventListener("click", function(e) {
+                    if (e.target !== cb) {
+                        cb.checked = !cb.checked;
+                        updateCount();
+                    }
+                });
+                cb.addEventListener("change", updateCount);
+                list.appendChild(row);
+            })(rows[ri]);
+            ri = ri + 1;
+        }
+        container.appendChild(list);
+        var footer = document.createElement("div");
+        footer.style.cssText = "display:flex;justify-content:flex-end;gap:8px;";
+        var cancelBtn = document.createElement("button");
+        cancelBtn.textContent = "Cancel";
+        cancelBtn.style.cssText = "background:#444;color:#fff;border:none;padding:7px 18px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;";
+        var confirmBtn = document.createElement("button");
+        confirmBtn.textContent = "Confirm";
+        confirmBtn.style.cssText = "background:#c0392b;color:#fff;border:none;padding:7px 18px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;";
+        footer.appendChild(cancelBtn);
+        footer.appendChild(confirmBtn);
+        container.appendChild(footer);
+        var popup = createPopup({ title: "Clear Mapping - Select Eligibility Items", content: container, width: "780px", height: "auto", maxHeight: "85%" });
+        selectAllBtn.addEventListener("click", function() {
+            var i = 0;
+            while (i < checks.length) { checks[i].checked = true; i = i + 1; }
+            updateCount();
+        });
+        deselectAllBtn.addEventListener("click", function() {
+            var i = 0;
+            while (i < checks.length) { checks[i].checked = false; i = i + 1; }
+            updateCount();
+        });
+        cancelBtn.addEventListener("click", function() {
+            clearRunMode();
+            clearClearMappingQueue();
+            popup.close();
+        });
+        confirmBtn.addEventListener("click", function() {
+            var selectedRows = [];
+            var i = 0;
+            while (i < rows.length) {
+                if (checks[i].checked) {
+                    selectedRows.push(rows[i]);
+                }
+                i = i + 1;
+            }
+            showClearMappingWarning(selectedRows, popup);
+        });
+        updateCount();
+    }
+
+    function showClearMappingWarning(selectedRows, selectionPopup) {
+        var wrap = document.createElement("div");
+        wrap.style.cssText = "display:flex;flex-direction:column;gap:12px;color:#fff;font-size:13px;line-height:1.45;";
+        var msg = document.createElement("div");
+        msg.innerHTML = '<div style="color:#ffb74d;font-weight:700;margin-bottom:6px;">Warning</div><div>You are about to delete <strong>' + String(selectedRows.length) + '</strong> selected eligibility mapping(s). This action changes the ClinSpark eligibility table.</div>';
+        wrap.appendChild(msg);
+        var btns = document.createElement("div");
+        btns.style.cssText = "display:flex;justify-content:flex-end;gap:8px;";
+        var cancelBtn = document.createElement("button");
+        cancelBtn.textContent = "Cancel";
+        cancelBtn.style.cssText = "background:#444;color:#fff;border:none;padding:7px 18px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;";
+        var confirmBtn = document.createElement("button");
+        confirmBtn.textContent = "Delete Selected";
+        confirmBtn.style.cssText = "background:#c0392b;color:#fff;border:none;padding:7px 18px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;";
+        btns.appendChild(cancelBtn);
+        btns.appendChild(confirmBtn);
+        wrap.appendChild(btns);
+        var warningPopup = createPopup({ title: "Clear Mapping - Confirm Delete", content: wrap, width: "430px", height: "auto" });
+        cancelBtn.addEventListener("click", function() {
+            warningPopup.close();
+        });
+        confirmBtn.addEventListener("click", function() {
+            warningPopup.close();
+            if (selectionPopup) {
+                selectionPopup.close();
+            }
+            setClearMappingQueue(selectedRows);
+            try { localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_CLEAR_MAPPING); } catch (e) {}
+            processClearMappingQueue(selectedRows);
+        });
+    }
+
+    async function processClearMappingQueue(queue) {
         if (CLEAR_MAPPING_CANCELED) {
-            log("ClearMapping: deleteFirstEligibilityRow cancelled");
+            log("ClearMapping: process queue cancelled");
+            clearRunMode();
             return;
         }
-        log("ClearMapping: deleteFirstEligibilityRow started");
+        log("ClearMapping: process queue started count=" + String(queue.length));
+        var remaining = queue.slice();
+        while (remaining.length > 0) {
+            if (CLEAR_MAPPING_CANCELED) {
+                log("ClearMapping: cancelled during selected delete queue");
+                setClearMappingQueue(remaining);
+                clearRunMode();
+                return;
+            }
+            setClearMappingQueue(remaining);
+            var item = remaining[0];
+            var ok = await deleteEligibilityRowByUrl(item.deleteUrl);
+            if (!ok) {
+                log("ClearMapping: failed to delete selected item url=" + String(item.deleteUrl));
+            }
+            remaining.shift();
+            setClearMappingQueue(remaining);
+            await sleep(1200);
+        }
+        log("ClearMapping: selected queue complete");
+        clearClearMappingQueue();
+        clearRunMode();
+        showWarningPopup("Clear Mapping", "Selected eligibility mappings were removed.");
+    }
+
+    async function deleteEligibilityRowByUrl(deleteUrl) {
+        log("ClearMapping: deleteEligibilityRowByUrl url=" + String(deleteUrl));
 
         var tbody = await waitForSelector("tbody#eligibilityRefTableBody", 15000);
         if (!tbody) {
-            log("ClearMapping: tbody missing in deleteFirstEligibilityRow");
-            clearRunMode();
-            return;
+            log("ClearMapping: tbody missing in deleteEligibilityRowByUrl");
+            return false;
         }
 
         var rows = tbody.querySelectorAll("tr");
         if (rows.length === 0) {
-            log("ClearMapping: no rows present during deleteFirstEligibilityRow");
-            clearRunMode();
-            return;
+            log("ClearMapping: no rows present during deleteEligibilityRowByUrl");
+            return false;
         }
 
-        var tr = rows[0];
-        var tds = tr.querySelectorAll("td");
-        if (!tds) {
-            log("ClearMapping: row has no tds; stopping");
-            clearRunMode();
-            return;
-        }
-        if (tds.length < 9) {
-            log("ClearMapping: row has insufficient columns; stopping");
-            clearRunMode();
-            return;
-        }
-
-        var actionTd = tds[8];
-        var btn = actionTd.querySelector("button.dropdown-toggle");
-        if (!btn) {
-            log("ClearMapping: dropdown toggle not found");
-            clearRunMode();
-            return;
-        }
-
-        btn.click();
-        log("ClearMapping: action dropdown opened");
-        await sleep(400);
-
-        var items = document.querySelectorAll("ul.dropdown-menu li a");
         var deleteLink = null;
-
         var i = 0;
-        while (i < items.length) {
-            if (CLEAR_MAPPING_CANCELED) {
-                log("ClearMapping: deleteFirstEligibilityRow cancelled");
-                return;
-            }
-            var a = items[i];
-            var txt = (a.textContent + "").trim().toLowerCase();
-            if (txt.indexOf("delete") >= 0) {
-                deleteLink = a;
-                break;
+        while (i < rows.length) {
+            var candidate = rows[i].querySelector("a[onclick*='maybeDeleteEligRef']");
+            if (candidate) {
+                var onclickText = candidate.getAttribute("onclick") || "";
+                if (onclickText.indexOf(deleteUrl) !== -1) {
+                    deleteLink = candidate;
+                    break;
+                }
             }
             i = i + 1;
         }
 
         if (!deleteLink) {
-            log("ClearMapping: delete link not found");
-            clearRunMode();
-            return;
+            log("ClearMapping: selected delete link not found on current table");
+            return false;
+        }
+
+        var actionBtn = null;
+        var parent = deleteLink;
+        while (parent && parent.tagName !== "TR") {
+            parent = parent.parentNode;
+        }
+        if (parent) {
+            actionBtn = parent.querySelector("button.dropdown-toggle");
+        }
+        if (actionBtn) {
+            actionBtn.click();
+            await sleep(250);
         }
 
         if (CLEAR_MAPPING_CANCELED) {
-            log("ClearMapping: deleteFirstEligibilityRow cancelled");
-            return;
+            log("ClearMapping: delete selected cancelled before click");
+            return false;
         }
-        log("ClearMapping: clicking delete link");
+        log("ClearMapping: clicking selected delete link");
         deleteLink.click();
         await sleep(600);
 
         var okBtn = null;
         var waited = 0;
         var step = 150;
-        var maxWait = 4000;
+        var maxWait = 5000;
 
         while (waited < maxWait) {
             if (CLEAR_MAPPING_CANCELED) {
-                log("ClearMapping: deleteFirstEligibilityRow cancelled");
-                return;
+                log("ClearMapping: delete selected cancelled while waiting confirm");
+                return false;
             }
             okBtn = document.querySelector("button[data-bb-handler='confirm'].btn.btn-primary");
             if (okBtn) {
@@ -26909,22 +27399,15 @@
 
         if (!okBtn) {
             log("ClearMapping: OK button not found in modal");
-            clearRunMode();
-            return;
+            return false;
         }
 
         log("ClearMapping: clicking OK button in modal");
         okBtn.click();
         await sleep(1500);
-
-        log("ClearMapping: delete confirmed; forcing page reload");
-        try {
-            localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_CLEAR_MAPPING);
-        } catch (e) {
-        }
-        await sleep(500);
-        location.href = getBaseUrl() + ELIGIBILITY_LIST_PATH;
+        return true;
     }
+
 
 
     //==========================
@@ -29912,6 +30395,59 @@
             return null;
         }
 
+        function findExpectedEligibilityEntry(mappingRecord) {
+            var targetText = String((mappingRecord && (mappingRecord.code || mappingRecord.checkItemText)) || "");
+            var targetParts = parsePoolCodeParts(targetText);
+            var targetCode = String((mappingRecord && mappingRecord.code) || "").replace(/\s+/g, "").toUpperCase();
+            if (!targetParts && !targetCode) {
+                return null;
+            }
+            var i = 0;
+            while (i < eligibilityItemPool.length) {
+                var poolEntry = eligibilityItemPool[i];
+                var poolParts = poolEntry.codeParts || parsePoolCodeParts(poolEntry.labelFull || poolEntry.code || "");
+                if (targetParts && poolParts &&
+                    poolParts.typeUpper === targetParts.typeUpper &&
+                    poolParts.numberInt === targetParts.numberInt &&
+                    (poolParts.suffix || "") === (targetParts.suffix || "")) {
+                    return eligibilityItemPool[i];
+                }
+                var poolLooseCode = extractIECodeStrict(poolEntry.labelFull || poolEntry.code || "").replace(/\s+/g, "").toUpperCase();
+                if (!poolLooseCode && poolEntry.labelFull) {
+                    poolLooseCode = String(parseItemCodeFromEligibilityOptionText(poolEntry.labelFull) || "").replace(/\s+/g, "").toUpperCase();
+                }
+                if (targetCode && poolLooseCode && poolLooseCode === targetCode) {
+                    return eligibilityItemPool[i];
+                }
+                i = i + 1;
+            }
+            return null;
+        }
+
+        function createExpectedEligibilityHint(mappingRecord) {
+            var expected = findExpectedEligibilityEntry(mappingRecord);
+            var hint = document.createElement("span");
+            hint.style.fontSize = "10px";
+            hint.style.color = expected ? "#9fc5e8" : "#777";
+            hint.style.background = expected ? "#102538" : "#1a1a1a";
+            hint.style.border = expected ? "1px solid #2f5f86" : "1px solid #333";
+            hint.style.borderRadius = "4px";
+            hint.style.padding = "2px 6px";
+            hint.style.maxWidth = "220px";
+            hint.style.overflow = "hidden";
+            hint.style.textOverflow = "ellipsis";
+            hint.style.whiteSpace = "nowrap";
+            hint.style.flexShrink = "0";
+            if (expected) {
+                hint.textContent = "Default: " + (expected.code || "") + " - " + expected.labelShort;
+                hint.title = "Used automatically if the dropbox is empty: " + expected.labelFull;
+            } else {
+                hint.textContent = "Default: no code match";
+                hint.title = "No matching eligibility item was found for this check item's code.";
+            }
+            return hint;
+        }
+
         var overlay = document.createElement("div");
         overlay.id = "importIEReviewOverlay";
         overlay.style.position = "fixed";
@@ -30627,11 +31163,13 @@
                 }
 
                 var flatDropbox = createDropbox(fr.mapping);
+                var flatExpectedHint = createExpectedEligibilityHint(fr.mapping);
                 var currentGender = ensureGenderStateForKey(selectionStateMap, fr.key);
 
                 row.appendChild(cb);
                 row.appendChild(textBlock);
                 row.appendChild(flatDropbox);
+                row.appendChild(flatExpectedHint);
                 renderRowGenderControl(row, fr.key, currentGender, isAlreadyExist);
                 row.appendChild(statusBadge);
 
@@ -31283,12 +31821,14 @@
                         statusBadge.style.whiteSpace = "nowrap";
 
                         var itemDropbox = createDropbox(item);
+                        var itemExpectedHint = createExpectedEligibilityHint(item);
                         var hierItemKey = getMappingKey(item);
                         var hierItemGender = ensureGenderStateForKey(selectionStateMap, hierItemKey);
 
                         itemRow.appendChild(itemCb);
                         itemRow.appendChild(itemLabel);
                         itemRow.appendChild(itemDropbox);
+                        itemRow.appendChild(itemExpectedHint);
                         renderRowGenderControl(itemRow, hierItemKey, hierItemGender, alreadyExists);
                         itemRow.appendChild(statusBadge);
 
