@@ -1343,5 +1343,25 @@
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Range%20check%20for%20ALL%20(HR%2C%20SYS%2C%20DIA%2C%20PR%2C%20RR%2C%20QtcF%2C%20QTC%2C%20QRS%2C%20QT)%20v2.js",
         "updated": "2026-08-26"
+    },
+    {
+        "id": "M-140",
+        "title": "Age, Gender (Sex), DoB",
+        "description": "Extracts the subject's age, gender, and date of birth from the volunteer data.",
+        "tags": [
+            "Demographics"
+        ],
+        "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Age%2C%20Gender%20(Sex)%2C%20DoB.js",
+        "updated": "2026-08-26"
+    },
+    {
+        "id": "M-140",
+        "title": "Average of Thigh, Chest, Abdominal, Triceps, Suprailiac",
+        "description": "Calculates the average of the specified body measurements.",
+        "tags": [
+            "Anthropometrics"
+        ],
+        "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20of%20Thigh%2C%20Chest%2C%20Abdominal%2C%20Triceps%2C%20Suprailiac.js",
+        "updated": "2026-08-26"
     }
 ]
