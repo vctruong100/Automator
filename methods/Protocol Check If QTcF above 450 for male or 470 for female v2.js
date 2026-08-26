@@ -27,6 +27,10 @@ function isQtcfItem(itemName) {
         containsValue(name, "QT CORRECTED BY FRIDERICIA");
 }
 
+function isBaselineQtcfItem(itemName) {
+    return containsValue(itemName, "BASELINE");
+}
+
 function addNumericValue(list, sourceItem) {
     if (!sourceItem || sourceItem.canceled || sourceItem.value === null || sourceItem.value === undefined || sourceItem.value === "") return;
 
@@ -39,7 +43,7 @@ function addNumericValue(list, sourceItem) {
     }
 }
 
-function pullLatestQtcfFromForm(formJsonValue) {
+function pullLatestQtcfFromForm(formJsonValue, includeBaselineItems) {
     var itemGroups = formJsonValue.form.itemGroups;
     var group, items, groupItem, i, j;
     var matches = [];
@@ -54,7 +58,7 @@ function pullLatestQtcfFromForm(formJsonValue) {
         for (j = 0; j < items.length; j++) {
             groupItem = items[j];
             if (!groupItem) continue;
-            if (isQtcfItem(groupItem.name)) addNumericValue(matches, groupItem);
+            if (isQtcfItem(groupItem.name) && (includeBaselineItems || !isBaselineQtcfItem(groupItem.name))) addNumericValue(matches, groupItem);
         }
     }
 
@@ -67,7 +71,7 @@ function pullLatestQtcfFromForm(formJsonValue) {
 }
 
 try {
-    var qtcf = pullLatestQtcfFromForm(formJson);
+    var qtcf = pullLatestQtcfFromForm(formJson, false);
 
     logger("Is it male: " + sexMale);
     logger("QTcF value: " + qtcf);
