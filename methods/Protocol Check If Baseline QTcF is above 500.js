@@ -70,4 +70,7 @@ function pullItemOnKeyword(formJsonValue, metric) {
     return null;
 }
 
-return pullItemOnKeyword(formJson, "QTCF");
+var collected = Number(pullItemOnKeyword(formJson, "QTCF"));
+if (collected && collected > 500) return "Y"
+else if (collected && collected <= 500) return "N";
+return null;

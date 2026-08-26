@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name ClinSpark Test Automator
 // @namespace vinh.activity.plan.state
-// @version 4.3.21
+// @version 4.3.22
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; Activity Plan Removal; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexeltest.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Test%20Automator.js
@@ -13400,13 +13400,14 @@
             {
                 title: "CRF Design & Library",
                 features: [
-                    { label: "Search Methods", desc: "Opens up the method library that contains all coded methods/edit checks." },
+                    { label: "Search Methods", desc: "Searches the method library for coded methods and edit checks, opens method details, and helps review formal expressions and item references." },
                     { label: "PLAP Builder", desc: "The Procedure Log Activity Plan Builder. Drag forms into segments, assign study events, configure time references, then submit all procedure log entries automatically." },
                     { label: "Import from Library", desc: "Opens a side-by-side tool for importing forms from the study library into the current study. Select the target study and form, and the automator imports and saves it." },
                     { label: "Archive/Update Forms", desc: "Batch archives or renames forms in the study library. Useful for replacing old versions with new versions." },
                     { label: "Copy Activity Forms", desc: "Copies scheduled activity forms from one study to another, preserving their structure and settings." },
+                    { label: "Activity Plan Removal", desc: "Removes selected activity plan rows in bulk. Useful when scheduled activities need to be cleaned up, rebuilt, or removed after a copy/import workflow." },
                     { label: "Item Method Forms", desc: "Locates forms that contain a specific calculation method item and navigates to their data pages." },
-                    { label: "Import I/E", desc: "Automatically map I/E items to the correct Activity Plan -> Forms -> Items" },
+                    { label: "Import I/E", desc: "Maps inclusion/exclusion criteria items to the correct Activity Plan, Form, and Item references, then applies those mappings to eligibility configuration." },
                     { label: "Clear Mapping", desc: "Clears the current form-to-schedule mapping configuration so you can start fresh with a new mapping setup." },
                     { label: "Edit Study Events List", desc: "Manage the study events list in the library — add new events, rename or reorder existing ones, and save all changes in a single batch." },
                     { label: "Set Visibility Condition", desc: "Sets visibility (show/hide) conditions on forms in an activity plan. Map each form to the item and value that controls whether it is shown or hidden, and the automator saves each condition." }
@@ -13415,7 +13416,7 @@
             {
                 title: "Navigation",
                 features: [
-                    { label: "Find Form & Events", desc: "Navigates directly to a form or study event data page. Enter a form keyword and/or a study event keyword, plus an optional subject identifier, and the automator applies the filters and searches automatically." }
+                    { label: "Find Form & Events", desc: "Finds and opens data collection pages by subject, form keyword, study event keyword, completion status, and target page filters." }
                 ]
             },
             {
@@ -13429,7 +13430,9 @@
                 features: [
                     { label: "Pause", desc: "Pauses any currently running automation. Click again to resume. Useful for briefly halting a long process without canceling it." },
                     { label: "Clear Logs", desc: "Clears all entries from the activity log panel for a fresh view." },
-                    { label: "Hide Logs", desc: "Toggles the activity log panel on or off to manage screen space when the log is not needed." }
+                    { label: "Hide Logs", desc: "Toggles the activity log panel on or off to manage screen space when the log is not needed." },
+                    { label: "Settings", desc: "Opens panel settings for theme, button visibility/order, hotkey selection, and related UI preferences." },
+                    { label: "Help Guide", desc: "Opens this searchable guide. The default panel hotkey is F2, and the configured hotkey can hide or show the panel." }
                 ]
             }
         ];

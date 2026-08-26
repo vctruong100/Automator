@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name        ClinSpark Automator
 // @namespace   vinh.activity.plan.state
-// @version     3.6.15
+// @version     3.6.16
 // @description Automate various tasks in ClinSpark platform
 // @match       https://cenexel.clinspark.com/*
 // @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Automator.js
@@ -18920,7 +18920,9 @@
                 title: "Data Collection",
                 features: [
                     { label: "Pull Barcode", desc: "Automatically fills in the subject barcode for a subject. It reads the barcode value and enters it into the required field — no manual typing needed." },
-                    { label: "Pull Lab Barcode", desc: "Scans all barcode fields on the current data collection page and fills each one in automatically. Every barcode is entered and confirmed one by one, saving significant time during lab sample processing." }
+                    { label: "Pull Lab Barcode", desc: "Scans all barcode fields on the current data collection page and fills each one in automatically. Every barcode is entered and confirmed one by one, saving significant time during lab sample processing." },
+                    { label: "Print Barcodes", desc: "Builds print jobs for subject labels and sample barcodes. Supports single-subject mode and multi-subject screening-plan mode, then fills the label and barcode print forms automatically." },
+                    { label: "Auto-Resaver", desc: "Re-saves eligible data collection forms in bulk so calculated values, edit checks, or autopopulated fields can refresh after configuration changes." }
                 ]
             },
             {
@@ -18930,20 +18932,24 @@
                     { label: "Import From Library", desc: "Opens a side-by-side tool to import forms from the study library into your current study. Select the study and form, and the automator handles the import and save steps." },
                     { label: "Archive/Update Forms", desc: "Batch archives or renames forms in the study library across multiple studies at once. Useful when form names are being updated or forms need to be archived." },
                     { label: "Copy Activity Forms", desc: "Copies scheduled activity forms from one study to another, carrying over their structure and settings." },
-                    { label: "Search Methods", desc: "Opens up the method library that contains all coded methods/edit checks." },
-                    { label: "Parse Deviation", desc: "Input the subject number. Automatically navigate to Study -> Data page, input the subject number and deviation forms, and parse it for copy." },
-                    { label: "Import I/E", desc: "Automatically map I/E items to the correct Activity Plan -> Forms -> Items" },
+                    { label: "Activity Plan Removal", desc: "Removes selected activity plan rows in bulk. Useful when scheduled activities need to be cleaned up, rebuilt, or removed after a copy/import workflow." },
+                    { label: "Search Methods", desc: "Searches the method library for coded methods and edit checks, opens method details, and helps review formal expressions and item references." },
+                    { label: "Parse Deviation", desc: "Uses a subject number to navigate to Study Data, filter deviation forms, and extract deviation content into a copy-friendly review popup." },
+                    { label: "Import I/E", desc: "Maps inclusion/exclusion criteria items to the correct Activity Plan, Form, and Item references, then applies those mappings to eligibility configuration." },
+                    { label: "Clear Mapping", desc: "Clears stored mapping state so form, schedule, visibility, or eligibility mapping workflows can start fresh." },
                     { label: "Set Visibility Condition", desc: "Sets show/hide conditions on scheduled activity forms. You map each form to the item and value that controls when it appears, and the automator saves each condition for you." },
                     { label: "Item Method Forms", desc: "Locates all forms that contain a specific calculation method item and navigates to their data pages so you can review or edit them." },
                     { label: "Parse Study Event", desc: "Navigates to and collects data from study events in the study library — useful for reviewing or exporting study event information." },
-                    { label: "Edit Study Events List", desc: "Manage the study events list in the library. Add new study events, rename existing ones, reorder the list, and save all changes in one batch operation." }
+                    { label: "Parse Forms", desc: "Collects form metadata, item groups, items, and related form configuration from the study library for review or downstream copy/update work." },
+                    { label: "Edit Study Events List", desc: "Manage the study events list in the library. Add new study events, rename existing ones, reorder the list, and save all changes in one batch operation." },
+                    { label: "Edit Item Reference", desc: "Reviews item references on the current page and lets you update selected item names, descriptions, origins, or related configuration in a guided batch workflow." }
                 ]
             },
             {
                 title: "Navigation",
                 features: [
                     { label: "Find Adverse Event", desc: "Jumps directly to the Adverse Event data page for a specific subject. Enter a Subject Identifier and the automator navigates to the right page — no manual searching needed." },
-                    { label: "Find Form & Events", desc: "Navigates directly to a form or study event data page. Enter a keyword (part of the form or event name) and an optional subject identifier, and the automator takes you there automatically." }
+                    { label: "Find Form & Events", desc: "Finds and opens data collection pages by subject, form keyword, study event keyword, completion status, and target page filters." }
                 ]
             },
             {
@@ -18964,7 +18970,9 @@
                 features: [
                     { label: "Pause", desc: "Pauses any automation that is currently running. Click again to resume. Helpful when you need to briefly halt a long process without canceling it entirely." },
                     { label: "Clear Logs", desc: "Clears all entries from the activity log panel, giving you a fresh view of new activity." },
-                    { label: "Hide Logs", desc: "Toggles the activity log panel on or off. Use this to free up screen space when the log is not needed." }
+                    { label: "Hide Logs", desc: "Toggles the activity log panel on or off. Use this to free up screen space when the log is not needed." },
+                    { label: "Settings", desc: "Opens panel settings for theme, button visibility/order, hotkey selection, and related UI preferences." },
+                    { label: "Help Guide", desc: "Opens this searchable guide. The default panel hotkey is F2, and the configured hotkey can hide or show the panel." }
                 ]
             }
         ];
