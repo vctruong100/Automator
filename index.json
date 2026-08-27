@@ -1355,7 +1355,7 @@
         "updated": "2026-08-26"
     },
     {
-        "id": "M-140",
+        "id": "M-141",
         "title": "Average of Thigh, Chest, Abdominal, Triceps, Suprailiac",
         "description": "Calculates the average of the specified body measurements.",
         "tags": [
@@ -1363,5 +1363,15 @@
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20of%20Thigh%2C%20Chest%2C%20Abdominal%2C%20Triceps%2C%20Suprailiac.js",
         "updated": "2026-08-26"
+    },
+    {
+        "id": "M-142",
+        "title": "Convert Weight KG to LBS",
+        "description": "Converts weight from kilograms to pounds.",
+        "tags": [
+            "Anthropometrics"
+        ],
+        "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Convert%20Weight%20KG%20to%20LBS.js",
+        "updated": "2026-08-27"
     }
 ]

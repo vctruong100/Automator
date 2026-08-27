@@ -14,12 +14,42 @@ var baselineFormName = [
 ];
 
 var attachedItem = itemJson.item;
+var item = itemJson.item;
+
+var rawgroupName = getItemDataContextByItemDataId(item.id);
+var parsedGroupName = JSON.parse(rawgroupName).foundItemGroupName;
+logger("Group name: " + parsedGroupName);
 
 var form = pullForm(baselineStudyEvent, baselineFormName);
 
 if (!form) return null;
 logger(form.form.name)
-return pullItemOnKeyword(form, "QTCF");
+
+var qtcfBaseline = pullItemOnKeyword(form, "QTCF");
+var PRbaseline = pullItemOnKeyword(form, "PR");
+var qrsBaseline = pullItemOnKeyword(form, "QRS");
+
+logger("QTCF baseline: " + qtcfBaseline);
+logger("PR Baseline: " + PRbaseline);
+logger("QRS baseline: " + qrsBaseline)
+
+var qtcfNew = pullItemFromSameItemGroup(formJson, "QTCF", parsedGroupName);
+var prNew = pullItemFromSameItemGroup(formJson, "PR", parsedGroupName);
+var qrsNew = pullItemFromSameItemGroup(formJson, "QRS", parsedGroupName);
+
+logger("QTCF New: " + qtcfNew);
+logger("PR New: " + prNew);
+logger("QRS New: " + qrsNew);
+
+var qtcfDiff = qtcfNew - qtcfBaseline;
+var prDiff = prNew - PRbaseline;
+var qrsDiff = qrsNew - qrsBaseline;
+
+logger("QTCF Difference: " + qtcfDiff);
+logger("PR Difference: " + prDiff);
+logger("QRS Differnce: " + qrsDiff);
+
+return "QTCF: " + qtcfDiff + ", PR: " + prDiff + ", QRS: "  + qrsDiff;
 
 function normalizeName(value) {
     if (value == null) return "";
@@ -56,9 +86,34 @@ function containsStandaloneKeyword(input, keyword) {
 
 function matchesMetric(itemName, metric) {
     var name = normalizeName(itemName);
+    if (metric === "PR") return name.indexOf("PR") !== -1 || containsStandaloneKeyword(name, "PR");
     if (metric === "QTCF") return name.indexOf("QTCF") !== -1 || containsStandaloneKeyword(name, "QTCF");
+    if (metric === "QRS") return name.indexOf("QRS") !== -1 || containsStandaloneKeyword(name, "QRS");
 
     return false;
+}
+
+function pullItemFromSameItemGroup(formJsonValue, metric, groupname) {
+    var itemGroups = formJsonValue.form.itemGroups;
+    var group, items, groupItem, i, j;
+
+    for (i = itemGroups.length - 1; i >= 0; i--) {
+        group = itemGroups[i];
+        if (!group || group.canceled || !group.items) continue;
+
+        items = group.items;
+
+        for (j = 0; j < items.length; j++) {
+            groupItem = items[j];
+            if (!groupItem) continue;
+            if (matchesMetric(groupItem.name, metric) && groupItem.value !== null) {
+                logger(metric + " matched item: " + groupItem.name + " | Value: " + groupItem.value);
+                return groupItem.value;
+            }
+        }
+    }
+
+    return null;
 }
 
 function pullItemOnKeyword(formJsonValue, metric) {
