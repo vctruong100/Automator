@@ -221,7 +221,21 @@ function parseMultiRange(input) {
         .replace(/to/gi, "-")
         .replace(/\s+/g, " ")
         .trim();
-
+    var maleMatch = input.match(/\(([^()]*)["']?males?["']?\)/i);
+    var femaleMatch = input.match(/\(([^()]*)["']?females?["']?\)/i);
+    
+    if (maleMatch || femaleMatch) {
+        if (maleMatch) {
+            result.male = parseRange("(" + maleMatch[1] + ")");
+        }
+    
+        if (femaleMatch) {
+            result.female = parseRange("(" + femaleMatch[1] + ")");
+        }
+    
+        logger("Final parsed ranges: " + JSON.stringify(result));
+        return result;
+    }
     var hasMale = /\b(male|m)\b/.test(content);
     var hasFemale = /\b(female|f)\b/.test(content);
 
