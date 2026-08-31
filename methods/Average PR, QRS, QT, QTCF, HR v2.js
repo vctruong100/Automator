@@ -57,7 +57,7 @@ function getMetricFromAverageItem(itemName) {
     var name = normalizeName(itemName);
 
     if (containsValue(name, "QTCF")) return "QTCF";
-    if (containsValue(name, "QTC") && !containsValue(name, "QTCF")) return "QTCF";
+    if (containsValue(name, "QTC") && !containsValue(name, "QTCF")) return "QTC";
     if (containsValue(name, "QT") && !containsValue(name, "QTC")) return "QT";
     if (containsValue(name, "QRS")) return "QRS";
     if (containsValue(name, "PR")) return "PR";

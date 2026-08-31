@@ -2,12 +2,12 @@
 // ==UserScript==
 // @name ClinSpark Val Automator
 // @namespace vinh.activity.plan.state
-// @version 4.1.7
+// @version 4.2.20
 // @description Run Activity Plans, Study Update (Cancel if already Active), Cohort Add, Informed Consent; draggable panel; Run ALL pipeline; Pause/Resume; Extensible buttons API;
 // @match https://cenexel-val.clinspark.com/*
-// @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Val%20Automator.js
-// @downloadURL  https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Val%20Automator.js
-// @run-at document-idle
+// @updateURL    https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Val%20Val%20Automator.js
+// @downloadURL  https://raw.githubusercontent.com/vctruong100/Automator/main/ClinSpark%20Val%20Val%20Automator.js
+// @run-at document-start
 // @grant GM.openInTab
 // @grant GM_openInTab
 // @grant GM.xmlHttpRequest
@@ -245,6 +245,7 @@
     var RETRY_DELAY_MS_MAX = 400;
     var ICF_ALLOWED_HOSTNAMES = ["cenexel-val.clinspark.com", "cenexel.clinspark.com"];
     const RUNMODE_CLEAR_MAPPING = "clearMapping";
+    const STORAGE_CLEAR_MAPPING_QUEUE = "activityPlanState.clearMapping.queue";
 
     // Run Parse Method
     var PARSE_METHOD_POPUP_TITLE = "Parse Method";
@@ -275,6 +276,7 @@
     const STORAGE_ICF_BARCODE_POPUP = "activityPlanState.icfBarcodePopup";
     const STORAGE_RUN_ALL_STATUS = "activityPlanState.runAllStatus";
     const STORAGE_CLEAR_MAPPING_POPUP = "activityPlanState.clearMappingPopup";
+    const STORAGE_CLEAR_MAPPING_FULLSCREEN = "activityPlanState.clearMappingFullscreen";
     const STORAGE_IMPORT_ELIG_POPUP = "activityPlanState.importEligPopup";
     const STORAGE_IMPORT_COHORT_POPUP = "activityPlanState.importCohortPopup";
     const STORAGE_ADD_COHORT_POPUP = "activityPlanState.addCohortPopup";
@@ -479,6 +481,7 @@
     var IFL_INTER_ITEM_DELAY = 800;
     var IFL_CANCELED = false;
     var IFL_STORAGE_IMPORT_STATE = "ifl.importState";
+    var IFL_STORAGE_CANCEL_REQUESTED = "ifl.cancelRequested";
     var IFL_STORAGE_STUDIES_CACHE = "ifl.studiesCache";
     var IFL_STORAGE_FULLSCREEN = "ifl.fullscreen";
     var IFL_STORAGE_DIVIDERS = "ifl.dividerWidths";
@@ -507,7 +510,6 @@
         "https://cenexel.clinspark.com/secure/crfdesign/activityplans/show/",
         "https://cenexel-val.clinspark.com/secure/crfdesign/activityplans/show/"
     ];
-    var STORAGE_SVC_REFERENCES = "activityPlanState.svc.references";
     var STORAGE_SVC_FULLSCREEN = "activityPlanState.svc.fullscreen";
 
     function isOnSVCPage() {
@@ -518,19 +520,6 @@
         return false;
     }
 
-    function svcLoadReferences() {
-        try {
-            var raw = localStorage.getItem(STORAGE_SVC_REFERENCES);
-            if (raw) return JSON.parse(raw);
-        } catch (e) {}
-        return {};
-    }
-
-    function svcSaveReferences(refs) {
-        try {
-            localStorage.setItem(STORAGE_SVC_REFERENCES, JSON.stringify(refs));
-        } catch (e) {}
-    }
 
     // Open a background iframe pointing to the current Activity Plan page
     function svcOpenBgIframe() {
@@ -835,7 +824,6 @@
     // Build the SVC selection GUI
     function createSVCSelectionGUI(saTableData) {
         var saItems = (saTableData && saTableData.saTableItems) ? saTableData.saTableItems : [];
-        var svcReferences = svcLoadReferences();
         var dropboxMappings = {}; // keyed by saItem index -> { segment, studyEvent, form, formName }
         var selectedDropboxIdx = null;
         var currentItems = []; // [{value, text}] for the Item dropdown
@@ -846,6 +834,7 @@
         var svcSegCollapsed = {};
         var svcSearchKeywords = [];
         var svcShowCompleted = false;
+        var svcAttrLoadSeq = 0;
 
         var container = document.createElement("div");
         container.style.cssText = "display:flex;flex-direction:column;gap:10px;height:100%;min-height:500px;";
@@ -1290,14 +1279,6 @@
                                         prefillReason: "Add visibility condition"
                                     };
                                     log("SVC: mapped form " + srcItem.form + " to dropbox idx=" + gIdx);
-                                    // Auto-prefill from reference if exists
-                                    var ref = svcReferences[srcItem.form];
-                                    if (ref) {
-                                        dropboxMappings[String(gIdx)].prefillItem = ref.item;
-                                        dropboxMappings[String(gIdx)].prefillItemValue = ref.itemValue;
-                                        dropboxMappings[String(gIdx)].prefillReason = ref.reason || "Add visibility condition";
-                                        log("SVC: auto-prefilled from reference for " + srcItem.form);
-                                    }
                                     renderPrimaryPanel();
                                     renderSegNavPanel();
                                     updateConfirmState();
@@ -1329,7 +1310,7 @@
 
         // Top half: Attributes
         var attrSection = document.createElement("div");
-        attrSection.style.cssText = "flex:1;display:flex;flex-direction:column;gap:8px;padding-bottom:8px;border-bottom:1px solid #333;";
+        attrSection.style.cssText = "flex:1;display:flex;flex-direction:column;gap:8px;padding-bottom:8px;";
 
         var attrPlaceholder = document.createElement("div");
         attrPlaceholder.textContent = "Click a form inside a dropbox to configure its visibility condition";
@@ -1393,25 +1374,6 @@
             }
         });
 
-        // Save Reference button
-        var saveRefBtn = document.createElement("button");
-        saveRefBtn.textContent = "Save Reference";
-        saveRefBtn.style.cssText = "padding:6px 14px;border-radius:4px;border:none;background:#28a745;color:#fff;font-size:11px;font-weight:600;cursor:pointer;align-self:flex-end;";
-        saveRefBtn.addEventListener("mouseenter", function() { this.style.background = "#218838"; });
-        saveRefBtn.addEventListener("mouseleave", function() { this.style.background = "#28a745"; });
-        saveRefBtn.addEventListener("click", function() {
-            if (selectedDropboxIdx === null) return;
-            var mapping = dropboxMappings[String(selectedDropboxIdx)];
-            if (!mapping) return;
-            var sourceFormName = mapping.form;
-            var selItem = itemSelect.options[itemSelect.selectedIndex] ? itemSelect.options[itemSelect.selectedIndex].text : "";
-            var selItemVal = itemValSelect.options[itemValSelect.selectedIndex] ? itemValSelect.options[itemValSelect.selectedIndex].text : "";
-            var reason = reasonInput.value.trim() || "Add visibility condition";
-            svcReferences[sourceFormName] = { item: selItem, itemValue: selItemVal, reason: reason };
-            svcSaveReferences(svcReferences);
-            log("SVC: saved reference for source form '" + sourceFormName + "'");
-            renderReferencesPanel();
-        });
 
         function renderItemDropdown(items, prefillItem) {
             itemSelect.innerHTML = "";
@@ -1457,7 +1419,9 @@
             }
         }
 
-        async function loadFormAttributesForDropbox(gIdx) {
+        async function loadFormAttributesForDropbox(gIdx, forceRefresh) {
+            var loadSeq = svcAttrLoadSeq + 1;
+            svcAttrLoadSeq = loadSeq;
             var mapping = dropboxMappings[String(gIdx)];
             if (!mapping) {
                 renderConfigPanel();
@@ -1472,6 +1436,13 @@
                 return;
             }
 
+            if (forceRefresh) {
+                delete mapping._cachedItems;
+                delete mapping._cachedItemValues;
+                currentItems = [];
+                currentItemValues = [];
+            }
+
             var prefill = mapping.prefillItem || null;
             var prefillVal = mapping.prefillItemValue || null;
             var prefillReason = mapping.prefillReason || "Add visibility condition";
@@ -1482,30 +1453,67 @@
             // Determine if this mapping already has cached items from a previous load
             var hasCachedItems = !!(mapping._cachedItems && mapping._cachedItems.length > 0);
             var hasCachedItemValues = !!(mapping._cachedItemValues && mapping._cachedItemValues.length > 0);
-            // Reference fast path: saved reference provides values but no cached items yet
-            var refForForm = svcReferences[mapping.form] || null;
-            var useRefFastPath = !!(refForForm && prefill && prefillVal && !hasCachedItems);
 
             if (hasCachedItems) {
                 // Restore from per-mapping cache — no bg iframe needed
                 currentItems = mapping._cachedItems;
                 currentItemValues = hasCachedItemValues ? mapping._cachedItemValues : [];
                 log("SVC: restored cached items for idx=" + gIdx + " (" + currentItems.length + " items, " + currentItemValues.length + " values)");
-            } else if (useRefFastPath) {
-                // Reference fast path: create synthetic entries from saved ref values
-                currentItems = prefill ? [{ text: prefill, value: prefill }] : [];
-                currentItemValues = prefillVal ? [{ text: prefillVal, value: prefillVal }] : [];
-                log("SVC: ref fast path for idx=" + gIdx + " (form=" + mapping.form + ")");
             } else {
                 // Full load via bg iframe
                 attrSection.innerHTML = "";
+                var loadingWrap = document.createElement("div");
+                loadingWrap.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:10px;color:#d8ecff;font-size:12px;text-align:center;padding:14px;border:1px solid #2f4f73;border-radius:6px;background:#151f2b;";
+                var spinner = document.createElement("div");
+                spinner.style.cssText = "width:24px;height:24px;border:3px solid #2f4f73;border-top-color:#7cc7ff;border-radius:50%;box-sizing:border-box;";
                 var loadingMsg = document.createElement("div");
-                loadingMsg.textContent = "Loading visibility for " + targetItem.form + " (source: " + mapping.form + ")...";
-                loadingMsg.style.cssText = "color:#9df;font-size:12px;text-align:center;padding:12px;";
-                attrSection.appendChild(loadingMsg);
+                loadingMsg.style.cssText = "font-weight:600;line-height:1.35;max-width:100%;word-break:break-word;";
+                var loadingDetail = document.createElement("div");
+                loadingDetail.style.cssText = "color:#9bbbd8;font-size:11px;line-height:1.3;";
+                var loadingStartedAt = Date.now();
+                var loadingFrame = 0;
+                var loadingBaseText = "Loading visibility for " + targetItem.form + " (source: " + mapping.form + ")";
+                function updateVisibilityLoadingAnimation() {
+                    loadingFrame = loadingFrame + 1;
+                    spinner.style.transform = "rotate(" + String(loadingFrame * 30) + "deg)";
+                    var dots = new Array((loadingFrame % 4) + 1).join(".");
+                    var elapsed = Math.max(1, Math.floor((Date.now() - loadingStartedAt) / 1000));
+                    loadingMsg.textContent = loadingBaseText + dots;
+                    loadingDetail.textContent = "Still working - " + String(elapsed) + "s elapsed. Use Refresh if this appears stuck.";
+                }
+                updateVisibilityLoadingAnimation();
+                var loadingAnimTimer = setInterval(function() {
+                    if (!loadingWrap.isConnected || loadSeq !== svcAttrLoadSeq || selectedDropboxIdx !== gIdx) {
+                        clearInterval(loadingAnimTimer);
+                        return;
+                    }
+                    updateVisibilityLoadingAnimation();
+                }, 350);
+                var refreshLoadBtn = document.createElement("button");
+                refreshLoadBtn.textContent = "Refresh";
+                refreshLoadBtn.title = "Retry loading visibility for this mapped form";
+                refreshLoadBtn.style.cssText = "padding:6px 12px;border-radius:4px;border:1px solid #4a6fa5;background:#26364d;color:#d8ecff;font-size:11px;font-weight:600;cursor:pointer;";
+                refreshLoadBtn.addEventListener("mouseenter", function() { this.style.background = "#314b70"; });
+                refreshLoadBtn.addEventListener("mouseleave", function() { this.style.background = "#26364d"; });
+                refreshLoadBtn.addEventListener("click", function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!dropboxMappings[String(gIdx)]) return;
+                    selectedDropboxIdx = gIdx;
+                    log("SVC: refresh requested for visibility load idx=" + gIdx);
+                    loadFormAttributesForDropbox(gIdx, true);
+                });
+                loadingWrap.appendChild(spinner);
+                loadingWrap.appendChild(loadingMsg);
+                loadingWrap.appendChild(loadingDetail);
+                loadingWrap.appendChild(refreshLoadBtn);
+                attrSection.appendChild(loadingWrap);
 
                 // Cache key combines target + source since items depend on which source SA is selected
                 var cacheKey = targetItem.form + "||" + mapping.form;
+                if (forceRefresh) {
+                    delete SVC_ITEM_CACHE[cacheKey];
+                }
                 var items = [];
 
                 // Check global cache
@@ -1515,11 +1523,15 @@
                 } else {
                     // Use bg iframe - open visibility modal for the TARGET row
                     await svcCloseBgModal();
+                    if (loadSeq !== svcAttrLoadSeq || selectedDropboxIdx !== gIdx) return;
                     await sleep(300);
+                    if (loadSeq !== svcAttrLoadSeq || selectedDropboxIdx !== gIdx) return;
                     var opened = await svcOpenVisibilityModalInBg(targetItem.segment, targetItem.studyEvent, targetItem.form);
+                    if (loadSeq !== svcAttrLoadSeq || selectedDropboxIdx !== gIdx) return;
                     if (opened) {
                         // Fill modal dropdowns with the SOURCE form's info
                         var saOk = await svcSelectActivityAndSA(mapping.studyEvent, mapping.form);
+                        if (loadSeq !== svcAttrLoadSeq || selectedDropboxIdx !== gIdx) return;
                         if (saOk) {
                             items = svcCollectItems();
                             SVC_ITEM_CACHE[cacheKey] = items;
@@ -1528,6 +1540,7 @@
                     }
                 }
 
+                if (loadSeq !== svcAttrLoadSeq || selectedDropboxIdx !== gIdx) return;
                 currentItems = items;
                 currentItemValues = [];
                 // Store on the mapping so switching back won't need bg iframe again
@@ -1559,91 +1572,14 @@
             attrSection.appendChild(reasonLbl);
             reasonInput.value = prefillReason;
             attrSection.appendChild(reasonInput);
-            attrSection.appendChild(saveRefBtn);
 
             // If prefill item is set but we did a full bg iframe load (no cached values yet), trigger item value loading
-            if (!hasCachedItems && !useRefFastPath && prefill && itemSelect.selectedIndex > 0) {
+            if (!hasCachedItems && prefill && itemSelect.selectedIndex > 0) {
                 currentItemValues = await svcSelectItemAndCollectValues(prefill);
+                if (loadSeq !== svcAttrLoadSeq || selectedDropboxIdx !== gIdx) return;
                 // Cache the loaded item values on the mapping
                 mapping._cachedItemValues = currentItemValues.slice();
                 renderItemValueDropdown(prefillVal);
-            }
-        }
-
-        // Bottom half: Saved References
-        var refSection = document.createElement("div");
-        refSection.style.cssText = "flex:1;display:flex;flex-direction:column;gap:6px;padding-top:8px;";
-
-        var refHeader = document.createElement("div");
-        refHeader.style.cssText = "display:flex;justify-content:space-between;align-items:center;";
-        var refTitle = document.createElement("span");
-        refTitle.textContent = "Saved References";
-        refTitle.style.cssText = "font-size:12px;font-weight:600;color:#ccc;";
-        var clearAllRefBtn = document.createElement("button");
-        clearAllRefBtn.textContent = "Clear All";
-        clearAllRefBtn.style.cssText = "padding:3px 8px;border-radius:4px;border:1px solid #c0392b;background:#2a1a1a;color:#ff6b6b;font-size:10px;cursor:pointer;";
-        clearAllRefBtn.addEventListener("click", function() {
-            createPopup({
-                title: "Clear All References",
-                content: '<div style="text-align:center;padding:16px;"><p>This will remove all saved visibility references.</p><p style="margin-top:12px;"><button id="svcClearAllConfirm" style="padding:8px 16px;border-radius:4px;border:none;background:#dc3545;color:#fff;cursor:pointer;margin-right:8px;">Confirm</button><button id="svcClearAllCancel" style="padding:8px 16px;border-radius:4px;border:1px solid #555;background:#333;color:#fff;cursor:pointer;">Cancel</button></p></div>',
-                width: "350px",
-                height: "auto"
-            });
-            setTimeout(function() {
-                var confirmEl = document.getElementById("svcClearAllConfirm");
-                var cancelEl = document.getElementById("svcClearAllCancel");
-                if (confirmEl) confirmEl.addEventListener("click", function() {
-                    svcReferences = {};
-                    svcSaveReferences(svcReferences);
-                    renderReferencesPanel();
-                    log("SVC: all references cleared");
-                    var popup = this.closest("[id^='clinsparkPopup_']");
-                    if (popup) popup.remove();
-                });
-                if (cancelEl) cancelEl.addEventListener("click", function() {
-                    var popup = this.closest("[id^='clinsparkPopup_']");
-                    if (popup) popup.remove();
-                });
-            }, 50);
-        });
-        refHeader.appendChild(refTitle);
-        refHeader.appendChild(clearAllRefBtn);
-
-        var refList = document.createElement("div");
-        refList.style.cssText = "flex:1;overflow-y:auto;border:1px solid #333;border-radius:4px;padding:4px;background:#1e1e1e;max-height:200px;";
-
-        function renderReferencesPanel() {
-            refList.innerHTML = "";
-            var keys = Object.keys(svcReferences);
-            if (keys.length === 0) {
-                var emptyMsg = document.createElement("div");
-                emptyMsg.textContent = "No saved references";
-                emptyMsg.style.cssText = "color:#666;font-size:11px;text-align:center;padding:12px;";
-                refList.appendChild(emptyMsg);
-                return;
-            }
-            for (var i = 0; i < keys.length; i++) {
-                var formName = keys[i];
-                var ref = svcReferences[formName];
-                var refRow = document.createElement("div");
-                refRow.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:4px 6px;margin-bottom:2px;border-radius:3px;background:#2a2a2a;font-size:10px;";
-                var refText = document.createElement("span");
-                refText.textContent = formName + ": " + ref.item + " = " + ref.itemValue;
-                refText.title = "Form: " + formName + "\nItem: " + ref.item + "\nItem Value: " + ref.itemValue + "\nReason: " + ref.reason;
-                refText.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#ccc;cursor:default;";
-                var refDelBtn = document.createElement("span");
-                refDelBtn.textContent = "\u2715";
-                refDelBtn.style.cssText = "cursor:pointer;color:#ff6b6b;font-weight:bold;margin-left:4px;flex-shrink:0;";
-                refDelBtn.dataset.formName = formName;
-                refDelBtn.addEventListener("click", function() {
-                    delete svcReferences[this.dataset.formName];
-                    svcSaveReferences(svcReferences);
-                    log("SVC: deleted reference for " + this.dataset.formName);
-                    renderReferencesPanel();
-                });
-                refRow.appendChild(refText);
-                refRow.appendChild(refDelBtn);
-                refList.appendChild(refRow);
             }
         }
 
@@ -1658,9 +1594,6 @@
         configPanel.appendChild(configHeader);
         attrSection.appendChild(attrPlaceholder);
         configBody.appendChild(attrSection);
-        refSection.appendChild(refHeader);
-        refSection.appendChild(refList);
-        configBody.appendChild(refSection);
         configPanel.appendChild(configBody);
 
         contentRow.appendChild(segNavPanel);
@@ -2149,7 +2082,6 @@
         // Initial render
         renderPrimaryPanel();
         renderSegNavPanel();
-        renderReferencesPanel();
 
         setTimeout(function() {
             if (svcIsFullscreen) applySVCFullscreen();
@@ -2748,6 +2680,13 @@
         return false;
     }
 
+    function ifl_detectSaveSuccess() {
+        if (IFL_SHOW_FORM_URL_PATTERN.test(location.href)) return true;
+        var successEl = document.querySelector(".alert-success, .modal .alert-success, .bootbox .alert-success");
+        if (successEl) return true;
+        return false;
+    }
+
     function ifl_readFormOptions() {
         var formSel = document.getElementById(IFL_FORM_SELECT_ID);
         if (!formSel) return [];
@@ -2764,6 +2703,23 @@
     // ---- IFL Persistence helpers ----
     function ifl_saveImportState(obj) {
         try {localStorage.setItem(IFL_STORAGE_IMPORT_STATE, JSON.stringify(obj)); } catch(e) {}
+    }
+
+    function ifl_isCancelRequested() {
+        try { return localStorage.getItem(IFL_STORAGE_CANCEL_REQUESTED) === "1"; } catch (e) {}
+        return false;
+    }
+
+    function ifl_requestCancel() {
+        IFL_CANCELED = true;
+        try { localStorage.setItem(IFL_STORAGE_CANCEL_REQUESTED, "1"); } catch (e) {}
+        ifl_clearImportState();
+        ifl_closeBgTab();
+        ifl_closeImportModal();
+    }
+
+    function ifl_clearCancelRequest() {
+        try { localStorage.removeItem(IFL_STORAGE_CANCEL_REQUESTED); } catch (e) {}
     }
 
     function ifl_loadImportState() {
@@ -2787,11 +2743,13 @@
         try {localStorage.removeItem(IFL_STORAGE_STUDIES_CACHE); } catch (e) {}
     }
 
-    function ifl_saveSelections() {
+    function ifl_saveSelections(formItems) {
         try {
             var sel = {};
             for (var i = 0; i < formItems.length; i++) {
-                if (formItems[i].selected) {
+                if (formItems[i].importCopies && formItems[i].importCopies.length > 0) {
+                    sel[formItems[i].studyValue + "|" + formItems[i].formValue] = formItems[i].importCopies;
+                } else if (formItems[i].selected) {
                     sel[formItems[i].studyValue + "|" + formItems[i].formValue] = true;
                 }
             }
@@ -3341,20 +3299,75 @@
         var glass = isGlassTheme();
         if (glass) injectThemeStylesIfNeeded();
 
-        var savedSelections = ifl_loadSelections();
         // State
+        var savedSelections = ifl_loadSelections();
         var formItems = [];
+        var iflCopySeq = Date.now();
+        function ifl_sourceKey(studyValue, formValue) {
+            return studyValue + "|" + formValue;
+        }
+        function ifl_cloneItemGroups(groups) {
+            if (!groups) return groups;
+            try { return JSON.parse(JSON.stringify(groups)); } catch (e) { return null; }
+        }
+        function ifl_makeImportCopy(source, seed) {
+            var copy = seed || {};
+            iflCopySeq++;
+            return {
+                copyId: copy.copyId || (ifl_sourceKey(source.studyValue, source.formValue) + "|" + iflCopySeq),
+                sourceKey: ifl_sourceKey(source.studyValue, source.formValue),
+                studyName: source.studyName,
+                studyValue: source.studyValue,
+                formName: source.formName,
+                formValue: source.formValue,
+                originalName: source.originalName,
+                newName: copy.newName || source.originalName,
+                selected: true,
+                lockOnSave: (copy.lockOnSave !== undefined) ? !!copy.lockOnSave : true,
+                itemGroups: (copy.itemGroups !== undefined) ? ifl_cloneItemGroups(copy.itemGroups) : null
+            };
+        }
+        function ifl_restoreImportCopies(source, savedValue) {
+            if (Array.isArray(savedValue)) {
+                var restored = [];
+                for (var ri = 0; ri < savedValue.length; ri++) {
+                    restored.push(ifl_makeImportCopy(source, savedValue[ri]));
+                }
+                return restored;
+            }
+            if (savedValue && typeof savedValue === "object") {
+                if (Array.isArray(savedValue.copies)) {
+                    var restoredCopies = [];
+                    for (var ci2 = 0; ci2 < savedValue.copies.length; ci2++) {
+                        restoredCopies.push(ifl_makeImportCopy(source, savedValue.copies[ci2]));
+                    }
+                    return restoredCopies;
+                }
+                return [ifl_makeImportCopy(source, savedValue)];
+            }
+            return savedValue ? [ifl_makeImportCopy(source, null)] : [];
+        }
         for (var si = 0; si < studies.length; si++) {
             for (var fi = 0; fi < studies[si].forms.length; fi++) {
-                formItems.push({
+                var baseItem = {
                     studyName: studies[si].text,
                     studyValue: studies[si].value,
                     formName: studies[si].forms[fi].text,
                     formValue: studies[si].forms[fi].value,
-                    originalName: studies[si].forms[fi].text,
-                    newName: studies[si].forms[fi].text,
-                    selected: savedSelections[studies[si].value + "|" + studies[si].forms[fi].value] || false,
+                    originalName: studies[si].forms[fi].text
+                };
+                var savedForItem = savedSelections[ifl_sourceKey(baseItem.studyValue, baseItem.formValue)];
+                var importCopies = ifl_restoreImportCopies(baseItem, savedForItem);
+                formItems.push({
+                    studyName: baseItem.studyName,
+                    studyValue: baseItem.studyValue,
+                    formName: baseItem.formName,
+                    formValue: baseItem.formValue,
+                    originalName: baseItem.originalName,
+                    newName: importCopies[0] ? importCopies[0].newName : baseItem.originalName,
+                    selected: importCopies.length > 0,
                     lockOnSave: true,
+                    importCopies: importCopies,
                     itemGroups: null
                 });
             }
@@ -3363,9 +3376,11 @@
         for (var ci = 0; ci < studies.length; ci++) collapsed[studies[ci].value] = true;
         var showSelectedOnly = false;
         var activeFormItem = null;
+        var activeImportCopy = null;
         var isFullscreen = false;
         var savedContainerStyle = "";
         var iflSyncBusy = false;
+        var iflRowClickTimer = null;
 
         // Color palette
         var tc = {
@@ -3642,7 +3657,7 @@
         footerLeft.appendChild(rescanLibBtn);
         footerLeft.appendChild(clearSelBtn);
         footerLeft.appendChild(selCount);
-    
+
         var confirmBtn = document.createElement("button");
         confirmBtn.textContent = "Confirm";
         confirmBtn.disabled = true;
@@ -3654,8 +3669,62 @@
 
         function getSelectedCount() {
             var c = 0;
-            for (var i = 0; i < formItems.length; i++) { if (formItems[i].selected) c++; }
+            for (var i = 0; i < formItems.length; i++) {
+                if (formItems[i].importCopies && formItems[i].importCopies.length > 0) {
+                    c += formItems[i].importCopies.length;
+                }
+            }
             return c;
+        }
+
+        function ifl_syncSourceSelection(item) {
+            item.selected = !!(item.importCopies && item.importCopies.length > 0);
+            item.newName = item.importCopies && item.importCopies[0] ? item.importCopies[0].newName : item.originalName;
+            item.lockOnSave = item.importCopies && item.importCopies[0] ? item.importCopies[0].lockOnSave : true;
+        }
+
+        function ifl_addImportCopy(item, seedCopy) {
+            if (!item.importCopies) item.importCopies = [];
+            var copy = ifl_makeImportCopy(item, seedCopy || (item.importCopies[0] || null));
+            if (seedCopy && seedCopy.itemGroups !== undefined) copy.itemGroups = ifl_cloneItemGroups(seedCopy.itemGroups);
+            item.importCopies.push(copy);
+            activeFormItem = item;
+            activeImportCopy = copy;
+            ifl_syncSourceSelection(item);
+            ifl_saveSelections(formItems);
+            renderMidPanel();
+            renderRightPanel();
+            updateConfirmState();
+            return copy;
+        }
+
+        function ifl_removeImportCopy(item, copy) {
+            if (!item.importCopies) return;
+            for (var i = item.importCopies.length - 1; i >= 0; i--) {
+                if (item.importCopies[i] === copy || item.importCopies[i].copyId === copy.copyId) {
+                    item.importCopies.splice(i, 1);
+                    break;
+                }
+            }
+            if (activeImportCopy === copy) {
+                activeImportCopy = item.importCopies[0] || null;
+            }
+            ifl_syncSourceSelection(item);
+            ifl_saveSelections(formItems);
+            renderMidPanel();
+            renderRightPanel();
+            updateConfirmState();
+        }
+
+        function ifl_getSelectedImportCopies() {
+            var selected = [];
+            for (var i = 0; i < formItems.length; i++) {
+                var copies = formItems[i].importCopies || [];
+                for (var ci = 0; ci < copies.length; ci++) {
+                    selected.push(copies[ci]);
+                }
+            }
+            return selected;
         }
 
         function updateConfirmState() {
@@ -3680,7 +3749,7 @@
             for (var si2 = 0; si2 < studies.length; si2++) {
                 var sName = studies[si2].text;
                 var sVal = studies[si2].value;
-                if (filter && sName.toLowerCase().indexOf(filter) === -1) continue;
+                if (filter && !matchesCommaSeparatedSearch(sName, filter)) continue;
                 var item = document.createElement("div");
                 item.textContent = sName;
                 item.style.cssText = "padding:6px 8px;border-radius:4px;cursor:pointer;font-size:12px;color:" + tc.text + ";white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px;";
@@ -3712,7 +3781,7 @@
                     if (showSelectedOnly && !formItems[fi2].selected) continue;
                     var desc = formItems[fi2].studyName + " - " + formItems[fi2].formName;
                     if (filter) {
-                        if (desc.toLowerCase().indexOf(filter) === -1 && sName.toLowerCase().indexOf(filter) === -1) continue;
+                        if (!matchesCommaSeparatedSearch(desc + " " + sName, filter)) continue;
                     }
                     sItems.push(formItems[fi2]);
                 }
@@ -3774,6 +3843,7 @@
                                     newName: existing ? existing.newName : newForms[nfi].text,
                                     selected: existing ? existing.selected : false,
                                     lockOnSave: existing ? existing.lockOnSave : true,
+                                    importCopies: existing && existing.importCopies ? existing.importCopies : [],
                                     itemGroups: existing ? existing.itemGroups : null
                                 });
                             }
@@ -3804,17 +3874,29 @@
                 for (var ri = 0; ri < sItems.length; ri++) {
                     (function(fItem) {
                         var row = document.createElement("div");
-                        var isRenamed = fItem.newName !== fItem.originalName;
+                        var copyCount = fItem.importCopies ? fItem.importCopies.length : 0;
+                        var isRenamed = false;
+                        if (copyCount > 0) {
+                            for (var rc = 0; rc < fItem.importCopies.length; rc++) {
+                                if (fItem.importCopies[rc].newName !== fItem.originalName || copyCount > 1) {
+                                    isRenamed = true;
+                                    break;
+                                }
+                            }
+                        }
                         var isActive = activeFormItem === fItem;
                         row.className = "ifl-row";
                         row.style.cssText = "display:flex;align-items:center;gap:6px;padding:5px 10px 5px 20px;border-radius:4px;cursor:pointer;margin:1px 0;font-size:12px;background:" + (isRenamed ? tc.renamed : (isActive ? tc.surfaceHover : "transparent")) + ";transition:background 0.1s;";
+                        row.title = "Click to view details. Double-click to select or unselect.";
                         row.onmouseover = function() { if (!isActive) row.style.background = tc.surfaceHover; };
                         row.onmouseout = function() { row.style.background = isRenamed ? tc.renamed : (isActive ? tc.surfaceHover : "transparent"); };
 
                         var nameSpan = document.createElement("span");
                         nameSpan.style.cssText = "flex:1;color:" + tc.text + ";overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
-                        if (isRenamed) {
-                            nameSpan.textContent = fItem.studyName + " - " + fItem.originalName + " \u2192 " + fItem.newName;
+                        if (copyCount > 1) {
+                            nameSpan.textContent = fItem.studyName + " - " + fItem.originalName + " (" + copyCount + " copies)";
+                        } else if (copyCount === 1 && fItem.importCopies[0].newName !== fItem.originalName) {
+                            nameSpan.textContent = fItem.studyName + " - " + fItem.originalName + " \u2192 " + fItem.importCopies[0].newName;
                         } else {
                             nameSpan.textContent = fItem.studyName + " - " + fItem.formName;
                         }
@@ -3822,55 +3904,112 @@
 
                         var lockIcon = document.createElement("span");
                         lockIcon.textContent = fItem.lockOnSave ? "\uD83D\uDD12" : "\uD83D\uDD13";
-                        lockIcon.style.cssText = "font-size:11px;flex-shrink:0;width:20px;text-align:center;cursor:pointer;user-select:none;" + (fItem.lockOnSave ? "opacity:1;" : "opacity:0.4;");
-                        lockIcon.title = fItem.lockOnSave ? "Locked — double-click to unlock" : "Unlocked — double-click to lock";
-                        lockIcon.addEventListener("dblclick", (function(fi2, iconEl) {
+                        lockIcon.style.cssText = "font-size:11px;flex-shrink:0;width:16px;text-align:center;cursor:pointer;user-select:none;" + (fItem.lockOnSave ? "opacity:1;" : "opacity:0.4;");
+                        lockIcon.title = fItem.lockOnSave ? "Locked - double-click to unlock" : "Unlocked - double-click to lock";
+                        lockIcon.onclick = function(e) { e.stopPropagation(); };
+                        lockIcon.addEventListener("dblclick", (function(fi2, iconE1) {
                             return function(e) {
                                 e.stopPropagation();
+                                if (!fi2.importCopies || fi2.importCopies.length === 0) {
+                                    ifl_addImportCopy(fi2, null);
+                                }
+                                for (var lc = 0; lc < fi2.importCopies.length; lc++) {
+                                    fi2.importCopies[lc].lockOnSave = !fi2.lockOnSave;
+                                }
                                 fi2.lockOnSave = !fi2.lockOnSave;
-                                iconEl.textContent = fi2.lockOnSave ? "\uD83D\uDD12" : "\uD83D\uDD13";
-                                iconEl.style.opacity = fi2.lockOnSave ? "1" : "0.4";
-                                iconEl.title = fi2.lockOnSave ? "Locked — double-click to unlock" : "Unlocked — double-click to lock";
-                                log("IFL: lock toggled to " + (fi2.lockOnSave ? "locked" : "unlocked") + " for " + fi2.formName);
+                                iconE1.textContent = fi2.lockOnSave ? "\uD83D\uDD12" :  "\uD83D\uDD13";
+                                iconE1.style.opacity = fi2.lockOnSave ? "1" : "0.4";
+                                iconE1.title = fi2.lockOnSave ? "Locked - double click to unlock" : "Unlocked - double-clock to lock";
+                                ifl_saveSelections(formItems);
+                                renderRightPanel();
+                                log("IFL: lock toggled");
                             };
                         })(fItem, lockIcon));
 
                         var cb = document.createElement("input");
                         cb.type = "checkbox";
-                        cb.checked = fItem.selected;
+                        cb.checked = copyCount > 0;
                         cb.className = "ifl-cb";
                         cb.style.cssText = "width:16px;height:16px;cursor:pointer;accent-color:" + tc.accent + ";flex-shrink:0;";
                         cb.onclick = function(e) { e.stopPropagation(); };
                         cb.onchange = function() {
-                            fItem.selected = cb.checked;
+                            if (cb.checked) {
+                                if (!fItem.importCopies || fItem.importCopies.length === 0) {
+                                    ifl_addImportCopy(fItem, null);
+                                }
+                            } else {
+                                fItem.importCopies = [];
+                                activeImportCopy = null;
+                                ifl_syncSourceSelection(fItem);
+                            }
                             ifl_saveSelections(formItems);
+                            renderMidPanel();
+                            renderRightPanel();
                             updateConfirmState();
                         };
 
-                        row.onclick = function() {
-                            activeFormItem = fItem;
-                            renderMidPanel();
-                            renderRightPanel();
-                            // Auto-load item groups if not yet loaded
-                            if (fItem.itemGroups === null && !iflSyncBusy) {
-                                iflSyncBusy = true;
-                                log("IFL: auto-loading item groups for " + fItem.studyName + " / " + fItem.originalName);
+                        var addCopyBtn = document.createElement("button");
+                        addCopyBtn.textContent = "+";
+                        addCopyBtn.title = "Add another import copy for this form";
+                        addCopyBtn.style.cssText = "background:" + tc.surface + ";border:1px solid " + tc.border + ";color:" + tc.text + ";width:20px;height:20px;border-radius:4px;cursor:pointer;font-size:13px;line-height:16px;flex-shrink:0;";
+                        addCopyBtn.onclick = function(e) {
+                            e.stopPropagation();
+                            ifl_addImportCopy(fItem, fItem.importCopies && fItem.importCopies.length ? fItem.importCopies[fItem.importCopies.length - 1] : null);
+                            log("IFL: added import copy for " + fItem.formName);
+                        };
+
+                        row.onclick = function(e) {
+                            if (e && e.detail > 1) {
+                                if (iflRowClickTimer) {
+                                    clearTimeout(iflRowClickTimer);
+                                    iflRowClickTimer = null;
+                                }
+                                if (fItem.importCopies && fItem.importCopies.length > 0) {
+                                    fItem.importCopies = [];
+                                    activeImportCopy = null;
+                                } else {
+                                    ifl_addImportCopy(fItem, null);
+                                }
+                                ifl_syncSourceSelection(fItem);
+                                cb.checked = !!(fItem.importCopies && fItem.importCopies.length > 0);
+                                ifl_saveSelections(formItems);
+                                renderMidPanel();
                                 renderRightPanel();
-                                ifl_syncModalToFormViaBgTab(fItem).then(function(groups) {
-                                    iflSyncBusy = false;
-                                    fItem.itemGroups = (groups !== null) ? groups : [];
-                                    log("IFL: collected " + fItem.itemGroups.length + " item groups for " + fItem.originalName);
-                                    if (activeFormItem === fItem) renderRightPanel();
-                                }).catch(function(err) {
-                                    iflSyncBusy = false;
-                                    log("IFL: sync error — " + String(err));
-                                    fItem.itemGroups = [];
-                                    if (activeFormItem === fItem) renderRightPanel();
-                                });
+                                updateConfirmState();
+                                log("IFL: form row double-click toggled selection to " + fItem.selected + " for " + fItem.formName);
+                                return;
                             }
+                            if (iflRowClickTimer) clearTimeout(iflRowClickTimer);
+                            iflRowClickTimer = setTimeout(function() {
+                                iflRowClickTimer = null;
+                                activeFormItem = fItem;
+                                activeImportCopy = fItem.importCopies && fItem.importCopies.length > 0 ? fItem.importCopies[0] : null;
+                                renderMidPanel();
+                                renderRightPanel();
+                                // Auto-load item groups if not yet loaded
+                                if (activeImportCopy && activeImportCopy.itemGroups === null && !iflSyncBusy) {
+                                    var loadCopy = activeImportCopy;
+                                    iflSyncBusy = true;
+                                    log("IFL: auto-loading item groups for " + fItem.studyName + " / " + fItem.originalName);
+                                    renderRightPanel();
+                                    ifl_syncModalToFormViaBgTab(loadCopy).then(function(groups) {
+                                        iflSyncBusy = false;
+                                        loadCopy.itemGroups = (groups !== null) ? groups : [];
+                                        ifl_saveSelections(formItems);
+                                        log("IFL: collected " + loadCopy.itemGroups.length + " item groups for " + fItem.originalName);
+                                        if (activeFormItem === fItem) renderRightPanel();
+                                    }).catch(function(err) {
+                                        iflSyncBusy = false;
+                                        log("IFL: sync error - " + String(err));
+                                        loadCopy.itemGroups = [];
+                                        if (activeFormItem === fItem) renderRightPanel();
+                                    });
+                                }
+                            }, 220);
                         };
 
                         row.appendChild(nameSpan);
+                        row.appendChild(addCopyBtn);
                         row.appendChild(lockIcon);
                         row.appendChild(cb);
                         midList.appendChild(row);
@@ -3914,12 +4053,13 @@
                     gCb.style.cssText = "width:14px;height:14px;accent-color:" + tc.accent + ";flex-shrink:0;";
                     gCb.onchange = function() {
                         g.included = gCb.checked;
+                        ifl_saveSelections(formItems);
                     };
                     var gInput = document.createElement("input");
                     gInput.type = "text";
                     gInput.value = g.newName;
                     gInput.style.cssText = "flex:1;padding:4px 6px;background:" + tc.inputBg + " !important;border:1px solid " + tc.inputBorder + ";border-radius:4px;color:" + tc.text + " !important;font-size:12px;font-weight:600;outline:none;-webkit-text-fill-color:" + tc.text + " !important;";
-                    gInput.oninput = function() { g.newName = gInput.value; };
+                    gInput.oninput = function() { g.newName = gInput.value; ifl_saveSelections(formItems); };
                     gRow.appendChild(gCb);
                     gRow.appendChild(gInput);
                     section.appendChild(gRow);
@@ -3933,12 +4073,12 @@
                             iCb.type = "checkbox";
                             iCb.checked = itm.included;
                             iCb.style.cssText = "width:13px;height:13px;accent-color:" + tc.accent + ";flex-shrink:0;";
-                            iCb.onchange = function() { itm.included = iCb.checked; };
+                            iCb.onchange = function() { itm.included = iCb.checked; ifl_saveSelections(formItems); };
                             var iInput = document.createElement("input");
                             iInput.type = "text";
                             iInput.value = itm.newName;
                             iInput.style.cssText = "flex:1;padding:3px 6px;background:" + tc.inputBg + " !important;border:1px solid " + tc.inputBorder + ";border-radius:4px;color:" + tc.text + " !important;font-size:11px;outline:none;-webkit-text-fill-color:" + tc.text + " !important;";
-                            iInput.oninput = function() { itm.newName = iInput.value; };
+                            iInput.oninput = function() { itm.newName = iInput.value; ifl_saveSelections(formItems); };
                             iRow.appendChild(iCb);
                             iRow.appendChild(iInput);
                             section.appendChild(iRow);
@@ -3959,6 +4099,10 @@
                 return;
             }
             var item = activeFormItem;
+            if (!item.importCopies) item.importCopies = [];
+            if (activeImportCopy && item.importCopies.indexOf(activeImportCopy) === -1) {
+                activeImportCopy = item.importCopies[0] || null;
+            }
 
             var studyLabel = document.createElement("div");
             studyLabel.textContent = item.studyName;
@@ -3966,7 +4110,83 @@
 
             var formLabel = document.createElement("div");
             formLabel.textContent = item.originalName;
-            formLabel.style.cssText = "color:" + tc.text + ";font-size:14px;font-weight:600;margin-bottom:16px;";
+            formLabel.style.cssText = "color:" + tc.text + ";font-size:14px;font-weight:600;margin-bottom:10px;";
+
+            var copyHeader = document.createElement("div");
+            copyHeader.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0 8px;";
+            var copyHeaderText = document.createElement("div");
+            copyHeaderText.textContent = "Import Copies";
+            copyHeaderText.style.cssText = "color:" + tc.textMuted + ";font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;";
+            var addCopyBtn = document.createElement("button");
+            addCopyBtn.textContent = "+ Add Copy";
+            addCopyBtn.style.cssText = "background:" + tc.accent + ";border:1px solid " + tc.accentHover + ";color:white;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;";
+            addCopyBtn.onclick = function() {
+                ifl_addImportCopy(item, activeImportCopy || (item.importCopies[0] || null));
+                log("IFL: added import copy from detail panel for " + item.formName);
+            };
+            copyHeader.appendChild(copyHeaderText);
+            copyHeader.appendChild(addCopyBtn);
+
+            var copyList = document.createElement("div");
+            copyList.style.cssText = "display:flex;flex-direction:column;gap:5px;margin-bottom:12px;";
+
+            rightPanel.appendChild(studyLabel);
+            rightPanel.appendChild(formLabel);
+            rightPanel.appendChild(copyHeader);
+
+            if (item.importCopies.length === 0) {
+                var noCopies = document.createElement("div");
+                noCopies.textContent = "No copies selected. Add a copy to import this form.";
+                noCopies.style.cssText = "color:" + tc.textMuted + ";font-size:12px;padding:12px;border:1px dashed " + tc.border + ";border-radius:6px;text-align:center;";
+                rightPanel.appendChild(noCopies);
+                return;
+            }
+
+            if (!activeImportCopy) activeImportCopy = item.importCopies[0];
+
+            for (var cp = 0; cp < item.importCopies.length; cp++) {
+                (function(copy, copyIndex) {
+                    var cRow = document.createElement("div");
+                    var isActiveCopy = activeImportCopy === copy;
+                    cRow.style.cssText = "display:flex;align-items:center;gap:6px;padding:6px 8px;border:1px solid " + (isActiveCopy ? tc.accent : tc.border) + ";border-radius:6px;background:" + (isActiveCopy ? tc.renamed : tc.surface) + ";cursor:pointer;";
+                    cRow.onclick = function() {
+                        activeImportCopy = copy;
+                        renderRightPanel();
+                    };
+                    var cName = document.createElement("div");
+                    cName.textContent = "Copy " + (copyIndex + 1) + ": " + (copy.newName || copy.originalName);
+                    cName.title = cName.textContent;
+                    cName.style.cssText = "flex:1;color:" + tc.text + ";font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+                    var dupBtn = document.createElement("button");
+                    dupBtn.textContent = "Copy";
+                    dupBtn.title = "Duplicate this configured copy";
+                    dupBtn.style.cssText = "background:" + tc.surface + ";border:1px solid " + tc.border + ";color:" + tc.text + ";padding:3px 7px;border-radius:5px;cursor:pointer;font-size:10px;flex-shrink:0;";
+                    dupBtn.onclick = function(e) {
+                        e.stopPropagation();
+                        ifl_addImportCopy(item, copy);
+                    };
+                    var removeBtn = document.createElement("button");
+                    removeBtn.textContent = "Remove";
+                    removeBtn.title = "Remove this import copy";
+                    removeBtn.style.cssText = "background:rgba(239,68,68,0.18);border:1px solid rgba(239,68,68,0.45);color:#fca5a5;padding:3px 7px;border-radius:5px;cursor:pointer;font-size:10px;flex-shrink:0;";
+                    removeBtn.onclick = function(e) {
+                        e.stopPropagation();
+                        ifl_removeImportCopy(item, copy);
+                    };
+                    cRow.appendChild(cName);
+                    cRow.appendChild(dupBtn);
+                    cRow.appendChild(removeBtn);
+                    copyList.appendChild(cRow);
+                })(item.importCopies[cp], cp);
+            }
+            rightPanel.appendChild(copyList);
+
+            var copyNote = document.createElement("div");
+            copyNote.textContent = "Each copy imports the same source form once with its own saved settings.";
+            copyNote.style.cssText = "color:" + tc.textMuted + ";font-size:11px;margin-bottom:10px;line-height:1.35;";
+            rightPanel.appendChild(copyNote);
+
+            var copy = activeImportCopy;
 
             var nameFieldLabel = document.createElement("label");
             nameFieldLabel.textContent = "New Form Name";
@@ -3974,10 +4194,12 @@
 
             var nameInput = document.createElement("input");
             nameInput.type = "text";
-            nameInput.value = item.newName;
+            nameInput.value = copy.newName;
             nameInput.style.cssText = "width:100%;box-sizing:border-box;padding:8px 10px;background:" + tc.inputBg + " !important;border:1px solid " + tc.inputBorder + ";border-radius:6px;color:" + tc.text + " !important;font-size:13px;outline:none;-webkit-text-fill-color:" + tc.text + " !important;";
             nameInput.oninput = function() {
-                item.newName = nameInput.value;
+                copy.newName = nameInput.value;
+                ifl_syncSourceSelection(item);
+                ifl_saveSelections(formItems);
                 renderMidPanel();
             };
 
@@ -3985,10 +4207,12 @@
             lockRow.style.cssText = "display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer;";
             var lockCb = document.createElement("input");
             lockCb.type = "checkbox";
-            lockCb.checked = item.lockOnSave;
+            lockCb.checked = copy.lockOnSave;
             lockCb.style.cssText = "width:16px;height:16px;cursor:pointer;accent-color:" + tc.accent + ";";
             lockCb.onchange = function() {
-                item.lockOnSave = lockCb.checked;
+                copy.lockOnSave = lockCb.checked;
+                ifl_syncSourceSelection(item);
+                ifl_saveSelections(formItems);
                 renderMidPanel();
             };
             var lockLabel = document.createElement("span");
@@ -3997,14 +4221,29 @@
             lockRow.appendChild(lockCb);
             lockRow.appendChild(lockLabel);
 
-            rightPanel.appendChild(studyLabel);
-            rightPanel.appendChild(formLabel);
             rightPanel.appendChild(nameFieldLabel);
             rightPanel.appendChild(nameInput);
             rightPanel.appendChild(lockRow);
 
-            // Item groups section (opt-in loading via button, not auto-sync)
-            var igSection = renderItemGroupsSection(item);
+            if (copy.itemGroups === null && !iflSyncBusy) {
+                var loadingCopy = copy;
+                iflSyncBusy = true;
+                setTimeout(function() {
+                    ifl_syncModalToFormViaBgTab(loadingCopy).then(function(groups) {
+                        iflSyncBusy = false;
+                        loadingCopy.itemGroups = (groups !== null) ? groups : [];
+                        ifl_saveSelections(formItems);
+                        if (activeImportCopy === loadingCopy) renderRightPanel();
+                    }).catch(function(err) {
+                        iflSyncBusy = false;
+                        log("IFL: sync error - " + String(err));
+                        loadingCopy.itemGroups = [];
+                        if (activeImportCopy === loadingCopy) renderRightPanel();
+                    });
+                }, 0);
+            }
+
+            var igSection = renderItemGroupsSection(copy);
             rightPanel.appendChild(igSection);
         }
 
@@ -4019,26 +4258,35 @@
         };
 
         rescanLibBtn.onclick = function() {
+            // Dismiss current GUI, clear cache, and do a full re-scan
             ifl_closeBgTab();
             document.removeEventListener("mousemove", onDragMove);
             document.removeEventListener("mouseup", onDragEnd);
             document.removeEventListener("keydown", escHandler, true);
-            if (overlay.parentNode) overlay. parentNode.removeChild(overlay);
+            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
             ifl_clearStudiesCache();
+            log("IFL: Re-scan Library triggered by user");
             var onGUIConfirm = function(selectedItems) {
-                ifl_processImports(selectedItems, 0 , null);
+                ifl_processImports(selectedItems, 0, null);
             };
             ifl_runFullScan(onGUIConfirm);
         };
+
         clearSelBtn.onclick = function() {
             for (var ci = 0; ci < formItems.length; ci++) {
                 formItems[ci].selected = false;
+                formItems[ci].importCopies = [];
+                formItems[ci].newName = formItems[ci].originalName;
+                formItems[ci].lockOnSave = true;
             }
+            activeImportCopy = null;
             ifl_clearSelections();
             renderMidPanel();
+            renderRightPanel();
             updateConfirmState();
-            log("all selectioned cleared");
-        }
+            log("IFL: all selections cleared");
+        };
+
         hClose.onclick = function() {
             ifl_closeBgTab();
             document.removeEventListener("mousemove", onDragMove);
@@ -4055,11 +4303,12 @@
         };
 
         confirmBtn.onclick = function() {
-            var selected = [];
-            for (var i = 0; i < formItems.length; i++) {
-                if (formItems[i].selected) selected.push(formItems[i]);
-            }
+            var selected = ifl_getSelectedImportCopies();
             if (selected.length === 0) return;
+            if (!confirm("Import from Library will import " + selected.length + " configured form cop" + (selected.length === 1 ? "y" : "ies") + ".\n\nEach copy will be imported separately with its own form name and item settings.\n\nClick OK to start importing, or Cancel to return to the selection screen.")) {
+                log("IFL: confirm warning canceled by user for " + selected.length + " configured import copies");
+                return;
+            }
             ifl_closeBgTab();
             document.removeEventListener("mousemove", onDragMove);
             document.removeEventListener("mouseup", onDragEnd);
@@ -4175,18 +4424,18 @@
         cancelBtn.textContent = "Cancel";
         cancelBtn.style.cssText = "background:rgba(239,68,68,0.3);border:1px solid rgba(239,68,68,0.5);color:#ff8a8a;padding:3px 12px;border-radius:6px;cursor:pointer;font-size:11px;";
         cancelBtn.onclick = function() {
-            IFL_CANCELED = true;
+            ifl_requestCancel();
             cancelBtn.disabled = true;
             cancelBtn.textContent = "Canceling\u2026";
         };
 
         var closeBtn = document.createElement("button");
         closeBtn.innerHTML = "\u2715";
-        closeBtn.title = "Close panel";
+        closeBtn.title = "Cancel import and close panel";
         closeBtn.style.cssText = "background:rgba(255,255,255,0.1);border:none;color:white;width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;";
         closeBtn.onmouseover = function() { closeBtn.style.background = "rgba(255,67,54,0.8)"; };
         closeBtn.onmouseout = function() { closeBtn.style.background = "rgba(255,255,255,0.1)"; };
-        closeBtn.onclick = function() { close(); };
+        closeBtn.onclick = function() { ifl_requestCancel(); close(); };
 
         hBtnGroup.appendChild(cancelBtn);
         hBtnGroup.appendChild(closeBtn);
@@ -4342,11 +4591,13 @@
     // ---- Persist/restore helpers for import state ----
 
     function ifl_persistProgress(progress, selectedItems, startIdx) {
+        if (IFL_CANCELED || ifl_isCancelRequested()) return;
         var statuses = [];
         for (var i = 0; i < progress.state.length; i++) {
             statuses.push({ status: progress.state[i].status, error: progress.state[i].error });
         }
         ifl_saveImportState({
+            resumeVersion: 2,
             items: selectedItems,
             statuses: statuses,
             currentIndex: startIdx,
@@ -4358,6 +4609,12 @@
     // ---- Import processing loop ----
 
     async function ifl_processImports(selectedItems, resumeIndex, existingStatuses) {
+        if (ifl_isCancelRequested()) {
+            IFL_CANCELED = true;
+            ifl_clearImportState();
+            log("IFL: import start blocked because cancellation was requested");
+            return;
+        }
         IFL_CANCELED = false;
         var startIdx = resumeIndex || 0;
         log("IFL: starting import of " + selectedItems.length + " forms from index " + startIdx);
@@ -4368,7 +4625,8 @@
         ifl_persistProgress(progress, selectedItems, startIdx);
 
         for (var idx = startIdx; idx < selectedItems.length; idx++) {
-            if (IFL_CANCELED) {
+            if (IFL_CANCELED || ifl_isCancelRequested()) {
+                IFL_CANCELED = true;
                 log("IFL: import canceled by user at index " + idx);
                 for (var ci = idx; ci < selectedItems.length; ci++) {
                     progress.setStatus(ci, progress.STATUS_FAILED, "Canceled");
@@ -4383,6 +4641,7 @@
             log("IFL: processing " + (idx + 1) + "/" + selectedItems.length + ": " + item.studyName + " / " + item.originalName);
 
             try {
+                if (IFL_CANCELED || ifl_isCancelRequested()) throw new Error("Canceled");
                 // Check if modal is open; if not, reopen it
                 var modalBody = document.querySelector(".modal-body");
                 var studySel = document.getElementById(IFL_STUDY_SELECT_ID);
@@ -4395,12 +4654,14 @@
                 // Select study
                 var ss = document.getElementById(IFL_STUDY_SELECT_ID);
                 if (!ss) throw new Error("Study select not found");
+                if (IFL_CANCELED || ifl_isCancelRequested()) throw new Error("Canceled");
                 ss.value = item.studyValue;
                 ifl_triggerChange(ss);
                 await sleep(300);
 
                 // Wait for form dropdown
                 var populated = await ifl_waitForFormOptions(IFL_FORM_POPULATE_TIMEOUT);
+                if (IFL_CANCELED || ifl_isCancelRequested()) throw new Error("Canceled");
                 if (!populated) throw new Error("Form dropdown did not populate");
 
                 // Select form
@@ -4418,9 +4679,11 @@
                 if (!formFound) throw new Error("Form option not found: " + item.formValue);
                 ifl_triggerChange(fs);
                 await sleep(500);
+                if (IFL_CANCELED || ifl_isCancelRequested()) throw new Error("Canceled");
 
                 // Wait for itemGroupsDiv to populate so we can apply changes
                 var igDiv = await ifl_waitForItemGroupsDiv(IFL_ITEMGROUPS_TIMEOUT);
+                if (IFL_CANCELED || ifl_isCancelRequested()) throw new Error("Canceled");
 
                 // Handle Lock on Save checkbox
                 var lockCb = document.getElementById(IFL_LOCK_CHECKBOX_ID);
@@ -4471,6 +4734,7 @@
                 var saveFailed = false;
 
                 while (saveAttempts < maxSaveAttempts) {
+                    if (IFL_CANCELED || ifl_isCancelRequested()) throw new Error("Canceled");
                     saveAttempts++;
                     saveBtn = document.getElementById(IFL_SAVE_BUTTON_ID);
                     if (!saveBtn) throw new Error("Save button not found");
@@ -4481,7 +4745,14 @@
                     var start = Date.now();
                     var closed = false;
                     var errorDetected = false;
+                    var successDetected = false;
                     while (Date.now() - start < IFL_MODAL_CLOSE_TIMEOUT) {
+                        if (IFL_CANCELED || ifl_isCancelRequested()) throw new Error("Canceled");
+                        if (ifl_detectSaveSuccess()) {
+                            successDetected = true;
+                            log("IFL: save success detected after click");
+                            break;
+                        }
                         // Check for error alert in modal
                         var alertEl = document.querySelector(".modal-body .alert-danger, .modal .alert-danger");
                         if (alertEl) {
@@ -4500,7 +4771,7 @@
                         await sleep(150);
                     }
 
-                    if (closed) break; // Save succeeded
+                    if (closed || successDetected) break; // Save succeeded
 
                     if (errorDetected && saveAttempts < maxSaveAttempts) {
                         log("IFL: retrying — re-selecting study/form before next save attempt");
@@ -4541,8 +4812,12 @@
                         continue; // Retry save
                     }
 
-                    // Error on last attempt or timeout
-                    saveFailed = true;
+                    if (errorDetected) {
+                        saveFailed = true;
+                        break;
+                    }
+                    // Timeout without an error usually means ClinSpark accepted the save but did not close the modal.
+                    log("IFL: save confirmation timed out without an error; treating as submitted");
                     break;
                 }
 
@@ -4551,6 +4826,7 @@
                 }
 
                 // Save succeeded — mark as completed
+                if (IFL_CANCELED || ifl_isCancelRequested()) throw new Error("Canceled");
                 progress.setStatus(idx, progress.STATUS_COMPLETED);
                 ifl_persistProgress(progress, selectedItems, idx + 1);
 
@@ -4563,11 +4839,23 @@
                 }
 
                 await sleep(IFL_INTER_ITEM_DELAY);
+                if (IFL_CANCELED || ifl_isCancelRequested()) {
+                    IFL_CANCELED = true;
+                    break;
+                }
 
                 log("IFL: completed " + item.studyName + " / " + item.originalName);
 
             } catch (err) {
                 var errMsg = err && err.message ? err.message : String(err);
+                if (IFL_CANCELED || ifl_isCancelRequested() || errMsg === "Canceled") {
+                    IFL_CANCELED = true;
+                    log("IFL: import canceled by user at index " + idx);
+                    progress.setStatus(idx, progress.STATUS_FAILED, "Canceled");
+                    ifl_clearImportState();
+                    await ifl_closeImportModal();
+                    break;
+                }
                 log("IFL: FAILED " + item.studyName + " / " + item.originalName + " \u2014 " + errMsg);
                 progress.setStatus(idx, progress.STATUS_FAILED, errMsg);
                 ifl_persistProgress(progress, selectedItems, idx + 1);
@@ -4584,8 +4872,19 @@
     // ---- Resume after page refresh ----
 
     function ifl_resumeImport() {
+        if (ifl_isCancelRequested()) {
+            IFL_CANCELED = true;
+            ifl_clearImportState();
+            log("IFL: resume blocked because cancellation was requested");
+            return;
+        }
         var saved = ifl_loadImportState();
         if (!saved || !saved.active || !saved.items || saved.items.length === 0) return;
+        if (saved.resumeVersion !== 2) {
+            ifl_clearImportState();
+            log("IFL: cleared legacy import resume state");
+            return;
+        }
 
         // If we're on a form show page (redirect after save), go back to list page
         if (!isOnImportFromLibraryPage()) {
@@ -4689,6 +4988,7 @@
     async function runImportFromLibrary() {
         log("IFL: Import from Library started");
         IFL_CANCELED = false;
+        ifl_clearCancelRequest();
 
         // Page check
         if (!isOnImportFromLibraryPage()) {
@@ -4912,9 +5212,9 @@
         addTitle.style.marginBottom = "2px";
         addBox.appendChild(addTitle);
 
-        var addInput = document.createElement("input");
-        addInput.type = "text";
-        addInput.placeholder = "Study Event Name";
+        var addInput = document.createElement("textarea");
+        addInput.rows = 4;
+        addInput.placeholder = "Study Event Name (one per line)";
         addInput.style.padding = "6px 10px";
         addInput.style.borderRadius = "6px";
         addInput.style.border = "1px solid " + (glass ? "rgba(255,255,255,0.25)" : "#555");
@@ -5055,7 +5355,7 @@
             tableBody.innerHTML = "";
             var filter = searchInput.value.trim().toLowerCase();
             for (var ri = 0; ri < rows.length; ri++) {
-                if (filter && rows[ri].name.toLowerCase().indexOf(filter) === -1) continue;
+                if (filter && !matchesCommaSeparatedSearch(rows[ri].name, filter)) continue;
                 (function(idx) {
                     var tr = document.createElement("tr");
                     tr.setAttribute("draggable", "true");
@@ -5221,35 +5521,31 @@
         // Add
         function doAdd() {
             if (locked) return;
-            var val = addInput.value.trim();
-            if (!val) { addError.textContent = "Name cannot be empty"; return; }
-            // check duplicate
-            for (var ai = 0; ai < rows.length; ai++) {
-                if (rows[ai].name.trim().toLowerCase() === val.toLowerCase()) {
-                    addError.textContent = "Duplicate: \"" + val + "\" already exists";
-                    return;
-                }
-            }
+            var names = addInput.value.replace(/\r\n/g, "\n").split("\n").map(function(name) { return name.trim(); }).filter(Boolean);
+            if (!names.length) { addError.textContent = "Enter at least one study event name"; return; }
             addError.textContent = "";
-            var newRow = { name: val, href: null, originalName: null, status: "added", reason: "" };
-            rows.push(newRow);
+            var existing = {}; for (var ei = 0; ei < rows.length; ei++) existing[rows[ei].name.trim().toLowerCase()] = true;
+            var addedRows = [];
+            for (var ni = 0; ni < names.length; ni++) { var normalized = names[ni].toLowerCase(); if (existing[normalized]) continue; var newRow = { name: names[ni], href: null, originalName: null, status: "added", reason: "" }; rows.push(newRow); addedRows.push(newRow); existing[normalized] = true; }
+            if (!addedRows.length) { addError.textContent = "All entered study events already exist"; return; }
             // sort using natural order (Day 2 before Day 11)
             rows.sort(function(a, b) {
                 return editSE_naturalSort(a.name, b.name);
             });
             selectedIdx = -1;
             for (var fi = 0; fi < rows.length; fi++) {
-                if (rows[fi] === newRow) { selectedIdx = fi; break; }
+                if (rows[fi] === addedRows[0]) { selectedIdx = fi; break; }
             }
             renderTable();
             showEditPanel(selectedIdx);
             validate();
-            log("[EditSE] Added new study event: " + val);
+            addInput.value = "";
+            log("[EditSE] Added " + addedRows.length + " new study event(s)");
         }
 
         addBtn.addEventListener("click", doAdd);
         addInput.addEventListener("keydown", function(e) {
-            if (e.key === "Enter") doAdd();
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) doAdd();
         });
 
         // Edit name live
@@ -7553,7 +7849,7 @@
                     var visibleForms = 0;
                     for (var f = 0; f < studyEvent.forms.length; f++) {
                         var form = studyEvent.forms[f];
-                        if (filter && form.formText.toLowerCase().indexOf(filter) === -1) continue;
+                        if (filter && !matchesCommaSeparatedSearch(form.formText, filter)) continue;
                         visibleForms++;
 
                         var formItem = document.createElement("div");
@@ -7677,7 +7973,7 @@
 
             for (var i = 0; i < studyEventsArray.length; i++) {
                 var ev = studyEventsArray[i];
-                if (filter && ev.text.toLowerCase().indexOf(filter) === -1) continue;
+                if (filter && !matchesCommaSeparatedSearch(ev.text, filter)) continue;
 
                 var item = document.createElement("div");
                 item.style.cssText = "display:flex;align-items:center;gap:10px;padding:10px;margin-bottom:6px;border:1px solid #333;border-radius:6px;background:#252525;cursor:pointer;transition:all 0.2s;";
@@ -8760,7 +9056,7 @@
             var filter = (searchValue || "").toLowerCase();
             for (var i = 0; i < targetFormsSorted.length; i++) {
                 var form = targetFormsSorted[i];
-                if (filter && form.text.toLowerCase().indexOf(filter) === -1) continue;
+                if (filter && !matchesCommaSeparatedSearch(form.text, filter)) continue;
 
                 var item = document.createElement("div");
                 item.style.cssText = "display:flex;align-items:center;gap:10px;padding:10px;margin-bottom:6px;border:1px solid #333;border-radius:6px;background:#252525;cursor:pointer;transition:all 0.2s;";
@@ -11638,73 +11934,74 @@
             {
                 title: "Study Setup",
                 features: [
-                    { label: "Lock Activity Plans", desc: "Automatically locks activity plans for one or more studies." },
-                    { label: "Lock Sample Paths", desc: "Locks sample path configurations for the current study." },
-                    { label: "Update Study Status", desc: "Updates the status of studies to Active if not already. Handles the status change workflow automatically." },
-                    { label: "Run Study Setup", desc: "Runs the full study setup pipeline, executing multiple sequential setup steps automatically in the correct order." }
+                    { label: "Lock Activity Plans", desc: "Locks activity plans for one or more studies and reports progress for each target." },
+                    { label: "Lock Sample Paths", desc: "Locks sample path configurations while skipping paths whose lock checkbox is disabled, with a dedicated skipped status when locking is required but unavailable." },
+                    { label: "Update Study Status", desc: "Updates studies to Active when needed and handles the status change workflow automatically." },
+                    { label: "Run Study Setup", desc: "Runs the full setup pipeline in sequence, including activity plan locking, sample path locking, status updates, cohort setup, and consent steps where configured." }
                 ]
             },
             {
                 title: "Subject Management",
                 features: [
-                    { label: "Add Cohort Subjects", desc: "Adds subjects to a cohort in a study. Specify the study and cohort, and the automator handles the enrollment steps without manual navigation." },
-                    { label: "Import Cohort Subjects", desc: "Imports a prepared list of subjects into a cohort, automating the entry of each subject's records." },
-                    { label: "Add Existing Subject", desc: "Adds a subject who already exists in the system to a new study or cohort, without creating a duplicate record." }
+                    { label: "Add Cohort Subjects", desc: "Adds subjects to a cohort in a selected study without manual navigation through each enrollment step." },
+                    { label: "Import Cohort Subjects", desc: "Imports a prepared subject list into a cohort and automates each subject record entry." },
+                    { label: "Add Existing Subject", desc: "Adds an existing subject to a new study or cohort without creating a duplicate subject." }
                 ]
             },
             {
                 title: "Consent",
                 features: [
-                    { label: "Run ICF Consent", desc: "Automates the Informed Consent Form (ICF) process for a subject. Navigates through the consent workflow, scans barcodes, and completes each required step automatically." }
+                    { label: "Run ICF Consent", desc: "Automates the informed consent workflow for a subject, including navigation, barcode scanning, and required consent steps." }
                 ]
             },
             {
                 title: "Data Collection",
                 features: [
-                    { label: "Pull Barcode", desc: "Automatically fills in the subject barcode for a subject based on the subject identifier — no manual typing needed." },
-                    { label: "Pull Lab Barcode", desc: "Scans all barcode icons on the current data collection page and fills them in one by one, confirming each automatically. Saves significant time during lab sample processing." },
-                    { label: "Run Form", desc: "Fills in and submits a data collection form with specified values. Can be configured to enter out-of-range (OOR) or in-range (IR) values — useful for study testing and setup verification." },
-                    { label: "Collect All", desc: "Processes all eligible data collection forms on the current page in sequence, collecting each one automatically without manual clicking." }
+                    { label: "Pull Barcode", desc: "Fills the subject barcode field from the current subject context." },
+                    { label: "Pull Lab Barcode", desc: "Scans barcode icons on the current page and fills lab barcode fields one by one." },
+                    { label: "Run Form", desc: "Fills and submits a data collection form with configured in-range or out-of-range values for testing and setup verification." },
+                    { label: "Collect All", desc: "Processes eligible data collection forms on the current page in sequence." }
                 ]
             },
             {
                 title: "CRF Design & Library",
                 features: [
-                    { label: "Search Methods", desc: "Opens up the method library that contains all coded methods/edit checks." },
-                    { label: "PLAP Builder", desc: "The Procedure Log Activity Plan Builder. Drag forms into segments, assign study events, configure time references, then submit all procedure log entries automatically." },
-                    { label: "Import from Library", desc: "Opens a side-by-side tool for importing forms from the study library into the current study. Select the target study and form, and the automator imports and saves it." },
+                    { label: "Search Methods", desc: "Opens the method library that contains coded methods and edit checks." },
+                    { label: "PLAP Builder", desc: "Builds procedure log activity plan rows with a full-screen, drag-and-drop workspace, existing-form editing, clear Existing visibility filtering, time offsets, example-time recalculation, and Apply Time Calculation." },
+                    { label: "Import from Library", desc: "Imports forms from another study library. Supports cached scans, duplicate import copies for the same source form, per-copy form names, item group/item renames, item inclusion settings, lock-on-save, confirmation warnings, progress tracking, and cancel/resume cleanup." },
+                    { label: "Activity Plan Removal", desc: "Selects scheduled activities for removal. Filtered Select All only affects visible rows, archived rows are shown with an archive indicator and cannot be selected, and unavailable deletes can fall back to archive." },
                     { label: "Archive/Update Forms", desc: "Batch archives or renames forms in the study library. Useful for replacing old versions with new versions." },
-                    { label: "Copy Activity Forms", desc: "Copies scheduled activity forms from one study to another, preserving their structure and settings." },
-                    { label: "Item Method Forms", desc: "Locates forms that contain a specific calculation method item and navigates to their data pages." },
-                    { label: "Import I/E", desc: "Automatically map I/E items to the correct Activity Plan -> Forms -> Items" },
-                    { label: "Clear Mapping", desc: "Clears the current form-to-schedule mapping configuration so you can start fresh with a new mapping setup." },
-                    { label: "Edit Study Events List", desc: "Manage the study events list in the library — add new events, rename or reorder existing ones, and save all changes in a single batch." },
-                    { label: "Set Visibility Condition", desc: "Sets visibility (show/hide) conditions on forms in an activity plan. Map each form to the item and value that controls whether it is shown or hidden, and the automator saves each condition." }
+                    { label: "Copy Activity Forms", desc: "Copies scheduled activity forms from one study or activity plan context to another while preserving structure and settings where possible." },
+                    { label: "Item Method Forms", desc: "Locates forms that contain a specific calculation method item and navigates to relevant data pages." },
+                    { label: "Import I/E", desc: "Maps inclusion/exclusion check items to Activity Plan forms and items. Shows expected eligibility defaults and supports selective mapping cleanup." },
+                    { label: "Clear Mapping", desc: "Scans eligibility mappings, displays selectable eligibility items, and removes only the mappings confirmed by the user." },
+                    { label: "Edit Study Events List", desc: "Adds, renames, reorders, and saves study event list changes in one batch." },
+                    { label: "Set Visibility Condition", desc: "Sets show/hide conditions on scheduled activity forms using auto-populated visibility references, with refresh handling and animated loading states." }
                 ]
             },
             {
                 title: "Navigation",
                 features: [
-                    { label: "Find Form & Events", desc: "Navigates directly to a form or study event data page. Enter a form keyword and/or a study event keyword, plus an optional subject identifier, and the automator applies the filters and searches automatically." }
+                    { label: "Find Form & Events", desc: "Navigates directly to a form or study event data page using keywords and an optional subject identifier." }
                 ]
             },
             {
                 title: "Reports",
                 features: [
-                    { label: "Download DTS Report", desc: "Automatically generates and downloads Clinical Data Text (Delimited) reports for selected studies, handling all navigation and download steps." }
+                    { label: "Download DTS Report", desc: "Generates and downloads Clinical Data Text reports for selected studies while handling navigation and download steps." }
                 ]
             },
             {
                 title: "Panel Controls",
                 features: [
-                    { label: "Pause", desc: "Pauses any currently running automation. Click again to resume. Useful for briefly halting a long process without canceling it." },
-                    { label: "Clear Logs", desc: "Clears all entries from the activity log panel for a fresh view." },
-                    { label: "Hide Logs", desc: "Toggles the activity log panel on or off to manage screen space when the log is not needed." }
+                    { label: "Settings", desc: "Customize visible buttons, panel order, and panel hotkey." },
+                    { label: "Help Guide", desc: "Opens this searchable guide for quick reminders about each available feature." },
+                    { label: "Pause", desc: "Pauses any running automation and resumes when supported by that workflow." },
+                    { label: "Clear Logs", desc: "Clears the activity log panel for a fresh view." },
+                    { label: "Hide Logs", desc: "Toggles the activity log panel on or off to manage screen space." }
                 ]
             }
-        ];
-
-        var overlay = document.createElement("div");
+        ];        var overlay = document.createElement("div");
         overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:30000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;";
 
         var modal = document.createElement("div");
@@ -11724,7 +12021,7 @@
         mHeader.style.cssText = "padding:20px 24px;background:rgba(102,126,234,0.15);border-bottom:1px solid rgba(102,126,234,0.3);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;";
 
         var mTitle = document.createElement("div");
-        mTitle.innerHTML = "<span style='font-size:20px;font-weight:700;color:white;'>ClinSpark Test Automator</span><span style='font-size:14px;color:rgba(255,255,255,0.6);margin-left:10px;'>Help Guide</span>";
+        mTitle.innerHTML = "<span style='font-size:20px;font-weight:700;color:white;'>ClinSpark Val Automator</span><span style='font-size:14px;color:rgba(255,255,255,0.6);margin-left:10px;'>Help Guide</span>";
 
         var closeX = document.createElement("button");
         closeX.innerHTML = "\u2715";
@@ -12013,6 +12310,14 @@
         btnSectionHint.style.cssText = "font-size:11px;color:" + tc.textHint + ";margin-bottom:10px;font-style:italic;";
         btnSection.appendChild(btnSectionHint);
 
+        var featureButtonFilter = "all";
+        var featureFilterBar = document.createElement("div"); featureFilterBar.style.cssText = "display:flex;align-items:center;gap:5px;margin-bottom:8px;";
+        var featureFilterLabel = document.createElement("span"); featureFilterLabel.textContent = "Show:"; featureFilterLabel.style.cssText = "font-size:11px;color:" + tc.textHint + ";margin-right:2px;"; featureFilterBar.appendChild(featureFilterLabel);
+        var featureFilterButtons = [];
+        function updateFeatureFilterButtons() { for (var fbi = 0; fbi < featureFilterButtons.length; fbi++) { var active = featureFilterButtons[fbi].dataset.filter === featureButtonFilter; featureFilterButtons[fbi].style.background = active ? tc.tBtnHover : tc.tBtnInactiveBg; featureFilterButtons[fbi].style.borderColor = active ? tc.tBtnActiveBorder : tc.tBtnInactiveBorder; featureFilterButtons[fbi].style.color = active ? "#fff" : tc.textSec; } }
+        [{ value: "enabled", label: "Enabled" }, { value: "disabled", label: "Disabled" }, { value: "all", label: "All" }].forEach(function(option) { var filterBtn = document.createElement("button"); filterBtn.type = "button"; filterBtn.textContent = option.label; filterBtn.dataset.filter = option.value; filterBtn.style.cssText = "padding:5px 9px;background:" + tc.tBtnInactiveBg + ";border:1px solid " + tc.tBtnInactiveBorder + ";border-radius:5px;color:" + tc.textSec + ";font-size:11px;cursor:pointer;"; filterBtn.onclick = function() { featureButtonFilter = this.dataset.filter; updateFeatureFilterButtons(); renderBtnGrid(); }; featureFilterButtons.push(filterBtn); featureFilterBar.appendChild(filterBtn); });
+        updateFeatureFilterButtons(); btnSection.appendChild(featureFilterBar);
+
         var btnGridContainer = document.createElement("div");
         btnGridContainer.style.cssText = "max-height:480px;overflow-y:auto;border-radius:6px;background:" + tc.gridBg + ";padding:6px;";
         btnGridContainer.setAttribute("role", "grid");
@@ -12107,6 +12412,8 @@
                     var entry = sorted[siLocal];
                     var def = defMap[entry.id];
                     if (!def) return;
+                    if (featureButtonFilter === "enabled" && !entry.visible) return;
+                    if (featureButtonFilter === "disabled" && entry.visible) return;
 
                     var cell = document.createElement("div");
                     cell.setAttribute("role", "gridcell");
@@ -13779,6 +14086,14 @@
     function normalizeSAText(t) {
         if (typeof t !== "string") return "";
         return t.trim().replace(/\s+/g, " ");
+    }
+
+    function matchesCommaSeparatedSearch(text, query) {
+        var haystack = String(text == null ? "" : text).toLowerCase();
+        var terms = String(query == null ? "" : query).split(",").map(function(term) { return term.trim().toLowerCase(); }).filter(function(term) { return term.length > 0; });
+        if (terms.length === 0) return true;
+        for (var i = 0; i < terms.length; i++) if (haystack.indexOf(terms[i]) !== -1) return true;
+        return false;
     }
 
     // Clear all SA Builder storage
@@ -15570,7 +15885,7 @@
         return currentUrl.indexOf(BPL_TARGET_URL) !== -1;
     }
 
-    function bplDetectTimepointColumn() {
+    function bplDetectTableColumn(headerText) {
         var table = document.querySelector("table");
         if (!table) {
             log("BPL: no table found for thead inspection");
@@ -15581,18 +15896,26 @@
             log("BPL: no thead found");
             return -1;
         }
+        var wanted = normalizeSAText(headerText);
         var ths = thead.querySelectorAll("th");
         for (var i = 0; i < ths.length; i++) {
             var thText = normalizeSAText(ths[i].textContent);
-            if (thText === "Timepoint") {
-                log("BPL: Timepoint column detected at index " + i);
+            if (thText === wanted) {
+                log("BPL: " + wanted + " column detected at index " + i);
                 return i;
             }
         }
-        log("BPL: no Timepoint column found in thead");
+        log("BPL: no " + wanted + " column found in thead");
         return -1;
     }
 
+    function bplDetectTimepointColumn() {
+        return bplDetectTableColumn("Timepoint");
+    }
+
+    function bplDetectExampleTimeColumn() {
+        return bplDetectTableColumn("Example Time");
+    }
     function bplParseTimepointText(raw) {
         var result = {
             raw: raw || "",
@@ -15683,8 +16006,10 @@
             return result;
         }
         var timepointColIndex = bplDetectTimepointColumn();
+        var exampleTimeColIndex = bplDetectExampleTimeColumn();
         var hasTimepoint = timepointColIndex !== -1;
-        log("BPL: enhanced scan - hasTimepoint=" + hasTimepoint + ", timepointColIndex=" + timepointColIndex);
+        var hasExampleTime = exampleTimeColIndex !== -1;
+        log("BPL: enhanced scan - hasTimepoint=" + hasTimepoint + ", timepointColIndex=" + timepointColIndex + ", hasExampleTime=" + hasExampleTime + ", exampleTimeColIndex=" + exampleTimeColIndex);
 
         // Use native HTMLCollection (tbody.rows) instead of querySelectorAll
         var rows = tbody.rows;
@@ -15707,7 +16032,7 @@
         var skippedArchived = 0;
         var skippedDuplicate = 0;
         var seenKeys = {};
-        var statusCellIndex = hasTimepoint ? 6 : 4;
+        var statusCellIndex = hasExampleTime ? (exampleTimeColIndex + 1) : (hasTimepoint ? (timepointColIndex + 1) : 4);
 
         for (var i = 0; i < rowCount; i++) {
             var cells = rows[i].cells;
@@ -15731,10 +16056,14 @@
                 continue;
             }
 
-            // Inline timepoint extraction and parsing
+            // Inline timepoint/example-time extraction and parsing
             var timepointRaw = "";
             if (hasTimepoint && cellCount > timepointColIndex) {
                 timepointRaw = cells[timepointColIndex].textContent.trim().replace(/\s+/g, " ");
+            }
+            var exampleTimeRaw = "";
+            if (hasExampleTime && cellCount > exampleTimeColIndex) {
+                exampleTimeRaw = cells[exampleTimeColIndex].textContent.trim().replace(/\s+/g, " ");
             }
             var timepointCleaned = "";
             var preReference = false;
@@ -15750,7 +16079,9 @@
             }
 
             var key = segment + " | " + studyEvent + " | " + form;
-            var dedupKey = key + " | " + (timepointCleaned || timepointRaw || "");
+            // Each table row is a distinct scheduled-activity instance. Do not collapse
+            // identical segment/event/form/timepoint combinations into one entry.
+            var dedupKey = String(i);
             if (seenKeys[dedupKey]) {
                 skippedDuplicate++;
                 continue;
@@ -15777,6 +16108,7 @@
                 timepointRaw: timepointRaw,
                 timepointCleaned: timepointCleaned,
                 timepointDisplay: timepointRaw || "",
+                exampleTime: exampleTimeRaw || "",
                 preReference: preReference,
                 refActivity: refActivity,
                 hidden: isHidden,
@@ -15868,7 +16200,7 @@
         if (!str || str === "N/A") {
             return null;
         }
-        var match = str.match(/^(\d{1,2})([A-Za-z]{3})(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
+        var match = str.match(/^(\d{1,2})([A-Za-z]{3})(\d{4})\s+(\d{2}):(\d{2}):(\d{2})(?:\s+[A-Za-z]{2,5})?$/);
         if (!match) {
             log("BPL: bplParseClinSparkDateTime failed to parse '" + str + "'");
             return null;
@@ -15918,6 +16250,45 @@
         return day + mon + year + " " + hours + ":" + mins + ":" + secs;
     }
 
+    function bplExtractClinSparkTimeZoneSuffix(str) {
+        var match = String(str || "").match(/\s+([A-Za-z]{2,5})$/);
+        return match ? match[1] : "";
+    }
+
+    function bplFormatClinSparkDateTimeWithSuffix(dateObj, sourceStr) {
+        var formatted = bplFormatClinSparkDateTime(dateObj);
+        var suffix = bplExtractClinSparkTimeZoneSuffix(sourceStr);
+        return suffix && formatted !== "N/A" ? (formatted + " " + suffix) : formatted;
+    }
+
+    function bplTimepointToSignedSeconds(timepointText, preReference) {
+        var raw = String(timepointText || "").trim();
+        if (!raw) {
+            return 0;
+        }
+        var isNegative = !!preReference || raw.indexOf("-") !== -1;
+        var cleaned = raw.replace(/\(\d+\)\s*$/g, "").replace(/[*+\-()]/g, "").trim();
+        var parts = cleaned.split(":");
+        var totalSeconds = 0;
+        if (parts.length >= 1) totalSeconds += (parseInt(parts[0]) || 0) * 3600;
+        if (parts.length >= 2) totalSeconds += (parseInt(parts[1]) || 0) * 60;
+        if (parts.length >= 3) totalSeconds += parseInt(parts[2]) || 0;
+        return isNegative ? -totalSeconds : totalSeconds;
+    }
+
+    function bplComputeExampleTimeFromPrevious(previousExampleTime, previousTimepoint, newTimepoint, previousPreReference, newPreReference) {
+        var baseDate = bplParseClinSparkDateTime(previousExampleTime);
+        if (!baseDate) {
+            return "N/A";
+        }
+        var previousSeconds = bplTimepointToSignedSeconds(previousTimepoint, previousPreReference);
+        var newSeconds = bplTimepointToSignedSeconds(newTimepoint, newPreReference);
+        var resultDate = new Date(baseDate.getTime() + ((newSeconds - previousSeconds) * 1000));
+        var formatted = bplFormatClinSparkDateTimeWithSuffix(resultDate, previousExampleTime);
+        log("BPL: computed example time from previous='" + previousExampleTime + "' oldTp='" + previousTimepoint + "' newTp='" + newTimepoint + "' -> " + formatted);
+        return formatted;
+    }
+
     function bplParseOffsetText(text) {
         var result = { days: 0, hours: 0, minutes: 0, seconds: 0 };
         if (!text || text.trim().length === 0) {
@@ -15955,7 +16326,7 @@
             }
             var totalMs = ((offset.days || 0) * 86400000) + ((offset.hours || 0) * 3600000) + ((offset.minutes || 0) * 60000) + ((offset.seconds || 0) * 1000);
             var resultDate = new Date(baseDate.getTime() + totalMs);
-            return bplFormatClinSparkDateTime(resultDate);
+            return bplFormatClinSparkDateTimeWithSuffix(resultDate, baseDateTimeStr);
         } catch (e) {
             log("BPL: error applying offset to datetime - " + String(e));
             return "N/A";
@@ -15993,7 +16364,7 @@
                 return "N/A";
             }
             var resultDate = new Date(baseDate.getTime() + (totalSeconds * 1000));
-            var formatted = bplFormatClinSparkDateTime(resultDate);
+            var formatted = bplFormatClinSparkDateTimeWithSuffix(resultDate, segmentRefDateTime);
             log("BPL: computed example time from segRef='" + segmentRefDateTime + "' tp='" + timepointCleaned + "' preRef=" + preReference + " -> " + formatted);
             return formatted;
         } catch (e) {
@@ -16143,6 +16514,13 @@
                 if (!efData) {
                     continue;
                 }
+                if (efData.autoPopulated && efData.saRowIndex !== undefined && efData.saRowIndex !== null && saItem.saRowIndex !== undefined && saItem.saRowIndex !== null && String(efData.saRowIndex) === String(saItem.saRowIndex)) {
+                    existingAutoIdx = ef;
+                    break;
+                }
+                if (efData.autoPopulated) {
+                    continue;
+                }
                 var formText = normalizeSAText(existingForms[ef].text);
                 if (formText !== saItem.form) {
                     continue;
@@ -16155,11 +16533,7 @@
                 if (efData.studyEvents && efData.studyEvents.length > 0) {
                     var evText = normalizeSAText(efData.studyEvents[0].text);
                     if (evText === saItem.studyEvent) {
-                        if (efData.autoPopulated) {
-                            existingAutoIdx = ef;
-                        } else {
-                            existingSessionIdx = ef;
-                        }
+                        existingSessionIdx = ef;
                         break;
                     }
                 }
@@ -16178,6 +16552,14 @@
                 if (autoData) {
                     autoData.editHref = saItem.editHref || autoData.editHref || "";
                     autoData.saRowIndex = saItem.saRowIndex;
+                    autoData.timepointRaw = saItem.timepointRaw || autoData.timepointRaw || "";
+                    autoData.timepointCleaned = saItem.timepointCleaned || autoData.timepointCleaned || "";
+                    autoData.timepointDisplay = saItem.timepointDisplay || autoData.timepointDisplay || "";
+                    if (!autoData.modified && saItem.exampleTime) {
+                        autoData.exampleTime = saItem.exampleTime;
+                    } else if ((!autoData.exampleTime || autoData.exampleTime === "N/A") && saItem.exampleTime) {
+                        autoData.exampleTime = saItem.exampleTime;
+                    }
                     mergedFormDataStore[autoKey] = autoData;
                 }
                 log("BPL: merge - SA item already exists as auto-populated at index " + existingAutoIdx + " for " + saItem.segment + "|" + saItem.studyEvent + "|" + saItem.form + ", skipping duplicate");
@@ -16295,7 +16677,7 @@
                 timepointCleaned: saItem.timepointCleaned || "",
                 timepointDisplay: saItem.timepointDisplay || "",
                 segmentRefDateTime: segRefDateTime,
-                exampleTime: bplComputeExampleTime(segRefDateTime, saItem.timepointCleaned || "", saItem.preReference || false)
+                exampleTime: saItem.exampleTime || bplComputeExampleTime(segRefDateTime, saItem.timepointCleaned || "", saItem.preReference || false)
             };
             saItemCount = saItemCount + 1;
         }
@@ -16777,14 +17159,9 @@
         } catch (e) {}
         log("BPL: hideExisting initial state = " + bplHideExisting);
 
-        var bplShowUpdatedOnly = false;
         try {
-            var savedShowUpdated = localStorage.getItem(STORAGE_BPL_SHOW_UPDATED_ONLY);
-            if (savedShowUpdated === "true") {
-                bplShowUpdatedOnly = true;
-            }
+            localStorage.removeItem(STORAGE_BPL_SHOW_UPDATED_ONLY);
         } catch (e) {}
-        log("BPL: showUpdatedOnly initial state = " + bplShowUpdatedOnly);
 
         var bplShowDuplicatesOnly = false;
 
@@ -17085,7 +17462,7 @@
             var filterLower = (filter || "").toLowerCase();
             for (var i = 0; i < studyEvents.length; i++) {
                 var ev = studyEvents[i];
-                if (filterLower && ev.text.toLowerCase().indexOf(filterLower) === -1) {
+                if (filterLower && !matchesCommaSeparatedSearch(ev.text, filter)) {
                     continue;
                 }
                 var evItem = document.createElement("div");
@@ -17209,7 +17586,7 @@
             var filterLower = (filter || "").toLowerCase();
             for (var i = 0; i < forms.length; i++) {
                 var frm = forms[i];
-                if (filterLower && frm.text.toLowerCase().indexOf(filterLower) === -1) {
+                if (filterLower && !matchesCommaSeparatedSearch(frm.text, filter)) {
                     continue;
                 }
                 var frmItem = document.createElement("div");
@@ -17309,6 +17686,48 @@
             return "N/A";
         }
 
+        function getReferenceActivityExampleTime(segVal, excludeFormKey) {
+            var segForms = segmentFormMap[segVal] || [];
+            for (var ri = 0; ri < segForms.length; ri++) {
+                var rfKey = getFormDataKey(segVal, segForms[ri].value, segForms[ri].index);
+                if (excludeFormKey && rfKey === excludeFormKey) {
+                    continue;
+                }
+                var rfData = formDataStore[rfKey];
+                if (rfData && rfData.refActivity && rfData.exampleTime && rfData.exampleTime !== "N/A") {
+                    log("BPL: using reference activity row example time for segment " + segVal + ": " + rfData.exampleTime);
+                    return rfData.exampleTime;
+                }
+            }
+            return "N/A";
+        }
+
+        function showBPLAutoConfigurePanel() {
+            if (!selectedFormKey || !formDataStore[selectedFormKey]) { alert("Select a form in the PLAP Builder first, then click Auto Configure."); return; }
+            var p = selectedFormKey.split("|"), sourceSeg = p[0], sourceForms = segmentFormMap[sourceSeg] || [], sourceEntry = null;
+            for (var i = 0; i < sourceForms.length; i++) if (getFormDataKey(sourceSeg, sourceForms[i].value, sourceForms[i].index) === selectedFormKey) { sourceEntry = sourceForms[i]; break; }
+            if (!sourceEntry) { alert("The selected form is no longer available. Select it again and retry."); return; }
+            var sourceData = JSON.parse(JSON.stringify(formDataStore[selectedFormKey])), selected = {}; selected[selectedFormKey] = true;
+            var box = document.createElement("div"); box.style.cssText = "display:grid;grid-template-columns:minmax(280px,1fr) minmax(240px,.85fr);gap:14px;min-width:680px;max-width:920px;";
+            var left = document.createElement("div"), right = document.createElement("div"); right.style.cssText = "border-left:1px solid #333;padding-left:14px;min-width:0;";
+            var title = document.createElement("div"); title.textContent = "Matching forms across segments"; title.style.cssText = "font-size:13px;font-weight:700;color:#fff;margin-bottom:4px;";
+            var hint = document.createElement("div"); hint.textContent = "Select the rows that should receive the configuration shown on the right."; hint.style.cssText = "color:#aaa;font-size:11px;margin-bottom:9px;";
+            var sourceBanner = document.createElement("div"); sourceBanner.textContent = "Source form: " + sourceEntry.text; sourceBanner.style.cssText = "padding:8px 10px;margin-bottom:10px;border:1px solid #5dade2;border-radius:4px;background:#182735;color:#d6eaff;font-size:12px;line-height:1.4;";
+            var tools = document.createElement("div"); tools.style.cssText = "display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;";
+            var count = document.createElement("span"); count.style.cssText = "color:#aaa;font-size:11px;"; var toggle = document.createElement("button"); toggle.style.cssText = "padding:5px 9px;border:1px solid #666;border-radius:4px;background:#2b2b2b;color:#fff;font-size:11px;cursor:pointer;";
+            var list = document.createElement("div"); list.style.cssText = "display:flex;flex-direction:column;gap:5px;max-height:390px;overflow:auto;padding-right:5px;"; var rows = [], sourceText = String(sourceEntry.text || "").replace(/\s+/g, " ").trim().toLowerCase();
+            function update() { var n = 0; for (var j = 0; j < rows.length; j++) if (rows[j].cb.checked) n++; count.textContent = n + " of " + rows.length + " selected"; toggle.textContent = n === rows.length ? "Clear All" : "Select All"; }
+            for (var si = 0; si < segments.length; si++) { var seg = segments[si], fs = segmentFormMap[seg.value] || []; for (var fi = 0; fi < fs.length; fi++) { var entry = fs[fi]; if (String(entry.value) !== String(sourceEntry.value) && String(entry.text || "").replace(/\s+/g, " ").trim().toLowerCase() !== sourceText) continue; var key = getFormDataKey(seg.value, entry.value, entry.index), data = formDataStore[key] || getDefaultFormData(); var row = document.createElement("label"); row.style.cssText = "display:flex;gap:8px;align-items:flex-start;padding:7px 8px;border:1px solid #444;border-radius:4px;background:#222;color:#eee;font-size:11px;line-height:1.35;cursor:pointer;"; var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!selected[key]; cb.style.cssText = "margin-top:2px;flex-shrink:0;"; var text = document.createElement("span"); text.textContent = bplBuildFormLabel(seg.text, data.studyEvents || [], entry.text, data); text.style.cssText = "min-width:0;overflow-wrap:anywhere;"; cb.onchange = function(k, c) { return function() { selected[k] = c.checked; update(); }; }(key, cb); row.appendChild(cb); row.appendChild(text); list.appendChild(row); rows.push({ key: key, cb: cb }); } }
+            toggle.onclick = function() { var select = toggle.textContent === "Select All"; for (var j = 0; j < rows.length; j++) { rows[j].cb.checked = select; selected[rows[j].key] = select; } update(); }; tools.appendChild(count); tools.appendChild(toggle); left.appendChild(sourceBanner); left.appendChild(title); left.appendChild(hint); left.appendChild(tools); left.appendChild(list);
+            var ctitle = document.createElement("div"); ctitle.textContent = "Time Relative to Segment"; ctitle.style.cssText = "font-size:13px;font-weight:700;color:#fff;margin-bottom:10px;"; right.appendChild(ctitle);
+            function check(label, prop) { var w = document.createElement("label"); w.style.cssText = "display:flex;align-items:center;gap:7px;margin:8px 0;color:#ddd;font-size:12px;cursor:pointer;"; var c = document.createElement("input"); c.type = "checkbox"; c.checked = !!sourceData[prop]; c.onchange = function() { sourceData[prop] = c.checked; }; w.appendChild(c); w.appendChild(document.createTextNode(label)); right.appendChild(w); }
+            function input(label, prop, type, max) { var w = document.createElement("label"); w.style.cssText = "display:flex;flex-direction:column;gap:3px;margin:8px 0;color:#aaa;font-size:11px;"; w.appendChild(document.createTextNode(label)); var el = document.createElement("input"); el.type = type; el.value = String(sourceData[prop] || (type === "number" ? 0 : "")); if (max) el.max = String(max); el.style.cssText = "padding:6px;border:1px solid #444;border-radius:4px;background:#222;color:#fff;font-size:12px;box-sizing:border-box;"; el.oninput = function() { sourceData[prop] = type === "number" ? (parseInt(el.value, 10) || 0) : el.value.trim(); }; w.appendChild(el); right.appendChild(w); }
+            check("Hidden?", "hidden"); check("Mandatory", "mandatory"); check("Enforce Data Collection Order", "enforce"); input("Pre-Window", "preWindow", "text"); input("Post-Window", "postWindow", "text"); check("Reference Activity", "refActivity"); check("Pre-Reference?", "preReference"); input("Days", "days", "number", 200); input("Hours", "hours", "number", 23); input("Minutes", "minutes", "number", 59); input("Seconds", "seconds", "number", 59);
+            var footer = document.createElement("div"); footer.style.cssText = "display:flex;justify-content:flex-end;gap:8px;margin-top:14px;padding-top:10px;border-top:1px solid #333;"; var cancel = document.createElement("button"); cancel.textContent = "Cancel"; cancel.style.cssText = "padding:6px 14px;border:1px solid #555;border-radius:4px;background:#333;color:#fff;cursor:pointer;font-size:12px;"; var confirm = document.createElement("button"); confirm.textContent = "Confirm"; confirm.style.cssText = "padding:6px 14px;border:1px solid #5dade2;border-radius:4px;background:#1a2a3a;color:#d6eaff;cursor:pointer;font-size:12px;";
+            cancel.onclick = function() { popup.close(); }; confirm.onclick = function() { var applied = 0; for (var j = 0; j < rows.length; j++) if (rows[j].cb.checked) { var d = formDataStore[rows[j].key] || getDefaultFormData(); d.days = sourceData.days || 0; d.hours = sourceData.hours || 0; d.minutes = sourceData.minutes || 0; d.seconds = sourceData.seconds || 0; d.hidden = !!sourceData.hidden; d.mandatory = sourceData.mandatory !== false; d.enforce = !!sourceData.enforce; d.preWindow = sourceData.preWindow || ""; d.postWindow = sourceData.postWindow || ""; d.refActivity = !!sourceData.refActivity; d.preReference = !!sourceData.preReference; var sv = rows[j].key.split("|")[0]; var targetRefTime = getSegmentRefDateTime(sv); if ((!targetRefTime || targetRefTime === "N/A") && !d.refActivity) targetRefTime = getReferenceActivityExampleTime(sv, rows[j].key); if ((!targetRefTime || targetRefTime === "N/A") && d.segmentRefDateTime && d.segmentRefDateTime !== "N/A") targetRefTime = d.segmentRefDateTime; d.segmentRefDateTime = targetRefTime || "N/A"; var recalculatedExampleTime = bplComputeExampleTime(d.segmentRefDateTime, bplFormatTimePoint(d.days, d.hours, d.minutes, d.seconds, d.preReference), d.preReference); if (recalculatedExampleTime && recalculatedExampleTime !== "N/A") d.exampleTime = recalculatedExampleTime; else if (!d.exampleTime || d.exampleTime === "N/A") d.exampleTime = "N/A"; if (d.autoPopulated) d.modified = true; formDataStore[rows[j].key] = d; applied++; } var autoConfigureSourceKey = selectedFormKey; selectedFormKey = null; saveSession(); renderCenterPanel(centerSearch.value); selectedFormKey = autoConfigureSourceKey; renderTimePanel(formDataStore[autoConfigureSourceKey], autoConfigureSourceKey); runAutoValidation(); popup.close(); showCopyToast("Configured " + applied + " form" + (applied === 1 ? "" : "s"), null); log("BPL: auto configure applied to " + applied + " form(s)"); };
+            footer.appendChild(cancel); footer.appendChild(confirm); right.appendChild(footer); box.appendChild(left); box.appendChild(right); var popup = createPopup({ title: "Auto Configure Forms", content: box, width: "760px", height: "760px", maxWidth: "94vw", maxHeight: "94vh" }); update();
+        }
+
         function loadFormDataToPanel(key) {
             selectedFormKey = key;
             var data = formDataStore[key] || getDefaultFormData();
@@ -17335,6 +17754,12 @@
             var postWindowEl = document.getElementById("bplPostWindow");
             var refActivityEl = document.getElementById("bplRefActivity");
             var preReferenceEl = document.getElementById("bplPreReference");
+            var prevDays = data.days || 0;
+            var prevHours = data.hours || 0;
+            var prevMinutes = data.minutes || 0;
+            var prevSeconds = data.seconds || 0;
+            var prevPreReference = data.preReference || false;
+            var previousExampleTime = data.exampleTime || "";
             if (daysEl) {
                 data.days = parseInt(daysEl.value) || 0;
             }
@@ -17372,8 +17797,38 @@
                 var keyParts = key.split("|");
                 data.segmentRefDateTime = getSegmentRefDateTime(keyParts[0]);
             }
-            var tpStr = bplFormatTimePoint(data.days || 0, data.hours || 0, data.minutes || 0, data.seconds || 0, false);
-            data.exampleTime = bplComputeExampleTime(data.segmentRefDateTime || "N/A", tpStr, data.preReference || false);
+            var timeInputsChanged = (
+                (data.days || 0) !== prevDays ||
+                (data.hours || 0) !== prevHours ||
+                (data.minutes || 0) !== prevMinutes ||
+                (data.seconds || 0) !== prevSeconds ||
+                (data.preReference || false) !== prevPreReference
+            );
+            if (timeInputsChanged || !previousExampleTime || previousExampleTime === "N/A") {
+                var oldTpStr = bplFormatTimePoint(prevDays, prevHours, prevMinutes, prevSeconds, prevPreReference);
+                var tpStr = bplFormatTimePoint(data.days || 0, data.hours || 0, data.minutes || 0, data.seconds || 0, data.preReference || false);
+                var computeRefDateTime = data.segmentRefDateTime || "N/A";
+                if (!computeRefDateTime || computeRefDateTime === "N/A") {
+                    var computeKeyParts = key.split("|");
+                    computeRefDateTime = getSegmentRefDateTime(computeKeyParts[0]);
+                    if (!computeRefDateTime || computeRefDateTime === "N/A") {
+                        computeRefDateTime = getReferenceActivityExampleTime(computeKeyParts[0], key);
+                    }
+                    if (computeRefDateTime && computeRefDateTime !== "N/A") {
+                        data.segmentRefDateTime = computeRefDateTime;
+                    }
+                }
+                var computedExampleTime = bplComputeExampleTime(computeRefDateTime || "N/A", tpStr, data.preReference || false);
+                if ((!computedExampleTime || computedExampleTime === "N/A") && previousExampleTime && previousExampleTime !== "N/A") {
+                    computedExampleTime = bplComputeExampleTimeFromPrevious(previousExampleTime, oldTpStr, tpStr, prevPreReference, data.preReference || false);
+                }
+                if (!computedExampleTime || computedExampleTime === "N/A") {
+                    computedExampleTime = previousExampleTime || "N/A";
+                }
+                data.exampleTime = computedExampleTime;
+            } else {
+                data.exampleTime = previousExampleTime;
+            }
             if (data.autoPopulated && !data.originalValues) {
                 data.originalValues = {
                     days: data.days || 0,
@@ -17633,6 +18088,10 @@
                         refDateTimeStr = getSegmentRefDateTime(kp[0]);
                     }
                     if (!refDateTimeStr || refDateTimeStr === "N/A") {
+                        var kpRef = key.split("|");
+                        refDateTimeStr = getReferenceActivityExampleTime(kpRef[0], key);
+                    }
+                    if (!refDateTimeStr || refDateTimeStr === "N/A") {
                         alert("No reference activity time available for this segment.");
                         return;
                     }
@@ -17805,15 +18264,104 @@
             }
         }
 
+        var bplFilterStatusDiv = null;
+
+        function bplGetFilterStats(filter, duplicateKeys) {
+            var stats = {
+                total: 0,
+                visible: 0,
+                userAdded: 0,
+                updated: 0,
+                existing: 0
+            };
+            var filterLower = (filter || "").toLowerCase();
+            for (var bsi = 0; bsi < segments.length; bsi++) {
+                var bseg = segments[bsi];
+                var bsegNameMatches = !filterLower || matchesCommaSeparatedSearch(bseg.text, filter);
+                var bforms = segmentFormMap[bseg.value] || [];
+                for (var bfi = 0; bfi < bforms.length; bfi++) {
+                    var bentry = bforms[bfi];
+                    var bkey = getFormDataKey(bseg.value, bentry.value, bentry.index);
+                    var bdata = formDataStore[bkey] || getDefaultFormData();
+                    var bisAuto = bentry.autoPopulated || bdata.autoPopulated || false;
+                    var bisUpdated = bisAuto && bdata.modified;
+                    stats.total++;
+                    if (bisAuto) {
+                        stats.existing++;
+                    } else {
+                        stats.userAdded++;
+                    }
+                    if (bisUpdated) {
+                        stats.updated++;
+                    }
+                    if (bisAuto && bplHideExisting) {
+                        continue;
+                    }
+                    if (bplShowDuplicatesOnly && !(duplicateKeys && duplicateKeys[bkey])) {
+                        continue;
+                    }
+                    if (filterLower && !bsegNameMatches) {
+                        var bsearchable = (bentry.text || "").toLowerCase();
+                        var bevents = bdata.studyEvents || [];
+                        for (var bei = 0; bei < bevents.length; bei++) {
+                            bsearchable += " " + (bevents[bei].text || "").toLowerCase();
+                        }
+                        if (bdata.timepointDisplay) {
+                            bsearchable += " " + bdata.timepointDisplay.toLowerCase();
+                        }
+                        bsearchable += " " + bplFormatTimePoint(bdata.days || 0, bdata.hours || 0, bdata.minutes || 0, bdata.seconds || 0, bdata.preReference || false).toLowerCase();
+                        if (bdata.exampleTime && bdata.exampleTime !== "N/A") {
+                            bsearchable += " " + bdata.exampleTime.toLowerCase();
+                        }
+                        if (!matchesCommaSeparatedSearch(bsearchable, filter)) {
+                            continue;
+                        }
+                    }
+                    stats.visible++;
+                }
+            }
+            return stats;
+        }
+
+        function bplUpdateFilterControls(hideBtn) {
+            if (hideBtn) {
+                hideBtn.textContent = bplHideExisting ? "Existing: Hidden" : "Existing: Visible";
+                hideBtn.title = bplHideExisting ? "Existing auto-populated forms are hidden. Click to show them." : "Existing auto-populated forms are visible. Click to hide them.";
+                hideBtn.style.borderColor = bplHideExisting ? "#f39c12" : "#2980b9";
+                hideBtn.style.background = bplHideExisting ? "#3a2a12" : "#1a2a3a";
+                hideBtn.style.color = bplHideExisting ? "#ffd166" : "#5dade2";
+            }
+        }
+
+        function bplUpdateFilterStatus(stats, filter) {
+            if (!bplFilterStatusDiv) return;
+            var existingText = bplHideExisting ? "existing hidden" : "existing visible";
+            var dupText = bplShowDuplicatesOnly ? ", duplicates only" : "";
+            var searchText = (filter || "").trim() ? ", search: \"" + (filter || "").trim() + "\"" : "";
+            bplFilterStatusDiv.textContent = "Currently showing " + stats.visible + " of " + stats.total + " forms (" + existingText + dupText + searchText + "). User-added: " + stats.userAdded + "; updated existing: " + stats.updated + "; existing total: " + stats.existing + ".";
+            if (stats.visible === 0 && stats.total > 0) {
+                bplFilterStatusDiv.style.borderColor = "#f39c12";
+                bplFilterStatusDiv.style.background = "#2f2512";
+                bplFilterStatusDiv.style.color = "#ffd166";
+                bplFilterStatusDiv.textContent += " The list is empty because the active filters are hiding the available forms.";
+            } else {
+                bplFilterStatusDiv.style.borderColor = "#34495e";
+                bplFilterStatusDiv.style.background = "#17212b";
+                bplFilterStatusDiv.style.color = "#d6eaff";
+            }
+        }
+
         function renderCenterPanel(filter) {
             saveFormDataFromPanel(selectedFormKey);
             var scrollTop = centerBody.scrollTop;
             centerBody.innerHTML = "";
             var bplDuplicateKeys = bplFindDuplicates(segments, segmentFormMap, formDataStore, segmentCheckboxStates);
+            var bplFilterStats = bplGetFilterStats(filter, bplDuplicateKeys);
+            bplUpdateFilterStatus(bplFilterStats, filter);
             var filterLower = (filter || "").toLowerCase();
             for (var si2 = 0; si2 < segments.length; si2++) {
                 var seg = segments[si2];
-                var segNameMatches = !filterLower || seg.text.toLowerCase().indexOf(filterLower) !== -1;
+                var segNameMatches = !filterLower || matchesCommaSeparatedSearch(seg.text, filter);
                 var matchingFormIndices = null;
                 if (!segNameMatches && filterLower) {
                     var formsToCheck = segmentFormMap[seg.value] || [];
@@ -17827,9 +18375,6 @@
                         if (fcIsAuto && bplHideExisting) {
                             continue;
                         }
-                        if (bplShowUpdatedOnly && !((!fcIsAuto) || (fcIsAuto && fcData.modified))) {
-                            continue;
-                        }
                         var searchableText = (fcEntry.text || "").toLowerCase();
                         for (var evi = 0; evi < fcEvents.length; evi++) {
                             searchableText += " " + (fcEvents[evi].text || "").toLowerCase();
@@ -17841,28 +18386,11 @@
                         if (fcData.exampleTime && fcData.exampleTime !== "N/A") {
                             searchableText += " " + fcData.exampleTime.toLowerCase();
                         }
-                        if (searchableText.indexOf(filterLower) !== -1) {
+                        if (matchesCommaSeparatedSearch(searchableText, filter)) {
                             matchingFormIndices.push(fci);
                         }
                     }
                     if (matchingFormIndices.length === 0) {
-                        continue;
-                    }
-                }
-                if (bplShowUpdatedOnly) {
-                    var segFormsForFilter = segmentFormMap[seg.value] || [];
-                    var hasVisibleForm = false;
-                    for (var sufi = 0; sufi < segFormsForFilter.length; sufi++) {
-                        var sufEntry = segFormsForFilter[sufi];
-                        var sufKey = getFormDataKey(seg.value, sufEntry.value, sufEntry.index);
-                        var sufData = formDataStore[sufKey] || getDefaultFormData();
-                        var sufIsAuto = sufEntry.autoPopulated || sufData.autoPopulated || false;
-                        if (!sufIsAuto || (sufIsAuto && sufData.modified)) {
-                            hasVisibleForm = true;
-                            break;
-                        }
-                    }
-                    if (!hasVisibleForm) {
                         continue;
                     }
                 }
@@ -17938,6 +18466,60 @@
                         }
                         log("BPL: copied all " + copiedAllForms.length + " forms from segment " + segVal);
                         showCopyToast("Copied " + copiedAllForms.length + " form" + (copiedAllForms.length !== 1 ? "s" : "") + "!", e);
+                    };
+                })(seg.value));
+                var deleteAllBtn = document.createElement("button");
+                deleteAllBtn.textContent = "\u2715 Delete All";
+                deleteAllBtn.title = "Remove newly-added forms and mark existing forms in this segment for archive/removal";
+                deleteAllBtn.style.cssText = "padding:3px 8px;border-radius:4px;border:1px solid #8e44ad;background:#2b1838;color:#d39cff;font-size:11px;font-weight:600;cursor:pointer;";
+                deleteAllBtn.dataset.segmentValue = seg.value;
+                deleteAllBtn.addEventListener("mouseenter", function() {
+                    this.style.background = "#3a204c";
+                    this.style.borderColor = "#b45cff";
+                });
+                deleteAllBtn.addEventListener("mouseleave", function() {
+                    this.style.background = "#2b1838";
+                    this.style.borderColor = "#8e44ad";
+                });
+                deleteAllBtn.addEventListener("click", (function(segVal) {
+                    return function(e) {
+                        e.stopPropagation();
+                        var forms = segmentFormMap[segVal] || [];
+                        if (forms.length === 0) {
+                            log("BPL: delete all attempted but segment " + segVal + " has no forms");
+                            return;
+                        }
+                        var kept = [];
+                        var removedNew = 0;
+                        var markedExisting = 0;
+                        for (var di = 0; di < forms.length; di++) {
+                            var entry = forms[di];
+                            var fk = getFormDataKey(segVal, entry.value, entry.index);
+                            var fd = formDataStore[fk] || getDefaultFormData();
+                            var isExisting = entry.autoPopulated || fd.autoPopulated || false;
+                            if (isExisting) {
+                                if (!entry.archiveRequested) {
+                                    entry.archiveRequested = true;
+                                    markedExisting++;
+                                }
+                                kept.push(entry);
+                            } else {
+                                delete formDataStore[fk];
+                                if (selectedFormKey === fk) {
+                                    selectedFormKey = null;
+                                }
+                                removedNew++;
+                            }
+                        }
+                        segmentFormMap[segVal] = kept;
+                        if (!selectedFormKey) {
+                            renderTimePanel({}, null);
+                        }
+                        saveSession();
+                        renderCenterPanel(centerSearch.value);
+                        runAutoValidation();
+                        log("BPL: delete all in segment " + segVal + " - removed " + removedNew + " new form(s), marked " + markedExisting + " existing form(s)");
+                        showCopyToast("Delete All: removed " + removedNew + ", marked " + markedExisting, e);
                     };
                 })(seg.value));
                 var pasteAllBtn = document.createElement("button");
@@ -18150,6 +18732,7 @@
                 segHeaderDiv.appendChild(segLabel);
                 segHeaderDiv.appendChild(undoBtn);
                 segHeaderDiv.appendChild(copyAllBtn);
+                segHeaderDiv.appendChild(deleteAllBtn);
                 segHeaderDiv.appendChild(pasteAllBtn);
                 segHeaderDiv.appendChild(sortBtn);
                 segHeaderDiv.appendChild(collapseBtn);
@@ -18224,9 +18807,6 @@
                         var fEvents = fData2.studyEvents || [];
                         var isAutoPopulated = fEntry.autoPopulated || fData2.autoPopulated || false;
                         if (isAutoPopulated && bplHideExisting) {
-                            continue;
-                        }
-                        if (bplShowUpdatedOnly && !((!isAutoPopulated) || (isAutoPopulated && fData2.modified))) {
                             continue;
                         }
                         if (matchingFormIndices !== null && matchingFormIndices.indexOf(fi) === -1) {
@@ -18558,7 +19138,7 @@
                         formRow.appendChild(eventDropBox);
                         formRow.appendChild(formLabel);
                         var tpStr2 = "";
-                        if (fData2.timepointDisplay && fData2.timepointDisplay.trim().length > 0) {
+                        if (fData2.timepointDisplay && fData2.timepointDisplay.trim().length > 0 && !fData2.modified) {
                             tpStr2 = fData2.timepointDisplay;
                         } else {
                             tpStr2 = bplFormatTimePoint(fData2.days || 0, fData2.hours || 0, fData2.minutes || 0, fData2.seconds || 0, fData2.preReference || false);
@@ -18642,6 +19222,12 @@
                 segBlock.appendChild(formDropArea);
                 centerBody.appendChild(segBlock);
             }
+            if (bplFilterStats.visible === 0) {
+                var bplEmptyState = document.createElement("div");
+                bplEmptyState.style.cssText = "margin:16px;padding:18px;border:1px solid " + (bplFilterStats.total > 0 ? "#f39c12" : "#444") + ";border-radius:6px;background:" + (bplFilterStats.total > 0 ? "#2f2512" : "#1f1f1f") + ";color:" + (bplFilterStats.total > 0 ? "#ffd166" : "#aaa") + ";font-size:13px;line-height:1.45;text-align:center;";
+                bplEmptyState.textContent = bplFilterStats.total > 0 ? "No forms match the current PLAP filters. Check the status bar below: Existing may be hidden, Duplicate filter may be on, or the search may be narrowing the list." : "No forms have been added to the PLAP Builder yet.";
+                centerBody.appendChild(bplEmptyState);
+            }
             centerBody.scrollTop = scrollTop;
             saveSession();
         }
@@ -18649,6 +19235,9 @@
         centerSearch.addEventListener("input", function() {
             renderCenterPanel(this.value);
         });
+
+        bplFilterStatusDiv = document.createElement("div");
+        bplFilterStatusDiv.style.cssText = "padding:8px 12px;border:1px solid #34495e;border-radius:6px;background:#17212b;color:#d6eaff;font-size:12px;font-weight:600;line-height:1.35;";
 
         var legendRow = document.createElement("div");
         legendRow.style.cssText = "display:flex;gap:16px;padding:8px 12px;border:1px solid #333;border-radius:6px;background:#1a1a1a;font-size:11px;color:#aaa;flex-wrap:wrap;";
@@ -18685,42 +19274,18 @@
         legendRow.appendChild(collapseAllBtn);
 
         var hideExistingBtn = document.createElement("button");
-        hideExistingBtn.textContent = bplHideExisting ? "\u{1F441} Show Existing" : "\u{1F6AB} Hide Existing";
-        hideExistingBtn.title = bplHideExisting ? "Show auto-populated items from SA table" : "Hide auto-populated items from SA table";
-        hideExistingBtn.style.cssText = "padding:5px 12px;border-radius:4px;border:1px solid " + (bplHideExisting ? "#2980b9" : "#555") + ";background:" + (bplHideExisting ? "#1a2a3a" : "#2a2a2a") + ";color:" + (bplHideExisting ? "#5dade2" : "#aaa") + ";font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;";
+        hideExistingBtn.style.cssText = "padding:5px 12px;border-radius:4px;border:1px solid #555;background:#2a2a2a;color:#aaa;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0;";
         hideExistingBtn.addEventListener("click", function() {
             bplHideExisting = !bplHideExisting;
             try {
                 localStorage.setItem(STORAGE_BPL_HIDE_EXISTING, bplHideExisting ? "true" : "false");
             } catch (e) {}
-            this.textContent = bplHideExisting ? "\u{1F441} Show Existing" : "\u{1F6AB} Hide Existing";
-            this.title = bplHideExisting ? "Show auto-populated items from SA table" : "Hide auto-populated items from SA table";
-            this.style.borderColor = bplHideExisting ? "#2980b9" : "#555";
-            this.style.background = bplHideExisting ? "#1a2a3a" : "#2a2a2a";
-            this.style.color = bplHideExisting ? "#5dade2" : "#aaa";
+            bplUpdateFilterControls(hideExistingBtn);
             log("BPL: hideExisting toggled to " + bplHideExisting);
             renderCenterPanel(centerSearch.value);
         });
+        bplUpdateFilterControls(hideExistingBtn);
         legendRow.appendChild(hideExistingBtn);
-
-        var showUpdatedBtn = document.createElement("button");
-        showUpdatedBtn.textContent = bplShowUpdatedOnly ? "\u{1F441} Show All" : "\u{270F}\u{FE0F} Show Updated Only";
-        showUpdatedBtn.title = bplShowUpdatedOnly ? "Show all forms including unmodified auto-populated" : "Only show user-added forms and modified auto-populated forms";
-        showUpdatedBtn.style.cssText = "padding:5px 12px;border-radius:4px;border:1px solid " + (bplShowUpdatedOnly ? "#27ae60" : "#555") + ";background:" + (bplShowUpdatedOnly ? "#1a2a1a" : "#2a2a2a") + ";color:" + (bplShowUpdatedOnly ? "#58d68d" : "#aaa") + ";font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;";
-        showUpdatedBtn.addEventListener("click", function() {
-            bplShowUpdatedOnly = !bplShowUpdatedOnly;
-            try {
-                localStorage.setItem(STORAGE_BPL_SHOW_UPDATED_ONLY, bplShowUpdatedOnly ? "true" : "false");
-            } catch (e) {}
-            this.textContent = bplShowUpdatedOnly ? "\u{1F441} Show All" : "\u{270F}\u{FE0F} Show Updated Only";
-            this.title = bplShowUpdatedOnly ? "Show all forms including unmodified auto-populated" : "Only show user-added forms and modified auto-populated forms";
-            this.style.borderColor = bplShowUpdatedOnly ? "#27ae60" : "#555";
-            this.style.background = bplShowUpdatedOnly ? "#1a2a1a" : "#2a2a2a";
-            this.style.color = bplShowUpdatedOnly ? "#58d68d" : "#aaa";
-            log("BPL: showUpdatedOnly toggled to " + bplShowUpdatedOnly);
-            renderCenterPanel(centerSearch.value);
-        });
-        legendRow.appendChild(showUpdatedBtn);
 
         var clearAllBtn = document.createElement("button");
         clearAllBtn.textContent = "\uD83D\uDDD1 Clear All";
@@ -18868,8 +19433,7 @@
 
             log("BPL: collect existing started");
 
-            // Build a set of updated auto-populated form identities (segment + studyEvent)
-            // to avoid re-adding duplicates
+            // Track updated auto-populated rows by their actual source table row.
             var updatedAutoKeys = {};
             for (var uSeg in segmentFormMap) {
                 if (!segmentFormMap.hasOwnProperty(uSeg)) continue;
@@ -18880,21 +19444,8 @@
                     var uData = formDataStore[uKey] || getDefaultFormData();
                     var uIsAuto = uEntry.autoPopulated || uData.autoPopulated;
                     if (uIsAuto && uData.modified) {
-                        // Build identity key from segment value + original study event text + form text
-                        // Use original study event if available, otherwise current
-                        var origEvText = "";
-                        if (uData.originalValues && uData.originalValues.studyEventText) {
-                            origEvText = uData.originalValues.studyEventText;
-                        } else if (uData.studyEvents && uData.studyEvents.length > 0) {
-                            origEvText = uData.studyEvents[0].text;
-                        }
-                        var identityKey = uSeg + "|" + normalizeSAText(origEvText) + "|" + normalizeSAText(uEntry.text);
-                        updatedAutoKeys[identityKey] = true;
-                        // Also add key with current study event in case it was changed
-                        if (uData.studyEvents && uData.studyEvents.length > 0) {
-                            var currEvText = uData.studyEvents[0].text;
-                            var identityKey2 = uSeg + "|" + normalizeSAText(currEvText) + "|" + normalizeSAText(uEntry.text);
-                            updatedAutoKeys[identityKey2] = true;
+                        if (uData.saRowIndex !== undefined && uData.saRowIndex !== null) {
+                            updatedAutoKeys[uSeg + "|" + String(uData.saRowIndex)] = true;
                         }
                     }
                 }
@@ -18933,7 +19484,7 @@
                     }
                 }
 
-                var checkKey = matchedSegVal + "|" + normalizeSAText(saItem.studyEvent) + "|" + normalizeSAText(resolvedFormText);
+                var checkKey = matchedSegVal + "|" + String(saItem.saRowIndex);
                 if (updatedAutoKeys[checkKey]) {
                     skippedCount++;
                     log("BPL: collect existing - skipping updated auto-populated form: " + saItem.segment + "|" + saItem.studyEvent + "|" + saItem.form);
@@ -18943,6 +19494,7 @@
                 // Check if this exact item already exists in segmentFormMap (any form, not just auto)
                 var existingForms = segmentFormMap[matchedSegVal] || [];
                 var alreadyExists = false;
+                var alreadyExistsKey = null;
                 for (var ef = 0; ef < existingForms.length; ef++) {
                     var efKey = getFormDataKey(matchedSegVal, existingForms[ef].value, existingForms[ef].index);
                     var efData = formDataStore[efKey];
@@ -18952,13 +19504,28 @@
                         var formTextNorm = normalizeSAText(existingForms[ef].text);
                         var saTpCleaned = saItem.timepointCleaned || "";
                         var efTpCleaned = efData.timepointCleaned || "";
-                        if (evText === saItem.studyEvent && formTextNorm === saItem.form && efTpCleaned === saTpCleaned) {
+                        if (efData.saRowIndex !== undefined && efData.saRowIndex !== null && saItem.saRowIndex !== undefined && String(efData.saRowIndex) === String(saItem.saRowIndex)) {
                             alreadyExists = true;
+                            alreadyExistsKey = efKey;
                             break;
                         }
                     }
                 }
                 if (alreadyExists) {
+                    if (alreadyExistsKey && formDataStore[alreadyExistsKey]) {
+                        var existingData = formDataStore[alreadyExistsKey];
+                        existingData.editHref = saItem.editHref || existingData.editHref || "";
+                        existingData.saRowIndex = saItem.saRowIndex;
+                        existingData.timepointRaw = saItem.timepointRaw || existingData.timepointRaw || "";
+                        existingData.timepointCleaned = saItem.timepointCleaned || existingData.timepointCleaned || "";
+                        existingData.timepointDisplay = saItem.timepointDisplay || existingData.timepointDisplay || "";
+                        if (!existingData.modified && saItem.exampleTime) {
+                            existingData.exampleTime = saItem.exampleTime;
+                        } else if ((!existingData.exampleTime || existingData.exampleTime === "N/A") && saItem.exampleTime) {
+                            existingData.exampleTime = saItem.exampleTime;
+                        }
+                        formDataStore[alreadyExistsKey] = existingData;
+                    }
                     skippedCount++;
                     continue;
                 }
@@ -19060,7 +19627,7 @@
                     timepointCleaned: saItem.timepointCleaned || "",
                     timepointDisplay: saItem.timepointDisplay || "",
                     segmentRefDateTime: segRefDateTime,
-                    exampleTime: bplComputeExampleTime(segRefDateTime, saItem.timepointCleaned || "", saItem.preReference || false)
+                    exampleTime: saItem.exampleTime || bplComputeExampleTime(segRefDateTime, saItem.timepointCleaned || "", saItem.preReference || false)
                 };
                 addedCount++;
             }
@@ -19106,10 +19673,31 @@
         });
         legendRow.appendChild(viewDuplicatesBtn);
 
+        var autoConfigureBtn = document.createElement("button");
+        autoConfigureBtn.textContent = "⚙ Auto Configure";
+        autoConfigureBtn.title = "Apply one selected form's configuration to matching forms across segments";
+        autoConfigureBtn.style.cssText = "padding:5px 12px;border-radius:4px;border:1px solid #8e7dff;background:#25203d;color:#cfc7ff;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;";
+        autoConfigureBtn.addEventListener("mouseenter", function() { this.style.background = "#342b58"; });
+        autoConfigureBtn.addEventListener("mouseleave", function() { this.style.background = "#25203d"; });
+        autoConfigureBtn.addEventListener("click", function() { showBPLAutoConfigurePanel(); });
+        legendRow.appendChild(autoConfigureBtn);
+
+        var sortAllBtn = document.createElement("button");
+        sortAllBtn.textContent = "↕ Sort All"; sortAllBtn.title = "Sort forms in every segment by time point";
+        sortAllBtn.style.cssText = "padding:5px 12px;border-radius:4px;border:1px solid #777;background:#2b2b2b;color:#fff;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;";
+        sortAllBtn.addEventListener("mouseenter", function() { this.style.background = "#3a3a3a"; }); sortAllBtn.addEventListener("mouseleave", function() { this.style.background = "#2b2b2b"; });
+        sortAllBtn.addEventListener("click", function() { saveFormDataFromPanel(selectedFormKey); for (var sai = 0; sai < segments.length; sai++) { var sv = segments[sai].value, list = segmentFormMap[sv] || []; list.sort(function(a, b) { var ad = formDataStore[getFormDataKey(sv, a.value, a.index)] || getDefaultFormData(), bd = formDataStore[getFormDataKey(sv, b.value, b.index)] || getDefaultFormData(); var at = (ad.days || 0) * 86400 + (ad.hours || 0) * 3600 + (ad.minutes || 0) * 60 + (ad.seconds || 0), bt = (bd.days || 0) * 86400 + (bd.hours || 0) * 3600 + (bd.minutes || 0) * 60 + (bd.seconds || 0); if (ad.preReference) at = -at; if (bd.preReference) bt = -bt; return at !== bt ? at - bt : a.text.localeCompare(b.text); }); segmentFormMap[sv] = list; } renderCenterPanel(centerSearch.value); runAutoValidation(); showCopyToast("Sorted all segments", null); log("BPL: sorted all segments"); });
+        legendRow.appendChild(sortAllBtn);
+
         var bottomRow = document.createElement("div");
         bottomRow.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:12px;";
 
-        bottomRow.appendChild(legendRow);
+        var bottomLeftArea = document.createElement("div");
+        bottomLeftArea.style.cssText = "display:flex;flex-direction:column;gap:8px;flex:1;min-width:0;";
+        bottomLeftArea.appendChild(bplFilterStatusDiv);
+        bottomLeftArea.appendChild(legendRow);
+
+        bottomRow.appendChild(bottomLeftArea);
 
         var confirmArea = document.createElement("div");
         confirmArea.style.cssText = "display:flex;flex-direction:row;align-items:center;gap:8px;flex-shrink:0;";
@@ -19758,6 +20346,28 @@
 
                 if (BPL_CANCELLED) {
                     break;
+                }
+
+                var formSel = document.getElementById("form");
+                var formChosenEl = document.querySelector("#s2id_form .select2-chosen");
+                var formChosenText = formChosenEl ? normalizeSAText(formChosenEl.textContent || "").trim() : "";
+                var formNeedsSelection = !formSel || !String(formSel.value || "").trim() || !formChosenText;
+                if (formNeedsSelection && item.formText) {
+                    var formOptions = formSel ? formSel.querySelectorAll("option") : [];
+                    var formMatchValue = "";
+                    var targetFormText = normalizeSAText(item.formText).trim().toLowerCase();
+                    for (var foi = 0; foi < formOptions.length; foi++) {
+                        if (normalizeSAText(formOptions[foi].textContent || "").trim().toLowerCase() === targetFormText) { formMatchValue = formOptions[foi].value; break; }
+                    }
+                    if (formMatchValue) {
+                        log("BPL Update: Form dropdown was blank; selecting existing form '" + item.formText + "'");
+                        await selectBPLSelect2Value("form", formMatchValue);
+                        formChosenEl = document.querySelector("#s2id_form .select2-chosen");
+                        formChosenText = formChosenEl ? normalizeSAText(formChosenEl.textContent || "").trim() : "";
+                        log("BPL Update: Form selection restored as '" + formChosenText + "'");
+                    } else {
+                        log("BPL Update: could not find Form option matching '" + item.formText + "'");
+                    }
                 }
 
                 // Check if studyEvent or form dropdowns are disabled — if so, skip this form
@@ -23457,7 +24067,7 @@
         var path = location.pathname;
         if (path !== "/secure/crfdesign/studylibrary/eligibility/list") {
             log("ClearMapping: not on eligibility list page; redirecting");
-            location.href = "https://cenexel-val.clinspark.com/secure/crfdesign/studylibrary/eligibility/list";
+            location.href = getBaseUrl() + ELIGIBILITY_LIST_PATH;
             return;
         }
 
@@ -23478,130 +24088,481 @@
                 localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_CLEAR_MAPPING);
             } catch (e) {
             }
-            location.href = "https://cenexel-val.clinspark.com/secure/crfdesign/studylibrary/eligibility/list";
+            location.href = getBaseUrl() + ELIGIBILITY_LIST_PATH;
             return;
         }
 
-        // Loop until no more rows
-        while (true) {
-            if (CLEAR_MAPPING_CANCELED) {
-                log("ClearMapping: cancelled during loop");
-                clearRunMode();
-                return;
-            }
-
-            var tbody = await waitForSelector("tbody#eligibilityRefTableBody", 15000);
-            if (!tbody) {
-                log("ClearMapping: table body missing; stopping");
-                clearRunMode();
-                return;
-            }
-
-            var rows = tbody.querySelectorAll("tr");
-            log("ClearMapping: rows found=" + String(rows.length));
-
-            if (rows.length === 0) {
-                log("ClearMapping: no rows remain; clearing run mode");
-                clearRunMode();
-                return;
-            }
-
-            await deleteFirstEligibilityRow();
-
-            // Wait a bit after delete/reload before checking again
-            await sleep(2000);
+        var queued = getClearMappingQueue();
+        if (queued.length > 0) {
+            await processClearMappingQueue(queued);
+            return;
         }
+
+        var tableRows = collectClearMappingRowsFromTable();
+        log("ClearMapping: selectable rows found=" + String(tableRows.length));
+        if (tableRows.length === 0) {
+            clearRunMode();
+            showWarningPopup("Clear Mapping", "No eligibility mappings were found in the page table.");
+            return;
+        }
+        showClearMappingSelectionPanel(tableRows);
     }
 
 
 
-    async function deleteFirstEligibilityRow() {
+    function getClearMappingQueue() {
+        try {
+            var raw = localStorage.getItem(STORAGE_CLEAR_MAPPING_QUEUE);
+            if (!raw) {
+                return [];
+            }
+            var parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+            log("ClearMapping: failed to read queue - " + String(e));
+            return [];
+        }
+    }
+
+    function setClearMappingQueue(queue) {
+        try {
+            localStorage.setItem(STORAGE_CLEAR_MAPPING_QUEUE, JSON.stringify(queue || []));
+        } catch (e) {
+            log("ClearMapping: failed to save queue - " + String(e));
+        }
+    }
+
+    function clearClearMappingQueue() {
+        try {
+            localStorage.removeItem(STORAGE_CLEAR_MAPPING_QUEUE);
+        } catch (e) {}
+    }
+
+    function collectClearMappingRowsFromTable() {
+        var results = [];
+        var tbody = document.querySelector("tbody#eligibilityRefTableBody");
+        if (!tbody) {
+            log("ClearMapping: collect rows no tbody");
+            return results;
+        }
+        var rows = tbody.querySelectorAll("tr");
+        var i = 0;
+        while (i < rows.length) {
+            var tr = rows[i];
+            var tds = tr.querySelectorAll("td");
+            if (tds && tds.length >= 9) {
+                var deleteLink = tr.querySelector("a[onclick*='maybeDeleteEligRef']");
+                var deleteUrl = "";
+                if (deleteLink) {
+                    var onclickText = deleteLink.getAttribute("onclick") || "";
+                    var m = onclickText.match(/maybeDeleteEligRef\(['"]([^'"]+)['"]\)/);
+                    if (m) {
+                        deleteUrl = m[1];
+                    }
+                }
+                if (deleteUrl) {
+                    var itemType = (tds[0].childNodes[0] ? tds[0].childNodes[0].textContent : tds[0].textContent || "").trim().replace(/\s+/g, " ");
+                    var itemCodeEl = tds[0].querySelector("a[href*='/show/item/']");
+                    var itemCode = itemCodeEl ? (itemCodeEl.textContent || "").trim().replace(/\s+/g, " ") : "";
+                    var checkItemEl = tds[5].querySelector("a[href*='/show/item/']");
+                    var checkItem = checkItemEl ? (checkItemEl.textContent || "").trim().replace(/\s+/g, " ") : (tds[5].textContent || "").trim().replace(/\s+/g, " ");
+                    var saText = (tds[4].textContent || "").trim().replace(/\s+/g, " ");
+                    var operatorText = (tds[6].textContent || "").trim().replace(/\s+/g, " ");
+                    var valueText = (tds[7].textContent || "").trim().replace(/\s+/g, " ");
+                    results.push({
+                        deleteUrl: deleteUrl,
+                        itemType: itemType || "",
+                        itemCode: itemCode || checkItem || "",
+                        checkItem: checkItem || itemCode || "",
+                        scheduledActivity: saText || "",
+                        operator: operatorText || "",
+                        value: valueText || "",
+                        rowIndex: i
+                    });
+                }
+            }
+            i = i + 1;
+        }
+        return results;
+    }
+
+    function showClearMappingSelectionPanel(rows) {
+        var container = document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;gap:10px;color:#fff;font-size:13px;min-width:720px;min-height:0;";
+        var summary = document.createElement("div");
+        summary.style.cssText = "color:#ccc;line-height:1.4;";
+        summary.textContent = "Select the eligibility mappings you want to remove. Only selected rows will be deleted.";
+        container.appendChild(summary);
+        var searchInput = document.createElement("input");
+        searchInput.type = "search";
+        searchInput.placeholder = "Search eligibility items, forms, activities... (use commas for multiple keywords)";
+        searchInput.setAttribute("aria-label", "Filter eligibility mappings");
+        searchInput.style.cssText = "width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #444;border-radius:5px;background:#1a1a1a;color:#fff;font-size:12px;outline:none;";
+        container.appendChild(searchInput);
+        var controls = document.createElement("div");
+        controls.style.cssText = "display:flex;gap:8px;align-items:center;";
+        var selectAllBtn = document.createElement("button");
+        selectAllBtn.textContent = "Select All";
+        selectAllBtn.style.cssText = "background:#2980b9;color:#fff;border:none;padding:5px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;";
+        var deselectAllBtn = document.createElement("button");
+        deselectAllBtn.textContent = "Deselect All";
+        deselectAllBtn.style.cssText = "background:#444;color:#fff;border:none;padding:5px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;";
+        var countLabel = document.createElement("span");
+        countLabel.style.cssText = "margin-left:auto;color:#aaa;font-size:12px;";
+        controls.appendChild(selectAllBtn);
+        controls.appendChild(deselectAllBtn);
+        controls.appendChild(countLabel);
+        container.appendChild(controls);
+        var list = document.createElement("div");
+        list.style.cssText = "flex:1 1 auto;min-height:0;max-height:460px;overflow-y:auto;border:1px solid #333;border-radius:5px;background:#141414;";
+        var checks = [];
+        var checkRows = [];
+        function updateCount() {
+            var selected = 0;
+            var i = 0;
+            while (i < checks.length) {
+                if (checks[i].checked) selected = selected + 1;
+                i = i + 1;
+            }
+            countLabel.textContent = String(selected) + " of " + String(rows.length) + " selected";
+            confirmBtn.disabled = selected === 0;
+            confirmBtn.style.opacity = selected === 0 ? "0.5" : "1";
+            confirmBtn.style.cursor = selected === 0 ? "default" : "pointer";
+        }
+        var ri = 0;
+        while (ri < rows.length) {
+            (function(rowData) {
+                var row = document.createElement("div");
+                row.style.cssText = "display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border-bottom:1px solid #252525;cursor:pointer;";
+                var cb = document.createElement("input");
+                cb.type = "checkbox";
+                cb.checked = true;
+                cb.style.cssText = "margin-top:2px;accent-color:#d9534f;cursor:pointer;";
+                checks.push(cb);
+                var text = document.createElement("div");
+                text.style.cssText = "flex:1;min-width:0;";
+                var title = document.createElement("div");
+                title.style.cssText = "font-weight:600;color:#fff;font-size:12px;";
+                title.textContent = (rowData.itemCode || rowData.checkItem || "Eligibility item") + " - " + (rowData.itemType || "Mapping");
+                var path = document.createElement("div");
+                path.style.cssText = "color:#aaa;font-size:11px;margin-top:2px;line-height:1.35;word-break:break-word;";
+                path.textContent = rowData.scheduledActivity + " | Check: " + rowData.checkItem + " | " + rowData.operator + " " + rowData.value;
+                text.appendChild(title);
+                text.appendChild(path);
+                row.appendChild(cb);
+                row.appendChild(text);
+                row.addEventListener("click", function(e) {
+                    if (e.target !== cb) {
+                        cb.checked = !cb.checked;
+                        updateCount();
+                    }
+                });
+                cb.addEventListener("change", updateCount);
+                list.appendChild(row);
+                checkRows.push({ row: row, data: rowData });
+            })(rows[ri]);
+            ri = ri + 1;
+        }
+        container.appendChild(list);
+        var footer = document.createElement("div");
+        footer.style.cssText = "display:flex;justify-content:flex-end;gap:8px;";
+        var cancelBtn = document.createElement("button");
+        cancelBtn.textContent = "Cancel";
+        cancelBtn.style.cssText = "background:#444;color:#fff;border:none;padding:7px 18px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;";
+        var confirmBtn = document.createElement("button");
+        confirmBtn.textContent = "Confirm";
+        confirmBtn.style.cssText = "background:#c0392b;color:#fff;border:none;padding:7px 18px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;";
+        footer.appendChild(cancelBtn);
+        footer.appendChild(confirmBtn);
+        container.appendChild(footer);
+        var clearMappingSelectionContinuing = false;
+        var popup = createPopup({ title: "Clear Mapping - Select Eligibility Items", content: container, width: "780px", height: "auto", maxHeight: "85%", onClose: function() {
+            if (!clearMappingSelectionContinuing) {
+                CLEAR_MAPPING_CANCELED = true;
+                clearRunMode();
+                clearClearMappingQueue();
+                try { localStorage.removeItem(STORAGE_CLEAR_MAPPING_POPUP); } catch (e) {}
+                log("ClearMapping: selection panel closed; automation cancelled");
+            }
+        } });
+        var fullscreenBtn = document.createElement("button");
+        fullscreenBtn.textContent = "\u26F6";
+        fullscreenBtn.title = "Toggle Full Screen";
+        fullscreenBtn.setAttribute("aria-label", "Toggle Clear Mapping full screen");
+        fullscreenBtn.style.cssText = "position:absolute;top:8px;right:42px;width:28px;height:28px;padding:3px 6px;border:1px solid #555;border-radius:4px;background:#333;color:#fff;font-size:14px;line-height:1;cursor:pointer;z-index:5;box-sizing:border-box;";
+        var clearMappingIsFullscreen = false;
+        var clearMappingOriginalStyles = {};
+        try { clearMappingIsFullscreen = localStorage.getItem(STORAGE_CLEAR_MAPPING_FULLSCREEN) === "true"; } catch (e) {}
+        function applyClearMappingFullscreen() {
+            var popupElement = popup.element;
+            if (!popupElement) return;
+            if (clearMappingIsFullscreen) {
+                if (!clearMappingOriginalStyles.width) {
+                    clearMappingOriginalStyles.width = popupElement.style.width;
+                    clearMappingOriginalStyles.maxWidth = popupElement.style.maxWidth;
+                    clearMappingOriginalStyles.height = popupElement.style.height;
+                    clearMappingOriginalStyles.maxHeight = popupElement.style.maxHeight;
+                    clearMappingOriginalStyles.top = popupElement.style.top;
+                    clearMappingOriginalStyles.left = popupElement.style.left;
+                    clearMappingOriginalStyles.transform = popupElement.style.transform;
+                    clearMappingOriginalStyles.borderRadius = popupElement.style.borderRadius;
+                }
+                popupElement.style.width = "100vw";
+                popupElement.style.maxWidth = "100vw";
+                popupElement.style.height = "100vh";
+                popupElement.style.maxHeight = "100vh";
+                popupElement.style.top = "0";
+                popupElement.style.left = "0";
+                popupElement.style.transform = "none";
+                popupElement.style.borderRadius = "0";
+                container.style.height = "100%";
+                list.style.maxHeight = "none";
+                if (popupElement.children[1]) popupElement.children[1].style.overflow = "hidden";
+                fullscreenBtn.textContent = "\u2716\u26F6";
+                fullscreenBtn.title = "Exit Full Screen";
+            } else {
+                popupElement.style.width = clearMappingOriginalStyles.width || "780px";
+                popupElement.style.maxWidth = clearMappingOriginalStyles.maxWidth || "90%";
+                popupElement.style.height = clearMappingOriginalStyles.height || "auto";
+                popupElement.style.maxHeight = clearMappingOriginalStyles.maxHeight || "85%";
+                popupElement.style.top = clearMappingOriginalStyles.top || "50%";
+                popupElement.style.left = clearMappingOriginalStyles.left || "50%";
+                popupElement.style.transform = clearMappingOriginalStyles.transform || "translate(-50%, -50%)";
+                popupElement.style.borderRadius = clearMappingOriginalStyles.borderRadius || "8px";
+                container.style.height = "";
+                list.style.maxHeight = "460px";
+                if (popupElement.children[1]) popupElement.children[1].style.overflow = "auto";
+                fullscreenBtn.textContent = "\u26F6";
+                fullscreenBtn.title = "Toggle Full Screen";
+            }
+        }
+        fullscreenBtn.addEventListener("mousedown", function(e) { e.stopPropagation(); });
+        fullscreenBtn.addEventListener("click", function(e) {
+            e.stopPropagation();
+            clearMappingIsFullscreen = !clearMappingIsFullscreen;
+            try { localStorage.setItem(STORAGE_CLEAR_MAPPING_FULLSCREEN, String(clearMappingIsFullscreen)); } catch (err) {}
+            applyClearMappingFullscreen();
+        });
+        var popupHeader = popup.element.firstElementChild;
+        if (popupHeader) {
+            popupHeader.style.position = "relative";
+            popupHeader.appendChild(fullscreenBtn);
+        } else {
+            popup.element.appendChild(fullscreenBtn);
+        }
+        function applyClearMappingSearch() {
+            var query = searchInput.value || "";
+            var visible = 0;
+            for (var si = 0; si < checkRows.length; si++) {
+                var rowData = checkRows[si].data;
+                var searchable = [rowData.itemCode, rowData.itemType, rowData.checkItem, rowData.scheduledActivity, rowData.operator, rowData.value].join(" ");
+                var matches = matchesCommaSeparatedSearch(searchable, query);
+                checkRows[si].row.style.display = matches ? "flex" : "none";
+                if (matches) visible++;
+            }
+            searchInput.title = query.trim() ? String(visible) + " matching mapping(s)" : "";
+        }
+        searchInput.addEventListener("input", applyClearMappingSearch);
+        applyClearMappingSearch();
+        applyClearMappingFullscreen();
+        selectAllBtn.addEventListener("click", function() {
+            var i = 0;
+            while (i < checks.length) { checks[i].checked = true; i = i + 1; }
+            updateCount();
+        });
+        deselectAllBtn.addEventListener("click", function() {
+            var i = 0;
+            while (i < checks.length) { checks[i].checked = false; i = i + 1; }
+            updateCount();
+        });
+        cancelBtn.addEventListener("click", function() {
+            clearRunMode();
+            clearClearMappingQueue();
+            popup.close();
+        });
+        confirmBtn.addEventListener("click", function() {
+            var selectedRows = [];
+            var i = 0;
+            while (i < rows.length) {
+                if (checks[i].checked) {
+                    selectedRows.push(rows[i]);
+                }
+                i = i + 1;
+            }
+            clearMappingSelectionContinuing = true;
+            showClearMappingWarning(selectedRows, popup);
+        });
+        updateCount();
+    }
+
+    function showClearMappingWarning(selectedRows, selectionPopup) {
+        var wrap = document.createElement("div");
+        wrap.style.cssText = "display:flex;flex-direction:column;gap:12px;color:#fff;font-size:13px;line-height:1.45;";
+        var msg = document.createElement("div");
+        msg.innerHTML = '<div style="color:#ffb74d;font-weight:700;margin-bottom:6px;">Warning</div><div>You are about to delete <strong>' + String(selectedRows.length) + '</strong> selected eligibility mapping(s). This action changes the ClinSpark eligibility table.</div>';
+        wrap.appendChild(msg);
+        var btns = document.createElement("div");
+        btns.style.cssText = "display:flex;justify-content:flex-end;gap:8px;";
+        var cancelBtn = document.createElement("button");
+        cancelBtn.textContent = "Cancel";
+        cancelBtn.style.cssText = "background:#444;color:#fff;border:none;padding:7px 18px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;";
+        var confirmBtn = document.createElement("button");
+        confirmBtn.textContent = "Delete Selected";
+        confirmBtn.style.cssText = "background:#c0392b;color:#fff;border:none;padding:7px 18px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;";
+        btns.appendChild(cancelBtn);
+        btns.appendChild(confirmBtn);
+        wrap.appendChild(btns);
+        var warningPopup = createPopup({ title: "Clear Mapping - Confirm Delete", content: wrap, width: "430px", height: "auto" });
+        cancelBtn.addEventListener("click", function() {
+            warningPopup.close();
+        });
+        confirmBtn.addEventListener("click", function() {
+            warningPopup.close();
+            if (selectionPopup) {
+                selectionPopup.close();
+            }
+            setClearMappingQueue(selectedRows);
+            try { localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_CLEAR_MAPPING); } catch (e) {}
+            processClearMappingQueue(selectedRows);
+        });
+    }
+
+    async function processClearMappingQueue(queue) {
         if (CLEAR_MAPPING_CANCELED) {
-            log("ClearMapping: deleteFirstEligibilityRow cancelled");
+            log("ClearMapping: process queue cancelled");
+            clearClearMappingQueue();
+            clearRunMode();
             return;
         }
-        log("ClearMapping: deleteFirstEligibilityRow started");
+        log("ClearMapping: process queue started count=" + String(queue.length));
+        var remaining = queue.slice();
+        var results = [];
+        while (remaining.length > 0) {
+            if (CLEAR_MAPPING_CANCELED) {
+                log("ClearMapping: cancelled during selected delete queue");
+                clearClearMappingQueue();
+                clearRunMode();
+                return;
+            }
+            setClearMappingQueue(remaining);
+            var item = remaining[0];
+            var ok = await deleteEligibilityRowByUrl(item.deleteUrl);
+            results.push({ item: item, ok: ok });
+            if (!ok) {
+                log("ClearMapping: failed to delete selected item url=" + String(item.deleteUrl));
+            }
+            remaining.shift();
+            setClearMappingQueue(remaining);
+            await sleep(1200);
+        }
+        log("ClearMapping: selected queue complete");
+        clearClearMappingQueue();
+        clearRunMode();
+        showClearMappingResults(results);
+    }
+
+    function showClearMappingResults(results) {
+        var completed = 0;
+        var failed = 0;
+        var wrap = document.createElement("div");
+        wrap.style.cssText = "display:flex;flex-direction:column;gap:10px;color:#fff;font-size:13px;line-height:1.4;min-width:520px;";
+        for (var i = 0; i < results.length; i++) {
+            if (results[i].ok) completed++; else failed++;
+        }
+        var summary = document.createElement("div");
+        summary.style.cssText = "padding:9px 10px;border:1px solid #34495e;border-radius:5px;background:#17212b;color:#d6eaff;font-weight:600;";
+        summary.textContent = "Completed: " + completed + " | Failed: " + failed + " | Total: " + results.length;
+        wrap.appendChild(summary);
+        var list = document.createElement("div");
+        list.style.cssText = "max-height:430px;overflow-y:auto;border:1px solid #333;border-radius:5px;background:#141414;";
+        for (var ri = 0; ri < results.length; ri++) {
+            var result = results[ri];
+            var item = result.item || {};
+            var row = document.createElement("div");
+            row.style.cssText = "padding:9px 10px;border-bottom:1px solid #252525;";
+            var title = document.createElement("div");
+            title.style.cssText = "font-weight:700;color:" + (result.ok ? "#9f9" : "#ff9b9b") + ";";
+            title.textContent = (result.ok ? "SUCCESS - " : "FAILED - ") + (item.itemCode || item.checkItem || "Eligibility item");
+            var details = document.createElement("div");
+            details.style.cssText = "margin-top:3px;color:#bbb;font-size:11px;word-break:break-word;";
+            details.textContent = (item.itemType || "Mapping") + " | " + (item.scheduledActivity || "") + " | Check: " + (item.checkItem || "") + " | " + (item.operator || "") + " " + (item.value || "");
+            row.appendChild(title);
+            row.appendChild(details);
+            list.appendChild(row);
+        }
+        wrap.appendChild(list);
+        var close = document.createElement("button");
+        close.textContent = "Close";
+        close.style.cssText = "align-self:flex-end;background:#444;color:#fff;border:none;padding:7px 18px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;";
+        wrap.appendChild(close);
+        var popup = createPopup({ title: "Clear Mapping - Results", content: wrap, width: "620px", height: "auto", maxHeight: "85%" });
+        close.addEventListener("click", function() { popup.close(); });
+    }
+
+    async function deleteEligibilityRowByUrl(deleteUrl) {
+        log("ClearMapping: deleteEligibilityRowByUrl url=" + String(deleteUrl));
 
         var tbody = await waitForSelector("tbody#eligibilityRefTableBody", 15000);
         if (!tbody) {
-            log("ClearMapping: tbody missing in deleteFirstEligibilityRow");
-            clearRunMode();
-            return;
+            log("ClearMapping: tbody missing in deleteEligibilityRowByUrl");
+            return false;
         }
 
         var rows = tbody.querySelectorAll("tr");
         if (rows.length === 0) {
-            log("ClearMapping: no rows present during deleteFirstEligibilityRow");
-            clearRunMode();
-            return;
+            log("ClearMapping: no rows present during deleteEligibilityRowByUrl");
+            return false;
         }
 
-        var tr = rows[0];
-        var tds = tr.querySelectorAll("td");
-        if (!tds) {
-            log("ClearMapping: row has no tds; stopping");
-            clearRunMode();
-            return;
-        }
-        if (tds.length < 9) {
-            log("ClearMapping: row has insufficient columns; stopping");
-            clearRunMode();
-            return;
-        }
-
-        var actionTd = tds[8];
-        var btn = actionTd.querySelector("button.dropdown-toggle");
-        if (!btn) {
-            log("ClearMapping: dropdown toggle not found");
-            clearRunMode();
-            return;
-        }
-
-        btn.click();
-        log("ClearMapping: action dropdown opened");
-        await sleep(400);
-
-        var items = document.querySelectorAll("ul.dropdown-menu li a");
         var deleteLink = null;
-
         var i = 0;
-        while (i < items.length) {
-            if (CLEAR_MAPPING_CANCELED) {
-                log("ClearMapping: deleteFirstEligibilityRow cancelled");
-                return;
-            }
-            var a = items[i];
-            var txt = (a.textContent + "").trim().toLowerCase();
-            if (txt.indexOf("delete") >= 0) {
-                deleteLink = a;
-                break;
+        while (i < rows.length) {
+            var candidate = rows[i].querySelector("a[onclick*='maybeDeleteEligRef']");
+            if (candidate) {
+                var onclickText = candidate.getAttribute("onclick") || "";
+                if (onclickText.indexOf(deleteUrl) !== -1) {
+                    deleteLink = candidate;
+                    break;
+                }
             }
             i = i + 1;
         }
 
         if (!deleteLink) {
-            log("ClearMapping: delete link not found");
-            clearRunMode();
-            return;
+            log("ClearMapping: selected delete link not found on current table");
+            return false;
+        }
+
+        var actionBtn = null;
+        var parent = deleteLink;
+        while (parent && parent.tagName !== "TR") {
+            parent = parent.parentNode;
+        }
+        if (parent) {
+            actionBtn = parent.querySelector("button.dropdown-toggle");
+        }
+        if (actionBtn) {
+            actionBtn.click();
+            await sleep(250);
         }
 
         if (CLEAR_MAPPING_CANCELED) {
-            log("ClearMapping: deleteFirstEligibilityRow cancelled");
-            return;
+            log("ClearMapping: delete selected cancelled before click");
+            return false;
         }
-        log("ClearMapping: clicking delete link");
+        log("ClearMapping: clicking selected delete link");
         deleteLink.click();
         await sleep(600);
 
         var okBtn = null;
         var waited = 0;
         var step = 150;
-        var maxWait = 4000;
+        var maxWait = 5000;
 
         while (waited < maxWait) {
             if (CLEAR_MAPPING_CANCELED) {
-                log("ClearMapping: deleteFirstEligibilityRow cancelled");
-                return;
+                log("ClearMapping: delete selected cancelled while waiting confirm");
+                return false;
             }
             okBtn = document.querySelector("button[data-bb-handler='confirm'].btn.btn-primary");
             if (okBtn) {
@@ -23613,17 +24574,15 @@
 
         if (!okBtn) {
             log("ClearMapping: OK button not found in modal");
-            clearRunMode();
-            return;
+            return false;
         }
 
         log("ClearMapping: clicking OK button in modal");
         okBtn.click();
         await sleep(1500);
-
-        log("ClearMapping: delete confirmed; forcing page reload");
-        localStorage.setItem(STORAGE_RUN_MODE, RUNMODE_CLEAR_MAPPING);
+        return true;
     }
+
 
 
     //==========================
@@ -26600,6 +27559,59 @@
             return null;
         }
 
+        function findExpectedEligibilityEntry(mappingRecord) {
+            var targetText = String((mappingRecord && (mappingRecord.code || mappingRecord.checkItemText)) || "");
+            var targetParts = parsePoolCodeParts(targetText);
+            var targetCode = String((mappingRecord && mappingRecord.code) || "").replace(/\s+/g, "").toUpperCase();
+            if (!targetParts && !targetCode) {
+                return null;
+            }
+            var i = 0;
+            while (i < eligibilityItemPool.length) {
+                var poolEntry = eligibilityItemPool[i];
+                var poolParts = poolEntry.codeParts || parsePoolCodeParts(poolEntry.labelFull || poolEntry.code || "");
+                if (targetParts && poolParts &&
+                    poolParts.typeUpper === targetParts.typeUpper &&
+                    poolParts.numberInt === targetParts.numberInt &&
+                    (poolParts.suffix || "") === (targetParts.suffix || "")) {
+                    return eligibilityItemPool[i];
+                }
+                var poolLooseCode = extractIECodeStrict(poolEntry.labelFull || poolEntry.code || "").replace(/\s+/g, "").toUpperCase();
+                if (!poolLooseCode && poolEntry.labelFull) {
+                    poolLooseCode = String(parseItemCodeFromEligibilityOptionText(poolEntry.labelFull) || "").replace(/\s+/g, "").toUpperCase();
+                }
+                if (targetCode && poolLooseCode && poolLooseCode === targetCode) {
+                    return eligibilityItemPool[i];
+                }
+                i = i + 1;
+            }
+            return null;
+        }
+
+        function createExpectedEligibilityHint(mappingRecord) {
+            var expected = findExpectedEligibilityEntry(mappingRecord);
+            var hint = document.createElement("span");
+            hint.style.fontSize = "10px";
+            hint.style.color = expected ? "#9fc5e8" : "#777";
+            hint.style.background = expected ? "#102538" : "#1a1a1a";
+            hint.style.border = expected ? "1px solid #2f5f86" : "1px solid #333";
+            hint.style.borderRadius = "4px";
+            hint.style.padding = "2px 6px";
+            hint.style.maxWidth = "220px";
+            hint.style.overflow = "hidden";
+            hint.style.textOverflow = "ellipsis";
+            hint.style.whiteSpace = "nowrap";
+            hint.style.flexShrink = "0";
+            if (expected) {
+                hint.textContent = "Default: " + (expected.code || "") + " - " + expected.labelShort;
+                hint.title = "Used automatically if the dropbox is empty: " + expected.labelFull;
+            } else {
+                hint.textContent = "Default: no code match";
+                hint.title = "No matching eligibility item was found for this check item's code.";
+            }
+            return hint;
+        }
+
         var overlay = document.createElement("div");
         overlay.id = "importIEReviewOverlay";
         overlay.style.position = "fixed";
@@ -27315,11 +28327,13 @@
                 }
 
                 var flatDropbox = createDropbox(fr.mapping);
+                var flatExpectedHint = createExpectedEligibilityHint(fr.mapping);
                 var currentGender = ensureGenderStateForKey(selectionStateMap, fr.key);
 
                 row.appendChild(cb);
                 row.appendChild(textBlock);
                 row.appendChild(flatDropbox);
+                row.appendChild(flatExpectedHint);
                 renderRowGenderControl(row, fr.key, currentGender, isAlreadyExist);
                 row.appendChild(statusBadge);
 
@@ -27971,12 +28985,14 @@
                         statusBadge.style.whiteSpace = "nowrap";
 
                         var itemDropbox = createDropbox(item);
+                        var itemExpectedHint = createExpectedEligibilityHint(item);
                         var hierItemKey = getMappingKey(item);
                         var hierItemGender = ensureGenderStateForKey(selectionStateMap, hierItemKey);
 
                         itemRow.appendChild(itemCb);
                         itemRow.appendChild(itemLabel);
                         itemRow.appendChild(itemDropbox);
+                        itemRow.appendChild(itemExpectedHint);
                         renderRowGenderControl(itemRow, hierItemKey, hierItemGender, alreadyExists);
                         itemRow.appendChild(statusBadge);
 
@@ -29844,6 +30860,18 @@
         return t;
     }
 
+    function getRangeTextFromItemMeta(tr) {
+        if (!tr) return "";
+        var meta = tr.querySelector("td.itemMeta");
+        if (!meta) return "";
+        var items = meta.querySelectorAll("li");
+        for (var i = 0; i < items.length; i++) {
+            var text = getText(items[i]);
+            if (/^Range\s*:/i.test(text)) return text.replace(/^Range\s*:/i, "").trim();
+        }
+        return "";
+    }
+
     function parseRangeSpecFromText(t) {
         if (typeof t !== "string") {
             return null;
@@ -29908,7 +30936,46 @@
         if (spec2) {
             return spec2;
         }
+        var metaText = getRangeTextFromItemMeta(tr);
+        var spec3 = parseRangeSpecFromText(metaText);
+        if (spec3) return spec3;
         return null;
+    }
+
+    function getSubjectGenderFromFormModal() {
+        var volunteerLink = document.querySelector(".modal-header a[href*='/volunteers/manage/show/']");
+        var volunteerText = getText(volunteerLink);
+        if (!volunteerText) return "";
+        var initials = volunteerText.match(/^[^,]+,\s*([MF])(?:\s*,|$)/i);
+        if (initials) return initials[1].toLowerCase() === "f" ? "female" : "male";
+        var normalized = volunteerText.toLowerCase();
+        if (/\b(?:female|woman|women|girl)\b/.test(normalized)) return "female";
+        if (/\b(?:male|man|men|boy)\b/.test(normalized)) return "male";
+        return "";
+    }
+
+    function findGenderRangeSpecForRow(tr, gender) {
+        if (!tr || !gender) return null;
+        var td = getItemTextCellFromRow(tr);
+        var itemText = getRangeTextFromItemText(td);
+        var helpText = getRangeTextFromHelp(td);
+        var source = itemText + " " + helpText;
+        if (!parseRangeSpecFromText(itemText) && !parseRangeSpecFromText(helpText)) {
+            source = getRangeTextFromItemMeta(tr);
+        }
+        var parts = source.split(/[,;|]/);
+        var specs = [];
+        var totalRanges = 0;
+        for (var gi = 0; gi < parts.length; gi++) {
+            var part = parts[gi];
+            if (parseRangeSpecFromText(part)) totalRanges++;
+            var isMale = /(?:\[\s*m(?:ale)?s?\s*\]|\b(?:male|males)\b)/i.test(part);
+            var isFemale = /(?:\[\s*f(?:emale)?s?\s*\]|\b(?:female|females)\b)/i.test(part);
+            if ((gender === "male" && !isMale) || (gender === "female" && !isFemale)) continue;
+            var parsed = parseRangeSpecFromText(part);
+            if (parsed) specs.push(parsed);
+        }
+        return totalRanges >= 2 && specs.length ? specs[0] : null;
     }
 
     function randomIntInInclusiveRange(a, b) {
@@ -30470,10 +31537,16 @@
             if (ta.disabled === true) {
                 ta.disabled = false;
             }
-            ta.value = "Test";
+            var taValue = "Test";
+            if (getFormValueMode() === "highOor" || getFormValueMode() === "highNorm") {
+                var taSpec = findGenderRangeSpecForRow(controlTd.closest("tr[id^=\"itemDataCollectRow_\"]"), getSubjectGenderFromFormModal());
+                var taPick = pickDecimalForSpec(taSpec, getFormValueMode(), 0);
+                if (taPick !== null && taPick !== undefined) taValue = String(taPick);
+            }
+            ta.value = taValue;
             var evt = new Event("input", { bubbles: true });
             ta.dispatchEvent(evt);
-            log("Run Form: textarea filled");
+            log("Run Form: textarea filled value=" + taValue);
             return;
         }
         var textBox = controlTd.querySelector("input.collectInput.text");
@@ -30484,10 +31557,16 @@
             if (textBox.disabled === true) {
                 textBox.disabled = false;
             }
-            textBox.value = "Test";
+            var textValue = "Test";
+            if (getFormValueMode() === "highOor" || getFormValueMode() === "highNorm") {
+                var textSpec = findGenderRangeSpecForRow(controlTd.closest("tr[id^=\"itemDataCollectRow_\"]"), getSubjectGenderFromFormModal());
+                var textPick = pickDecimalForSpec(textSpec, getFormValueMode(), 0);
+                if (textPick !== null && textPick !== undefined) textValue = String(textPick);
+            }
+            textBox.value = textValue;
             var evtX = new Event("input", { bubbles: true });
             textBox.dispatchEvent(evtX);
-            log("Run Form: text input set value=Test");
+            log("Run Form: text input set value=" + textValue);
             return;
         }
         var intBox = controlTd.querySelector("input.collectInput.integer");
@@ -30502,7 +31581,7 @@
             var n = null;
             if (modeInt === "oor" || modeInt === "ir" || modeInt === "oorA" || modeInt === "oorB" || modeInt === "lowOor" || modeInt === "lowNorm" || modeInt === "highNorm" || modeInt === "highOor" || modeInt === "randomIr") {
                 var trI = controlTd.closest("tr[id^=\"itemDataCollectRow_\"]");
-                var specI = findRangeSpecForRow(trI);
+                var specI = (modeInt === "highOor" || modeInt === "highNorm") ? (findGenderRangeSpecForRow(trI, getSubjectGenderFromFormModal()) || findRangeSpecForRow(trI)) : findRangeSpecForRow(trI);
                 if (specI) {
                     var pickI = pickIntegerForSpec(specI, modeInt);
                     if (pickI !== null && pickI !== undefined) {
@@ -30532,7 +31611,7 @@
             var d = null;
             if (modeDec === "oor" || modeDec === "ir" || modeDec === "oorA" || modeDec === "oorB" || modeDec === "lowOor" || modeDec === "lowNorm" || modeDec === "highNorm" || modeDec === "highOor" || modeDec === "randomIr") {
                 var trD = controlTd.closest("tr[id^=\"itemDataCollectRow_\"]");
-                var specD = findRangeSpecForRow(trD);
+                var specD = (modeDec === "highOor" || modeDec === "highNorm") ? (findGenderRangeSpecForRow(trD, getSubjectGenderFromFormModal()) || findRangeSpecForRow(trD)) : findRangeSpecForRow(trD);
                 if (specD) {
                     var pickD = pickDecimalForSpec(specD, modeDec, p);
                     if (pickD !== null && pickD !== undefined) {
@@ -31072,6 +32151,11 @@
                 return { success: true, message: "Already locked" };
             }
 
+            if (lockCheckbox.disabled || lockCheckbox.hasAttribute("disabled")) {
+                log("Sample Path lock checkbox disabled; skipping: " + samplePathName);
+                return { success: false, skipped: true, message: "Skipped - lock checkbox disabled" };
+            }
+
             var formElement = updateDoc.querySelector('form');
             if (!formElement) {
                 log("Form not found for: " + samplePathName);
@@ -31079,6 +32163,13 @@
             }
 
             var formData = "";
+            function addFormParam(paramName, paramValue) {
+                if (formData.length > 0) {
+                    formData += "&";
+                }
+                formData += encodeURIComponent(paramName) + "=" + encodeURIComponent(paramValue || "");
+            }
+
             var inputs = formElement.querySelectorAll('input, textarea, select');
             var i = 0;
             while (i < inputs.length) {
@@ -31088,6 +32179,10 @@
                 var value = "";
 
                 if (name) {
+                    if (input.disabled || input.hasAttribute("disabled")) {
+                        i = i + 1;
+                        continue;
+                    }
                     if (name === "locked") {
                         value = "on";
                     } else if (name === "reasonForChange") {
@@ -31100,20 +32195,28 @@
                             continue;
                         }
                     } else if (input.tagName.toLowerCase() === "select") {
-                        var selectedOption = input.querySelector("option[selected]");
-                        if (selectedOption) {
-                            value = selectedOption.value || "";
+                        if (input.multiple || input.hasAttribute("multiple")) {
+                            var selectedOptions = input.querySelectorAll("option:checked, option[selected]");
+                            var si = 0;
+                            while (si < selectedOptions.length) {
+                                addFormParam(name, selectedOptions[si].value || "");
+                                si = si + 1;
+                            }
+                            i = i + 1;
+                            continue;
                         } else {
-                            value = input.value || "";
+                            var selectedOption = input.querySelector("option:checked, option[selected]");
+                            if (selectedOption) {
+                                value = selectedOption.value || "";
+                            } else {
+                                value = input.value || "";
+                            }
                         }
                     } else {
                         value = input.value || "";
                     }
 
-                    if (formData.length > 0) {
-                        formData += "&";
-                    }
-                    formData += encodeURIComponent(name) + "=" + encodeURIComponent(value);
+                    addFormParam(name, value);
                 }
                 i = i + 1;
             }
@@ -31304,6 +32407,7 @@
         }, 500);
 
         var successCount = 0;
+        var skippedCount = 0;
         var failCount = 0;
         var j = 0;
         while (j < unlockedPaths.length) {
@@ -31315,14 +32419,16 @@
             }
 
             var result = await fetchAndLockSamplePath(path.url, path.name);
-            if (result.success) {
+            if (result.skipped) {
+                skippedCount = skippedCount + 1;
+            } else if (result.success) {
                 successCount = successCount + 1;
             } else {
                 failCount = failCount + 1;
             }
 
             if (countsDiv) {
-                countsDiv.innerHTML = "<span style='color:#9f9'>Success: " + String(successCount) + "</span> | <span style='color:#f99'>Failed: " + String(failCount) + "</span>";
+                countsDiv.innerHTML = "<span style='color:#9f9'>Success: " + String(successCount) + "</span> | <span style='color:#ffd166'>Skipped: " + String(skippedCount) + "</span> | <span style='color:#f99'>Failed: " + String(failCount) + "</span>";
             }
 
             await sleep(500);
@@ -31331,7 +32437,7 @@
 
         clearInterval(loadingInterval);
 
-        log("processLockSamplePathsPage: completed. Success=" + String(successCount) + " Failed=" + String(failCount));
+        log("processLockSamplePathsPage: completed. Success=" + String(successCount) + " Skipped=" + String(skippedCount) + " Failed=" + String(failCount));
 
         if (statusDiv) {
             statusDiv.textContent = "Completed";
@@ -37510,6 +38616,7 @@
                             try {
                                 localStorage.removeItem(STORAGE_RUN_MODE);
                                 localStorage.removeItem(STORAGE_CLEAR_MAPPING_POPUP);
+                                clearClearMappingQueue();
                             } catch (e) {}
                             CLEAR_MAPPING_POPUP_REF = null;
                         }
@@ -41827,6 +42934,7 @@
         clearMappingBtn.addEventListener("click", function () {
             log("ClearMapping: button clicked");
             CLEAR_MAPPING_CANCELED = false;
+            clearClearMappingQueue();
             if (CLEAR_MAPPING_PAUSE == true) {
                 log("ClearMapping: Paused");
                 return;
@@ -41865,6 +42973,7 @@
                     try {
                         localStorage.removeItem(STORAGE_RUN_MODE);
                         localStorage.removeItem(STORAGE_CLEAR_MAPPING_POPUP);
+                        clearClearMappingQueue();
                     } catch (e) {}
                     CLEAR_MAPPING_POPUP_REF = null;
                     CLEAR_MAPPING_CANCELED = true;
@@ -42032,7 +43141,24 @@
 
 
     // Initialize the panel, register APS_AddButton, and route to the appropriate processing function.
+    function initStudySwitcherHotkey() {
+        if (window.__CLINSPARK_STUDY_SWITCHER_BOUND) return;
+        window.__CLINSPARK_STUDY_SWITCHER_BOUND = true;
+        document.addEventListener("keydown", function(e) {
+            if (!e.altKey || (e.key !== "a" && e.key !== "A" && e.code !== "KeyA")) return;
+            e.preventDefault(); e.stopPropagation();
+            try {
+                if (window.jQuery && window.jQuery.fn && window.jQuery.fn.select2) { window.jQuery("#studyIdChanger").select2("open"); return; }
+            } catch (err) {}
+            var choice = document.querySelector("#s2id_studyIdChanger .select2-choice");
+            if (choice) { choice.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, view: window })); choice.click(); return; }
+            var select = document.getElementById("studyIdChanger");
+            if (select) { select.focus(); select.click(); }
+        }, true);
+    }
+
     function init() {
+        initStudySwitcherHotkey();
         makePanel();
         window.APS_AddButton = function (label, handler) {
             addButtonToPanel(label, handler);
@@ -42423,7 +43549,7 @@
                 if (CLEAR_MAPPING_CANCELED) {
                     return;
                 }
-                logger("CLEAR_MAPPING_CANCELED: " + CLEAR_MAPPING_CANCELED)
+                log("ClearMapping: canceled state=" + CLEAR_MAPPING_CANCELED);
                 executeClearMappingAutomation();
             }, 4000);
             return;
@@ -42433,6 +43559,24 @@
             processFindCombinedOnList();
         }
 
+    }
+
+    // Create the dock and reserve page space as soon as the body exists. The
+    // full feature initialization remains on DOMContentLoaded below.
+    var earlyPanelBootstrapped = false;
+    function bootstrapDockedPanelEarly() {
+        if (earlyPanelBootstrapped || !document.body || !document.head) return earlyPanelBootstrapped;
+        try {
+            makePanel();
+            earlyPanelBootstrapped = true;
+        } catch (e) {}
+        return earlyPanelBootstrapped;
+    }
+    if (!bootstrapDockedPanelEarly() && typeof MutationObserver !== "undefined" && document.documentElement) {
+        var earlyPanelObserver = new MutationObserver(function() {
+            if (bootstrapDockedPanelEarly()) earlyPanelObserver.disconnect();
+        });
+        earlyPanelObserver.observe(document.documentElement, { childList: true, subtree: true });
     }
 
     if (document.readyState === "loading") {
