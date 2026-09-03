@@ -111,7 +111,7 @@ try {
 
     var status = pullItemFromForm(form, statusItem);
     if (status && status.value !== null && (status.value == status.codeListItems[2].codedValue)) return itemJson.item.codeListItems[3].codedValue; // return None
-    else if (status && status.value !== null) return itemJson.item.codeListItems[0]; // return pregnancy for other status
+    else if (status && status.value !== null) return itemJson.item.codeListItems[0].codedValue; // return pregnancy for other status
 
     return itemJson.item.codeListItems[3].codedValue; // return none
 } catch (e) {

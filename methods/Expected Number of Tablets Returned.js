@@ -141,7 +141,7 @@ try {
     }
     var dispensed = parseFloat(pullItemFromForm(formJson, dispensedItem));
     var prescribed = parseFloat(pullItemFromForm(formJson, prescribedItem));
-    if (!dispensed || dispensed == null || !prescribed || prescribed == null) return null;
+    if (!dispensed || dispensed == null || dispensed == "" || !prescribed || prescribed == null || prescribed == "") return null;
     
     logger("Current Day: " + day);
     logger("expectedDays: " + expecteddays);

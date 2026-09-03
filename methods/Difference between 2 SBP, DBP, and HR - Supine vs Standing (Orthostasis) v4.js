@@ -117,7 +117,7 @@ function getOrthostasisValues(metric, isRepeat) {
                 if (isStanding(groupItem.name, group.name)) {
                     if (standing === null) standing = parseFloat(groupItem.value);
                 } else {
-                    if (standing === null) semi = parseFloat(groupItem.value);
+                    if (semi === null) semi = parseFloat(groupItem.value);
                 }
             }
         }

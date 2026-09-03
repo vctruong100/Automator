@@ -22,9 +22,8 @@ var QRSitems = [
 // Inclusive (Edit)
 var QTcF_max_range = 450;
 var QRS_max_range = 120;
-var count = 0;
 
-var item = itemJson.item.id;
+var item = itemJson.item;
 
 function normalizeItemName(name) {
     if (!name) return "";
@@ -54,10 +53,8 @@ function populateList(form, targetItem, isRepeat) {
             for (j = 0; j < group.items.length; j++) {
                 item = group.items[j];
                 if (item && containsItemName(targetItem, item.name)) {
-                    count++;
                     if (item.value !== null && !isNaN(item.value) && item.value !== "") {
                         list.push(parseFloat(item.value));
-                        if (list.length >= count) return list;
                     }
                 }
             }
@@ -72,7 +69,6 @@ function populateList(form, targetItem, isRepeat) {
                 if (item && containsItemName(targetItem, item.name)) {
                     if (item.value !== null && !isNaN(item.value) && item.value !== "") {
                         list.push(parseFloat(item.value));
-                        if (list.length >= count) return list;
                     }
                 }
             }
@@ -149,7 +145,7 @@ try {
     var QRSlist = populateList(formJson, QRSitems, isRepeat);
     var QRSavg = calculateAverage(QRSlist);
 
-    if (QTcFlist.length < count || QRSlist.length < count) return itemJson.item.codeListItems[0].codedValue; // return pending result
+    if (QTcFlist.length < 1 || QRSlist.length < 1) return itemJson.item.codeListItems[0].codedValue; // return pending result
 
     if (QTcFavg > QTcF_max_range || QRSavg > QRS_max_range) return itemJson.item.codeListItems[2].codedValue; // return Out of protocol range
     else if (QTcFavg <= QTcF_max_range || QRSavg > QRS_max_range) return itemJson.item.codeListItems[1].codedValue; // return within protocol range

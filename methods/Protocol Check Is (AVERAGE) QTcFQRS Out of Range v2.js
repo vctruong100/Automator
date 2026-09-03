@@ -47,7 +47,7 @@ function matchesMetric(itemName, metric) {
     var name = normalizeName(itemName);
 
     if (metric === "QRS") return containsStandaloneKeyword(name, "QRS");
-    if (metric === "QTCF") return name.indexOf("QTCF") !== -1 || containsStandaloneKeyword(name, "QTC");
+    if (metric === "QTCF") return (!containsStandaloneKeyword(name, "QTC") && (name.indexOf("QTCF") !== -1 || containsStandaloneKeyword(name, "QTCF")));
 
     return false;
 }

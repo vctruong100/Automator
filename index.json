@@ -127,13 +127,14 @@
     {
         "id": "M-015",
         "title": "FormJson and ItemJson Structure",
+        "description": "Reference material used by the ClinSpark Automator method library.",
         "tags": [
             "FormJson",
             "ItemJson",
             "Structure"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/FormJson%20and%20ItemJson%20Structure.md",
-        "updated": "2026-02-12"
+        "updated": "2026-09-03"
     },
     {
         "id": "M-016",
@@ -149,13 +150,14 @@
     {
         "id": "M-017",
         "title": "Help Text Code (AE, Auto-Navigate)",
+        "description": "Reference material used by the ClinSpark Automator method library.",
         "tags": [
             "Help Text",
             "AE",
             "Auto-Navigate"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Help%20Text%20Code%20(AE%2C%20Auto-Navigate).md",
-        "updated": "2026-02-12"
+        "updated": "2026-09-03"
     },
     {
         "id": "M-018",
@@ -579,13 +581,13 @@
     {
         "id": "M-075",
         "title": "Edit Check Kit Accession Number Format",
-        "description": "Validates kit accession number formatting against the expected study pattern so malformed kit identifiers can be queried before downstream use.",
+        "description": "Validates that the value consists of exactly 2 letters followed by 6 digits.",
         "tags": [
             "Edit",
             "Check"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Kit%20Accession%20Number%20Format.js",
-        "updated": "2026-07-27"
+        "updated": "2026-09-03"
     },
     {
         "id": "M-076",
@@ -910,17 +912,17 @@
     },
     {
         "id": "M-109",
-        "title": "Edit Check Difference between Start Time and Collection Time (Minutes Only) (if used on Vital Sign Form that Pulls from ECG).js",
+        "title": "Edit Check Difference between Start Time and Collection Time (Minutes Only) (if used on Vital Sign Form that Pulls from ECG)",
         "description": "Validates vital-sign collection timing against ECG-derived start times, accounting for same-as-ECG selections and using minute-level comparison for the configured interval.",
         "tags": [
             "Edit Check"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Difference%20between%20Start%20Time%20and%20Collection%20Time%20(Minutes%20Only)%20(if%20used%20on%20Vital%20Sign%20Form%20that%20Pulls%20from%20ECG).js",
-        "updated": "2026-07-27"
+        "updated": "2026-09-03"
     },
     {
         "id": "M-084",
-        "title": "Combine Alcohol Substance Use (SU) Queries.js",
+        "title": "Combine Alcohol Substance Use (SU) Queries",
         "description": "Combines alcohol and substance-use query text by normalizing frequency and use-response values, producing consolidated query wording for data-transfer or review workflows.",
         "tags": [
             "Alcohol",
@@ -929,37 +931,37 @@
             "Combine"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Combine%20Alcohol%20Substance%20Use%20(SU)%20Queries.js",
-        "updated": "2026-07-27"
+        "updated": "2026-09-03"
     },
     {
         "id": "M-110",
-        "title": "Edit Check Check if item date value has at least the year.js",
+        "title": "Edit Check Check if item date value has at least the year",
         "description": "Validates partial or complete date entries by requiring at least a year component, and raises a custom message when the date is blank or missing the year.",
         "tags": [
             "Edit Check"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Check%20if%20item%20date%20value%20has%20at%20least%20the%20year.js",
-        "updated": "2026-07-27"
+        "updated": "2026-09-03"
     },
     {
         "id": "M-107",
-        "title": "Average PR, QRS, QT, QTCF, HR v2.js",
+        "title": "Average PR, QRS, QT, QTCF, HR v2",
         "description": "Calculates average ECG interval or heart-rate values by detecting PR, QRS, QT, QTcF, and HR source items automatically, including repeat-aware collection logic and summary-field exclusion.",
         "tags": [
             "AVerage"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20PR%2C%20QRS%2C%20QT%2C%20QTCF%2C%20HR%20v2.js",
-        "updated": "2026-07-27"
+        "updated": "2026-09-03"
     },
     {
         "id": "M-108",
-        "title": "Edit Check Supine time must be the same as original.js",
+        "title": "Edit Check Supine time must be the same as original",
         "description": "Validates that repeat-form supine or semi-recumbent start time matches the original source time when the repeat assessment is marked as same as original.",
         "tags": [
             "Edit Check"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Supine%20time%20must%20be%20the%20same%20as%20original.js",
-        "updated": "2026-07-27"
+        "updated": "2026-09-03"
     },
     {
         "id": "M-111",
@@ -1268,14 +1270,14 @@
     {
         "id": "M-134",
         "title": "Orthostasis + Latest Triplicate Calculation",
-        "description": "Calculates the difference between a standing vital-sign value and the latest matching supine or semi-recumbent triplicate value instead of the triplicate median.",
+        "description": "Calculates the difference between a standing vital-sign value and the latest matching supine or semi-recumbent triplicate value for orthostasis workflows.",
         "tags": [
             "Orthostasis",
             "Triplicate",
             "Latest Value"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Orthostasis%20+%20Latest%20Triplicate%20Calculation.js",
-        "updated": "2026-08-03"
+        "updated": "2026-09-03"
     },
     {
         "id": "M-135",
@@ -1294,7 +1296,7 @@
     {
         "id": "M-136",
         "title": "Protocol Check Any QTcF increase ≥60 msec from Baseline OR average QTcF 500 msec v2",
-        "description": "Runs the QTcF increase-from-baseline and >500 msec protocol check using keyword-based QTcF/Fridericia detection instead of exact item names.",
+        "description": "Runs a QTcF protocol check using keyword-based QTcF/Fridericia detection instead of exact item names. Pulls baseline QTcF from configured baseline forms and compares it against the latest matching QTcF value on the current form, flagging when the increase is at least 60 msec or the current QTcF is above 500 msec.",
         "tags": [
             "Protocol Check",
             "QtcF",
@@ -1302,12 +1304,12 @@
             "Keyword Match"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20Any%20QTcF%20increase%20%E2%89%A560%20msec%20from%20Baseline%20OR%20average%20QTcF%20500%20msec%20v2.js",
-        "updated": "2026-08-26"
+        "updated": "2026-09-03"
     },
     {
         "id": "M-137",
         "title": "Protocol Check If QTcF above 450 for male or 470 for female v2",
-        "description": "Applies sex-specific QTcF protocol thresholds using keyword-based QTcF/Fridericia detection instead of a hard-coded QTcF item name.",
+        "description": "Applies sex-specific QTcF protocol thresholds using keyword-based QTcF detection instead of exact item names. Pulls the latest matching QTcF/Fridericia value from the current form and returns the configured Yes/No codelist value.",
         "tags": [
             "Protocol Check",
             "QtcF",
@@ -1315,12 +1317,12 @@
             "Keyword Match"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20If%20QTcF%20above%20450%20for%20male%20or%20470%20for%20female%20v2.js",
-        "updated": "2026-08-26"
+        "updated": "2026-09-03"
     },
     {
         "id": "M-138",
         "title": "Edit Check QtcF (Trigger if  500 OR male  450 OR female  470 OR difference from baseline  60 v2",
-        "description": "Runs QTcF safety edit-check thresholds using keyword-based QTcF/Fridericia detection for current and baseline QTcF values.",
+        "description": "Runs QTcF safety logic using keyword-based QTcF/Fridericia detection instead of exact item names. Triggers when the current QTcF is at least 500 msec, exceeds sex-specific thresholds, or increases by at least 60 msec from baseline.",
         "tags": [
             "Edit Check",
             "QtcF",
@@ -1328,12 +1330,12 @@
             "Keyword Match"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20QtcF%20(Trigger%20if%20%20500%20OR%20male%20%20450%20OR%20female%20%20470%20OR%20difference%20from%20baseline%20%2060%20v2.js",
-        "updated": "2026-08-26"
+        "updated": "2026-09-03"
     },
     {
         "id": "M-139",
         "title": "Edit Check Range check for ALL (HR, SYS, DIA, PR, RR, QtcF, QTC, QRS, QT) v2",
-        "description": "Applies standard vital-sign and ECG range checks using keyword-based metric detection for HR, SYS, DIA, PR, RR, QTcF, QTC, QRS, and QT.",
+        "description": "Applies comprehensive range checks for standard vital-sign and ECG parameters using keyword-based metric detection instead of exact item names. Detects HR, SYS, DIA, PR, RR, QTcF, QTC, QRS, and QT while avoiding ECG keyword collisions such as QT matching QTC/QTCF.",
         "tags": [
             "Edit Check",
             "Vitals",
@@ -1342,7 +1344,7 @@
             "Keyword Match"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Range%20check%20for%20ALL%20(HR%2C%20SYS%2C%20DIA%2C%20PR%2C%20RR%2C%20QtcF%2C%20QTC%2C%20QRS%2C%20QT)%20v2.js",
-        "updated": "2026-08-26"
+        "updated": "2026-09-03"
     },
     {
         "id": "M-140",
@@ -1357,12 +1359,12 @@
     {
         "id": "M-141",
         "title": "Average of Thigh, Chest, Abdominal, Triceps, Suprailiac",
-        "description": "Calculates the average of the specified body measurements.",
+        "description": "Calculates the average skinfold measurement for thigh, chest, abdominal, triceps, or suprailiac fields by detecting the metric from the attached average item and averaging matching source values on the current form.",
         "tags": [
             "Anthropometrics"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20of%20Thigh%2C%20Chest%2C%20Abdominal%2C%20Triceps%2C%20Suprailiac.js",
-        "updated": "2026-08-26"
+        "updated": "2026-09-03"
     },
     {
         "id": "M-142",
@@ -1373,5 +1375,48 @@
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Convert%20Weight%20KG%20to%20LBS.js",
         "updated": "2026-08-27"
+    },
+    {
+        "id": "M-143",
+        "title": "Baseline Difference for QTCF, PR, and QRS",
+        "description": "Calculates current-minus-baseline differences for QTcF, PR, and QRS by pulling baseline ECG values from configured baseline events/forms and comparing them with matching values from the current item group.",
+        "tags": [
+            "Difference",
+            "ECG"
+        ],
+        "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Baseline%20Difference%20for%20QTCF%2C%20PR%2C%20and%20QRS.js",
+        "updated": "2026-09-03"
+    },
+    {
+        "id": "M-144",
+        "title": "Get Latest Date for Drug (scan through all forms from every study events)",
+        "description": "Finds the latest asthma-medication administration datetime by scanning configured medication forms across study events, filtering for the target therapy category, and returning the most recent matching date/time value.",
+        "tags": [
+            "DateTime"
+        ],
+        "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Get%20Latest%20Date%20for%20Drug%20(scan%20through%20all%20forms%20from%20every%20study%20events).js",
+        "updated": "2026-09-03"
+    },
+    {
+        "id": "M-145",
+        "title": "Inhalation Number (increment unique count on repeated item groups)",
+        "description": "Generates the inhalation training sequence number by using the current repeated item-group number outside Screening or by scanning prior inhalation training forms and returning the next available number during Screening.",
+        "tags": [
+            "ClinSpark"
+        ],
+        "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Inhalation%20Number%20(increment%20unique%20count%20on%20repeated%20item%20groups).js",
+        "updated": "2026-09-03"
+    },
+    {
+        "id": "M-146",
+        "title": "Protocol Check If Baseline QTcF is above 500",
+        "description": "Checks whether the detected baseline QTcF value is above 500 msec by auto-detecting the QTcF source item on the current form and returning the protocol-check output.",
+        "tags": [
+            "Protocol Check",
+            "Difference",
+            "ECG"
+        ],
+        "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20If%20Baseline%20QTcF%20is%20above%20500.js",
+        "updated": "2026-09-03"
     }
 ]
