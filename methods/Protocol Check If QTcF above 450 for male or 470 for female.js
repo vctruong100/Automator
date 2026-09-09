@@ -40,7 +40,7 @@ function pullItemFromForm(form, targetItem) {
         if (!group || group.canceled) continue;
         for (j = 0; j < group.items.length; j++) {
             item = group.items[j];
-            if (containsItemName(targetItem, item.name) && item.value !== null && !isNaN(item.value) && item.value !== "") return item.value;
+            if (containsItemName(targetItem, item.name) && item.value !== null && !isNaN(item.value) && item.value !== "") return item;
         }
     }
     return null;
@@ -50,8 +50,8 @@ try {
     var qtcf = pullItemFromForm(formJson, qtcfItems);
 
     logger("Is it male: " + sexMale);
-    logger("Qtcf value: " + item.value);
-    if ((sexMale && item.value > maleRange) || (!sexMale && item.value > femaleRange)) return item.codeListItems[1].codedValue; // yes
+    logger("Qtcf value: " + qtcf.value);
+    if ((sexMale && qtcf.value > maleRange) || (!sexMale && qtcf.value > femaleRange)) return qtcf.codeListItems[1].codedValue; // yes
 
     return item.codeListItems[0].codedValue; // no
 } catch (e) {

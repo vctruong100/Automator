@@ -131,6 +131,7 @@ try {
     var form = pullForm(formNames, studyEventNames);
     var day1Date = pullItemFromForm(form, startDateItem);
 
+    
     if (!day1Date || !item || item.value == null || item.dateValueMs == null) return true;
 
     var day1DateMs = isoToLocalMidnight(day1Date.value);

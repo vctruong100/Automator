@@ -4,8 +4,11 @@
 // Purpose: Validates time difference between start and collection.
 
 // Add Item Names
-var startTimeItem = [
-    "VS_Resting time (NEW)", "VS_Resting time", "Same as ECG supine time", "Start Supine time", "ECG_Supine resting time","Start Semirecumbent Time", 
+var startTimeItemYes = [
+    "VS_Resting time (NEW)", "VS_Resting time", "Same as ECG supine time",  "ECG_Supine resting time", 
+]
+var startTimeItemNo = [
+    "VS_Resting time (NEW)", "VS_Resting time",  "Start Supine time", "Start Semirecumbent Time", 
 ]
 
 var studyevent = formJson.form.studyEventName;
@@ -13,9 +16,11 @@ logger("Study event: " + studyevent)
 
 var formName = [
     "⚡ECG_Single 12 - Lead ECG (SCRN/D-1)",
-]
-
-var confirmationItemName = ["Did subject remain supine from ECG collection?"]
+    "⚡ECG_Single 12 - Lead ECG (SCRN/Admission/Predose)",
+    "⚡ECG_Single 12 - Lead ECG"
+];
+    
+var confirmationItemName = ["Did subject remain supine from ECG collection?", "Has subject remained in supine position since original vital signs collection?"]
 var difference = 5; // in minutes
 
 // Two Approaches: Method A and Method B
@@ -27,7 +32,7 @@ var difference = 5; // in minutes
 var methodType = "B";
 var form = formJson.form;
 
-function pullItemFromForm(form, targetItem, isRepeat) {
+function pullItemFromForm(form, targetItem, isRepeat, wantDateTime) {
     var itemGroups = form.form.itemGroups;
     var group, items, item, i, j, value;
 
@@ -41,7 +46,10 @@ function pullItemFromForm(form, targetItem, isRepeat) {
                 item = group.items[j];
                 if (targetItem.indexOf(item.name) !== -1) {
                     logger("Start Time: " + item.name + ", value: " + item.value);
-                    if (item.value !== null && !item.canceled && item.value !== "") return item;
+                    if (item.value !== null && !item.canceled && item.value !== "") {
+                        if (wantDateTime && item.dataType == "datetime") return item;
+                        else if (!wantDateTime && item.dataType != "datetime") return item;
+                    }
                 }
             }
         }
@@ -54,7 +62,10 @@ function pullItemFromForm(form, targetItem, isRepeat) {
                 item = group.items[j];
                 if (targetItem.indexOf(item.name) !== -1) {
                     logger("Start Time: " + item.value);
-                    if (item.value !== null && !item.canceled && item.value !== "" && item.dataType == "datetime") return item;
+                    if (item.value !== null && !item.canceled && item.value !== "") {
+                        if (wantDateTime && item.dataType == "datetime") return item;
+                        else if (!wantDateTime && item.dataType != "datetime") return item;
+                    }
                 }
             }
         }
@@ -128,15 +139,22 @@ try {
     var groupName = getItemGroupName(formJson);
     var isRepeat = false;
     if (containsValue(groupName, "repeat") || containsValue(groupName, "standing")) isRepeat = true;
-    var confirmation = pullItemFromForm(formJson, confirmationItemName);
+    var confirmation = pullItemFromForm(formJson, confirmationItemName, isRepeat, false);
+    logger(isRepeat)
+    logger("Confirmation: " + confirmation.value)
+    if (!confirmation) return null;
     var startTime = null;
-    if (confirmation == "YES") {
+    if (confirmation.value == "YES") {
+        if (isRepeat) return true;
         var ecgForm = pullForm([studyevent], formName);
+        logger(ecgForm);
         if (!ecgForm) return null;
-        var startTime = pullItemFromForm(ecgForm, startTimeItem, false);
+        startTime = pullItemFromForm(ecgForm, startTimeItemYes, false, true);
+        logger(startTime);
     }
     else {
-        startTime = pullItemFromForm(formJson, startTimeItem, isRepeat);
+        startTime = pullItemFromForm(formJson, startTimeItemNo, isRepeat, true);
+        logger(startTime);
     }
     var endTime = itemJson.item;
 
