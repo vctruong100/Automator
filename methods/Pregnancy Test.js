@@ -23,8 +23,45 @@ var statusItem = [
     "Female subject is considered non-childbearing potential due to"
 ];
 
+var demoForms = [
+    "🌍DM_DEMOGRAPHICS"    
+];
+
+var ageitem = [
+    "DM_Age",
+];
+
+
 var gender = formJson.form.subject.volunteer.sexMale;
-var age = formJson.form.subject.volunteer.age;
+
+var demoForm = pullForm(studyEvent, demoForms)
+var age = null;
+if (demoForm) {
+    age = pullItemFromForm(demoForm, ageitem).value;
+} else {
+    age = parseInt(formJson.form.subject.volunteer.age);
+}
+
+try {
+    logger(age);
+    logger(gender);
+    if (gender) return itemJson.item.codeListItems[3].codedValue; // return None
+
+    var form = pullForm(studyEvent, formNames);
+    if (!form) return null;
+
+    var childbearing = pullItemFromForm(form, childbearingItem);
+    if (childbearing && childbearing.value !== null && childbearing.value == childbearing.codeListItems[0].codedValue) return itemJson.item.codeListItems[0].codedValue; // if childbearing = Yes, return
+
+    var status = pullItemFromForm(form, statusItem);
+    if (status && status.value !== null && (status.value == status.codeListItems[2].codedValue)) return itemJson.item.codeListItems[3].codedValue; // return None
+    else if (status && status.value !== null) return itemJson.item.codeListItems[0].codedValue; // return pregnancy for other status
+
+    return itemJson.item.codeListItems[3].codedValue; // return none
+} catch (e) {
+    logger("Error in main execution logic: " + e);
+    return null;
+}
 
 function normalizeItemName(name) {
     if (!name) return "";
@@ -96,25 +133,4 @@ function collectCompleted(formDataArray, INCLUDE_NONCONFORMANT_DATA) {
         }
     }
     return keepers;
-}
-
-try {
-    logger(age);
-    logger(gender);
-    if (gender) return itemJson.item.codeListItems[3].codedValue; // return None
-
-    var form = pullForm(studyEvent, formNames);
-    if (!form) return null;
-
-    var childbearing = pullItemFromForm(form, childbearingItem);
-    if (childbearing && childbearing.value !== null && childbearing.value == childbearing.codeListItems[0].codedValue) return itemJson.item.codeListItems[0].codedValue; // if childbearing = Yes, return
-
-    var status = pullItemFromForm(form, statusItem);
-    if (status && status.value !== null && (status.value == status.codeListItems[2].codedValue)) return itemJson.item.codeListItems[3].codedValue; // return None
-    else if (status && status.value !== null) return itemJson.item.codeListItems[0].codedValue; // return pregnancy for other status
-
-    return itemJson.item.codeListItems[3].codedValue; // return none
-} catch (e) {
-    logger("Error in main execution logic: " + e);
-    return null;
 }
