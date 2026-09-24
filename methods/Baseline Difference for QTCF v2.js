@@ -1,7 +1,7 @@
 /* jshint strict: false */
 
 // Version: v2
-// Description: Runs a QTcF protocol check using keyword-based QTcF/Fridericia detection instead of exact item names. Pulls baseline QTcF from configured baseline forms and compares it against the latest matching QTcF value on the current form, flagging when the increase is at least 60 msec or the current QTcF is above 500 msec.
+// Description: Calculates the QTcF change from baseline by pulling a baseline QTcF value from configured baseline ECG forms, detecting the current QTcF value by keyword on the current form, and returning the numeric difference rounded to a whole number.
 
 var baselineForms = [
     "ECG_Predose_Triplicate ECG (baseline) (SPONSOR PROVIDED MACHINE)",

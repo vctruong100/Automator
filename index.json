@@ -913,12 +913,12 @@
     {
         "id": "M-109",
         "title": "Edit Check Difference between Start Time and Collection Time (Minutes Only) (if used on Vital Sign Form that Pulls from ECG)",
-        "description": "Validates vital-sign collection timing against ECG-derived start times, accounting for same-as-ECG selections and using minute-level comparison for the configured interval.",
+        "description": "Validates time difference between start and collection.",
         "tags": [
             "Edit Check"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Difference%20between%20Start%20Time%20and%20Collection%20Time%20(Minutes%20Only)%20(if%20used%20on%20Vital%20Sign%20Form%20that%20Pulls%20from%20ECG).js",
-        "updated": "2026-09-03"
+        "updated": "2026-09-24"
     },
     {
         "id": "M-084",
@@ -1359,12 +1359,12 @@
     {
         "id": "M-141",
         "title": "Average of Thigh, Chest, Abdominal, Triceps, Suprailiac",
-        "description": "Calculates the average skinfold measurement for thigh, chest, abdominal, triceps, or suprailiac fields by detecting the metric from the attached average item and averaging matching source values on the current form.",
+        "description": "Calculates average height from explicitly configured height measurement items on the current form, excluding blank or canceled entries and summary fields.",
         "tags": [
             "Anthropometrics"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Average%20of%20Thigh%2C%20Chest%2C%20Abdominal%2C%20Triceps%2C%20Suprailiac.js",
-        "updated": "2026-09-03"
+        "updated": "2026-09-24"
     },
     {
         "id": "M-142",
@@ -1410,13 +1410,36 @@
     {
         "id": "M-146",
         "title": "Protocol Check If Baseline QTcF is above 500",
-        "description": "Checks whether the detected baseline QTcF value is above 500 msec by auto-detecting the QTcF source item on the current form and returning the protocol-check output.",
+        "description": "Calculates median ECG or vital values from the attached median item, auto-detecting HR, RR, PR, QRS, QT, QTC, QTcF, SYS, or DIA source values across repeat and non-repeat item groups and logging collected values.",
         "tags": [
             "Protocol Check",
             "Difference",
             "ECG"
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Protocol%20Check%20If%20Baseline%20QTcF%20is%20above%20500.js",
-        "updated": "2026-09-03"
+        "updated": "2026-09-24"
+    },
+    {
+        "id": "M-147",
+        "title": "Baseline Difference for QTCF v2",
+        "description": "Calculates the QTcF change from baseline by pulling a baseline QTcF value from configured baseline ECG forms, detecting the current QTcF value by keyword on the current form, and returning the numeric difference rounded to a whole number.",
+        "tags": [
+            "Difference",
+            "ECG"
+        ],
+        "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Baseline%20Difference%20for%20QTCF%20v2.js",
+        "updated": "2026-09-24"
+    },
+    {
+        "id": "M-148",
+        "title": "Edit Check Supine time must be the same as original v2",
+        "description": "Validates that a repeat-form supine or semi-recumbent time matches an original source time by comparing the current value against matching source-form values across study events, while allowing first/original forms to pass automatically.",
+        "tags": [
+            "Edit Check",
+            "DateTime",
+            "Vitals"
+        ],
+        "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Supine%20time%20must%20be%20the%20same%20as%20original%20v2.js",
+        "updated": "2026-09-24"
     }
 ]
