@@ -1441,5 +1441,16 @@
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Supine%20time%20must%20be%20the%20same%20as%20original%20v2.js",
         "updated": "2026-09-24"
+    },
+    {
+        "id": "M-149",
+        "title": "Edit Check Urinalysis is Out of Window",
+        "description": "Validates that a repeat-form urinalysis result is within the allowed time window.",
+        "tags": [
+            "Edit Check",
+            "DateTime"
+        ],
+        "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Urinalysis%20is%20Out%20of%20Window.js",
+        "updated": "2026-09-28"
     }
 ]
