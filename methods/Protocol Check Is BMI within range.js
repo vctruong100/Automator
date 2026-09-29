@@ -207,12 +207,10 @@ try {
     logger("BMI Height: " + height);
     logger("BMI Weight: " + weight);
 
-    if (!weight || weight == 0 || !height || height == 0) return null;
-
+    if (weight == null || height == null) return null;
     var heightMtr = height / 100;
     var bmi = weight / (heightMtr * heightMtr);
     var factor = Math.pow(10, sigfig);
-    bmi = Math.round(bmi * factor) / factor;
     logger("BMI: " + bmi);
 
     if (BMI_lower_range <= bmi && bmi <= BMI_upper_range) return item.codeListItems[0].codedValue; // return Yes
