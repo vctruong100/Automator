@@ -93,7 +93,7 @@ function getFirstMetricValue(formData, metric) {
             groupItem = items[j];
             if (!groupItem || groupItem.value == null || groupItem.value === "") continue;
 
-            if (matchesMetric(groupItem.name, metric) && !isAverageItem(groupItem.name)) {
+            if (matchesMetric(groupItem.name, metric) && !isAverageItem(groupItem.name) && (groupItem.dataType == "float" || groupItem.dataType == "integer")) {
                 logger(metric + " first value matched item: " + groupItem.name + " | Value: " + groupItem.value);
                 return parseFloat(groupItem.value);
             }
@@ -124,7 +124,7 @@ function getMetricMeasurements(formData, metric) {
                 return result;
             }
 
-            if (matchesMetric(groupItem.name, metric) && !isAverageItem(groupItem.name)) {
+            if (matchesMetric(groupItem.name, metric) && !isAverageItem(groupItem.name) && (groupItem.dataType == "float" || groupItem.dataType == "integer")) {
                 result.count++;
                 logger(metric + " matched item: " + groupItem.name + " | Value: " + groupItem.value);
                 addNumericValue(result.values, groupItem.value);
