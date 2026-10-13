@@ -1452,5 +1452,25 @@
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Urinalysis%20is%20Out%20of%20Window.js",
         "updated": "2026-09-28"
+    },
+    {
+        "id": "M-150",
+        "title": "Pull End Time of Previous Interval",
+        "description": "Pulls the end time of the previous interval and calculates the end time of the current interval.",
+        "tags": [
+            "DateTime"
+        ],
+        "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Pull%20End%20Time%20of%20Previous%20Interval%20and%20Calculate%20End%20Interval.js",
+        "updated": "2026-10-13"
+    },
+    {
+        "id": "M-151",
+        "title": "Pull End Time of Previous Interval and Calculate End Interval",
+        "description": "Pulls the end time of the previous interval and calculates the end time of the current interval.",
+        "tags": [
+            "DateTime"
+        ],
+        "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Pull%20End%20Time%20of%20Previous%20Interval%20and%20Calculate%20End%20Interval.js",
+        "updated": "2026-10-13"
     }
 ]
