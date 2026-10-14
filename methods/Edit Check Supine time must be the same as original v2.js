@@ -37,7 +37,7 @@ function findMatchingTime(formData, item) {
         if (form.itemGroups && form.itemGroups.length > 0 && !form.itemGroups[0].canceled && form.itemGroups[0].items[0] && 
             !form.itemGroups[0].items[0].canceled && form.itemGroups[0].items[0].value !== null) {
                 logger("Item name: " + form.itemGroups[0].items[0].name + ", item value: " + formatDateTime(form.itemGroups[0].items[0].value));
-                if (form.itemGroups[0].items[0].value === item.value) {
+                if (form.itemGroups[0].items[0].value === item.value && (form.id !== formJson.form.id)) {
                     logger("Original form ID: " + form.id);
                     logger("Repeat form ID: " + formJson.form.id);
                     return true;

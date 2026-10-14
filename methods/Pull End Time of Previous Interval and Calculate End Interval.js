@@ -1,6 +1,8 @@
-// used in AbbVie m26-089
-
 var formMapping = {
+    "(*) LAB_URINE PK (0-4 Hours)": {
+        previousForm: "🟡IP_Dose ABBV-295 or Placebo flex dosing (Day 134)",
+        studyEvents: ["Period 1 Day 85", "Period 1 Day 134"]
+    },
     "(*) LAB_URINE PK (4-8 Hours)": {
         previousForm: "(*) LAB_URINE PK (0-4 Hours)",
         studyEvents: ["Period 1 Day 85", "Period 1 Day 134"]
@@ -47,6 +49,7 @@ var previousBaseName = mapping.previousForm;
 var studyEventList = mapping.studyEvents;
 var currentStudyEvent = formJson.form.studyEventName;
 
+logger("Previous base name: " + previousBaseName);
 logger("Current Study Event: " + currentStudyEvent);
 
 if (!currentStudyEvent) {
@@ -65,7 +68,8 @@ for (var i = 0; i < studyEventList.length; i++) {
 
     var dayNumber = parseInt(dayMatch[1], 10);
 
-    if (dayNumber >= expectedScheduleStart && dayNumber <= expectedScheduleEnd) {
+    if (dayNumber >= expectedScheduleStart &&
+        dayNumber <= expectedScheduleEnd) {
         filteredStudyEvents.push(studyEventList[i]);
     }
 }
@@ -75,46 +79,87 @@ if (filteredStudyEvents.length === 0) {
     return null;
 }
 
-logger("Selected schedule: " + (useAlternateSchedule ? "Day 134-139" : "Day 85-89"));
+logger("Selected schedule: " +
+    (useAlternateSchedule ? "Day 134-139" : "Day 85-89"));
 logger("Study Events to search: " + filteredStudyEvents.join(", "));
 
 var currentInterval = getInterval(baseFormName);
-var previousInterval = getInterval(previousBaseName);
 
-if (!currentInterval || !previousInterval) {
-    logger("ERROR: Could not determine interval endpoints.");
+if (!currentInterval) {
+    logger("ERROR: Could not determine current interval endpoints.");
     return null;
 }
 
-var hoursToAdd = currentInterval.end - previousInterval.end;
+var isDosingForm = containsValue(previousBaseName, "dosing");
+var previousInterval = isDosingForm
+    ? null
+    : getInterval(previousBaseName);
+
+if (!isDosingForm && !previousInterval) {
+    logger("ERROR: Could not determine previous interval endpoints.");
+    return null;
+}
+
+var hoursToAdd;
+var previousItemName;
+
+if (isDosingForm) {
+    // First urine PK interval: calculate from last dose administration.
+    hoursToAdd = currentInterval.end;
+    previousItemName = "Date / Time of Last Dose Administration";
+} else {
+    // Subsequent intervals: calculate from the previous interval end.
+    hoursToAdd = currentInterval.end - previousInterval.end;
+    previousItemName =
+        previousInterval.start + " to " +
+        previousInterval.end +
+        " hr Interval End (both)";
+}
 
 if (hoursToAdd <= 0) {
     logger("ERROR: Invalid interval difference: " + hoursToAdd);
     return null;
 }
 
-var previousItemName = previousInterval.start + " to " + previousInterval.end + " hr Interval End (both)";
 logger("Previous item: " + previousItemName);
 logger("Hours to add: " + hoursToAdd);
 
-var previousForms = isV2 ? [previousBaseName + " v2", previousBaseName] : [previousBaseName, previousBaseName + " v2"];
+var previousForms;
+
+if (isDosingForm) {
+    previousForms = [previousBaseName];
+} else {
+    previousForms = isV2
+        ? [previousBaseName + " v2", previousBaseName]
+        : [previousBaseName, previousBaseName + " v2"];
+}
+
 var previousValue = null;
 var selectedSource = null;
 var selectedStudyEvent = null;
 
 for (var i = 0; i < previousForms.length; i++) {
     for (var j = 0; j < filteredStudyEvents.length; j++) {
-        var sourceForm = pullForm([filteredStudyEvents[j]], [previousForms[i]]);
+        var sourceForm = pullForm(
+            [filteredStudyEvents[j]],
+            [previousForms[i]]
+        );
 
         if (!sourceForm) {
-            logger("Source unavailable: " + filteredStudyEvents[j] + " / " + previousForms[i]);
+            logger(
+                "Source unavailable: " +
+                filteredStudyEvents[j] + " / " + previousForms[i]
+            );
             continue;
         }
 
         var value = pullItemFromForm(sourceForm, previousItemName);
 
         if (value === null || value === undefined || value === "") {
-            logger("Target item unavailable: " + filteredStudyEvents[j] + " / " + previousForms[i]);
+            logger(
+                "Target item unavailable: " +
+                filteredStudyEvents[j] + " / " + previousForms[i]
+            );
             continue;
         }
 
@@ -124,11 +169,17 @@ for (var i = 0; i < previousForms.length; i++) {
         break;
     }
 
-    if (previousValue !== null) break;
+    if (previousValue !== null &&
+        previousValue !== undefined &&
+        previousValue !== "") {
+        break;
+    }
 }
 
-if (previousValue === null) {
-    logger("ERROR: No usable previous interval value found.");
+if (previousValue === null ||
+    previousValue === undefined ||
+    previousValue === "") {
+    logger("ERROR: No usable previous datetime value found.");
     return null;
 }
 
@@ -145,6 +196,7 @@ if (result === null) {
 
 logger("Calculated interval end: " + result);
 return result;
+
 
 function getInterval(name) {
     if (!name) return null;
@@ -173,14 +225,18 @@ function pullItemFromForm(form, targetItemName) {
 
     for (var i = 0; i < itemGroups.length; i++) {
         var group = itemGroups[i];
+
         if (!group || group.canceled || !group.items) continue;
 
         for (var j = 0; j < group.items.length; j++) {
             var item = group.items[j];
+
             if (!item || !item.name) continue;
             if (normalizeItemName(item.name) !== target) continue;
 
-            if (item.value !== null && item.value !== undefined && item.value !== "") {
+            if (item.value !== null &&
+                item.value !== undefined &&
+                item.value !== "") {
                 return item.value;
             }
         }
@@ -226,7 +282,9 @@ function collectCompleted(formDataArray, includeNonconformantData) {
 
         var status = sourceForm.dataCollectionStatus;
 
-        if (status === "Complete" || (includeNonconformantData && status === "Nonconformant") || status === "Incomplete") {
+        if (status === "Complete" ||
+            (includeNonconformantData && status === "Nonconformant") ||
+            status === "Incomplete") {
             keepers.push(formData);
         }
     }
@@ -237,23 +295,56 @@ function collectCompleted(formDataArray, includeNonconformantData) {
 function addHoursToDateTime(value, hours) {
     if (typeof value !== "string") return null;
 
-    var match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})$/);
-    if (!match) return null;
+    var year, month, day, hour, minute, second;
+    var match = value.match(
+        /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})$/
+    );
 
-    var year = parseInt(match[1], 10);
-    var month = parseInt(match[2], 10);
-    var day = parseInt(match[3], 10);
-    var hour = parseInt(match[4], 10);
-    var minute = parseInt(match[5], 10);
-    var second = parseInt(match[6], 10);
+    if (match) {
+        year = parseInt(match[1], 10);
+        month = parseInt(match[2], 10);
+        day = parseInt(match[3], 10);
+        hour = parseInt(match[4], 10);
+        minute = parseInt(match[5], 10);
+        second = parseInt(match[6], 10);
+    } else {
+        // Also accept ClinSpark display format, e.g. 13 Oct 2026 12:26:51.
+        match = value.match(
+            /^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/
+        );
 
-    if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59 || second > 59) {
+        if (!match) return null;
+
+        var monthNames = {
+            jan: 1, feb: 2, mar: 3, apr: 4,
+            may: 5, jun: 6, jul: 7, aug: 8,
+            sep: 9, oct: 10, nov: 11, dec: 12
+        };
+
+        day = parseInt(match[1], 10);
+        month = monthNames[match[2].toLowerCase()];
+        year = parseInt(match[3], 10);
+        hour = parseInt(match[4], 10);
+        minute = parseInt(match[5], 10);
+        second = parseInt(match[6], 10);
+
+        if (!month) return null;
+    }
+
+    if (month < 1 || month > 12 ||
+        day < 1 || day > 31 ||
+        hour > 23 || minute > 59 || second > 59 ||
+        hour < 0 || minute < 0 || second < 0) {
         return null;
     }
 
-    var date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+    var date = new Date(Date.UTC(
+        year, month - 1, day, hour, minute, second
+    ));
 
-    if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    if (date.getUTCFullYear() !== year ||
+        date.getUTCMonth() !== month - 1 ||
+        date.getUTCDate() !== day) {
         return null;
     }
 
@@ -269,4 +360,12 @@ function addHoursToDateTime(value, hours) {
         pad(date.getUTCHours()) + ":" +
         pad(date.getUTCMinutes()) + ":" +
         pad(date.getUTCSeconds());
+}
+
+function containsValue(input, keyword) {
+    if (input == null) return false;
+
+    return input.toString().toLowerCase().indexOf(
+        keyword.toLowerCase()
+    ) !== -1;
 }
