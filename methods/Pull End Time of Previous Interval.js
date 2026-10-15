@@ -1,5 +1,3 @@
-// Used in AbbVie M26-089
-
 var baseFormMapping = {
     "(*) LAB_URINE PK (4-8 Hours)": {
         previousForm: "(*) LAB_URINE PK (0-4 Hours)",
@@ -39,7 +37,8 @@ var itemNames = [
     "24 to 48 hr Interval End (both)",
     "48 to 96 hr Interval End (both)",
     "96 to 120 hr Interval End (both)",
-    "120 to 144 hr Interval End (both)"
+    "120 to 144 hr Interval End (both)",
+    "Manual Urine Interval End Time",
 ];
 
 var formName = formJson.form.name;

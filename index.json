@@ -1472,5 +1472,15 @@
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Pull%20End%20Time%20of%20Previous%20Interval%20and%20Calculate%20End%20Interval.js",
         "updated": "2026-10-13"
+    },
+    {
+        "id": "M-152",
+        "title": "Pull Eligibility Criteria",
+        "description": "Pulls the eligibility criteria from the subject eligibility form.",
+        "tags": [
+            "Eligibility"
+        ],
+        "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Pull%20Eligibility%20Criteria.js",
+        "updated": "2026-10-13"
     }
 ]
