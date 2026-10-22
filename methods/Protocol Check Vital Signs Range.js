@@ -205,7 +205,7 @@ try {
     logger("Systolic: " + sys);
     logger("Diastolic: " + dia);
     logger("Heart rate: " + hr);
-    if (sys === null || dia == null || hr == null) return itemJson.item.codeListItems[4].codedValue;
+    if (sys === null || dia == null || hr == null) return null;
     // OOR
     if (
         sys > sys_max_range ||
@@ -224,7 +224,7 @@ try {
         hr >= hr_min_range
     ) return itemJson.item.codeListItems[0].codedValue; // Within Normal Range
 
-    return itemJson.item.codeListItems[4].codedValue;
+    return null;
 } catch (e) {
     logger("Error in main execution logic: " + e);
     return null;

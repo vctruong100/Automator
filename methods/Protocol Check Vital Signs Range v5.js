@@ -191,7 +191,7 @@ logger("Difference in SYS: " + sys);
 logger("Difference in DIA: " + dia);
 logger("Difference in HR: " + hr);
 
-if (sys === null || dia == null || hr == null) return attachedItem.codeListItems[4].codedValue;
+if (sys === null || dia == null || hr == null) return null;
 
 // OOR
 if (
@@ -205,4 +205,4 @@ else if ( // IR
     hr <= hr_change_min
 ) return attachedItem.codeListItems[0].codedValue; // Within Normal Range
 
-return attachedItem.codeListItems[4].codedValue;
+return null;

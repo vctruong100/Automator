@@ -215,7 +215,6 @@ function collectCompleted(formDataArray, includeNonconformantData) {
 
         if (sourceForm.canceled === true) continue;
         if (!groups || groups.length === 0) continue;
-        if (!groups[0] || groups[0].canceled === true) continue;
 
         var status = sourceForm.dataCollectionStatus;
 
