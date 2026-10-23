@@ -193,7 +193,7 @@ try {
     logger("Weight: " + weight);
     logger("Height: " + height);
 
-    if (!weight || weight == 0 || !height || height == 0) return null;
+    if (weight == null || height == null) return null;
 
     var heightMtr = height / 100;
     var bmi = weight / (heightMtr * heightMtr);
