@@ -1482,5 +1482,16 @@
         ],
         "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Pull%20Eligibility%20Criteria.js",
         "updated": "2026-10-13"
+    },
+    {
+        "id": "M-153",
+        "title": "Edit Check Void Interval Check to see If Time is Within Interval",
+        "description": "Checks if the time is within the allowed interval.",
+        "tags": [
+            "DateTime"
+        ],
+        "url": "https://raw.githubusercontent.com/vctruong100/Automator/refs/heads/main/methods/Edit%20Check%20Void%20Interval%20Check%20to%20see%20If%20Time%20is%20Within%20Interval.js",
+        "updated": "2026-10-23"
     }
+
 ]
